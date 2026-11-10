@@ -40,6 +40,19 @@
   <link rel="preload" as="image" href="/velvet_logo.png">
 
   <script>
+    // Conexión automática de API para Cloudflare Pages
+    (function() {
+      const origFetch = window.fetch;
+      window.fetch = function(input, init) {
+        if (typeof input === 'string' && input.startsWith('/api/')) {
+          const apiHost = window.location.hostname.includes('pages.dev')
+            ? 'https://velvet-hub-lrcy.vercel.app'
+            : '';
+          input = apiHost + input;
+        }
+        return origFetch.call(this, input, init);
+      };
+    })();
 
     tailwind.config = {
 
