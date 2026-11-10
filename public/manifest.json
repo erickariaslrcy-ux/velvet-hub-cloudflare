@@ -1,0 +1,27 @@
+{
+  "name": "Velvet Hub — Cómics +18 & Videos HD",
+  "short_name": "Velvet Hub",
+  "description": "Plataforma de Cómics, Manhwas y Videos HD sin censura.",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#040209",
+  "theme_color": "#040209",
+  "categories": ["entertainment"],
+  "icons": [
+    {
+      "src": "/velvet_logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/velvet_logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

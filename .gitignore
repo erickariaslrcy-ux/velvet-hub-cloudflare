@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.vercel/
+.env
+.env.*
+!.env.example
+sync/.env
+*.log
+*.db
+.deploy-state.json
+__pycache__/
+
+tsconfig.tsbuildinfo

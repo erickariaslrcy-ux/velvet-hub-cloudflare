@@ -1,0 +1,6 @@
+.env
+.env.*
+.deploy-state.json
+sync/
+node_modules/
+.next/
