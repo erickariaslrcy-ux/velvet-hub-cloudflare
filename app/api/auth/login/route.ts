@@ -8,27 +8,51 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const username = (body.username || "").trim();
+    const rawUsername = (body.username || "").trim();
     const password = body.password || "";
 
-    if (!username || !password) {
-      return NextResponse.json({ detail: "Usuario y contraseña requeridos" }, { status: 400 });
+    if (!rawUsername || !password) {
+      return NextResponse.json({ detail: "Usuario o correo y contraseña requeridos" }, { status: 400 });
     }
 
-    let email = username.toLowerCase();
+    let email = rawUsername.toLowerCase();
     const admin = createAdminClient();
 
+    // Si el usuario no ingresó un correo con '@'
     if (!email.includes("@")) {
-      const { data: matchedProfile } = await admin
-        .from("profiles")
-        .select("email")
-        .ilike("email", `${username}@%`)
-        .maybeSingle();
-
-      if (matchedProfile?.email) {
-        email = matchedProfile.email;
+      const masterEmail = (process.env.MASTER_EMAIL || "erickariaslrcy@gmail.com").toLowerCase().trim();
+      if (email === "admin" || email === "master" || email === "erick") {
+        email = masterEmail;
       } else {
-        email = `${username}@velvet.local`;
+        // Buscar en profiles por coincidencia exacta o prefijo de email
+        const { data: matchedProfiles } = await admin
+          .from("profiles")
+          .select("email")
+          .or(`email.ilike.${email}@%,email.ilike.${email}%`)
+          .limit(5);
+
+        if (matchedProfiles && matchedProfiles.length > 0) {
+          // Priorizar coincidencia exacta antes de la arroba
+          const exact = matchedProfiles.find((p) => p.email.toLowerCase().startsWith(`${email}@`));
+          email = exact ? exact.email : matchedProfiles[0].email;
+        } else {
+          // Buscar en metadata de auth.users si alguien tiene este username
+          try {
+            const { data: userList } = await admin.auth.admin.listUsers({ perPage: 200 });
+            const found = userList?.users?.find((u) => {
+              const meta = u.user_metadata || {};
+              const uName = (meta.username || meta.full_name || meta.display_name || "").toLowerCase();
+              return uName === email || (u.email && u.email.toLowerCase().startsWith(email));
+            });
+            if (found?.email) {
+              email = found.email;
+            } else {
+              email = `${email}@velvet.local`;
+            }
+          } catch {
+            email = `${email}@velvet.local`;
+          }
+        }
       }
     }
 
@@ -54,10 +78,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (authError || !authData.user) {
-      return NextResponse.json(
-        { detail: authError?.message || "Credenciales incorrectas" },
-        { status: 401 }
-      );
+      const msg =
+        authError?.message === "Invalid login credentials"
+          ? "Credenciales incorrectas. Si tu cuenta es de Patreon, inicia sesión con 'Acceder con Patreon VIP'."
+          : authError?.message || "Credenciales incorrectas";
+      return NextResponse.json({ detail: msg }, { status: 401 });
     }
 
     const { data: profile } = await admin
@@ -67,10 +92,16 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     const role = profile?.is_admin ? "admin" : "member";
-    const displayName = authData.user.email ? authData.user.email.split("@")[0] : username;
+    const meta = authData.user.user_metadata || {};
+    const displayName =
+      meta.username ||
+      meta.full_name ||
+      meta.display_name ||
+      (authData.user.email ? authData.user.email.split("@")[0] : rawUsername);
 
     // Registrar o actualizar dispositivo (soporte de hasta 10 dispositivos sin expulsión)
     const deviceToken =
+      body.device_token ||
       req.headers.get("x-device-token") ||
       req.cookies.get("velvet_device_token")?.value ||
       "dev_" + Math.random().toString(36).substring(2);
@@ -82,11 +113,15 @@ export async function POST(req: NextRequest) {
       token: session?.access_token || "velvet_token",
       refresh_token: session?.refresh_token || null,
       expires_at: session?.expires_at || null,
+      device_token: deviceToken,
       user: {
         id: authData.user.id,
         username: displayName,
         email: authData.user.email,
         role,
+        tier: meta.tier || (role === "admin" ? "Dueño" : "Velvet VIP ($5.99)"),
+        tier_level: "pro",
+        is_pro: true,
       },
     });
 

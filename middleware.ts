@@ -41,11 +41,11 @@ function checkRateLimit(
   cleanExpiredLimits(now);
 
   const limits = {
-    // 15 intentos cada 30 segundos (anti fuerza bruta de llaves/contraseñas pero amigable con usuarios)
-    auth: { max: 15, windowMs: 30_000 },
-    // 60 peticiones cada 10 segundos (permite navegación rápida, búsqueda en vivo y prefetch sin bloqueos)
-    data_api: { max: 60, windowMs: 10_000 },
-    // 300 peticiones cada 10 segundos (permite abrir capítulos de cómic de 100+ páginas sin imágenes rotas por 429)
+    // 30 intentos cada 30 segundos para login/registro
+    auth: { max: 30, windowMs: 30_000 },
+    // 120 peticiones cada 10 segundos para navegación fluida
+    data_api: { max: 120, windowMs: 10_000 },
+    // 300 peticiones cada 10 segundos para cómics e imágenes
     media: { max: 300, windowMs: 10_000 },
     // 60 visitas cada 10 segundos para páginas HTML generales
     pages: { max: 60, windowMs: 10_000 },
@@ -65,6 +65,17 @@ function checkRateLimit(
 
   record.count++;
   return true;
+}
+
+function setCorsHeaders(res: NextResponse, req: NextRequest) {
+  const origin = req.headers.get("origin") || "*";
+  res.headers.set("Access-Control-Allow-Origin", origin);
+  res.headers.set("Access-Control-Allow-Credentials", "true");
+  res.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.headers.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, Range, X-Requested-With, X-Refresh-Token, X-Device-Token, x-cloudflare-token"
+  );
 }
 
 // User-Agents típicos de scrapers que no son navegadores reales
@@ -104,6 +115,7 @@ const PUBLIC_PATHS = [
   "/api/auth",
   "/api/debug",
   "/api/redeem",
+  "/api/favorites",
   "/api/user/favorites",
   "/api/user/favorites/sync",
   "/api/user/history",
@@ -120,15 +132,26 @@ const PUBLIC_PATHS = [
 // ============================================================================
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
   const path = request.nextUrl.pathname;
+  const isApiRoute = path.startsWith("/api/");
+
+  // --------------------------------------------------------------------------
+  // A. PREFLIGHT CORS (OPTIONS) PARA COMPATIBILIDAD CON CLOUDFLARE PAGES Y PWA
+  // --------------------------------------------------------------------------
+  if (request.method === "OPTIONS") {
+    const preflight = new NextResponse(null, { status: 204 });
+    setCorsHeaders(preflight, request);
+    return preflight;
+  }
+
+  let response = NextResponse.next({ request });
   const rawUrl = request.url || "";
   const rawSearch = request.nextUrl.search || "";
   const clientIp = getClientIp(request);
   const userAgent = (request.headers.get("user-agent") || "").toLowerCase();
 
   // --------------------------------------------------------------------------
-  // A. CORTAFUEGOS DE BORDE (EDGE FIREWALL): Anti Inyecciones (SQLi, XSS, Path Traversal)
+  // B. CORTAFUEGOS DE BORDE: Anti Inyecciones (SQLi, XSS, Path Traversal)
   // --------------------------------------------------------------------------
   let decodedSearch = rawSearch;
   let decodedUrl = rawUrl;
@@ -145,20 +168,18 @@ export async function middleware(request: NextRequest) {
     maliciousPattern.test(path) ||
     maliciousPattern.test(decodedUrl)
   ) {
-    return new NextResponse("Acceso bloqueado por Cortafuegos Velvet Anti-Inyección", {
+    const blockedRes = new NextResponse("Acceso bloqueado por Cortafuegos Velvet Anti-Inyección", {
       status: 403,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
+    if (isApiRoute) setCorsHeaders(blockedRes, request);
+    return blockedRes;
   }
 
   // --------------------------------------------------------------------------
-  // B. ORIGIN SHIELD: TOKEN PORTADOR (BEARER TOKEN) DE CLOUDFLARE
-  //    Evita que scrapers descubran la URL directa de Vercel y se salten a Cloudflare.
-  //    Si CLOUDFLARE_BEARER_TOKEN está configurado, las APIs solo aceptan peticiones
-  //    que vengan validadas por el proxy de Cloudflare.
+  // C. ORIGIN SHIELD: TOKEN PORTADOR (BEARER TOKEN) DE CLOUDFLARE
   // --------------------------------------------------------------------------
   const cfBearerSecret = process.env.CLOUDFLARE_BEARER_TOKEN;
-  const isApiRoute = path.startsWith("/api/");
   const isExcludedFromCfSecret =
     path.startsWith("/api/auth/patreon/callback") ||
     path.startsWith("/api/cron/");
@@ -169,31 +190,42 @@ export async function middleware(request: NextRequest) {
     const expectedBearer = `Bearer ${cfBearerSecret}`;
 
     if (authHeader !== expectedBearer && cfCustomHeader !== cfBearerSecret) {
-      return NextResponse.json(
+      const deniedRes = NextResponse.json(
         {
           error: "Acceso denegado: Petición directa al origen no autorizada. Debe pasar por el proxy de Cloudflare.",
         },
         { status: 403 }
       );
+      setCorsHeaders(deniedRes, request);
+      return deniedRes;
     }
   }
 
   // --------------------------------------------------------------------------
-  // C. DETECCIÓN Y FILTRO SILENCIOSO DE SCRAPERS AUTOMATIZADOS (User-Agent)
+  // D. DETECCIÓN Y FILTRO SILENCIOSO DE SCRAPERS AUTOMATIZADOS (User-Agent)
   // --------------------------------------------------------------------------
   if (isApiRoute && KNOWN_SCRAPER_BOTS.some((bot) => userAgent.includes(bot))) {
-    return NextResponse.json(
-      { error: "Herramienta automatizada de scraping no permitida." },
+    const scraperRes = NextResponse.json(
+      { error: "Herramienta automatizada no permitida." },
       { status: 403 }
     );
+    setCorsHeaders(scraperRes, request);
+    return scraperRes;
   }
 
   // --------------------------------------------------------------------------
-  // D. RATE LIMITING INTELIGENTE Y DIFERENCIADO POR TIPO DE SOLICITUD
+  // E. RATE LIMITING INTELIGENTE Y DIFERENCIADO POR TIPO DE SOLICITUD
   // --------------------------------------------------------------------------
   let category: "auth" | "data_api" | "media" | "pages" = "pages";
 
-  if (path.startsWith("/api/auth") || path.startsWith("/api/redeem") || path === "/login" || path === "/registro") {
+  if (path === "/api/auth/me" || path === "/api/auth/refresh") {
+    category = "data_api"; // Verificación de sesión no sufre rate limiting agresivo
+  } else if (
+    path.startsWith("/api/auth") ||
+    path.startsWith("/api/redeem") ||
+    path === "/login" ||
+    path === "/registro"
+  ) {
     category = "auth";
   } else if (
     path.startsWith("/api/img") ||
@@ -208,19 +240,21 @@ export async function middleware(request: NextRequest) {
   const allowed = checkRateLimit(clientIp, category);
   if (!allowed) {
     if (isApiRoute) {
-      return NextResponse.json(
+      const rateRes = NextResponse.json(
         {
-          error: "Límite de solicitudes excedido por seguridad. Espera unos momentos.",
+          error: "Límite de solicitudes temporal excedido. Por favor espera unos momentos.",
           ip: clientIp,
         },
         {
           status: 429,
           headers: {
-            "Retry-After": "10",
+            "Retry-After": "5",
             "Content-Type": "application/json",
           },
         }
       );
+      setCorsHeaders(rateRes, request);
+      return rateRes;
     } else {
       return new NextResponse(
         "Demasiadas solicitudes simultáneas. Por favor espera unos segundos.",
@@ -230,7 +264,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // --------------------------------------------------------------------------
-  // E. SUPABASE AUTH SESSION REFRESH
+  // F. SUPABASE AUTH SESSION REFRESH
   // --------------------------------------------------------------------------
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -251,11 +285,21 @@ export async function middleware(request: NextRequest) {
 
   const { data } = await supabase.auth.getUser();
 
+  let user = data.user;
+  if (!user && isApiRoute) {
+    const authHeader = request.headers.get("authorization") || "";
+    if (authHeader.startsWith("Bearer ") && authHeader.slice(7) !== "velvet_token" && authHeader.slice(7) !== "null") {
+      user = { id: "bearer_provided" } as any;
+    }
+  }
+
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
 
-  if (!data.user && !isPublic) {
+  if (!user && !isPublic) {
     if (isApiRoute) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      const unauthRes = NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      setCorsHeaders(unauthRes, request);
+      return unauthRes;
     }
     const url = request.nextUrl.clone();
     url.pathname = "/";
@@ -263,11 +307,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (data.user && (path === "/login" || path === "/registro")) {
+  if (user && (path === "/login" || path === "/registro")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  if (isApiRoute) {
+    setCorsHeaders(response, request);
   }
 
   return response;

@@ -1,14 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUser, isAdmin } from "@/lib/supabase/server";
+import { getAuthenticatedUser } from "@/lib/auth-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  const { user } = await getUser();
-  if (!user || !(await isAdmin())) return NextResponse.json({ error: "Solo la cuenta maestra" }, { status: 403 });
+async function guard(req: NextRequest) {
+  const user = await getAuthenticatedUser(req);
+  if (!user) return null;
   const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile?.is_admin) return null;
+  return { admin, user };
+}
+
+export async function GET(req: NextRequest) {
+  const ctx = await guard(req);
+  if (!ctx) return NextResponse.json({ error: "Solo la cuenta maestra" }, { status: 403 });
+  const { data, error } = await ctx.admin.auth.admin.listUsers({ perPage: 1000 });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({
     users: data.users.map((u) => ({
@@ -23,12 +36,11 @@ export async function GET() {
 
 // Bloquear o desbloquear el acceso de un usuario (no se puede a uno mismo).
 export async function PATCH(req: NextRequest) {
-  const { user } = await getUser();
-  if (!user || !(await isAdmin())) return NextResponse.json({ error: "Solo la cuenta maestra" }, { status: 403 });
+  const ctx = await guard(req);
+  if (!ctx) return NextResponse.json({ error: "Solo la cuenta maestra" }, { status: 403 });
   const { id, banned } = await req.json().catch(() => ({}));
-  if (!id || id === user.id) return NextResponse.json({ error: "Usuario inválido" }, { status: 400 });
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(id, { ban_duration: banned ? "876000h" : "none" });
+  if (!id || id === ctx.user.id) return NextResponse.json({ error: "Usuario inválido" }, { status: 400 });
+  const { error } = await ctx.admin.auth.admin.updateUserById(id, { ban_duration: banned ? "876000h" : "none" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

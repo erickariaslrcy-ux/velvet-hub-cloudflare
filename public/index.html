@@ -22,8 +22,6 @@
   <link rel="apple-touch-icon" href="/velvet_logo.png">
 
   <!-- Turbo Network Preconnect & DNS Pre-resolution (0ms Handshake) -->
-  <link rel="dns-prefetch" href="https://velvet-hub-lrcy.vercel.app">
-  <link rel="preconnect" href="https://velvet-hub-lrcy.vercel.app" crossorigin>
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://fonts.gstatic.com">
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
@@ -42,19 +40,6 @@
   <link rel="preload" as="image" href="/velvet_logo.png">
 
   <script>
-    // Conexión automática de API para Cloudflare Pages
-    (function() {
-      const origFetch = window.fetch;
-      window.fetch = function(input, init) {
-        if (typeof input === 'string' && input.startsWith('/api/')) {
-          const apiHost = window.location.hostname.includes('pages.dev')
-            ? 'https://velvet-hub-lrcy.vercel.app'
-            : '';
-          input = apiHost + input;
-        }
-        return origFetch.call(this, input, init);
-      };
-    })();
 
     tailwind.config = {
 
@@ -2582,13 +2567,13 @@
 
         <div>
 
-          <label class="block text-[11px] font-bold text-purple-300 uppercase tracking-wider mb-1.5">Nombre de Usuario</label>
+          <label class="block text-[11px] font-bold text-purple-300 uppercase tracking-wider mb-1.5">Correo o Usuario</label>
 
           <div class="relative">
 
             <i class="fa-solid fa-user absolute left-3.5 top-3 text-purple-400 text-xs"></i>
 
-            <input type="text" id="login-input-username" placeholder="Ingresa tu usuario" autocomplete="username" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-purple-400/40 focus:outline-none focus:border-pink-500 transition-colors">
+            <input type="text" id="login-input-username" placeholder="tu@correo.com o usuario" autocomplete="username" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-purple-400/40 focus:outline-none focus:border-pink-500 transition-colors">
 
           </div>
 
@@ -3277,21 +3262,24 @@
     // =======================================================================
 
     window.onerror = function(msg, url, line, col, error) {
-
       console.error('🚨 [ERROR JS GLOBAL]:', msg, 'en', url, 'línea:', line, error);
-
-      if (typeof showToast === 'function') {
-
-        showToast('Error JS en línea ' + line + ': ' + msg, 'error');
-
-      }
-
     };
 
     window.onunhandledrejection = function(event) {
+      console.warn('⚠️ [PROMISE NO ATRAPADA]:', event.reason);
+    };
 
-      console.error('🚨 [PROMISE NO ATRAPADA]:', event.reason);
-
+    // Manejador seguro para errores de carga de imágenes en tarjetas
+    window.handleCardImageError = function(img, type) {
+      if (!img) return;
+      if (!img.dataset.retried && img.src && !img.src.startsWith('data:') && !img.src.includes('/api/image')) {
+        img.dataset.retried = '1';
+        const original = img.dataset.originalSrc || img.getAttribute('data-original-src') || img.src;
+        img.src = '/api/image?url=' + encodeURIComponent(original);
+      } else {
+        img.onerror = null;
+        img.src = (type === 'video') ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG;
+      }
     };
 
     console.log('%c🚀 [VELVET HUB] Inicializando Plataforma Unificada (Cómics + Videos)...', 'color: #ec4899; font-weight: bold; font-size: 15px;');
@@ -4075,54 +4063,71 @@
 
     function getStealthImageUrl(url, referer) {
       if (!url) return '';
-      if (
-        url.includes('buondua.com') ||
-        url.includes('4khd.com') ||
-        url.includes('xascdn.li') ||
-        url.includes('xasiat.com')
-      ) {
+      // Si la URL es HTTP o HTTPS directa, cargarla directamente.
+      // El navegador con <meta name="referrer" content="no-referrer"> y referrerpolicy="no-referrer"
+      // no envía cabecera Referer al CDN de origen, evitando bloqueos por hotlink y permitiendo
+      // carga a velocidad pura de CDN con 0ms de latencia de redirección y caché nativa de browser.
+      if (url.startsWith('http://') || url.startsWith('https://')) {
         return url;
       }
-      if (url.startsWith('/api/') || url.startsWith('http://localhost') || url.startsWith('/')) return url;
-      try {
-        const payload = JSON.stringify({ u: url, r: referer || '' });
-        const b64 = btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        return `/api/image?t=${b64}`;
-      } catch (e) {
-        return `/api/image?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || '')}`;
-      }
+      if (url.startsWith('/api/') || url.startsWith('/')) return url;
+      return url;
     }
 
-    // Prefijo de almacenamiento particionado por cuenta de usuario (Supabase ready)
+    // Prefijo de almacenamiento particionado por cuenta de usuario (aislado por ID real)
     function getAccountStoragePrefix() {
-      const u = state.currentUser || state.user;
-      const id = (u && (u.id || u.username || u.name)) || 'erick_vip';
+      const u = state.currentUser;
+      const id = (u && (u.id || u.username || u.email)) || 'guest';
       return 'velvet_' + String(id).toLowerCase().replace(/[^a-z0-9_-]/g, '_') + '_';
     }
 
     // Gestión de LocalStorage por cuenta
     function loadStorage() {
       try {
+        // 1. Hidratar usuario actual desde caché para disponibilidad instantánea (0ms)
+        const cachedUser = localStorage.getItem('velvet_current_user');
+        if (cachedUser && !state.currentUser) {
+          try {
+            state.currentUser = JSON.parse(cachedUser);
+          } catch(e) {}
+        }
+
         const prefix = getAccountStoragePrefix();
-        const u = localStorage.getItem('velvet_user');
-        state.user = u ? JSON.parse(u) : { name: 'Erick VIP', avatar: '👑', avatarBg: 'from-gold to-amber-600', isVip: true };
 
-        const f = localStorage.getItem(prefix + 'favs') || localStorage.getItem('velvet_favs');
-        state.favorites = f ? JSON.parse(f) : [];
+        if (state.currentUser) {
+          state.user = {
+            name: state.currentUser.username || 'Usuario VIP',
+            avatar: state.currentUser.role === 'admin' ? '👑' : '⭐',
+            avatarBg: state.currentUser.role === 'admin' ? 'from-gold to-amber-600' : 'from-pink-600 to-purple-600',
+            isVip: true
+          };
+          const f = localStorage.getItem(prefix + 'favs') || localStorage.getItem('velvet_favs');
+          state.favorites = f ? JSON.parse(f) : [];
 
-        const w = localStorage.getItem(prefix + 'watchlist') || localStorage.getItem('velvet_watchlist');
-        state.watchlist = w ? JSON.parse(w) : [];
+          const w = localStorage.getItem(prefix + 'watchlist') || localStorage.getItem('velvet_watchlist');
+          state.watchlist = w ? JSON.parse(w) : [];
 
-        const h = localStorage.getItem(prefix + 'history') || localStorage.getItem('velvet_history');
-        state.history = h ? JSON.parse(h) : [];
+          const h = localStorage.getItem(prefix + 'history') || localStorage.getItem('velvet_history');
+          state.history = h ? JSON.parse(h) : [];
 
-        const p = localStorage.getItem(prefix + 'progress') || localStorage.getItem('velvet_progress');
-        state.progress = p ? JSON.parse(p) : {};
+          const p = localStorage.getItem(prefix + 'progress') || localStorage.getItem('velvet_progress');
+          state.progress = p ? JSON.parse(p) : {};
+        } else {
+          state.user = { name: 'Invitado', avatar: '🔑', avatarBg: 'from-purple-900 to-slate-900', isVip: false };
+          const f = localStorage.getItem('velvet_guest_favs') || localStorage.getItem('velvet_favs');
+          state.favorites = f ? JSON.parse(f) : [];
+          const w = localStorage.getItem('velvet_guest_watchlist') || localStorage.getItem('velvet_watchlist');
+          state.watchlist = w ? JSON.parse(w) : [];
+          const h = localStorage.getItem('velvet_guest_history') || localStorage.getItem('velvet_history');
+          state.history = h ? JSON.parse(h) : [];
+          const p = localStorage.getItem('velvet_guest_progress') || localStorage.getItem('velvet_progress');
+          state.progress = p ? JSON.parse(p) : {};
+        }
 
         const oled = localStorage.getItem('velvet_oled');
         if (oled === 'true') enableOled(true);
       } catch (e) {
-        state.user = { name: 'Erick VIP', avatar: '👑', avatarBg: 'from-gold to-amber-600', isVip: true };
+        state.user = { name: 'Invitado', avatar: '🔑', avatarBg: 'from-purple-900 to-slate-900', isVip: false };
       }
       updateUserUI();
       updateVaultCounts();
@@ -4131,16 +4136,17 @@
     function saveStorage() {
       try {
         const prefix = getAccountStoragePrefix();
-        localStorage.setItem('velvet_user', JSON.stringify(state.user));
-        localStorage.setItem(prefix + 'favs', JSON.stringify(state.favorites));
-        localStorage.setItem(prefix + 'watchlist', JSON.stringify(state.watchlist));
-        localStorage.setItem(prefix + 'history', JSON.stringify(state.history));
-        localStorage.setItem(prefix + 'progress', JSON.stringify(state.progress));
-
-        // Compatibilidad con perfiles sin sesión
-        localStorage.setItem('velvet_favs', JSON.stringify(state.favorites));
-        localStorage.setItem('velvet_history', JSON.stringify(state.history));
-        localStorage.setItem('velvet_progress', JSON.stringify(state.progress));
+        if (state.currentUser) {
+          localStorage.setItem('velvet_current_user', JSON.stringify(state.currentUser));
+          localStorage.setItem(prefix + 'favs', JSON.stringify(state.favorites));
+          localStorage.setItem(prefix + 'watchlist', JSON.stringify(state.watchlist));
+          localStorage.setItem(prefix + 'history', JSON.stringify(state.history));
+          localStorage.setItem(prefix + 'progress', JSON.stringify(state.progress));
+        } else {
+          localStorage.setItem('velvet_guest_favs', JSON.stringify(state.favorites));
+          localStorage.setItem('velvet_guest_history', JSON.stringify(state.history));
+          localStorage.setItem('velvet_guest_progress', JSON.stringify(state.progress));
+        }
         localStorage.setItem('velvet_oled', String(state.oled));
       } catch (e) {}
       updateUserUI();
@@ -4169,39 +4175,32 @@
     });
 
     function updateUserUI() {
-
       const btnText = document.getElementById('user-name-display');
-
+      const avatarIcon = document.getElementById('user-avatar-icon');
+      const adminBtn = document.getElementById('dropdown-admin-btn');
+      const dropUser = document.getElementById('dropdown-username');
+      const dropRole = document.getElementById('dropdown-role-badge');
       const badge = document.getElementById('user-avatar-badge');
 
-      const modalName = document.getElementById('modal-user-name');
-
-      const modalAvatar = document.getElementById('modal-avatar-preview');
-
-      if (state.user) {
-
-        if (btnText && !state.currentUser) btnText.textContent = state.user.name || 'Ingresar';
-
-        if (badge && !state.currentUser) {
-
-          badge.textContent = state.user.avatar || '👑';
-
-          badge.className = `w-6 h-6 rounded-lg bg-gradient-to-br ${state.user.avatarBg || 'from-gold to-amber-600'} flex items-center justify-center text-[11px] text-white font-black shadow`;
-
+      if (state.currentUser) {
+        const u = state.currentUser;
+        if (btnText) btnText.textContent = u.username || 'Mi Cuenta';
+        if (dropUser) dropUser.textContent = u.username || 'Mi Cuenta';
+        if (u.role === 'admin') {
+          if (avatarIcon) avatarIcon.className = 'fa-solid fa-crown text-amber-300';
+          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-crown text-amber-400"></i> Dueño &bull; Administrador';
+          if (adminBtn) adminBtn.classList.remove('hidden');
+        } else {
+          if (avatarIcon) avatarIcon.className = 'fa-solid fa-user-check text-pink-300';
+          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-shield-halved text-pink-400"></i> Miembro VIP';
+          if (adminBtn) adminBtn.classList.add('hidden');
         }
-
-        if (modalName) modalName.textContent = state.user.name;
-
-        if (modalAvatar) {
-
-          modalAvatar.textContent = state.user.avatar || '👑';
-
-          modalAvatar.className = `w-12 h-12 rounded-2xl bg-gradient-to-tr ${state.user.avatarBg || 'from-hot to-neon'} flex items-center justify-center text-xl text-white font-black shadow-hot-glow`;
-
-        }
-
+      } else {
+        if (btnText) btnText.textContent = 'Ingresar';
+        if (avatarIcon) avatarIcon.className = 'fa-solid fa-key';
+        if (adminBtn) adminBtn.classList.add('hidden');
+        if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-lock text-purple-400"></i> Sin Sesión';
       }
-
     }
 
     function updateVaultCounts() {
@@ -4760,13 +4759,14 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch">
             <img
               src="${coverSrc}"
+              data-original-src="${coverSrc}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isLocked ? 'filter brightness-90' : ''}"
-              onerror="if(!this.dataset.retried && !this.src.includes('/api/image')){ this.dataset.retried='1'; this.src='/api/image?url='+encodeURIComponent('${coverSrc}'); } else { this.onerror=null; this.src=COMIC_FALLBACK_SVG; }"
+              onerror="handleCardImageError(this, 'comic')"
             />
 
             <!-- Lock Overlay on Hover -->
@@ -4794,7 +4794,10 @@
             <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               <button
                 onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform"
+                class="card-fav-btn w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                data-fav-source="${it.source || ''}"
+                data-fav-source-id="${it.source_id || ''}"
+                data-fav-id="${it.id || ''}"
                 title="Favorito"
               >
                 <i class="${isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70'} fa-heart"></i>
@@ -4878,12 +4881,14 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch">
             <img
               src="${coverSrc}"
+              data-original-src="${coverSrc}"
+              referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isLocked ? 'filter brightness-90' : ''}"
-              onerror="if(!this.dataset.retried && !this.src.includes('/api/image')){ this.dataset.retried='1'; this.src='/api/image?url='+encodeURIComponent('${coverSrc}'); } else { this.onerror=null; this.src=VIDEO_FALLBACK_SVG; }"
+              onerror="handleCardImageError(this, 'video')"
             />
 
             <!-- Play / Lock Overlay on Hover -->
@@ -4917,7 +4922,10 @@
             <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               <button
                 onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform"
+                class="card-fav-btn w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                data-fav-source="${it.source || ''}"
+                data-fav-source-id="${it.source_id || ''}"
+                data-fav-id="${it.id || ''}"
                 title="Favorito"
               >
                 <i class="${isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70'} fa-heart"></i>
@@ -7072,7 +7080,10 @@
             <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               <button
                 onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform"
+                class="card-fav-btn w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                data-fav-source="${it.source || ''}"
+                data-fav-source-id="${it.source_id || ''}"
+                data-fav-id="${it.id || ''}"
                 title="Favorito"
               >
                 <i class="${isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70'} fa-heart"></i>
@@ -8788,20 +8799,31 @@
     // Favoritos & Lista de Seguimiento
 
     function isFavorite(source, sourceId, itemId = null) {
-
+      if (!state.favorites || !Array.isArray(state.favorites)) return false;
+      const numId = itemId ? Number(itemId) : null;
       return state.favorites.some(f => {
-        if (itemId && f.id && Number(f.id) === Number(itemId)) return true;
-        return f.source === source && f.source_id === sourceId;
+        if (!f) return false;
+        if (numId && f.id && Number(f.id) === numId) return true;
+        return f.source === source && String(f.source_id) === String(sourceId);
       });
-
     }
 
-    // toggleFavorite unificada y optimizada con sincronizacion en la nube\n    }
+    function updateAllFeedFavoriteIcons() {
+      const favButtons = document.querySelectorAll('.card-fav-btn, [data-fav-source]');
+      favButtons.forEach(btn => {
+        const source = btn.getAttribute('data-fav-source');
+        const sourceId = btn.getAttribute('data-fav-source-id');
+        const id = btn.getAttribute('data-fav-id');
+        const icon = btn.querySelector('i.fa-heart');
+        if (icon && (source || id)) {
+          const fav = isFavorite(source, sourceId, id);
+          icon.className = (fav ? 'fa-solid text-hot' : 'fa-regular text-lav/70') + ' fa-heart';
+        }
+      });
+    }
 
     function toggleCurrentItemFavorite() {
-
       if (state.currentItem) toggleFavorite(state.currentItem);
-
     }
 
     function isWatchlisted(source, sourceId, itemId = null) {
@@ -8892,59 +8914,55 @@
     }
 
     async function initAuth() {
-
       const token = getAuthToken();
 
-      const userBtn = document.getElementById('user-profile-btn');
-
-      const nameDisplay = document.getElementById('user-name-display');
-
-      const avatarIcon = document.getElementById('user-avatar-icon');
-
-      const adminBtn = document.getElementById('dropdown-admin-btn');
-
-      const dropUser = document.getElementById('dropdown-username');
-
-      const dropRole = document.getElementById('dropdown-role-badge');
-
       if (!token) {
+        // Si no hay token en localStorage, intentar ver si existen cookies de sesión
+        try {
+          const cookieResp = await fetch('/api/auth/me', { headers: authHeaders(), credentials: 'include' });
+          if (cookieResp.ok) {
+            const userWithCookie = await cookieResp.json();
+            if (userWithCookie.new_token) {
+              localStorage.setItem('velvet_auth_token', userWithCookie.new_token);
+            }
+            if (userWithCookie.new_refresh_token) {
+              localStorage.setItem('velvet_refresh_token', userWithCookie.new_refresh_token);
+            }
+            if (userWithCookie.device_token) {
+              localStorage.setItem('velvet_device_token', userWithCookie.device_token);
+            }
+            localStorage.setItem('velvet_current_user', JSON.stringify(userWithCookie));
+            state.currentUser = userWithCookie;
+            loadStorage();
+            updateUserUI();
+            await loadCloudFavorites();
+            await loadCloudHistory();
+            return;
+          }
+        } catch(e) {}
 
+        // Usuario realmente no logueado
         state.currentUser = null;
-      loadStorage();
-      renderContinueShelf();
-      updateVaultCounts();
-
-        if (nameDisplay) nameDisplay.textContent = 'Ingresar';
-
-        if (avatarIcon) avatarIcon.className = 'fa-solid fa-key';
-
-        if (adminBtn) adminBtn.classList.add('hidden');
-
+        loadStorage();
+        renderContinueShelf();
+        updateVaultCounts();
+        updateUserUI();
         return;
-
       }
 
       try {
-
-        const resp = await fetch('/api/auth/me', { headers: authHeaders() });
+        const resp = await fetch('/api/auth/me', { headers: authHeaders(), credentials: 'include' });
 
         if (!resp.ok) {
-
-          const errData = await resp.json().catch(() => ({}));
-
-          // Si el servidor indica expulsión explícita
-          if (errData && errData.kicked) {
-            showToast(errData.detail || 'Sesión cerrada.', 'warning');
-            localStorage.removeItem('velvet_auth_token');
-            localStorage.removeItem('velvet_refresh_token');
-          } else if (resp.status === 401) {
-            // Intentar autorefresh transparente con el refresh_token antes de desloguear
+          // Solo si recibimos 401 Unauthorized intentamos autorefresh antes de cerrar sesión
+          if (resp.status === 401) {
             const refToken = localStorage.getItem('velvet_refresh_token');
             if (refToken) {
               try {
                 const refResp = await fetch('/api/auth/refresh', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
                   body: JSON.stringify({ refresh_token: refToken })
                 });
                 if (refResp.ok) {
@@ -8957,110 +8975,66 @@
                 }
               } catch(e) {}
             }
+
+            // Si el refresh también falló o expiró: limpiar sesión
             localStorage.removeItem('velvet_auth_token');
             localStorage.removeItem('velvet_refresh_token');
+            localStorage.removeItem('velvet_current_user');
+            state.currentUser = null;
+            loadStorage();
+            renderContinueShelf();
+            updateVaultCounts();
+            updateUserUI();
+            return;
+          } else {
+            // Error de red, 429 temporal o error 500: mantener la sesión que ya tenemos en caché
+            console.warn('[AUTH] Error verificando sesión en servidor (' + resp.status + '), manteniendo sesión local');
+            return;
           }
-
-          state.currentUser = null;
-          loadStorage();
-          renderContinueShelf();
-          updateVaultCounts();
-
-          if (nameDisplay) nameDisplay.textContent = 'Ingresar';
-
-          if (avatarIcon) avatarIcon.className = 'fa-solid fa-key';
-
-          if (adminBtn) adminBtn.classList.add('hidden');
-
-          return;
-
         }
 
         const user = await resp.json();
-        // Si el backend refrescó los tokens transparentemente, guardarlos
         if (user.new_token) {
           localStorage.setItem('velvet_auth_token', user.new_token);
         }
         if (user.new_refresh_token) {
           localStorage.setItem('velvet_refresh_token', user.new_refresh_token);
         }
+        if (user.device_token) {
+          localStorage.setItem('velvet_device_token', user.device_token);
+        }
+        localStorage.setItem('velvet_current_user', JSON.stringify(user));
         state.currentUser = user;
         loadStorage();
         renderContinueShelf();
-
-        if (nameDisplay) nameDisplay.textContent = user.username;
-
-        if (dropUser) dropUser.textContent = user.username;
-
-        if (user.role === 'admin') {
-
-          if (avatarIcon) avatarIcon.className = 'fa-solid fa-crown text-amber-300';
-
-          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-crown text-amber-400"></i> Dueño &bull; Administrador';
-
-          if (adminBtn) adminBtn.classList.remove('hidden');
-
-        } else {
-
-          if (avatarIcon) avatarIcon.className = 'fa-solid fa-user-check text-pink-300';
-
-          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-shield-halved text-pink-400"></i> Miembro VIP';
-
-          if (adminBtn) adminBtn.classList.add('hidden');
-
-        }
+        updateUserUI();
 
         // Cargar favoritos del usuario desde el servidor
-
-        loadCloudFavorites();
+        await loadCloudFavorites();
 
         // Cargar historial del usuario desde el servidor
+        await loadCloudHistory();
 
-        loadCloudHistory();
         if (state.catalogCache && state.catalogCache.length > 0) {
           renderFeedData({ items: state.catalogCache, page: state.page || 1, total_pages: state.totalPages || 1 });
         }
       } catch (e) {
-
         console.warn('[AUTH] Error verificando sesión:', e);
-
       }
-
     }
 
     async function loadCloudFavorites() {
       if (!state.currentUser) return;
       try {
-        const resp = await fetch('/api/user/favorites', { headers: authHeaders() });
+        const resp = await fetch('/api/user/favorites', { headers: authHeaders(), credentials: 'include' });
         if (resp.ok) {
           const cloudFavs = await resp.json();
           if (Array.isArray(cloudFavs)) {
-            // Fusión inteligente: unir favoritos del móvil y del PC sin perder nada
-            const favMap = new Map();
-            (state.favorites || []).forEach(f => {
-              if (!f) return;
-              const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-              favMap.set(k, f);
-            });
-            cloudFavs.forEach(f => {
-              if (!f) return;
-              const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-              favMap.set(k, f);
-            });
-            const merged = Array.from(favMap.values());
-            state.favorites = merged;
+            state.favorites = cloudFavs;
             saveStorage();
             updateVaultFavCountBadge();
             renderVaultFavoritesPro();
-
-            // Sincronizar hacia la nube si el cliente tenía favoritos que la nube no tenía
-            if (merged.length > cloudFavs.length) {
-              fetch('/api/user/favorites/sync', {
-                method: 'POST',
-                headers: authHeaders(),
-                body: JSON.stringify({ items: merged })
-              }).catch(() => {});
-            }
+            updateAllFeedFavoriteIcons();
           }
         }
       } catch (e) {
@@ -9311,9 +9285,14 @@
         if (data.refresh_token) {
           localStorage.setItem('velvet_refresh_token', data.refresh_token);
         }
+        if (data.device_token) {
+          localStorage.setItem('velvet_device_token', data.device_token);
+        }
+        localStorage.setItem('velvet_current_user', JSON.stringify(data.user));
 
         state.currentUser = data.user;
         loadStorage();
+        updateUserUI();
         renderContinueShelf();
 
         const nameDisplay = document.getElementById('user-name-display');
@@ -9464,12 +9443,19 @@
 
         }
 
-        // Registro exitoso: Guardar token
-
+        // Registro exitoso: Guardar tokens y sesión
         localStorage.setItem('velvet_auth_token', data.token);
+        if (data.refresh_token) {
+          localStorage.setItem('velvet_refresh_token', data.refresh_token);
+        }
+        if (data.device_token) {
+          localStorage.setItem('velvet_device_token', data.device_token);
+        }
+        localStorage.setItem('velvet_current_user', JSON.stringify(data.user));
 
         state.currentUser = data.user;
         loadStorage();
+        updateUserUI();
         renderContinueShelf();
 
         // Sincronizar favoritos locales si existían
@@ -9526,11 +9512,14 @@
 
       localStorage.removeItem('velvet_auth_token');
       localStorage.removeItem('velvet_refresh_token');
+      localStorage.removeItem('velvet_current_user');
 
       state.currentUser = null;
       loadStorage();
       renderContinueShelf();
       updateVaultCounts();
+      updateUserUI();
+      updateAllFeedFavoriteIcons();
 
       const dropMenu = document.getElementById('user-dropdown-menu');
 
@@ -9827,6 +9816,7 @@
       saveStorage();
       updateVaultFavCountBadge();
       updateVideoFavIcon();
+      updateAllFeedFavoriteIcons();
 
       if (state.currentUser) {
         try {
@@ -9855,7 +9845,10 @@
     }
 
     async function toggleFavorite(item, event) {
-      if (event) event.stopPropagation();
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       if (!item) return;
       if (!hasFullAccess()) {
         showToast('Para guardar en tu Bóveda necesitas Membresía VIP ($5.99) o Llave de Acceso.', 'warning');
@@ -9866,7 +9859,7 @@
       const itemId = item.id || null;
       const idx = state.favorites.findIndex(f => {
         if (itemId && f.id && Number(f.id) === Number(itemId)) return true;
-        return f.source === item.source && f.source_id === item.source_id;
+        return f.source === item.source && String(f.source_id) === String(item.source_id);
       });
 
       const isFav = idx !== -1;
@@ -9880,7 +9873,7 @@
             const delUrl = itemId
               ? `/api/user/favorites/${itemId}`
               : `/api/user/favorites/${encodeURIComponent(item.source)}/${encodeURIComponent(item.source_id)}`;
-            fetch(delUrl, { method: 'DELETE', headers: authHeaders() }).catch(() => {});
+            fetch(delUrl, { method: 'DELETE', headers: authHeaders(), credentials: 'include' }).catch(() => {});
           } catch (e) {}
         }
       } else {
@@ -9891,7 +9884,8 @@
           title: item.title,
           cover_url: item.cover_url,
           url: item.url,
-          media_type: item.media_type || (state.mode === 'videos' ? 'video' : 'comic')
+          media_type: item.media_type || (state.mode === 'videos' ? 'video' : (state.mode === 'galleries' ? 'gallery' : 'comic')),
+          created_at: new Date().toISOString()
         };
         state.favorites.unshift(favEntry);
         showToast('Guardado en Mi Bóveda', 'success');
@@ -9901,20 +9895,33 @@
             fetch('/api/user/favorites', {
               method: 'POST',
               headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+              credentials: 'include',
               body: JSON.stringify(favEntry)
             }).catch(() => {});
           } catch (e) {}
         }
       }
 
-saveStorage();
+      // Actualizar inmediatamente botón clickeado
+      if (event) {
+        const btn = event.currentTarget || (event.target && event.target.closest('button'));
+        if (btn) {
+          const icon = btn.querySelector('i.fa-heart');
+          if (icon) {
+            icon.className = (!isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70') + ' fa-heart';
+          }
+        }
+      }
 
+      saveStorage();
+      updateAllFeedFavoriteIcons();
       updateVaultFavCountBadge();
-
       updateVideoFavIcon();
-
+      updateAllFeedFavoriteIcons();
       renderContinueShelf();
-
+      if (document.getElementById('vault-modal') && !document.getElementById('vault-modal').classList.contains('hidden')) {
+        renderVaultFavoritesPro();
+      }
     }
 
     // Panel de Control del Dueño / Administrador

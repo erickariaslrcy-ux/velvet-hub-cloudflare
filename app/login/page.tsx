@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -13,14 +12,40 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) {
-      setError("Correo o contraseña incorrectos");
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.detail || "Correo o contraseña incorrectos");
+        setBusy(false);
+        return;
+      }
+
+      if (data.token) {
+        localStorage.setItem("velvet_auth_token", data.token);
+      }
+      if (data.refresh_token) {
+        localStorage.setItem("velvet_refresh_token", data.refresh_token);
+      }
+      if (data.device_token) {
+        localStorage.setItem("velvet_device_token", data.device_token);
+      }
+      if (data.user) {
+        localStorage.setItem("velvet_current_user", JSON.stringify(data.user));
+      }
+
+      window.location.href = "/";
+    } catch {
+      setError("Error de conexión con el servidor");
       setBusy(false);
-      return;
     }
-    window.location.href = "/";
   }
 
   return (
@@ -58,8 +83,30 @@ export default function LoginPage() {
           — O con tu cuenta —
         </div>
 
-        <label>Correo<input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label>Contraseña<input className="input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+        <label>
+          Correo o Usuario
+          <input
+            className="input"
+            type="text"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            placeholder="tu@correo.com o usuario"
+          />
+        </label>
+        <label>
+          Contraseña
+          <input
+            className="input"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            placeholder="••••••••"
+          />
+        </label>
         {error && <div className="error">{error}</div>}
         <button className="btn btn-primary" disabled={busy}>{busy ? "Entrando…" : "Entrar"}</button>
         <p className="small muted">¿Tienes una llave de invitación? <Link href="/registro" style={{ color: "var(--accent-2)" }}>Crear cuenta</Link></p>

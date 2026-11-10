@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 
 export default function RegistroPage() {
   const [code, setCode] = useState("");
@@ -19,26 +18,51 @@ export default function RegistroPage() {
     }
     setBusy(true);
     setError("");
-    const res = await fetch("/api/redeem", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, email, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(data.error || "No se pudo crear la cuenta");
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          access_key: code.trim().toUpperCase(),
+          email: email.trim().toLowerCase(),
+          password,
+          username: email.split("@")[0],
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.detail || data.error || "No se pudo crear la cuenta VIP");
+        setBusy(false);
+        return;
+      }
+
+      if (data.token) {
+        localStorage.setItem("velvet_auth_token", data.token);
+      }
+      if (data.refresh_token) {
+        localStorage.setItem("velvet_refresh_token", data.refresh_token);
+      }
+      if (data.device_token) {
+        localStorage.setItem("velvet_device_token", data.device_token);
+      }
+      if (data.user) {
+        localStorage.setItem("velvet_current_user", JSON.stringify(data.user));
+      }
+
+      window.location.href = "/";
+    } catch {
+      setError("Error de conexión con el servidor");
       setBusy(false);
-      return;
     }
-    const supabase = createClient();
-    await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
-    window.location.href = "/buscar";
   }
 
   return (
     <main className="auth-wrap">
       <form className="card auth-card" onSubmit={submit}>
-        <h1>Crear cuenta</h1>
+        <h1>Crear cuenta VIP</h1>
 
         {/* Botón Acceso Patreon */}
         <a
@@ -71,14 +95,46 @@ export default function RegistroPage() {
         </div>
 
         <p className="small muted">El registro manual requiere una llave de invitación.</p>
-        <label>Llave de invitación<input className="input mono" required value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="XXXX-XXXX-XXXX-XXXX" /></label>
-        <label>Correo<input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label>Contraseña (mínimo 8)<input className="input" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></label>
+        <label>
+          Llave de invitación VIP
+          <input
+            className="input mono"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="XXXX-XXXX-XXXX-XXXX"
+          />
+        </label>
+        <label>
+          Correo electrónico
+          <input
+            className="input"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            placeholder="tu@correo.com"
+          />
+        </label>
+        <label>
+          Contraseña (mínimo 6)
+          <input
+            className="input"
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            placeholder="••••••••"
+          />
+        </label>
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} /> Confirmo que soy mayor de 18 años
         </label>
         {error && <div className="error">{error}</div>}
-        <button className="btn btn-primary" disabled={busy}>{busy ? "Creando…" : "Crear cuenta"}</button>
+        <button className="btn btn-primary" disabled={busy}>{busy ? "Creando…" : "Crear cuenta VIP"}</button>
         <p className="small muted">¿Ya tienes cuenta? <Link href="/login" style={{ color: "var(--accent-2)" }}>Inicia sesión</Link></p>
       </form>
     </main>

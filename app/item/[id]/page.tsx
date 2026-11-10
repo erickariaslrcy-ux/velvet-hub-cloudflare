@@ -33,7 +33,9 @@ export default async function ItemPage({
   const item = data as CatalogItem;
 
   const [{ data: fav }, rawItem] = await Promise.all([
-    supabase.from("favorites").select("item_id").eq("user_id", user!.id).eq("item_id", id).maybeSingle(),
+    user
+      ? supabase.from("favorites").select("item_id").eq("user_id", user.id).eq("item_id", id).maybeSingle()
+      : Promise.resolve({ data: null }),
     createAdminClient().from("items").select("source,source_id,url,pages,video_sources").eq("id", id).maybeSingle(),
   ]);
 

@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth-user";
 
 export const runtime = "nodejs";
 
-// GET /api/user/favorites - Obtiene todos los favoritos del usuario (de la nube y base de datos)
+// GET /api/user/favorites - Obtiene todos los favoritos del usuario
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser(req);
@@ -16,7 +16,15 @@ export async function GET(req: NextRequest) {
     const meta = user.user_metadata || {};
     const metaFavs: any[] = Array.isArray(meta.favorites) ? meta.favorites : [];
 
-    // También buscar en la tabla SQL favorites
+    if (metaFavs.length > 0) {
+      return NextResponse.json(metaFavs, {
+        headers: {
+          "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        },
+      });
+    }
+
+    // Fallback si metaFavs está vacío: buscar en tabla SQL favorites
     let sqlFavs: any[] = [];
     try {
       const { data } = await admin
@@ -37,24 +45,19 @@ export async function GET(req: NextRequest) {
           url: r.items.url,
           created_at: r.created_at,
         }));
+
+      // Si había en SQL, persistir en user_metadata para futuras lecturas rápidas
+      if (sqlFavs.length > 0) {
+        await admin.auth.admin.updateUserById(user.id, {
+          user_metadata: {
+            ...meta,
+            favorites: sqlFavs,
+          },
+        });
+      }
     } catch (e) {}
 
-    // Combinar sin duplicados (metaFavs tienen prioridad por ser más detallados)
-    const combinedMap = new Map<string, any>();
-    metaFavs.forEach((f) => {
-      if (!f) return;
-      const key = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-      combinedMap.set(key, f);
-    });
-    sqlFavs.forEach((f) => {
-      if (!f) return;
-      const key = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-      if (!combinedMap.has(key)) combinedMap.set(key, f);
-    });
-
-    const items = Array.from(combinedMap.values());
-
-    return NextResponse.json(items, {
+    return NextResponse.json(sqlFavs, {
       headers: {
         "Cache-Control": "private, no-cache, no-store, must-revalidate",
       },
@@ -77,7 +80,7 @@ export async function POST(req: NextRequest) {
     const meta = user.user_metadata || {};
     let cloudFavs: any[] = Array.isArray(meta.favorites) ? [...meta.favorites] : [];
 
-    // CASO A: Sincronización masiva de favoritos (ej: al loguearse o sincronizar entre PC y móvil)
+    // CASO A: Sincronización masiva de favoritos (ej: al loguearse por primera vez)
     if (Array.isArray(body.items)) {
       const incomingItems: any[] = body.items;
       const favMap = new Map<string, any>();
@@ -107,7 +110,7 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      const mergedFavs = Array.from(favMap.values()).slice(0, 250);
+      const mergedFavs = Array.from(favMap.values()).slice(0, 300);
 
       await admin.auth.admin.updateUserById(user.id, {
         user_metadata: {
@@ -146,9 +149,9 @@ export async function POST(req: NextRequest) {
     };
 
     cloudFavs.unshift(newFav);
-    if (cloudFavs.length > 250) cloudFavs = cloudFavs.slice(0, 250);
+    if (cloudFavs.length > 300) cloudFavs = cloudFavs.slice(0, 300);
 
-    // Guardar en user_metadata (100% garantizado en la nube)
+    // Guardar en user_metadata (100% garantizado)
     await admin.auth.admin.updateUserById(user.id, {
       user_metadata: {
         ...meta,
@@ -158,7 +161,7 @@ export async function POST(req: NextRequest) {
 
     // Guardar también en tabla SQL si existe
     try {
-      let resolvedItemId = itemId;
+      let resolvedItemId = itemId ? Number(itemId) : null;
       if (!resolvedItemId && source && sourceId) {
         const { data: it } = await admin
           .from("items")
@@ -168,10 +171,10 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
         if (it) resolvedItemId = it.id;
       }
-      if (resolvedItemId) {
+      if (resolvedItemId && Number.isInteger(resolvedItemId)) {
         await admin
           .from("favorites")
-          .upsert({ user_id: user.id, item_id: Number(resolvedItemId) }, { onConflict: "user_id,item_id" });
+          .upsert({ user_id: user.id, item_id: resolvedItemId }, { onConflict: "user_id,item_id" });
       }
     } catch (e) {}
 
