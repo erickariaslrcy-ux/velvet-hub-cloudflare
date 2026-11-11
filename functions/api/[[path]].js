@@ -331,7 +331,7 @@ export async function onRequest(context) {
       postgrestUrl += "&media_type=eq.gallery&id=gte.370000&order=id.desc";
       estimatedTotal = 18253;
     } else {
-      postgrestUrl += "&media_type=eq.comic&order=id.desc";
+      postgrestUrl += "&media_type=eq.comic&id=gte.320000&order=id.desc";
       estimatedTotal = 45000;
     }
 
