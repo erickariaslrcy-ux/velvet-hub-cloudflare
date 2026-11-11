@@ -265,6 +265,99 @@ export async function onRequest(context) {
       }
 
       const it = items[0];
+
+      // Auto-reparación y extracción JIT de páginas si el cómic está sin páginas
+      if ((!it.pages || it.pages.length === 0) && (it.media_type === "comic" || !it.media_type)) {
+        // Caso A: 3hentai tiene páginas deterministas según cover_url y page_count
+        if (it.source === "3hentai" && it.cover_url && it.page_count > 0) {
+          const baseUrl = it.cover_url.replace(/\/thumb\.[a-z0-9]+$/i, "");
+          const extMatch = it.cover_url.match(/\.([a-z0-9]+)$/i);
+          const ext = extMatch ? extMatch[1] : "jpg";
+          it.pages = [];
+          for (let pNum = 1; pNum <= it.page_count; pNum++) {
+            it.pages.push({
+              index: pNum,
+              image_url: `${baseUrl}/${pNum}.${ext}`,
+              referer: it.url || `https://3hentai.net/d/${it.source_id}`
+            });
+          }
+          if (context.waitUntil) {
+            context.waitUntil(
+              fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
+                method: "PATCH",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "return=minimal"
+                },
+                body: JSON.stringify({ pages: it.pages })
+              }).catch(() => {})
+            );
+          }
+        } else if (it.url && it.url.startsWith("http")) {
+          // Caso B: Cómics web / WordPress (melapelocondibujos, melapelacomics, reycomix, pornocomic, vercomicporno, etc.)
+          try {
+            const pageResp = await fetch(it.url, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+                "Referer": it.url
+              }
+            });
+            if (pageResp.ok) {
+              const html = await pageResp.text();
+              const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|src)=["']([^"']+)["']/gi;
+              const bannerRegex = /(logo-generator|ms-icon|ACCESO-VIPS|HACERSE-VIP|ZONAVIP|CHAT-VIPS|portadavip|\/themes\/|\/plugins\/|avatar|gravatar|advert|banner)/i;
+              const thumbRegex = /-\d{2,4}x\d{2,4}(?=\.(?:jpe?g|png|webp|gif)$)/i;
+              let m;
+              const foundImgs = [];
+              while ((m = imgRegex.exec(html)) !== null) {
+                let src = m[1];
+                if (!src || src.startsWith("data:")) continue;
+                if (src.startsWith("//")) src = "https:" + src;
+                if (bannerRegex.test(src)) continue;
+                src = src.replace(thumbRegex, "");
+                if (src.includes("/wp-content/uploads/") || src.includes(".jpg") || src.includes(".png") || src.includes(".webp")) {
+                  if (!foundImgs.includes(src)) foundImgs.push(src);
+                }
+              }
+              if (foundImgs.length > 0) {
+                foundImgs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+                it.pages = foundImgs.map((u, idx) => ({
+                  index: idx + 1,
+                  image_url: u,
+                  referer: it.url
+                }));
+                it.page_count = it.pages.length;
+                if (!it.cover_url && it.pages[0]) {
+                  it.cover_url = it.pages[0].image_url;
+                }
+                if (context.waitUntil) {
+                  context.waitUntil(
+                    fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
+                      method: "PATCH",
+                      headers: {
+                        "apikey": SUPABASE_KEY,
+                        "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal"
+                      },
+                      body: JSON.stringify({
+                        pages: it.pages,
+                        page_count: it.page_count,
+                        cover_url: it.cover_url
+                      })
+                    }).catch(() => {})
+                  );
+                }
+              }
+            }
+          } catch (scrapeErr) {
+            // Continuar si falla el fetch en vivo
+          }
+        }
+      }
+
       const masked = {
         ...it,
         url: "", // Ocultar URL original
@@ -345,7 +438,7 @@ export async function onRequest(context) {
     let estimatedTotal = 20000;
 
     if (mediaType === "video") {
-      postgrestUrl += "&media_type=eq.video&id=lte.304214";
+      postgrestUrl += "&media_type=eq.video&video_sources=neq.[]";
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery&id=gte.370000";
@@ -356,8 +449,8 @@ export async function onRequest(context) {
       }
       estimatedTotal = 18253;
     } else {
-      postgrestUrl += "&media_type=eq.comic&id=gte.320000";
-      estimatedTotal = 45000;
+      postgrestUrl += "&media_type=eq.comic&page_count=gt.0";
+      estimatedTotal = 16000;
     }
 
     if (q) {
@@ -472,11 +565,11 @@ export async function onRequest(context) {
 
     let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
     if (mediaType === "video") {
-      queryParam += "&media_type=eq.video&id=lte.304214&order=id.desc";
+      queryParam += "&media_type=eq.video&video_sources=neq.[]&order=id.desc";
     } else if (mediaType === "gallery") {
       queryParam += "&media_type=eq.gallery&id=gte.370000&source=neq.leakgallery&order=id.desc";
     } else {
-      queryParam += "&media_type=eq.comic&id=gte.320000&order=id.desc";
+      queryParam += "&media_type=eq.comic&page_count=gt.0&order=id.desc";
     }
 
     try {
