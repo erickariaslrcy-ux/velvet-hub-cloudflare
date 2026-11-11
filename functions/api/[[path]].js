@@ -309,8 +309,89 @@ export async function onRequest(context) {
 
       const it = items[0];
 
+      // Función de limpieza estricta: elimina publicidad, banners VIP y miniaturas de posts relacionados (YARPP)
+      const cleanComicPagesList = (pages) => {
+        if (!pages || !Array.isArray(pages) || pages.length === 0) return [];
+        const adRegex = /(logo|banner|advert|patrocinador|donar|promo|avatar|gravatar|ACCESO-VIPS|HACERSE-VIP|ZONAVIP|CHAT-VIPS|portadavip|unirse[-_]vip|acceso[-_]vip|hacerse[-_]vip|ms-icon|favicon|\/themes\/|\/plugins\/|discord|telegram|yarpp|thumbnail)/i;
+
+        let valid = pages.filter(p => {
+          const u = (typeof p === "string" ? p : (p.image_url || p.url || "")).trim();
+          if (!u || u.startsWith("data:")) return false;
+          if (adRegex.test(u)) return false;
+          return true;
+        });
+
+        if (valid.length <= 2) return valid.map((p, idx) => ({
+          index: idx + 1,
+          image_url: typeof p === "string" ? p : p.image_url,
+          referer: typeof p === "object" ? (p.referer || "") : ""
+        }));
+
+        // Detectar carpeta mensual dominante (/wp-content/uploads/YYYY/MM/) para descartar miniaturas intrusas de otros cómics
+        const folderCounts = {};
+        for (const p of valid) {
+          const u = typeof p === "string" ? p : p.image_url;
+          const m = u.match(/\/wp-content\/uploads\/(\d{4}\/\d{2})\//i);
+          if (m) folderCounts[m[1]] = (folderCounts[m[1]] || 0) + 1;
+        }
+
+        let dominantFolder = null;
+        let maxCount = 0;
+        for (const [ym, count] of Object.entries(folderCounts)) {
+          if (count > maxCount) {
+            maxCount = count;
+            dominantFolder = ym;
+          }
+        }
+
+        if (dominantFolder && maxCount >= 2 && maxCount >= valid.length * 0.5) {
+          valid = valid.filter(p => {
+            const u = typeof p === "string" ? p : p.image_url;
+            const m = u.match(/\/wp-content\/uploads\/(\d{4}\/\d{2})\//i);
+            if (!m) return true;
+            return m[1] === dominantFolder;
+          });
+        }
+
+        return valid.map((p, idx) => ({
+          index: idx + 1,
+          image_url: typeof p === "string" ? p : p.image_url,
+          referer: typeof p === "object" ? (p.referer || "") : ""
+        }));
+      };
+
+      // Si el cómic ya tiene páginas, sanitizarlas inmediatamente para expulsar intrusos de posts relacionados
+      const isComic = it.media_type === "comic" || !it.media_type;
+      if (isComic && it.pages && it.pages.length > 0) {
+        const initialCount = it.pages.length;
+        const cleaned = cleanComicPagesList(it.pages);
+        if (cleaned.length !== initialCount) {
+          it.pages = cleaned;
+          it.page_count = cleaned.length;
+          if (it.pages[0]) it.cover_url = it.pages[0].image_url;
+          if (context.waitUntil) {
+            context.waitUntil(
+              fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
+                method: "PATCH",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "return=minimal"
+                },
+                body: JSON.stringify({
+                  pages: it.pages,
+                  page_count: it.page_count,
+                  cover_url: it.cover_url
+                })
+              }).catch(() => {})
+            );
+          }
+        }
+      }
+
       // Auto-reparación y extracción JIT de páginas si el cómic está sin páginas
-      if ((!it.pages || it.pages.length === 0) && (it.media_type === "comic" || !it.media_type)) {
+      if ((!it.pages || it.pages.length === 0) && isComic) {
         // Caso A: 3hentai tiene páginas deterministas según cover_url y page_count
         if (it.source === "3hentai" && it.cover_url && it.page_count > 0) {
           const baseUrl = it.cover_url.replace(/\/thumb\.[a-z0-9]+$/i, "");
@@ -349,28 +430,44 @@ export async function onRequest(context) {
             });
             if (pageResp.ok) {
               const html = await pageResp.text();
-              const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|src)=["']([^"']+)["']/gi;
-              const bannerRegex = /(logo-generator|ms-icon|ACCESO-VIPS|HACERSE-VIP|ZONAVIP|CHAT-VIPS|portadavip|\/themes\/|\/plugins\/|avatar|gravatar|advert|banner)/i;
+
+              // 1. Aislar estrictamente el contenedor del cómic (#penci-post-entry-inner, .entry-content, article)
+              let contentHtml = html;
+              const entryMatch = html.match(/<(?:article|div)[^>]+class=["'][^"']*(?:penci-post-entry-inner|inner-post-entry|post-entry|entry-content|the_content|post-content|comic-content)[^"']*["']/i);
+              if (entryMatch) {
+                let sub = html.substring(entryMatch.index);
+                // Cortar antes de posts relacionados (YARPP), comentarios, widgets, sidebar y footer
+                const cutMatch = sub.match(/(?:class=["'][^"']*(?:yarpp|related|sharedaddy|jp-relatedposts|comments-area|post-navigation|widget-area|sidebar)[^"']*["']|<div[^>]+id=["'](?:comments|sidebar|related|footer)["']|<footer|<aside)/i);
+                if (cutMatch) {
+                  sub = sub.substring(0, cutMatch.index);
+                }
+                contentHtml = sub;
+              }
+
+              const imgRegex = /<img[^>]+(?:data-src|data-lazy-src|data-original|src)=["']([^"']+)["'][^>]*>/gi;
+              const bannerRegex = /(logo|banner|advert|patrocinador|donar|promo|avatar|gravatar|ACCESO-VIPS|HACERSE-VIP|ZONAVIP|CHAT-VIPS|portadavip|unirse[-_]vip|acceso[-_]vip|hacerse[-_]vip|ms-icon|favicon|\/themes\/|\/plugins\/|discord|telegram)/i;
               const thumbRegex = /-\d{2,4}x\d{2,4}(?=\.(?:jpe?g|png|webp|gif)$)/i;
               let m;
               const foundImgs = [];
-              while ((m = imgRegex.exec(html)) !== null) {
+              while ((m = imgRegex.exec(contentHtml)) !== null) {
+                const tagStr = m[0];
+                if (/class=["'][^"']*(?:yarpp|thumbnail|wp-post-image|avatar)[^"']*["']/i.test(tagStr)) continue;
                 let src = m[1];
                 if (!src || src.startsWith("data:")) continue;
                 if (src.startsWith("//")) src = "https:" + src;
                 if (bannerRegex.test(src)) continue;
-                src = src.replace(thumbRegex, "");
-                if (src.includes("/wp-content/uploads/") || src.includes(".jpg") || src.includes(".png") || src.includes(".webp")) {
+                src = src.split("?")[0].replace(thumbRegex, "");
+                if (src.includes("/wp-content/uploads/") || /\.(?:jpe?g|png|webp)$/i.test(src)) {
                   if (!foundImgs.includes(src)) foundImgs.push(src);
                 }
               }
               if (foundImgs.length > 0) {
                 foundImgs.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-                it.pages = foundImgs.map((u, idx) => ({
+                it.pages = cleanComicPagesList(foundImgs.map((u, idx) => ({
                   index: idx + 1,
                   image_url: u,
                   referer: it.url
-                }));
+                })));
                 it.page_count = it.pages.length;
                 if (!it.cover_url && it.pages[0]) {
                   it.cover_url = it.pages[0].image_url;
