@@ -139,10 +139,10 @@
       background-color: #040209;
     }
 
-    /* VIRTUALIZACIÓN NATIVA EN CASCADA (REDUCE RAM & GPU HASTA UN 80%) */
+    /* RENDERIZADO FLUIDO EN CASCADA SIN CUADROS NEGROS */
     #reader-pages-vertical > div {
-      content-visibility: auto;
-      contain-intrinsic-size: auto 1000px;
+      transform: translateZ(0);
+      backface-visibility: hidden;
     }
 
     /* OPTIMIZACIÓN MÓVIL ANDROID (CERO LAG, 120 FPS NATIVO) */
@@ -239,21 +239,10 @@
       image-rendering: auto;
       max-width: 100%;
       height: auto;
-      contain: layout paint;
     }
     .reader-page-item {
-      content-visibility: auto;
-      contain-intrinsic-size: 800px 1200px;
-    }
-    
-    .skeleton-shimmer {
-      background: linear-gradient(90deg, rgba(255,255,255,0.01) 25%, rgba(236,72,153,0.08) 50%, rgba(255,255,255,0.01) 75%);
-      background-size: 200% 100%;
-      animation: velvetShimmer 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    @keyframes velvetShimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
+      transform: translateZ(0);
+      backface-visibility: hidden;
     }
     #reader-body {
       -webkit-overflow-scrolling: touch;
@@ -773,8 +762,8 @@
     }
 
     #video-recommendations-grid > div {
-      content-visibility: auto;
-      contain-intrinsic-size: 200px 180px;
+      transform: translateZ(0);
+      backface-visibility: hidden;
     }
 
     .ambient-glow-pulse {
