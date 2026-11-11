@@ -151,6 +151,18 @@ export async function onRequest(context) {
         spoofedReferer = "https://hentaipaw.com/";
       } else if (targetMediaUrl.includes("pmvhaven") || targetMediaUrl.includes("ovh.net")) {
         spoofedReferer = "https://pmvhaven.com/";
+      } else if (targetMediaUrl.includes("pornone")) {
+        spoofedReferer = "https://pornone.com/";
+      } else if (targetMediaUrl.includes("redporn")) {
+        spoofedReferer = "https://redporn.porn/";
+      } else if (targetMediaUrl.includes("anyporn")) {
+        spoofedReferer = "https://anyporn.com/";
+      } else if (targetMediaUrl.includes("damplips")) {
+        spoofedReferer = "https://www.damplips.com/";
+      } else if (targetMediaUrl.includes("alotporn")) {
+        spoofedReferer = "https://www.alotporn.com/";
+      } else if (targetMediaUrl.includes("pornhd")) {
+        spoofedReferer = "https://pornhd.pet/";
       } else {
         try {
           spoofedReferer = new URL(targetMediaUrl).origin + "/";
@@ -358,6 +370,115 @@ export async function onRequest(context) {
         }
       }
 
+      // Auto-reparación y extracción JIT de video streams si el video está sin fuentes
+      if ((!it.video_sources || it.video_sources.length === 0) && (it.media_type === "video" || it.source === "pmvhaven" || it.source === "pornone" || it.source === "redporn" || it.source === "anyporn" || it.source === "alotporn" || it.source === "damplips" || it.source === "pornhd")) {
+        const streams = [];
+
+        // 1. PMVHaven API
+        if (it.source === "pmvhaven" || (it.url && it.url.includes("pmvhaven.com"))) {
+          const pmvId = it.source_id || ((it.url && it.url.match(/[?&]v=([a-f0-9]{24})/i)) || (it.url && it.url.match(/\/([a-f0-9]{24})/i)) || [])[1];
+          if (pmvId) {
+            try {
+              const pmvRes = await fetch(`https://pmvhaven.com/api/videos/${pmvId}`, {
+                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "application/json" }
+              });
+              if (pmvRes.ok) {
+                const pmvData = await pmvRes.json();
+                const vData = pmvData?.data;
+                if (vData) {
+                  if (vData.videoUrl) streams.push({ quality: "1080p HD", url: vData.videoUrl, format: "mp4" });
+                  if (vData.hlsMasterPlaylistUrl) streams.push({ quality: "720p HD", url: vData.hlsMasterPlaylistUrl, format: "m3u8" });
+                }
+              }
+            } catch (e) {}
+          }
+        }
+
+        // 2. Extractor Web JIT multi-sitio (PornOne, AnyPorn, RedPorn, Damplips, AlotPorn, PornHD, etc.)
+        if (streams.length === 0 && it.url && it.url.startsWith("http")) {
+          try {
+            const cleanUrl = it.url.replace("es.anyporn.com", "anyporn.com");
+            const vResp = await fetch(cleanUrl, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                "Referer": cleanUrl
+              }
+            });
+            if (vResp.ok) {
+              const html = await vResp.text();
+
+              // A. AnyPorn JS sources object
+              const srcObjMatch = html.match(/sources\s*=\s*(\{.*?\});/s);
+              if (srcObjMatch) {
+                const found = [...srcObjMatch[1].matchAll(/(\d+)\s*:\s*['"]([^'"]+)['"]/g)];
+                for (const f of found) {
+                  streams.push({ quality: `${f[1]}p`, url: f[2], format: f[2].includes(".m3u8") ? "m3u8" : "mp4" });
+                }
+              }
+
+              // B. Schema.org contentUrl (PornOne, AnyPorn)
+              const contentUrl = html.match(/"contentUrl":\s*"([^"]+)"/);
+              if (contentUrl && !streams.some(s => s.url === contentUrl[1])) {
+                streams.push({ quality: "720p HD", url: contentUrl[1], format: contentUrl[1].includes(".m3u8") ? "m3u8" : "mp4" });
+              }
+
+              // C. HTML5 <source> tags (PornOne, RedPorn, Damplips, etc.)
+              const sourcesMatch = [...html.matchAll(/<source[^>]+src=["']([^"']+)["']/gi)];
+              for (const sm of sourcesMatch) {
+                const src = sm[1];
+                if (src.includes("preview") && cleanUrl.includes("alotporn")) continue;
+                if (!streams.some(s => s.url === src)) {
+                  let q = "1080p HD";
+                  if (src.includes("720") || sm[0].includes("720")) q = "720p HD";
+                  else if (src.includes("480") || sm[0].includes("480")) q = "480p";
+                  else if (src.includes("360") || sm[0].includes("360")) q = "360p";
+                  streams.push({ quality: q, url: src, format: src.includes(".m3u8") ? "m3u8" : "mp4" });
+                }
+              }
+
+              // D. JS video file configs (jwplayer, videojs, embed)
+              const fileMatches = [...html.matchAll(/(?:file|video_url|source|stream_url)\s*:\s*["'](https?:\/\/[^"']+\.(?:mp4|m3u8)[^"']*)["']/gi)];
+              for (const fm of fileMatches) {
+                const fUrl = fm[1];
+                if (fUrl.includes("preview") && cleanUrl.includes("alotporn")) continue;
+                if (!streams.some(s => s.url === fUrl)) {
+                  streams.push({ quality: "1080p HD", url: fUrl, format: fUrl.includes(".m3u8") ? "m3u8" : "mp4" });
+                }
+              }
+
+              // E. Fallback MP4 directo
+              if (streams.length === 0) {
+                const mp4s = [...new Set(html.match(/https?:\/\/[^\s'"<>]+\.(?:mp4|m3u8)(?:\?[^\s'"<>]*)?/gi) || [])];
+                for (const m of mp4s) {
+                  if (m.includes("preview") && cleanUrl.includes("alotporn")) continue;
+                  if (!streams.some(s => s.url === m)) {
+                    streams.push({ quality: "720p HD", url: m, format: m.includes(".m3u8") ? "m3u8" : "mp4" });
+                  }
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (streams.length > 0) {
+          it.video_sources = streams;
+          if (context.waitUntil) {
+            context.waitUntil(
+              fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
+                method: "PATCH",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "return=minimal"
+                },
+                body: JSON.stringify({ video_sources: it.video_sources })
+              }).catch(() => {})
+            );
+          }
+        }
+      }
+
       const masked = {
         ...it,
         url: "", // Ocultar URL original
@@ -368,7 +489,7 @@ export async function onRequest(context) {
         })),
         video_sources: (it.video_sources || []).map(vs => ({
           ...vs,
-          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url)}` : ""
+          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url, it.url || vs.referer || "")}` : ""
         }))
       };
 
@@ -435,27 +556,22 @@ export async function onRequest(context) {
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources,artists";
     let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
 
-    let estimatedTotal = 20000;
+    let estimatedTotal = 100000;
 
     if (mediaType === "video") {
-      postgrestUrl += "&source=eq.pmvhaven";
-      estimatedTotal = 20242;
+      postgrestUrl += "&media_type=eq.video&id=lte.305000";
+      estimatedTotal = 166086;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
-      postgrestUrl += "&media_type=eq.gallery&id=gte.370000";
+      postgrestUrl += "&media_type=eq.gallery";
       // Leakedgallery solo 0.002 (0.2%) de probabilidad ultra rara o si se busca explícitamente
       const allowLeak = (Math.random() < 0.002) || (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
       if (!allowLeak) {
         postgrestUrl += "&source=neq.leakgallery";
       }
-      estimatedTotal = 18253;
+      estimatedTotal = 18261;
     } else {
       postgrestUrl += "&media_type=eq.comic";
-      if (!q && (!category || category === "all")) {
-        postgrestUrl += "&page_count=gt.0";
-      } else {
-        postgrestUrl += "&source=in.(3hentai,melapelocondibujos,hentaipaw,melapelacomics,mhcomics,comics18_net)";
-      }
-      estimatedTotal = 16000;
+      estimatedTotal = 105326;
     }
 
     if (q) {
