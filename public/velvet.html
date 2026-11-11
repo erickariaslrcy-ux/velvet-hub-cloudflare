@@ -3263,6 +3263,7 @@
 
     window.onerror = function(msg, url, line, col, error) {
       console.error('🚨 [ERROR JS GLOBAL]:', msg, 'en', url, 'línea:', line, error);
+      return true; // Suprime alertas en pantalla
     };
 
     window.onunhandledrejection = function(event) {
@@ -10772,7 +10773,9 @@
     // =========================================================================
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('/sw.js').then((reg) => {
+          reg.update(); // Actualizar de inmediato y limpiar cachés obsoletas
+        }).catch(() => {});
       });
     }
 

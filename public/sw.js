@@ -1,7 +1,8 @@
 // Velvet Hub Ultra-Fast Turbo Service Worker (PC & Android Hardware-Accelerated Cache)
-const STATIC_CACHE = 'velvet-static-v2';
-const API_CACHE = 'velvet-api-v2';
-const IMAGE_CACHE = 'velvet-images-v2';
+const CACHE_VERSION = 'v5';
+const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
+const API_CACHE = `velvet-api-${CACHE_VERSION}`;
+const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
 const MAX_CACHED_IMAGES = 450;
 
 const STATIC_ASSETS = [
@@ -24,7 +25,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys
-          .filter((key) => ![STATIC_CACHE, API_CACHE, IMAGE_CACHE].includes(key))
+          .filter((key) => !key.endsWith(CACHE_VERSION))
           .map((key) => caches.delete(key))
       );
     }).then(() => self.clients.claim())
@@ -60,7 +61,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Caché de Imágenes (/api/image, /api/img, portadas y páginas de cómic): Cache First con fallback y guardado en segundo plano
+  // 2. Navegación HTML (Páginas y Vistas): NETWORK FIRST con fallback a caché
+  // Garantiza que cualquier actualización o solución se vea de inmediato al recargar
+  const isNavigation = req.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.startsWith('/comic/') ||
+    url.pathname.startsWith('/gallery/') ||
+    url.pathname.startsWith('/video/');
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(req)
+        .then((networkResp) => {
+          if (networkResp && networkResp.status === 200) {
+            const clone = networkResp.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(req, clone));
+          }
+          return networkResp;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // 3. Caché de Imágenes (/api/image, /api/img, portadas y páginas de cómic): Cache First con fallback y guardado en segundo plano
   const isImageReq =
     url.pathname.startsWith('/api/image') ||
     url.pathname.startsWith('/api/img') ||
@@ -75,11 +100,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(req).then((cached) => {
         if (cached) {
-          // Devolver instantáneo desde caché local (0ms)
           return cached;
         }
 
-        // Si no está en caché, descargar de la red y guardar copia
         return fetch(req)
           .then((networkResp) => {
             if (networkResp && networkResp.status === 200) {
@@ -92,7 +115,6 @@ self.addEventListener('fetch', (event) => {
             return networkResp;
           })
           .catch(() => {
-            // Si falla la red y no hay caché, retornar fallback transparente si existe
             return caches.match('/velvet_logo.png');
           });
       })
@@ -100,7 +122,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Caché de Datos API (/api/items, /api/tags, /api/random): Stale-While-Revalidate a 0ms
+  // 4. Caché de Datos API (/api/items, /api/tags, /api/random): Stale-While-Revalidate
   const isApiReq = url.pathname.startsWith('/api/items') || url.pathname.startsWith('/api/tags');
   if (isApiReq) {
     event.respondWith(
@@ -115,7 +137,6 @@ self.addEventListener('fetch', (event) => {
             })
             .catch(() => cached);
 
-          // Si hay respuesta previa en caché, devolverla a 0 milisegundos mientras la red se actualiza en segundo plano
           return cached || fetchPromise;
         });
       })
@@ -123,9 +144,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 4. Recursos Estáticos de la App Shell (HTML, JS, CSS, Fuentes): Stale-While-Revalidate
+  // 5. Recursos Estáticos (Fuentes, Tailwind, CSS): Stale-While-Revalidate
   if (
-    url.pathname === '/' ||
     url.pathname.startsWith('/_next/static') ||
     url.pathname.endsWith('.woff2') ||
     url.hostname.includes('cdnjs.cloudflare.com') ||
