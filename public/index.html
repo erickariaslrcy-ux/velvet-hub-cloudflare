@@ -191,7 +191,28 @@
       backface-visibility: hidden;
       contain: layout paint;
       content-visibility: auto;
-      contain-intrinsic-size: auto 380px;
+      contain-intrinsic-size: auto 340px;
+    }
+
+    @keyframes velvetCardFadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .velvet-card-enter {
+      animation: velvetCardFadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+      animation-delay: calc(var(--card-i, 0) * 28ms);
+      will-change: transform, opacity;
+    }
+
+    .card-cover-img {
+      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .cat-chip {
       backface-visibility: hidden;
@@ -1483,56 +1504,88 @@
 
     </div>
 
-    <!-- Flujo Infinito & Paginación Velvet Modern (Infinite Stream) -->
-    <div id="infinite-scroll-container" class="mt-8 flex flex-col items-center justify-center gap-4 select-none pb-12">
-      <!-- Sentinel invisible para auto-carga automática con IntersectionObserver al hacer scroll -->
-      <div id="feed-sentinel" class="w-full h-8"></div>
+    <!-- Flujo Ultra-Liviano & Paginación Velvet Android (Cero Saturación de Memoria) -->
+    <div id="infinite-scroll-container" class="mt-8 flex flex-col items-center justify-center gap-4 select-none pb-16 px-3">
+      <!-- Sentinel invisible para auto-carga suave al llegar al fondo -->
+      <div id="feed-sentinel" class="w-full h-4"></div>
 
       <!-- Spinner animado de carga en segundo plano -->
-      <div id="infinite-loading-spinner" class="hidden flex items-center gap-3 px-6 py-3 rounded-2xl bg-glass border border-neon/30 text-ink shadow-neon backdrop-blur-md">
+      <div id="infinite-loading-spinner" class="hidden flex items-center gap-3 px-6 py-3 rounded-2xl bg-[#0d0720]/95 border border-neon/40 text-ink shadow-[0_0_25px_rgba(236,72,153,0.3)] backdrop-blur-md">
         <div class="w-5 h-5 border-2 border-hot/30 border-t-hot rounded-full animate-spin"></div>
-        <span class="text-xs font-bold text-lav">Cargando más contenido en alta definición...</span>
+        <span class="text-xs font-black text-lav">Cargando siguiente página en alta definición...</span>
       </div>
 
-      <!-- Barra de Carga & Salto Limpio -->
-      <div id="load-more-btn-container" class="flex flex-wrap items-center justify-center gap-3">
-        <button id="load-more-btn" onclick="loadNextPage()" class="group px-7 py-3.5 bg-gradient-to-r from-hot via-purple-600 to-neon hover:opacity-95 text-white rounded-2xl text-xs sm:text-sm font-extrabold shadow-hot-glow hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2.5 cursor-pointer">
-          <i class="fa-solid fa-angles-down group-hover:translate-y-0.5 transition-transform text-white"></i>
-          <span id="load-more-btn-text">Cargar más contenido</span>
-          <span id="load-more-counter" class="text-[10px] bg-black/40 px-2.5 py-0.5 rounded-full text-lav border border-white/10 font-bold">Pág. 1</span>
+      <!-- Barra de Navegación Rápida Flotante / Ergonómica para Android & Desktop -->
+      <div id="load-more-btn-container" class="w-full max-w-md flex flex-col items-center gap-2.5">
+        
+        <!-- Botón Grande de Acción: Página Siguiente (Limpieza de RAM Instantánea) -->
+        <button id="load-more-btn" onclick="loadNextPage()" class="group w-full py-4 px-6 bg-gradient-to-r from-hot via-purple-600 to-neon hover:opacity-95 text-white rounded-2xl text-sm font-black shadow-hot-glow hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-between cursor-pointer border border-white/10">
+          <span class="flex items-center gap-2">
+            <i class="fa-solid fa-bolt text-amber-300 text-xs"></i>
+            <span id="load-more-btn-text">Página Siguiente</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <span id="load-more-counter" class="text-[11px] bg-black/40 px-2.5 py-1 rounded-xl text-lav border border-white/10 font-bold tabular-nums">Pág. 1 / 4,389</span>
+            <i class="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition-transform"></i>
+          </span>
         </button>
 
-        <!-- Botón discreto para desplegar salto directo sin estorbar -->
-        <button onclick="togglePageJumpDrawer()" class="px-4 py-3.5 bg-glass border border-neon/25 hover:border-hot text-lav hover:text-ink rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer" title="Ir a una página específica">
-          <i class="fa-solid fa-list-ol text-hot"></i>
-          <span class="text-xs">Saltar Pág</span>
-        </button>
-      </div>
+        <!-- Barra de Controles Táctiles Rápidos: Anterior / Salto / Siguiente -->
+        <div class="flex items-center justify-between w-full gap-2 p-1.5 rounded-2xl bg-[#0c061d]/90 border border-neon/25 shadow-lg backdrop-blur-md">
+          <button id="prev-page-btn" onclick="changePage(-1)" title="Página anterior" class="flex-1 h-10 px-3 flex items-center justify-center gap-1.5 bg-glass border border-neon/20 hover:border-hot text-lav hover:text-white rounded-xl text-xs font-bold disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer">
+            <i class="fa-solid fa-chevron-left text-[10px]"></i>
+            <span>Ant</span>
+          </button>
 
-      <!-- Drawer colapsable para salto manual (limpio, elegante y sin 'undefined') -->
-      <div id="page-jump-drawer" class="hidden flex flex-wrap items-center justify-center gap-2 p-3 bg-obsidian/95 border border-neon/30 rounded-2xl backdrop-blur-xl shadow-neon-strong transition-all">
-        <button id="first-page-btn" onclick="jumpToPage(1)" title="Primera página" class="w-8 h-8 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
-          <i class="fa-solid fa-angles-left"></i>
-        </button>
-        <button id="prev-page-btn" onclick="changePage(-1)" title="Página anterior" class="px-3 h-8 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
-          <i class="fa-solid fa-chevron-left mr-1"></i> Ant
-        </button>
+          <!-- Botón central para desplegar salto directo -->
+          <button onclick="togglePageJumpDrawer()" class="h-10 px-4 bg-hot/15 border border-hot/35 hover:bg-hot/25 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-sm">
+            <i class="fa-solid fa-compass text-hot text-[11px]"></i>
+            <span id="quick-page-counter" class="tabular-nums font-mono text-[11px]">Pág. 1</span>
+            <i class="fa-solid fa-chevron-up text-[9px] text-lav/60"></i>
+          </button>
 
-        <div class="flex items-center gap-1.5 px-2 border-x border-neon/20">
-          <span class="text-xs text-lav font-bold">Pág:</span>
-          <input id="direct-page-input" type="number" min="1" class="w-16 h-8 px-2 text-center text-xs font-bold text-white bg-black/80 border border-neon/40 focus:border-hot rounded-xl focus:outline-none" placeholder="1" onkeydown="if(event.key==='Enter') executeDirectJump()" />
-          <button onclick="executeDirectJump()" class="px-3 h-8 bg-gradient-to-r from-hot to-neon text-white text-xs font-bold rounded-xl hover:shadow-hot-glow cursor-pointer">
-            Ir
+          <button id="next-page-btn" onclick="changePage(1)" title="Página siguiente" class="flex-1 h-10 px-3 flex items-center justify-center gap-1.5 bg-glass border border-neon/20 hover:border-hot text-lav hover:text-white rounded-xl text-xs font-bold disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer">
+            <span>Sig</span>
+            <i class="fa-solid fa-chevron-right text-[10px]"></i>
           </button>
         </div>
 
-        <button id="next-page-btn" onclick="changePage(1)" title="Página siguiente" class="px-3 h-8 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
-          Sig <i class="fa-solid fa-chevron-right ml-1"></i>
+        <!-- Indicador de Memoria Limpia Android -->
+        <div class="flex items-center gap-1.5 text-[10px] text-lav/50 font-medium">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span>Motor Ligero Velvet Android &bull; Cero saturación de memoria</span>
+        </div>
+      </div>
+
+      <!-- Drawer colapsable para salto manual (limpio, elegante y táctil) -->
+      <div id="page-jump-drawer" class="hidden flex flex-wrap items-center justify-center gap-2 p-3 bg-obsidian/95 border border-neon/30 rounded-2xl backdrop-blur-xl shadow-neon-strong transition-all max-w-md w-full">
+        <button id="first-page-btn" onclick="jumpToPage(1)" title="Primera página" class="w-9 h-9 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
+          <i class="fa-solid fa-angles-left"></i>
         </button>
-        <button id="last-page-btn" onclick="jumpToLastPage()" title="Última página" class="w-8 h-8 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
+
+        <div class="flex items-center gap-1.5 px-2 border-x border-neon/20 flex-1 justify-center">
+          <span class="text-xs text-lav font-bold">Ir a pág:</span>
+          <input id="direct-page-input" type="number" min="1" class="w-20 h-9 px-2 text-center text-xs font-bold text-white bg-black/80 border border-neon/40 focus:border-hot rounded-xl focus:outline-none" placeholder="1" onkeydown="if(event.key==='Enter') executeDirectJump()" />
+          <button onclick="executeDirectJump()" class="px-4 h-9 bg-gradient-to-r from-hot to-neon text-white text-xs font-black rounded-xl hover:shadow-hot-glow cursor-pointer">
+            Saltar
+          </button>
+        </div>
+
+        <button id="last-page-btn" onclick="jumpToLastPage()" title="Última página" class="w-9 h-9 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
           <i class="fa-solid fa-angles-right"></i>
         </button>
       </div>
+
+      <!-- Contenedores ocultos de compatibilidad -->
+      <div id="pagination-pills" class="hidden"></div>
+      <div id="pagination-controls" class="hidden"></div>
+
+      <!-- Fin del catálogo -->
+      <div id="infinite-end-reached" class="hidden text-center py-4 space-y-1">
+        <p class="text-xs font-bold text-lav/80"><i class="fa-solid fa-circle-check text-hot mr-1"></i> Has llegado al final de este catálogo</p>
+        <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] text-hot hover:underline font-bold cursor-pointer">Volver al inicio &uarr;</button>
+      </div>
+    </div>
 
       <!-- Contenedores ocultos de compatibilidad -->
       <div id="pagination-pills" class="hidden"></div>
@@ -4385,13 +4438,20 @@
       const loadBtnCont = document.getElementById('load-more-btn-container');
       const loadBtnText = document.getElementById('load-more-btn-text');
       const counterEl = document.getElementById('load-more-counter');
+      const quickCounter = document.getElementById('quick-page-counter');
+      const prevBtn = document.getElementById('prev-page-btn');
+      const nextBtn = document.getElementById('next-page-btn');
       const endEl = document.getElementById('infinite-end-reached');
 
       if (container) container.classList.remove('hidden');
 
-      const modeName = state.mode === 'videos' ? 'videos' : (state.mode === 'galleries' ? 'fotos / sets' : 'historias');
-      if (loadBtnText) loadBtnText.textContent = `Cargar más ${modeName}`;
-      if (counterEl) counterEl.textContent = `Pág. ${currentPage} / ${totalPages}`;
+      const modeName = state.mode === 'videos' ? 'Videos' : (state.mode === 'galleries' ? 'Galerías' : 'Cómics');
+      if (loadBtnText) loadBtnText.textContent = `Página Siguiente (${modeName})`;
+      if (counterEl) counterEl.textContent = `Pág. ${currentPage.toLocaleString()} / ${totalPages.toLocaleString()}`;
+      if (quickCounter) quickCounter.textContent = `Pág. ${currentPage.toLocaleString()} / ${totalPages.toLocaleString()}`;
+
+      if (prevBtn) prevBtn.disabled = currentPage <= 1;
+      if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
 
       if (currentPage >= totalPages) {
         if (loadBtnCont) loadBtnCont.classList.add('hidden');
@@ -4463,7 +4523,13 @@
         if (data && data.items && data.items.length > 0) {
           state.page = nextPage;
           if (data.total_pages) state.totalPages = data.total_pages;
-          renderFeedData(data, true);
+          // LIMPIEZA ANDROID: Borra las tarjetas anteriores para liberar memoria RAM y GPU
+          renderFeedData(data, false);
+          const grid = document.getElementById('comics-grid');
+          if (grid) {
+            const topOffset = grid.getBoundingClientRect().top + window.scrollY - 85;
+            window.scrollTo({ top: Math.max(0, topOffset), behavior: 'smooth' });
+          }
         } else {
           const endEl = document.getElementById('infinite-end-reached');
           if (endEl) endEl.classList.remove('hidden');
@@ -4480,7 +4546,7 @@
     }
 
     function getAdaptivePageSize() {
-      return (typeof window !== 'undefined' && window.innerWidth < 768) ? 8 : 12;
+      return (typeof window !== 'undefined' && window.innerWidth < 768) ? 12 : 24;
     }
 
     function initInfiniteScrollObserver() {
@@ -4503,7 +4569,7 @@
             loadNextPage();
           }
         }
-      }, { rootMargin: '600px 0px' });
+      }, { rootMargin: '120px 0px' });
 
       _feedObserver.observe(sentinel);
     }
@@ -4831,11 +4897,13 @@
         const isLocked = isItemLockedForUser(it, idx);
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
+        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
+        card.classList.add('velvet-card-enter');
         if (isLocked) {
-          card.className = 'group flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
           card.onclick = () => openProUpgradeModal(it);
         } else {
-          card.className = 'group flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
           card.onclick = () => openReader(it.source, it.source_id, true, it.id);
         }
 
@@ -4857,8 +4925,8 @@
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
-              class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();"
+              class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -4953,12 +5021,14 @@
         const isLocked = isItemLockedForUser(it, idx);
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
+        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
+        card.classList.add('velvet-card-enter');
 
         if (isLocked) {
-          card.className = 'group flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
           card.onclick = () => openProUpgradeModal(it);
         } else {
-          card.className = 'group flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
           card.onclick = () => {
             if (it.id) setCachedItem(String(it.id), it);
             if (it.source && it.source_id) setCachedItem(`${it.source}_${it.source_id}`, it);
@@ -4984,8 +5054,8 @@
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
-              class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();"
+              class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
               onerror="handleCardImageError(this, 'video')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -7122,12 +7192,14 @@
         const isLocked = isItemLockedForUser(it, idx);
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
+        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
+        card.classList.add('velvet-card-enter');
 
         if (isLocked) {
-          card.className = 'group flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
           card.onclick = () => openProUpgradeModal(it);
         } else {
-          card.className = 'group flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
           card.onclick = () => openReader(it.source, it.source_id, true, it.id);
         }
 
@@ -7153,8 +7225,8 @@
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
-              class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();"
+              class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
