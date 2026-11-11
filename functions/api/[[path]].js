@@ -438,7 +438,7 @@ export async function onRequest(context) {
     let estimatedTotal = 20000;
 
     if (mediaType === "video") {
-      postgrestUrl += "&media_type=eq.video&video_sources=neq.[]";
+      postgrestUrl += "&source=eq.pmvhaven";
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery&id=gte.370000";
@@ -449,7 +449,12 @@ export async function onRequest(context) {
       }
       estimatedTotal = 18253;
     } else {
-      postgrestUrl += "&media_type=eq.comic&page_count=gt.0";
+      postgrestUrl += "&media_type=eq.comic";
+      if (!q && (!category || category === "all")) {
+        postgrestUrl += "&page_count=gt.0";
+      } else {
+        postgrestUrl += "&source=in.(3hentai,melapelocondibujos,hentaipaw,melapelacomics,mhcomics,comics18_net)";
+      }
       estimatedTotal = 16000;
     }
 
@@ -565,7 +570,7 @@ export async function onRequest(context) {
 
     let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
     if (mediaType === "video") {
-      queryParam += "&media_type=eq.video&video_sources=neq.[]&order=id.desc";
+      queryParam += "&source=eq.pmvhaven&order=id.desc";
     } else if (mediaType === "gallery") {
       queryParam += "&media_type=eq.gallery&id=gte.370000&source=neq.leakgallery&order=id.desc";
     } else {

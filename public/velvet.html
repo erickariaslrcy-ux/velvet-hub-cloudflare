@@ -4745,6 +4745,23 @@
 
         empty.classList.remove('hidden');
 
+        const emptyTitle = empty.querySelector('h3');
+        const emptyDesc = empty.querySelector('p');
+        const emptyBtn = empty.querySelector('button');
+        if (state.mode === 'videos') {
+          if (emptyTitle) emptyTitle.textContent = 'No se encontraron videos';
+          if (emptyDesc) emptyDesc.textContent = 'Prueba buscando otro término (ej: PMV, 1080p, Milf) o pulsa en Todos los Videos para ver el catálogo.';
+          if (emptyBtn) emptyBtn.textContent = 'Ver Todos los Videos';
+        } else if (state.mode === 'galleries') {
+          if (emptyTitle) emptyTitle.textContent = 'No se encontraron galerías';
+          if (emptyDesc) emptyDesc.textContent = 'Prueba buscando otra modelo o cosplayer (ej: Kang, Genshin, ArtGravia, Momo).';
+          if (emptyBtn) emptyBtn.textContent = 'Ver Todas las Galerías';
+        } else {
+          if (emptyTitle) emptyTitle.textContent = 'No se encontraron cómics';
+          if (emptyDesc) emptyDesc.textContent = 'Prueba buscando otro término (ej: Milf, 3D, Harem) o pulsa en Todos para ver el catálogo completo.';
+          if (emptyBtn) emptyBtn.textContent = 'Ver Catálogo Completo';
+        }
+
         showToast('Error cargando contenido: ' + (err.message || 'Servidores ocupados'), 'error');
 
       }
