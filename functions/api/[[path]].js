@@ -349,6 +349,11 @@ export async function onRequest(context) {
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery&id=gte.370000&order=id.desc";
+      // Leakedgallery solo 0.002 (0.2%) de probabilidad ultra rara o si se busca explícitamente
+      const allowLeak = (Math.random() < 0.002) || (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
+      if (!allowLeak) {
+        postgrestUrl += "&source=neq.leakgallery";
+      }
       estimatedTotal = 18253;
     } else {
       postgrestUrl += "&media_type=eq.comic&id=gte.320000&order=id.desc";

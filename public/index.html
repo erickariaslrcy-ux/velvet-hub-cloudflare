@@ -4762,7 +4762,7 @@
         if (existingCards.has(cardId)) return;
         existingCards.add(cardId);
 
-        const isLocked = isItemLockedForUser(it);
+        const isLocked = isItemLockedForUser(it, idx);
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
         if (isLocked) {
@@ -4884,7 +4884,7 @@
         if (existingCards.has(cardId)) return;
         existingCards.add(cardId);
 
-        const isLocked = isItemLockedForUser(it);
+        const isLocked = isItemLockedForUser(it, idx);
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
 
@@ -5839,14 +5839,40 @@
     // CONTROL DE ACCESO: ACCESO TOTAL (PATREON O LLAVE) vs 75% GRATIS (25% VIP)
     // =======================================================================
     function hasFullAccess() {
-      return true; // 100% Desbloqueado sin restricciones
+      if (!state.currentUser) return false;
+      if (state.currentUser.role === 'admin' || state.currentUser.role === 'member') return true;
+      if (state.currentUser.is_pro || state.currentUser.tier_level === 'pro') return true;
+      return false;
     }
 
-    function isItemLockedForUser(it) {
-      return false; // Totalmente libre y accesible para todos
+    function isItemLockedForUser(it, idx = null) {
+      // 1. Usuarios con cuenta activa (Patreon, VIP o Admin) tienen ACCESO TOTAL (100% libre)
+      if (hasFullAccess()) {
+        return false;
+      }
+      if (!it) return false;
+
+      // 2. Patron alternado no monotono ("uno si, uno no", ~50% libre y 50% VIP Premium)
+      // Grilla PC (4 columnas): Fila 1 [Free, VIP, Free, VIP], Fila 2 [VIP, Free, VIP, Free]
+      // Grilla Android (2 columnas): Fila 1 [Free, VIP], Fila 2 [Free, VIP], Fila 3 [VIP, Free], Fila 4 [VIP, Free]
+      if (typeof idx === 'number' && idx >= 0) {
+        const pattern = [false, true, false, true, true, false, true, false];
+        return pattern[idx % pattern.length];
+      }
+
+      // 3. Fallback determinista por ID si no hay indice
+      let num = parseInt(it.id, 10);
+      if (!num || isNaN(num)) {
+        const str = String(it.source || '') + ':' + String(it.source_id || it.title || '');
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+          hash = ((hash << 5) - hash) + str.charCodeAt(i);
+          hash |= 0;
+        }
+        num = Math.abs(hash);
+      }
+      return (num % 2) === 1;
     }
-
-
 
     function canUserAccessItem(it) {
       return !isItemLockedForUser(it);
@@ -7027,7 +7053,7 @@
         existingCards.add(cardId);
 
         const fmt = getFormatInfo(it);
-        const isLocked = isItemLockedForUser(it);
+        const isLocked = isItemLockedForUser(it, idx);
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
 
@@ -8040,8 +8066,8 @@
 
         .slice(0, 4);
 
-      recs.forEach(it => {
-        const isLocked = isItemLockedForUser(it);
+      recs.forEach((it, idx) => {
+        const isLocked = isItemLockedForUser(it, idx);
         const card = document.createElement('div');
         if (isLocked) {
           card.className = 'group flex flex-col bg-[#120722] border border-amber-500/40 rounded-xl overflow-hidden hover:border-amber-400 transition-all cursor-pointer';
@@ -9579,9 +9605,7 @@
       if (adminBtn) adminBtn.classList.add('hidden');
 
       showToast('Sesión cerrada correctamente', 'info');
-      if (state.catalogCache && state.catalogCache.length > 0) {
-        renderFeedData({ items: state.catalogCache, page: state.page || 1, total_pages: state.totalPages || 1 });
-      }
+      fetchLiveFeed(true);
 
     }
 
