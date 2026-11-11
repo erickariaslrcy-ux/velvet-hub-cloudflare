@@ -186,18 +186,27 @@
         transform: none !important;
       }
     }
-    /* Catálogo ultra fluido sin sobrecarga de capas GPU ni saltos de contenido */
+    /* Aceleración por hardware limpia (CERO cuadros negros al hacer scroll rápido) */
     #comics-grid > div {
+      transform: translateZ(0);
       backface-visibility: hidden;
-      contain: layout paint;
-      content-visibility: auto;
-      contain-intrinsic-size: auto 340px;
+    }
+
+    .skeleton-shimmer {
+      background: linear-gradient(90deg, #130924 0%, #281446 50%, #130924 100%);
+      background-size: 200% 100%;
+      animation: skeletonShimmer 1.8s ease-in-out infinite;
+    }
+
+    @keyframes skeletonShimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     @keyframes velvetCardFadeUp {
       from {
         opacity: 0;
-        transform: translateY(16px) scale(0.98);
+        transform: translateY(14px) scale(0.985);
       }
       to {
         opacity: 1;
@@ -206,13 +215,12 @@
     }
 
     .velvet-card-enter {
-      animation: velvetCardFadeUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
-      animation-delay: calc(var(--card-i, 0) * 28ms);
-      will-change: transform, opacity;
+      animation: velvetCardFadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+      animation-delay: calc(var(--card-i, 0) * 25ms);
     }
 
     .card-cover-img {
-      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity 0.35s ease, transform 0.4s ease;
     }
     .cat-chip {
       backface-visibility: hidden;
@@ -1587,15 +1595,15 @@
       </div>
     </div>
 
-      <!-- Contenedores ocultos de compatibilidad -->
-      <div id="pagination-pills" class="hidden"></div>
-      <div id="pagination-controls" class="hidden"></div>
-
-      <!-- Fin del catálogo -->
-      <div id="infinite-end-reached" class="hidden text-center py-4 space-y-1">
-        <p class="text-xs font-bold text-lav/80"><i class="fa-solid fa-circle-check text-hot mr-1"></i> Has llegado al final de este catálogo</p>
-        <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] text-hot hover:underline font-bold cursor-pointer">Volver al inicio &uarr;</button>
-      </div>
+    <!-- Bolita / Cápsula Flotante Interactiva de Página Siguiente (Pull-Up & Tap Android / PC) -->
+    <div id="velvet-page-orb-container" class="fixed bottom-16 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 pointer-events-none opacity-0 translate-y-14 select-none">
+      <button id="velvet-page-orb" onclick="transitionToNextPage()" class="pointer-events-auto group px-5 py-3 rounded-full bg-gradient-to-r from-[#ff2a85] via-purple-700 to-[#00f2fe] text-white font-black text-xs shadow-[0_8px_32px_rgba(255,42,133,0.5)] hover:shadow-[0_8px_38px_rgba(0,242,254,0.6)] border border-white/30 flex items-center gap-2.5 backdrop-blur-xl hover:scale-105 active:scale-95 transition-all cursor-pointer">
+        <span id="velvet-orb-icon" class="w-5 h-5 rounded-full bg-black/30 flex items-center justify-center text-[10px] text-amber-300">
+          <i class="fa-solid fa-angles-up group-hover:-translate-y-0.5 transition-transform"></i>
+        </span>
+        <span id="velvet-orb-text" class="tracking-wide font-extrabold text-xs">Página Siguiente</span>
+        <span id="velvet-orb-page" class="text-[10px] bg-black/40 px-2.5 py-0.5 rounded-full font-mono text-lav border border-white/10">Pág. 2</span>
+      </button>
     </div>
 </main>
 
@@ -4475,60 +4483,141 @@
       }
     }
 
-    async function loadNextPage() {
-      if (_isLoadingMore) return;
-      if (state.totalPages && state.page >= state.totalPages) {
-        const endEl = document.getElementById('infinite-end-reached');
-        if (endEl) endEl.classList.remove('hidden');
-        const loadBtn = document.getElementById('load-more-btn-container');
-        if (loadBtn) loadBtn.classList.add('hidden');
-        return;
+    function updatePageOrbUI() {
+      const orbPage = document.getElementById('velvet-orb-page');
+      const orbText = document.getElementById('velvet-orb-text');
+      const orbIcon = document.getElementById('velvet-orb-icon');
+      const nextPage = (state.page || 1) + 1;
+      const totalPages = state.totalPages || 1;
+
+      if (orbPage) {
+        orbPage.textContent = `Pág. ${nextPage}`;
+      }
+      if (orbText) {
+        orbText.textContent = 'Página Siguiente';
+      }
+      if (orbIcon) {
+        orbIcon.innerHTML = '<i class="fa-solid fa-angles-up group-hover:-translate-y-0.5 transition-transform"></i>';
       }
 
-      _isLoadingMore = true;
-      const spinner = document.getElementById('infinite-loading-spinner');
-      const loadBtn = document.getElementById('load-more-btn');
-      if (spinner) spinner.classList.remove('hidden');
-      if (loadBtn) loadBtn.classList.add('opacity-50', 'pointer-events-none');
+      const orbCont = document.getElementById('velvet-page-orb-container');
+      if (orbCont && nextPage > totalPages) {
+        orbCont.classList.add('opacity-0', 'translate-y-14');
+        orbCont.classList.remove('opacity-100', 'translate-y-0');
+      }
+    }
 
-      const nextPage = (state.page || 1) + 1;
+    async function transitionToNextPage(targetPage = null) {
+      if (_isLoadingMore) return;
+      const nextPage = targetPage || ((state.page || 1) + 1);
+      if (state.totalPages && nextPage > state.totalPages) return;
+      if (nextPage < 1) return;
+
+      _isLoadingMore = true;
+
+      // Actualizar indicadores visuales de carga inmediata
+      const orbText = document.getElementById('velvet-orb-text');
+      const orbIcon = document.getElementById('velvet-orb-icon');
+      const loadBtn = document.getElementById('load-more-btn');
+      const loadBtnText = document.getElementById('load-more-btn-text');
+      const spinner = document.getElementById('infinite-loading-spinner');
+
+      if (orbText) orbText.textContent = `Cargando Pág. ${nextPage}...`;
+      if (orbIcon) orbIcon.innerHTML = '<div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
+      if (loadBtnText) loadBtnText.textContent = `Cargando Pág. ${nextPage}...`;
+      if (loadBtn) loadBtn.classList.add('opacity-60', 'pointer-events-none');
+      if (spinner) spinner.classList.remove('hidden');
+
+      const grid = document.getElementById('comics-grid');
 
       try {
-        const params = new URLSearchParams({
-          page: nextPage,
-          page_size: state.pageSize,
-          sort: state.sort,
-          live: 'true'
-        });
+        const cacheKey = `${state.mode}:${state.category}:${nextPage}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
+        let data = null;
 
-        if (state.mode === 'videos') {
-          params.append('media_type', 'video');
-          if (state.feedSeed) params.append('seed', String(state.feedSeed));
-          if (state.category && state.category !== 'all') params.append('category', state.category);
-        } else if (state.mode === 'galleries') {
-          params.append('media_type', 'gallery');
-          if (state.feedSeed) params.append('seed', String(state.feedSeed));
-          if (state.category && state.category !== 'all') params.append('category', state.category);
+        if (CLIENT_CACHE.has(cacheKey)) {
+          data = CLIENT_CACHE.get(cacheKey).data;
         } else {
-          params.append('media_type', 'comic');
-          if (state.feedSeed) params.append('seed', String(state.feedSeed));
-          if (state.category && state.category !== 'all') params.append('category', state.category);
-        }
-        if (state.query) params.append('q', state.query);
+          const params = new URLSearchParams({
+            page: nextPage,
+            page_size: state.pageSize,
+            sort: state.sort,
+            live: 'true'
+          });
 
-        const resp = await fetch(`/api/items?${params.toString()}`, { credentials: 'omit' });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+          if (state.mode === 'videos') {
+            params.append('media_type', 'video');
+            if (state.feedSeed) params.append('seed', String(state.feedSeed));
+            if (state.category && state.category !== 'all') params.append('category', state.category);
+          } else if (state.mode === 'galleries') {
+            params.append('media_type', 'gallery');
+            if (state.feedSeed) params.append('seed', String(state.feedSeed));
+            if (state.category && state.category !== 'all') params.append('category', state.category);
+          } else {
+            params.append('media_type', 'comic');
+            if (state.feedSeed) params.append('seed', String(state.feedSeed));
+            if (state.category && state.category !== 'all') params.append('category', state.category);
+          }
+          if (state.query) params.append('q', state.query);
+
+          const resp = await fetch(`/api/items?${params.toString()}`, { credentials: 'omit' });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          data = await resp.json();
+          CLIENT_CACHE.set(cacheKey, { ts: Date.now(), data });
+        }
 
         if (data && data.items && data.items.length > 0) {
+          // Transición suave: desvanecer la grilla actual para no cambiar de golpe (200ms)
+          if (grid) {
+            grid.style.transition = 'opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)';
+            grid.style.opacity = '0';
+            grid.style.transform = 'translateY(-10px) scale(0.99)';
+            await new Promise(r => setTimeout(r, 200));
+          }
+
           state.page = nextPage;
           if (data.total_pages) state.totalPages = data.total_pages;
-          // LIMPIEZA ANDROID: Borra las tarjetas anteriores para liberar memoria RAM y GPU
+
+          // Renderizar los nuevos elementos y desplazar suavemente al inicio del catálogo
           renderFeedData(data, false);
-          const grid = document.getElementById('comics-grid');
+
           if (grid) {
             const topOffset = grid.getBoundingClientRect().top + window.scrollY - 85;
             window.scrollTo({ top: Math.max(0, topOffset), behavior: 'smooth' });
+            grid.style.transition = '';
+            grid.style.opacity = '1';
+            grid.style.transform = 'none';
+          }
+
+          // Pre-fetch en segundo plano de la siguiente página para respuesta instantánea (0ms)
+          if (nextPage < (data.total_pages || 1)) {
+            const pNext = nextPage + 1;
+            const pNextKey = `${state.mode}:${state.category}:${pNext}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
+            if (!CLIENT_CACHE.has(pNextKey)) {
+              const pNextParams = new URLSearchParams({
+                page: pNext,
+                page_size: state.pageSize,
+                sort: state.sort,
+                live: 'true'
+              });
+              if (state.mode === 'videos') {
+                pNextParams.append('media_type', 'video');
+                if (state.feedSeed) pNextParams.append('seed', String(state.feedSeed));
+                if (state.category && state.category !== 'all') pNextParams.append('category', state.category);
+              } else if (state.mode === 'galleries') {
+                pNextParams.append('media_type', 'gallery');
+                if (state.feedSeed) pNextParams.append('seed', String(state.feedSeed));
+                if (state.category && state.category !== 'all') pNextParams.append('category', state.category);
+              } else {
+                pNextParams.append('media_type', 'comic');
+                if (state.feedSeed) pNextParams.append('seed', String(state.feedSeed));
+                if (state.category && state.category !== 'all') pNextParams.append('category', state.category);
+              }
+              if (state.query) pNextParams.append('q', state.query);
+              fetch(`/api/items?${pNextParams.toString()}`, { credentials: 'omit' })
+                .then(r => r.ok ? r.json() : null)
+                .then(nd => { if (nd) CLIENT_CACHE.set(pNextKey, { ts: Date.now(), data: nd }); })
+                .catch(() => {});
+            }
           }
         } else {
           const endEl = document.getElementById('infinite-end-reached');
@@ -4537,12 +4626,18 @@
           if (btnCont) btnCont.classList.add('hidden');
         }
       } catch (err) {
-        console.error('[LOAD NEXT PAGE ERROR]:', err);
+        console.error('[PAGE TRANSITION ERROR]:', err);
+        showToast('Reintentando sincronización de catálogo...', 'info');
       } finally {
         _isLoadingMore = false;
         if (spinner) spinner.classList.add('hidden');
-        if (loadBtn) loadBtn.classList.remove('opacity-50', 'pointer-events-none');
+        if (loadBtn) loadBtn.classList.remove('opacity-60', 'pointer-events-none');
+        updatePageOrbUI();
       }
+    }
+
+    async function loadNextPage() {
+      return transitionToNextPage();
     }
 
     function getAdaptivePageSize() {
@@ -4556,23 +4651,93 @@
         try { _feedObserver.disconnect(); } catch (e) {}
       }
 
+      // El observador ahora es SEGURO: solo asoma la bolita interactiva
+      // NUNCA destruye el contenido abruptamente bajo los dedos del usuario
       _feedObserver = new IntersectionObserver((entries) => {
         const entry = entries[0];
-        if (entry && entry.isIntersecting) {
-          const homeView = document.getElementById('home-view');
-          const readerModal = document.getElementById('reader-modal');
-          const videoView = document.getElementById('video-view');
-          const isHomeVisible = homeView && !homeView.classList.contains('hidden') &&
-                                (!readerModal || readerModal.classList.contains('hidden')) &&
-                                (!videoView || videoView.classList.contains('hidden'));
-          if (isHomeVisible && !_isLoadingMore && state.page < (state.totalPages || 1)) {
-            loadNextPage();
-          }
+        const orbCont = document.getElementById('velvet-page-orb-container');
+        if (!orbCont) return;
+        const homeView = document.getElementById('home-view');
+        const readerModal = document.getElementById('reader-modal');
+        const videoView = document.getElementById('video-view');
+        const isHomeVisible = homeView && !homeView.classList.contains('hidden') &&
+                              (!readerModal || readerModal.classList.contains('hidden')) &&
+                              (!videoView || videoView.classList.contains('hidden'));
+
+        if (entry && entry.isIntersecting && isHomeVisible && state.page < (state.totalPages || 1)) {
+          orbCont.classList.remove('opacity-0', 'translate-y-14');
+          orbCont.classList.add('opacity-100', 'translate-y-0');
         }
-      }, { rootMargin: '120px 0px' });
+      }, { rootMargin: '100px 0px' });
 
       _feedObserver.observe(sentinel);
     }
+
+    let _touchStartY = 0;
+    let _isPullingAtBottom = false;
+
+    window.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches.length === 1) {
+        _touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!e.touches || e.touches.length !== 1 || _isLoadingMore) return;
+      const currentY = e.touches[0].clientY;
+      const deltaY = _touchStartY - currentY;
+      const isAtBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 70);
+
+      const orb = document.getElementById('velvet-page-orb');
+      if (isAtBottom && deltaY > 15) {
+        if (orb) {
+          const lift = Math.min(22, (deltaY - 15) * 0.35);
+          const scale = Math.min(1.12, 1 + (deltaY - 15) * 0.002);
+          orb.style.transform = `translateY(-${lift}px) scale(${scale})`;
+        }
+        if (deltaY > 80 && !_isPullingAtBottom && state.page < (state.totalPages || 1)) {
+          _isPullingAtBottom = true;
+          transitionToNextPage();
+        }
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => {
+      _isPullingAtBottom = false;
+      const orb = document.getElementById('velvet-page-orb');
+      if (orb) {
+        orb.style.transform = '';
+      }
+    }, { passive: true });
+
+    window.addEventListener('scroll', () => {
+      const orbCont = document.getElementById('velvet-page-orb-container');
+      if (!orbCont) return;
+      const homeView = document.getElementById('home-view');
+      const readerModal = document.getElementById('reader-modal');
+      const videoView = document.getElementById('video-view');
+      const isHomeVisible = homeView && !homeView.classList.contains('hidden') &&
+                            (!readerModal || readerModal.classList.contains('hidden')) &&
+                            (!videoView || videoView.classList.contains('hidden'));
+
+      if (!isHomeVisible || (state.totalPages && state.page >= state.totalPages)) {
+        orbCont.classList.add('opacity-0', 'translate-y-14');
+        orbCont.classList.remove('opacity-100', 'translate-y-0');
+        return;
+      }
+
+      const scrollY = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight;
+      const winHeight = window.innerHeight;
+
+      if (scrollY + winHeight >= docHeight * 0.45 && docHeight > winHeight * 1.2) {
+        orbCont.classList.remove('opacity-0', 'translate-y-14');
+        orbCont.classList.add('opacity-100', 'translate-y-0');
+      } else {
+        orbCont.classList.add('opacity-0', 'translate-y-14');
+        orbCont.classList.remove('opacity-100', 'translate-y-0');
+      }
+    }, { passive: true });
 
     function renderFeedData(data, append = false) {
 
@@ -4915,8 +5080,8 @@
         const isFav = isFavorite(it.source, it.source_id, it.id);
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch select-none">
-            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
+          <div class="relative aspect-[3/4] w-full overflow-hidden bg-[#130924] select-none">
+            <div class="skeleton-shimmer absolute inset-0"></div>
             <img
               src="${coverSrc}"
               data-original-src="${coverSrc}"
@@ -5044,8 +5209,8 @@
         const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || (it.source ? it.source.toUpperCase() : 'VIDEO HD');
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch select-none">
-            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
+          <div class="relative aspect-[3/4] w-full overflow-hidden bg-[#130924] select-none">
+            <div class="skeleton-shimmer absolute inset-0"></div>
             <img
               src="${coverSrc}"
               data-original-src="${coverSrc}"
@@ -7215,8 +7380,8 @@
           : `<span class="text-[9px] px-1.5 py-0.2 rounded bg-pitch/70 text-lav/80 border border-neon/20">#SinCensura</span>`;
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch select-none">
-            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
+          <div class="relative aspect-[3/4] w-full overflow-hidden bg-[#130924] select-none">
+            <div class="skeleton-shimmer absolute inset-0"></div>
             <img
               src="${coverSrc}"
               data-original-src="${coverSrc}"
@@ -10832,15 +10997,7 @@
       targetPage = parseInt(targetPage, 10);
       if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
       if (state.totalPages && targetPage > state.totalPages) targetPage = state.totalPages;
-      state.page = targetPage;
-      fetchLiveFeed();
-      const grid = document.getElementById('comics-grid');
-      if (grid) {
-        const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
-        window.scrollTo({ top: Math.max(0, topOffset), behavior: 'smooth' });
-      } else {
-        window.scrollTo({ top: 350, behavior: 'smooth' });
-      }
+      transitionToNextPage(targetPage);
     }
 
     function jumpToLastPage() {
