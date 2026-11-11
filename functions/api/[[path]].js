@@ -562,8 +562,8 @@ export async function onRequest(context) {
     let estimatedTotal = 100000;
 
     if (mediaType === "video") {
-      postgrestUrl += "&media_type=eq.video&id=lte.305000";
-      estimatedTotal = 166086;
+      postgrestUrl += "&media_type=eq.video&source=eq.pmvhaven&id=lte.305000";
+      estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery";
       // Leakedgallery solo 0.002 (0.2%) de probabilidad ultra rara o si se busca explícitamente
