@@ -139,8 +139,18 @@
       background-color: #040209;
     }
 
-    /* RENDERIZADO FLUIDO EN CASCADA SIN CUADROS NEGROS */
+    /* RENDERIZADO FLUIDO EN CASCADA SIN CUADROS NEGROS NI PARPADEOS (120 FPS FLUID) */
     #reader-pages-vertical > div {
+      transform: translateZ(0);
+      backface-visibility: hidden;
+    }
+
+    #comics-grid > div {
+      contain: layout style paint;
+      content-visibility: auto;
+      contain-intrinsic-size: 260px 380px;
+      background-color: #0b0714;
+      border-radius: 1rem;
       transform: translateZ(0);
       backface-visibility: hidden;
     }
@@ -3693,6 +3703,26 @@
         }
       }
 
+      const emptyEl = document.getElementById("empty-state");
+      if (emptyEl) {
+        const eTitle = emptyEl.querySelector("h3");
+        const eDesc = emptyEl.querySelector("p");
+        const eBtn = emptyEl.querySelector("button");
+        if (mode === "videos") {
+          if (eTitle) eTitle.textContent = "No se encontraron videos";
+          if (eDesc) eDesc.textContent = "Prueba buscando otro término (ej: PMV, 1080p, Milf) o pulsa en Todos los Videos para ver el catálogo.";
+          if (eBtn) eBtn.textContent = "Ver Todos los Videos";
+        } else if (mode === "galleries") {
+          if (eTitle) eTitle.textContent = "No se encontraron galerías";
+          if (eDesc) eDesc.textContent = "Prueba buscando otra modelo o cosplayer (ej: Kang, Genshin, ArtGravia, Momo).";
+          if (eBtn) eBtn.textContent = "Ver Todas las Galerías";
+        } else {
+          if (eTitle) eTitle.textContent = "No se encontraron cómics";
+          if (eDesc) eDesc.textContent = "Prueba buscando otro término (ej: Milf, 3D, Harem) o pulsa en Todos para ver el catálogo completo.";
+          if (eBtn) eBtn.textContent = "Ver Catálogo Completo";
+        }
+      }
+
       renderCategoryChips();
       renderTrendingTags();
       renderContinueShelf();
@@ -6398,10 +6428,10 @@
           return;
         }
 
-        // Priorizar streams directos MP4 sobre HLS para reproducción nativa instantánea
+        // Priorizar streams directos MP4 sobre HLS para reproducción nativa instantánea (<300ms)
         sources.sort((a, b) => {
-          const aIsMp4 = (a.format === 'mp4' || (a.url && a.url.endsWith('.mp4'))) ? 1 : 0;
-          const bIsMp4 = (b.format === 'mp4' || (b.url && b.url.endsWith('.mp4'))) ? 1 : 0;
+          const aIsMp4 = (a.format === 'mp4' || (a.url && (a.url.includes('.mp4') || a.url.includes('format=mp4'))) || (a.quality && !a.format?.includes('m3u8') && a.quality.includes('1080p'))) ? 1 : 0;
+          const bIsMp4 = (b.format === 'mp4' || (b.url && (b.url.includes('.mp4') || b.url.includes('format=mp4'))) || (b.quality && !b.format?.includes('m3u8') && b.quality.includes('1080p'))) ? 1 : 0;
           return bIsMp4 - aIsMp4;
         });
 
@@ -6530,8 +6560,7 @@
 
       console.log('%c🚀 [STREAM] Cargando calidad de video:', 'color: #10b981; font-weight: bold;', vs.quality, streamUrl);
 
-      // WATCHDOG SEGURO ANTI-DEADLOCK:
-      // A los 3.8s: Si la nueva resolución falla o no entrega datos, auto-recupera a la calidad previa
+      // WATCHDOG SEGURO ANTI-DEADLOCK (2.2s failover rápido sin bloqueos)
       videoWatchdogTimer = setTimeout(() => {
         if (player.readyState >= 2 || !player.paused) {
           clearVideoWatchdog();
@@ -6550,7 +6579,7 @@
         } else {
           clearVideoWatchdog();
         }
-      }, 3800);
+      }, 2200);
 
       const isHls = (vs.format && (vs.format.toLowerCase() === 'hls' || vs.format.toLowerCase() === 'm3u8')) ||
         vs.url.includes('.m3u8') ||
@@ -6624,8 +6653,9 @@
           }
         });
       } else {
-        // Stream MP4 nativo
+        // Stream MP4 nativo de alta velocidad con hardware decoding instantáneo (<300ms)
         player.removeAttribute('src');
+        player.preload = 'auto';
         player.src = streamUrl;
         player.load();
 

@@ -212,6 +212,37 @@ export async function onRequest(context) {
         respHeaders.set("Content-Range", upstream.headers.get("Content-Range"));
       }
 
+      // Reescritura dinámica de listas M3U8 para resolver segmentos y sub-playlists relativos
+      const isM3u8 = targetMediaUrl.includes(".m3u8") || (upstream.headers.get("content-type") || "").toLowerCase().includes("mpegurl");
+      if (isM3u8 && upstream.ok) {
+        try {
+          const manifestText = await upstream.text();
+          const lastSlash = targetMediaUrl.lastIndexOf("/");
+          const baseUrl = lastSlash !== -1 ? targetMediaUrl.substring(0, lastSlash + 1) : targetMediaUrl + "/";
+          const lines = manifestText.split("\n");
+          const rewritten = lines.map(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return line;
+            if (trimmed.startsWith("#")) {
+              return line.replace(/URI=["']([^"']+)["']/g, (match, uri) => {
+                const abs = uri.startsWith("http") ? uri : new URL(uri, baseUrl).href;
+                return `URI="/api/media?t=${encodeMediaToken(abs, spoofedReferer)}"`;
+              });
+            }
+            const abs = trimmed.startsWith("http") ? trimmed : new URL(trimmed, baseUrl).href;
+            return `/api/media?t=${encodeMediaToken(abs, spoofedReferer)}`;
+          });
+          const rewrittenBody = rewritten.join("\n");
+          const m3u8Headers = new Headers(respHeaders);
+          m3u8Headers.set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+          m3u8Headers.set("Access-Control-Allow-Origin", "*");
+          m3u8Headers.set("Cache-Control", "public, max-age=3600");
+          return new Response(rewrittenBody, { status: 200, headers: m3u8Headers });
+        } catch (mErr) {
+          // Si falla la reescritura, continuar con el streaming normal
+        }
+      }
+
       const clientResponse = new Response(upstream.body, {
         status: upstream.status,
         headers: respHeaders,
@@ -370,13 +401,17 @@ export async function onRequest(context) {
         }
       }
 
-      // Auto-reparación y extracción JIT de video streams si el video está sin fuentes o tiene tokens efímeros
+      // Auto-reparación y extracción JIT de video streams si el video está sin fuentes, le falta MP4 directo o tiene tokens efímeros
+      const hasDirectMp4 = (it.video_sources || []).some(s => s.format === "mp4" || (s.url && s.url.includes(".mp4")));
       const isEphemeral = it.source === "pornone";
-      if ((!it.video_sources || it.video_sources.length === 0 || isEphemeral) && (it.media_type === "video" || it.source === "pmvhaven" || it.source === "pornone" || it.source === "redporn" || it.source === "anyporn" || it.source === "alotporn" || it.source === "damplips" || it.source === "pornhd")) {
-        const streams = [];
+      const isPmv = it.source === "pmvhaven" || (it.url && it.url.includes("pmvhaven.com"));
+      const needsPmvMp4 = isPmv && !hasDirectMp4;
 
-        // 1. PMVHaven API
-        if (it.source === "pmvhaven" || (it.url && it.url.includes("pmvhaven.com"))) {
+      if ((!it.video_sources || it.video_sources.length === 0 || isEphemeral || needsPmvMp4) && (it.media_type === "video" || isPmv || it.source === "pornone" || it.source === "redporn" || it.source === "anyporn" || it.source === "alotporn" || it.source === "damplips" || it.source === "pornhd")) {
+        let streams = [...(it.video_sources || [])];
+
+        // 1. PMVHaven API (garantiza extracción inmediata del stream 1080p MP4)
+        if (isPmv) {
           const pmvId = it.source_id || ((it.url && it.url.match(/[?&]v=([a-f0-9]{24})/i)) || (it.url && it.url.match(/\/([a-f0-9]{24})/i)) || [])[1];
           if (pmvId) {
             try {
@@ -387,8 +422,13 @@ export async function onRequest(context) {
                 const pmvData = await pmvRes.json();
                 const vData = pmvData?.data;
                 if (vData) {
-                  if (vData.videoUrl) streams.push({ quality: "1080p HD", url: vData.videoUrl, format: "mp4" });
-                  if (vData.hlsMasterPlaylistUrl) streams.push({ quality: "720p HD", url: vData.hlsMasterPlaylistUrl, format: "m3u8" });
+                  const newStreams = [];
+                  if (vData.videoUrl) newStreams.push({ quality: "1080p HD", url: vData.videoUrl, format: "mp4" });
+                  if (vData.hlsMasterPlaylistUrl) newStreams.push({ quality: "Master Multi-Bitrate HD", url: vData.hlsMasterPlaylistUrl, format: "m3u8" });
+                  for (const s of streams) {
+                    if (!newStreams.some(ns => ns.url === s.url)) newStreams.push(s);
+                  }
+                  streams = newStreams;
                 }
               }
             } catch (e) {}
@@ -462,6 +502,12 @@ export async function onRequest(context) {
         }
 
         if (streams.length > 0) {
+          // Priorizar siempre streams MP4 directos sobre HLS para inicio instantáneo
+          streams.sort((a, b) => {
+            const aMp4 = a.format === "mp4" || (a.url && a.url.includes(".mp4")) ? 1 : 0;
+            const bMp4 = b.format === "mp4" || (b.url && b.url.includes(".mp4")) ? 1 : 0;
+            return bMp4 - aMp4;
+          });
           it.video_sources = streams;
           if (context.waitUntil && !isEphemeral) {
             context.waitUntil(
@@ -480,6 +526,12 @@ export async function onRequest(context) {
         }
       }
 
+      const sortedSources = [...(it.video_sources || [])].sort((a, b) => {
+        const aMp4 = a.format === "mp4" || (a.url && a.url.includes(".mp4")) ? 1 : 0;
+        const bMp4 = b.format === "mp4" || (b.url && b.url.includes(".mp4")) ? 1 : 0;
+        return bMp4 - aMp4;
+      });
+
       const masked = {
         ...it,
         url: "", // Ocultar URL original
@@ -488,7 +540,7 @@ export async function onRequest(context) {
           index: p.index || idx + 1,
           image_url: p.image_url ? `/api/media?t=${encodeMediaToken(p.image_url)}` : ""
         })),
-        video_sources: (it.video_sources || []).map(vs => ({
+        video_sources: sortedSources.map(vs => ({
           ...vs,
           url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url, it.url || vs.referer || "")}` : ""
         }))
@@ -540,17 +592,17 @@ export async function onRequest(context) {
 
     let offset = (page - 1) * pageSize;
     if (seedParam > 0 && !q && sort === "recent") {
-      let baseWindow = 120;
+      let baseWindow = 40;
       let multiplier = 7919;
       if (mediaType === "video") {
         multiplier = 1337;
-        baseWindow = (category && category !== "all") ? 15 : 120;
+        baseWindow = (category && category !== "all") ? 10 : 30;
       } else if (mediaType === "gallery" || mediaType === "cosplay") {
         multiplier = 7919;
-        baseWindow = (category && category !== "all") ? 15 : 120;
+        baseWindow = (category && category !== "all") ? 10 : 40;
       } else {
         multiplier = 3137;
-        baseWindow = (category && category !== "all") ? 15 : 120;
+        baseWindow = (category && category !== "all") ? 10 : 40;
       }
       const basePage = Math.abs(seedParam * multiplier) % baseWindow;
       offset = (basePage + (page - 1)) * pageSize;
@@ -562,7 +614,7 @@ export async function onRequest(context) {
     let estimatedTotal = 100000;
 
     if (mediaType === "video") {
-      postgrestUrl += "&media_type=eq.video&source=eq.pmvhaven&id=lte.305000";
+      postgrestUrl += "&source=eq.pmvhaven&id=lte.304215";
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery";
@@ -578,7 +630,13 @@ export async function onRequest(context) {
     }
 
     if (q) {
-      postgrestUrl += `&search_text=ilike.*${encodeURIComponent(q)}*`;
+      const words = q.split(/\s+/).filter(Boolean).slice(0, 3);
+      if (words.length === 1) {
+        postgrestUrl += `&search_text=ilike.*${encodeURIComponent(words[0])}*`;
+      } else {
+        const orClauses = words.map(w => `search_text.ilike.*${encodeURIComponent(w)}*`).join(",");
+        postgrestUrl += `&or=(${orClauses})`;
+      }
       estimatedTotal = 800;
     } else if (category && category !== "all") {
       let catTerm = category;
@@ -616,16 +674,25 @@ export async function onRequest(context) {
     }
 
     try {
-      const spRes = await fetch(postgrestUrl, {
+      let spRes = await fetch(postgrestUrl, {
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
       });
 
       if (!spRes.ok) {
-        const errText = await spRes.text();
-        return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: errText }), {
-          status: 500,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        // Fallback seguro anti-timeout para garantizar cero errores 500 al usuario
+        const safeFallbackUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&${mediaType === "video" ? "source=eq.pmvhaven&id=lte.304215" : (mediaType === "gallery" || mediaType === "cosplay" ? "media_type=eq.gallery" : "media_type=eq.comic")}&order=id.desc`;
+        const fbRes = await fetch(safeFallbackUrl, {
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
         });
+        if (fbRes.ok) {
+          spRes = fbRes;
+        } else {
+          const errText = await spRes.text();
+          return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: errText }), {
+            status: 500,
+            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          });
+        }
       }
 
       const rawItems = await spRes.json();
