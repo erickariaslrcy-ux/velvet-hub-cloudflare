@@ -5839,42 +5839,14 @@
     // CONTROL DE ACCESO: ACCESO TOTAL (PATREON O LLAVE) vs 75% GRATIS (25% VIP)
     // =======================================================================
     function hasFullAccess() {
-      return !!state.currentUser;
+      return true; // 100% Desbloqueado sin restricciones
     }
 
     function isItemLockedForUser(it) {
-      // 1. Usuarios con cuenta activa (Patreon, Llave de Acceso o Admin) tienen ACCESO TOTAL (100% libre)
-      if (hasFullAccess()) {
-        return false;
-      }
-      // 2. Control granular de acceso por tipo de contenido:
-      if (!it) return false;
-      let num = parseInt(it.id, 10);
-      if (!num || isNaN(num)) {
-        const str = `${it.source || ''}:${it.source_id || it.title || ''}`;
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-          hash = ((hash << 5) - hash) + str.charCodeAt(i);
-          hash |= 0;
-        }
-        num = Math.abs(hash);
-      }
-      const mod = num % 100;
-      const mediaType = it.media_type || (state.mode === 'videos' ? 'video' : (state.mode === 'galleries' ? 'gallery' : 'comic'));
-
-      // COSPLAYER / GALERÍAS: 45% LIBRE / 55% BLOQUEADO VIP (motiva a desbloquear sets completos)
-      if (mediaType === 'gallery' || mediaType === 'cosplay') {
-        return mod < 55;
-      }
-
-      // VIDEOS: 75% LIBRE / 25% BLOQUEADO VIP (la gran mayoría libre y disfrutable)
-      if (mediaType === 'video') {
-        return mod < 25;
-      }
-
-      // CÓMICS Y MANGAS: 75% LIBRE / 25% BLOQUEADO VIP (75% gratis para lectura fluida)
-      return mod < 25;
+      return false; // Totalmente libre y accesible para todos
     }
+
+
 
     function canUserAccessItem(it) {
       return !isItemLockedForUser(it);
@@ -10746,6 +10718,8 @@
     }
 
     function shuffleCurrentFeed() {
+      const shuffleIcon = document.querySelector('#category-chips .fa-shuffle');
+      if (shuffleIcon) shuffleIcon.classList.add('fa-spin');
       state.feedSeed = Math.floor(Math.random() * 900000) + 100000;
       state.videoSeed = state.feedSeed;
       state.page = 1;
@@ -10755,7 +10729,7 @@
           if (k.startsWith('vcache_')) sessionStorage.removeItem(k);
         });
       } catch (e) {}
-      fetchLiveFeed();
+      fetchLiveFeed(true);
       const grid = document.getElementById('comics-grid');
       if (grid) {
         const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
@@ -10763,7 +10737,10 @@
       } else {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-      showToast('🎲 Catálogo renovado con contenido variado', 'info');
+      setTimeout(() => {
+        if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
+      }, 700);
+      showToast('?? Cat�logo renovado con nuevo contenido variado', 'info');
     }
 
     function shuffleVideoFeed() {

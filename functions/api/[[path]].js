@@ -318,7 +318,27 @@ export async function onRequest(context) {
       }
     } catch (e) {}
 
-    const offset = (page - 1) * pageSize;
+    const seedParam = parseInt(url.searchParams.get("seed") || "0", 10);
+    const sort = url.searchParams.get("sort") || "recent";
+
+    let offset = (page - 1) * pageSize;
+    if (seedParam > 0 && !q && sort === "recent") {
+      let baseWindow = 120;
+      let multiplier = 7919;
+      if (mediaType === "video") {
+        multiplier = 1337;
+        baseWindow = (category && category !== "all") ? 15 : 120;
+      } else if (mediaType === "gallery" || mediaType === "cosplay") {
+        multiplier = 7919;
+        baseWindow = (category && category !== "all") ? 15 : 120;
+      } else {
+        multiplier = 3137;
+        baseWindow = (category && category !== "all") ? 15 : 120;
+      }
+      const basePage = Math.abs(seedParam * multiplier) % baseWindow;
+      offset = (basePage + (page - 1)) * pageSize;
+    }
+
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources,artists";
     let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
 
