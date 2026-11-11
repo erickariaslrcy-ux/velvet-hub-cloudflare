@@ -370,8 +370,9 @@ export async function onRequest(context) {
         }
       }
 
-      // Auto-reparación y extracción JIT de video streams si el video está sin fuentes
-      if ((!it.video_sources || it.video_sources.length === 0) && (it.media_type === "video" || it.source === "pmvhaven" || it.source === "pornone" || it.source === "redporn" || it.source === "anyporn" || it.source === "alotporn" || it.source === "damplips" || it.source === "pornhd")) {
+      // Auto-reparación y extracción JIT de video streams si el video está sin fuentes o tiene tokens efímeros
+      const isEphemeral = it.source === "pornone";
+      if ((!it.video_sources || it.video_sources.length === 0 || isEphemeral) && (it.media_type === "video" || it.source === "pmvhaven" || it.source === "pornone" || it.source === "redporn" || it.source === "anyporn" || it.source === "alotporn" || it.source === "damplips" || it.source === "pornhd")) {
         const streams = [];
 
         // 1. PMVHaven API
@@ -462,7 +463,7 @@ export async function onRequest(context) {
 
         if (streams.length > 0) {
           it.video_sources = streams;
-          if (context.waitUntil) {
+          if (context.waitUntil && !isEphemeral) {
             context.waitUntil(
               fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
                 method: "PATCH",
@@ -497,7 +498,7 @@ export async function onRequest(context) {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "public, max-age=60, s-maxage=300",
+          "Cache-Control": isEphemeral ? "no-store, no-cache, must-revalidate" : "public, max-age=60, s-maxage=300",
           ...getCorsHeaders(origin)
         }
       });
@@ -519,18 +520,20 @@ export async function onRequest(context) {
     const q = (url.searchParams.get("q") || "").trim();
     const category = (url.searchParams.get("category") || "").trim().toLowerCase();
 
-    // Cache de Borde Cloudflare para catálogo público (300 segundos)
+    // Cache de Borde Cloudflare para catálogo público (300 segundos, solo sin búsqueda activa)
     const cache = caches.default;
     const cacheKey = new Request(url.toString(), context.request);
-    try {
-      const cached = await cache.match(cacheKey);
-      if (cached) {
-        const edgeHeaders = new Headers(cached.headers);
-        edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
-        edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-        return new Response(cached.body, { status: 200, headers: edgeHeaders });
-      }
-    } catch (e) {}
+    if (!q) {
+      try {
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+          const edgeHeaders = new Headers(cached.headers);
+          edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
+          edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
+          return new Response(cached.body, { status: 200, headers: edgeHeaders });
+        }
+      } catch (e) {}
+    }
 
     const seedParam = parseInt(url.searchParams.get("seed") || "0", 10);
     const sort = url.searchParams.get("sort") || "recent";
