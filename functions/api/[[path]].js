@@ -459,7 +459,7 @@ export async function onRequest(context) {
     }
 
     if (q) {
-      postgrestUrl += `&title=ilike.*${encodeURIComponent(q)}*`;
+      postgrestUrl += `&search_text=ilike.*${encodeURIComponent(q)}*`;
       estimatedTotal = 800;
     } else if (category && category !== "all") {
       let catTerm = category;
@@ -489,7 +489,7 @@ export async function onRequest(context) {
         else if (category === "parody") catTerm = "parodia";
         else if (category === "western") catTerm = "comic";
       }
-      postgrestUrl += `&title=ilike.*${encodeURIComponent(catTerm)}*`;
+      postgrestUrl += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
       estimatedTotal = 1500;
     } else {
       // Orden por defecto ultra-rápido indexado por B-tree id desc (solo cuando no hay ilike filter)
