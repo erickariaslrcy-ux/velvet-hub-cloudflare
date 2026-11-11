@@ -216,6 +216,16 @@
       content-visibility: auto;
       contain-intrinsic-size: 800px 1200px;
     }
+    
+    .skeleton-shimmer {
+      background: linear-gradient(90deg, rgba(255,255,255,0.01) 25%, rgba(236,72,153,0.08) 50%, rgba(255,255,255,0.01) 75%);
+      background-size: 200% 100%;
+      animation: velvetShimmer 1.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes velvetShimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
     #reader-body {
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: contain;
@@ -1276,7 +1286,7 @@
 
         <div class="w-36 sm:w-48 md:w-56 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-hot/50 relative group/cover cursor-pointer" onclick="openHeroComic()">
 
-          <img id="hero-cover" referrerpolicy="no-referrer" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='600' fill='%23120b22'><rect width='100%' height='100%'/></svg>" alt="Portada destacada" class="w-full h-full object-cover group-hover/cover:scale-105 transition-transform duration-500" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'400\' height=\'600\' fill=\'%23120b22\'><rect width=\'100%\' height=\'100%\'/></svg>'">
+          <img id="hero-cover" referrerpolicy="no-referrer" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='600' fill='%23120b22'><rect width='100%' height='100%'/></svg>" alt="Portada destacada" class="w-full h-full object-cover group-hover/cover:scale-105 transition-transform duration-500" onerror="handleCardImageError(this, 'comic')">
 
           <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/90 backdrop-blur-md text-[10px] font-black text-gold border border-gold/40 shadow-gold">
 
@@ -1664,19 +1674,8 @@
             <i class="fa-regular fa-heart" id="video-player-fav-icon"></i>
 
           </button>
-
-          <a id="video-player-download-btn" href="#" target="_blank" download class="h-8 px-3.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-xs font-black flex items-center gap-1.5 shadow-[0_0_20px_rgba(236,72,153,0.35)] transition-all cursor-pointer" title="Descargar MP4 Directo">
-
-            <i class="fa-solid fa-download"></i>
-
-            <span class="hidden sm:inline">Descargar HD</span>
-
-          </a>
-
         </div>
-
       </div>
-
     </div>
 
     <!-- Contenedor Principal del Reproductor y Contenido -->
@@ -1693,20 +1692,16 @@
 
         <div id="video-stage" class="w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl relative border border-purple-500/30 select-none group/player transition-all duration-300">
 
-        <!-- Video Element (Hardware Acelerado) -->
-
+        <!-- Video Element (Hardware Acelerado y Protegido) -->
         <video
-
           id="html5-video-player"
-
           referrerpolicy="no-referrer"
-
-          class="w-full h-full object-contain cursor-pointer will-change-transform"
-
+          controlslist="nodownload noplaybackrate"
+          disablepictureinpicture
+          oncontextmenu="return false;"
+          class="w-full h-full object-contain cursor-pointer will-change-transform select-none"
           playsinline
-
           preload="auto"
-
         ></video>
 
         <!-- Spinner / Loader de Conexión -->
@@ -3273,15 +3268,26 @@
     // Manejador seguro para errores de carga de imágenes en tarjetas
     window.handleCardImageError = function(img, type) {
       if (!img) return;
-      if (!img.dataset.retried && img.src && !img.src.startsWith('data:') && !img.src.includes('/api/image')) {
-        img.dataset.retried = '1';
-        const original = img.dataset.originalSrc || img.getAttribute('data-original-src') || img.src;
-        img.src = '/api/image?url=' + encodeURIComponent(original);
-      } else {
-        img.onerror = null;
-        img.src = (type === 'video') ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG;
-      }
+      img.onerror = null;
+      img.classList.remove('opacity-0');
+      const sk = img.previousElementSibling;
+      if (sk && sk.classList.contains('skeleton-shimmer')) sk.remove();
+      img.src = (type === 'video') ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG;
     };
+
+    // Limpieza de cookies infladas obsoletas para evitar REQUEST_HEADER_TOO_LARGE (494)
+    (function purgeBloatedCookies() {
+      try {
+        const cookies = document.cookie.split(';');
+        for (const c of cookies) {
+          const name = c.split('=')[0].trim();
+          if (name.startsWith('sb-') || name.startsWith('supabase')) {
+            document.cookie = name + '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = name + '=; path=/; domain=' + window.location.hostname + '; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          }
+        }
+      } catch(e) {}
+    })();
 
     console.log('%c🚀 [VELVET HUB] Inicializando Plataforma Unificada (Cómics + Videos)...', 'color: #ec4899; font-weight: bold; font-size: 15px;');
 
@@ -3403,9 +3409,11 @@
       } catch (e) {}
     }
 
-    const COMIC_FALLBACK_SVG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><defs><linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23380b42"/><stop offset="50%" stop-color="%23170724"/><stop offset="100%" stop-color="%23090312"/></linearGradient><linearGradient id="ct" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="%23ff2a85"/><stop offset="100%" stop-color="%23d946ef"/></linearGradient></defs><rect width="100%" height="100%" fill="url(%23cg)"/><circle cx="150" cy="180" r="55" fill="%23ff2a85" opacity="0.12"/><path d="M120 175 Q150 145 180 175 Q150 205 120 175 Z" fill="%23ff1a75" opacity="0.85"/><text x="150" y="245" font-family="system-ui,sans-serif" font-weight="900" font-size="14" fill="url(%23ct)" text-anchor="middle" letter-spacing="4">VELVET HUB</text><text x="150" y="265" font-family="system-ui,sans-serif" font-weight="700" font-size="9" fill="%23e2e8f0" text-anchor="middle" letter-spacing="2">COLECCION VELVET HD</text></svg>';
+    const COMIC_FALLBACK_SVG = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><defs><linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#380b42"/><stop offset="50%" stop-color="#170724"/><stop offset="100%" stop-color="#090312"/></linearGradient><linearGradient id="ct" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ff2a85"/><stop offset="100%" stop-color="#d946ef"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#cg)"/><circle cx="150" cy="180" r="55" fill="#ff2a85" opacity="0.12"/><path d="M120 175 Q150 145 180 175 Q150 205 120 175 Z" fill="#ff1a75" opacity="0.85"/><text x="150" y="245" font-family="system-ui,sans-serif" font-weight="900" font-size="14" fill="url(#ct)" text-anchor="middle" letter-spacing="4">VELVET HUB</text><text x="150" y="265" font-family="system-ui,sans-serif" font-weight="700" font-size="9" fill="#e2e8f0" text-anchor="middle" letter-spacing="2">COLECCION VELVET HD</text></svg>');
 
-    const VIDEO_FALLBACK_SVG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><defs><linearGradient id="vg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%232b0836"/><stop offset="50%" stop-color="%2314051f"/><stop offset="100%" stop-color="%2306020a"/></linearGradient><linearGradient id="vt" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="%23ff2a85"/><stop offset="100%" stop-color="%23ec4899"/></linearGradient></defs><rect width="100%" height="100%" fill="url(%23vg)"/><circle cx="320" cy="160" r="45" fill="%23ff2a85" opacity="0.15"/><polygon points="310,142 342,160 310,178" fill="%23ff2a85"/><text x="320" y="225" font-family="system-ui,sans-serif" font-weight="900" font-size="15" fill="url(%23vt)" text-anchor="middle" letter-spacing="4">VELVET STREAM HD</text><text x="320" y="245" font-family="system-ui,sans-serif" font-weight="700" font-size="9" fill="%23c084fc" text-anchor="middle" letter-spacing="2">1080P ULTRA DISPONIBLE</text></svg>';
+    const VIDEO_FALLBACK_SVG = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><defs><linearGradient id="vg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2b0836"/><stop offset="50%" stop-color="#14051f"/><stop offset="100%" stop-color="#06020a"/></linearGradient><linearGradient id="vt" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ff2a85"/><stop offset="100%" stop-color="#ec4899"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#vg)"/><circle cx="320" cy="160" r="45" fill="#ff2a85" opacity="0.15"/><polygon points="310,142 342,160 310,178" fill="#ff2a85"/><text x="320" y="225" font-family="system-ui,sans-serif" font-weight="900" font-size="15" fill="url(#vt)" text-anchor="middle" letter-spacing="4">VELVET STREAM HD</text><text x="320" y="245" font-family="system-ui,sans-serif" font-weight="700" font-size="9" fill="#c084fc" text-anchor="middle" letter-spacing="2">1080P ULTRA DISPONIBLE</text></svg>');
+
+    
 
     // =======================================================================
 
@@ -4051,28 +4059,36 @@
     }
 
     // Helper de Enmascaramiento Stealth y Tokens Seguros
-    function getStealthStreamUrl(url, referer) {
-      if (!url) return '';
+    const MEDIA_SECRET = "velvet_ultra_stealth_secret_key_2026";
+
+    function encodeMediaToken(targetUrl, referer) {
+      if (!targetUrl) return '';
       try {
-        const payload = JSON.stringify({ u: url, r: referer || '' });
-        const b64 = btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        return `/api/video/stream?t=${b64}`;
+        const raw = JSON.stringify({ u: targetUrl, r: referer || '' });
+        let enc = '';
+        for (let i = 0; i < raw.length; i++) {
+          enc += String.fromCharCode(raw.charCodeAt(i) ^ MEDIA_SECRET.charCodeAt(i % MEDIA_SECRET.length));
+        }
+        return btoa(enc).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       } catch (e) {
-        return `/api/video/stream?url=${encodeURIComponent(url)}&referer=${encodeURIComponent(referer || '')}`;
+        return btoa(JSON.stringify({ u: targetUrl, r: referer || '' })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       }
     }
 
     function getStealthImageUrl(url, referer) {
       if (!url) return '';
-      // Si la URL es HTTP o HTTPS directa, cargarla directamente.
-      // El navegador con <meta name="referrer" content="no-referrer"> y referrerpolicy="no-referrer"
-      // no envía cabecera Referer al CDN de origen, evitando bloqueos por hotlink y permitiendo
-      // carga a velocidad pura de CDN con 0ms de latencia de redirección y caché nativa de browser.
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        return url;
-      }
-      if (url.startsWith('/api/') || url.startsWith('/')) return url;
-      return url;
+      if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+      if (url.startsWith('/api/media?t=')) return url;
+      if (url.startsWith('/api/') && !url.includes('url=') && !url.includes('t=')) return url;
+      const token = encodeMediaToken(url, referer);
+      return `/api/media?t=${token}`;
+    }
+
+    function getStealthStreamUrl(streamUrl, referer) {
+      if (!streamUrl) return '';
+      if (streamUrl.startsWith('blob:') || streamUrl.startsWith('/api/media?t=')) return streamUrl;
+      const token = encodeMediaToken(streamUrl, referer);
+      return `/api/media?t=${token}`;
     }
 
     // Prefijo de almacenamiento particionado por cuenta de usuario (aislado por ID real)
@@ -4385,7 +4401,7 @@
         }
         if (state.query) params.append('q', state.query);
 
-        const resp = await fetch(`/api/items?${params.toString()}`);
+        const resp = await fetch(`/api/items?${params.toString()}`, { credentials: 'omit' });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
 
@@ -4619,7 +4635,7 @@
 
         if (state.query) params.append('q', state.query);
 
-        const resp = await fetch(`/api/items?${params.toString()}`);
+        const resp = await fetch(`/api/items?${params.toString()}`, { credentials: 'omit' });
 
         if (!resp.ok) {
 
@@ -4648,7 +4664,7 @@
           if (!CLIENT_CACHE.has(nextKey)) {
             const nextParams = new URLSearchParams(params);
             nextParams.set('page', nextP);
-            fetch(`/api/items?${nextParams.toString()}`)
+            fetch(`/api/items?${nextParams.toString()}`, { credentials: 'omit' })
               .then(r => r.ok ? r.json() : null)
               .then(nextData => {
                 if (nextData && nextData.items) {
@@ -4751,13 +4767,16 @@
           card.onclick = () => openReader(it.source, it.source_id, true, it.id);
         }
 
-        const coverSrc = it.cover_url || COMIC_FALLBACK_SVG;
+        const coverSrc = it.cover_url
+          ? getStealthImageUrl(it.cover_url, it.url)
+          : COMIC_FALLBACK_SVG;
         const photoCount = it.page_count || (it.pages ? it.pages.length : 50);
         const modelName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || 'Cosplay VIP';
         const isFav = isFavorite(it.source, it.source_id, it.id);
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch">
+          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch select-none">
+            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
             <img
               src="${coverSrc}"
               data-original-src="${coverSrc}"
@@ -4766,9 +4785,11 @@
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isLocked ? 'filter brightness-90' : ''}"
+              class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
+              onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();"
               onerror="handleCardImageError(this, 'comic')"
             />
+            <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
 
             <!-- Lock Overlay on Hover -->
             ${isLocked ? `
@@ -4874,12 +4895,15 @@
         }
 
         const isFav = isFavorite(it.source, it.source_id, it.id);
-        const coverSrc = it.cover_url || VIDEO_FALLBACK_SVG;
+        const coverSrc = it.cover_url
+          ? getStealthImageUrl(it.cover_url, it.url)
+          : VIDEO_FALLBACK_SVG;
         const duration = (it.extra && it.extra.duration) || '1080p HD';
         const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || (it.source ? it.source.toUpperCase() : 'VIDEO HD');
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch">
+          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch select-none">
+            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
             <img
               src="${coverSrc}"
               data-original-src="${coverSrc}"
@@ -4888,9 +4912,11 @@
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isLocked ? 'filter brightness-90' : ''}"
+              class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
+              onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();"
               onerror="handleCardImageError(this, 'video')"
             />
+            <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
 
             <!-- Play / Lock Overlay on Hover -->
             ${isLocked ? `
@@ -6109,7 +6135,7 @@
       const loader = document.getElementById('video-player-loader');
       const qualityBadge = document.getElementById('video-player-quality-badge');
       const qualityLabel = document.getElementById('video-quality-label');
-      const downloadBtn = document.getElementById('video-player-download-btn');
+      
       const buffSpinner = document.getElementById('video-buffering-spinner');
 
       if (!player) return;
@@ -6205,8 +6231,8 @@
         vs.url.includes('pornone.com') ||
         vs.url.includes('.mp4');
 
-      const streamUrl = isDirectClient ? vs.url : getStealthStreamUrl(vs.url, refUrl);
-      if (downloadBtn) downloadBtn.href = streamUrl;
+      const streamUrl = getStealthStreamUrl(vs.url, refUrl);
+      
 
       console.log('%c🚀 [STREAM] Cargando calidad de video:', 'color: #10b981; font-weight: bold;', vs.quality, streamUrl);
 
@@ -6646,7 +6672,7 @@
         try {
 
           const recSeed = Math.floor(Math.random() * 900000) + 100000;
-          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=18&seed=${recSeed}&live=true`);
+          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=18&seed=${recSeed}&live=true`, { credentials: 'omit' });
 
           if (resp.ok) {
 
@@ -6707,7 +6733,7 @@
 
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
 
-                onerror="this.src=\'data:image/svg+xml;utf8,<svg xmlns=\\\'http://www.w3.org/2000/svg\\\' width=\\\'320\\\' height=\\\'180\\\' fill=\\\'%23060212\\\'><rect width=\\\'100%\\\' height=\\\'100%\\\'/></svg>\'"
+                onerror="handleCardImageError(this, 'video')"
 
               />
 
@@ -7035,7 +7061,9 @@
           card.onclick = () => openReader(it.source, it.source_id, true, it.id);
         }
 
-        const coverSrc = it.cover_url || COMIC_FALLBACK_SVG;
+        const coverSrc = it.cover_url
+          ? getStealthImageUrl(it.cover_url, it.url)
+          : COMIC_FALLBACK_SVG;
         const isFav = isFavorite(it.source, it.source_id, it.id);
         const isWatch = isWatchlisted(it.source, it.source_id, it.id);
 
@@ -7045,7 +7073,8 @@
           : `<span class="text-[9px] px-1.5 py-0.2 rounded bg-pitch/70 text-lav/80 border border-neon/20">#SinCensura</span>`;
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch">
+          <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch select-none">
+            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
             <img
               src="${coverSrc}"
               data-original-src="${coverSrc}"
@@ -7054,9 +7083,11 @@
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isLocked ? 'filter brightness-90' : ''}"
+              class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
+              onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();"
               onerror="handleCardImageError(this, 'comic')"
             />
+            <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
 
             <!-- Lock Overlay on Hover -->
             ${isLocked ? `
@@ -7449,8 +7480,9 @@
           : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
         card.innerHTML = `
-          <div class="w-14 h-18 aspect-[3/4] rounded-xl overflow-hidden bg-pitch shrink-0 relative">
-            <img src="${coverSrc}" class="w-full h-full object-cover" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+          <div class="w-14 h-18 aspect-[3/4] rounded-xl overflow-hidden bg-pitch shrink-0 relative select-none">
+            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
+            <img src="${coverSrc}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
             <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-hot text-sm drop-shadow"></i>
             </div>
@@ -7462,10 +7494,17 @@
               <div class="bg-gradient-to-r from-hot to-neon h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
             </div>
           </div>
-          <button onclick="event.stopPropagation(); dismissContinueItem('${h.source}', '${h.source_id}')" title="Quitar de continuar" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-black/70 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all cursor-pointer">
+          <button class="dismiss-continue-btn absolute top-2 right-2 w-5 h-5 rounded-full bg-black/70 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all cursor-pointer" title="Quitar de continuar">
             <i class="fa-solid fa-xmark"></i>
           </button>
         `;
+        const disBtn = card.querySelector('.dismiss-continue-btn');
+        if (disBtn) {
+          disBtn.onclick = (e) => {
+            e.stopPropagation();
+            dismissContinueItem(h.source, h.source_id);
+          };
+        }
         container.appendChild(card);
       });
     }
@@ -7801,23 +7840,43 @@
       const imgUrl = getStealthImageUrl(p.image_url, p.referer || refererUrl);
       const wrapper = document.createElement('div');
       wrapper.className = 'w-full flex flex-col items-center relative z-10 reader-page-item';
-      wrapper.style.minHeight = '480px';
+      wrapper.style.minHeight = '650px';
       wrapper.dataset.pageIndex = idx + 1;
 
-      // Skeleton shimmer ultra-fluido
+      // Skeleton shimmer con marca Velvet
       const skeleton = document.createElement('div');
-      skeleton.className = 'reader-skeleton absolute inset-0 flex items-center justify-center bg-obsidian/60 sm:rounded-2xl border border-neon/10 pointer-events-none transition-opacity duration-300';
-      skeleton.innerHTML = `<div class="flex items-center gap-2 text-lav/40 text-xs font-semibold animate-pulse"><i class="fa-solid fa-bolt-lightning text-neon"></i><span>Pág ${p.index || idx + 1}</span></div>`;
+      skeleton.className = 'reader-skeleton absolute inset-0 flex flex-col items-center justify-center bg-[#090312] sm:rounded-2xl border border-pink-500/15 pointer-events-none transition-opacity duration-300';
+      skeleton.innerHTML = `
+        <div class="relative flex items-center justify-center w-12 h-12">
+          <div class="absolute inset-0 rounded-full border-2 border-pink-500/15 border-t-pink-500 animate-spin"></div>
+          <i class="fa-solid fa-crown text-[10px] text-pink-400 drop-shadow-[0_0_8px_rgba(236,72,153,0.8)]"></i>
+        </div>
+        <div class="mt-3 text-[11px] font-bold text-pink-300/80 tracking-widest uppercase">VELVET CLOUD • PÁG ${p.index || idx + 1}</div>
+        <div class="mt-1 text-[9px] text-purple-400/50">Cargando en alta resolución...</div>
+      `;
       wrapper.appendChild(skeleton);
 
       const img = document.createElement('img');
       img.alt = `Página ${p.index || idx + 1}`;
       img.referrerPolicy = 'no-referrer';
       img.setAttribute('referrerpolicy', 'no-referrer');
-      img.className = 'w-full reader-img bg-pitch sm:rounded-2xl sm:border sm:border-neon/15 cursor-pointer opacity-0 transition-opacity duration-200';
+      img.className = 'w-full reader-img bg-pitch sm:rounded-2xl sm:border sm:border-neon/15 cursor-pointer opacity-0 transition-opacity duration-300 select-none';
       img.decoding = 'async';
+      img.style.userSelect = 'none';
+      img.style.webkitUserSelect = 'none';
+      img.style.webkitTouchCallout = 'none';
 
-      // Distribución inteligente de ancho de banda: 100% prioridad a la pág 1
+      // Capa protectora transparente contra click derecho y arrastre
+      const shield = document.createElement('div');
+      shield.className = 'absolute inset-0 z-20 select-none cursor-pointer';
+      shield.oncontextmenu = (e) => { e.preventDefault(); return false; };
+      shield.ondragstart = (e) => { e.preventDefault(); return false; };
+      shield.ondblclick = (e) => {
+        e.stopPropagation();
+        toggleReaderZoomLevel();
+      };
+      wrapper.appendChild(shield);
+
       if (idx === 0) {
         img.setAttribute('fetchpriority', 'high');
         img.loading = 'eager';
@@ -7834,39 +7893,29 @@
         img.classList.add('opacity-100');
         skeleton.style.opacity = '0';
         setTimeout(() => { try { skeleton.remove(); } catch(e){} }, 300);
-        // Pre-cargar la siguiente página de forma secuencial sin saturar la red
         if (idx + 1 < _readerAllPages.length) {
           preloadSinglePage(idx + 1);
         }
       };
 
-      img.ondblclick = (e) => {
-        e.stopPropagation();
-        toggleReaderZoomLevel();
-      };
-
       img.onerror = function() {
-        if (!this.dataset.retried && !this.src.includes('/api/image')) {
+        if (!this.dataset.retried) {
           this.dataset.retried = '1';
-          try {
-            const payload = JSON.stringify({ u: p.image_url, r: p.referer || refererUrl || '' });
-            const b64 = btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-            this.src = `/api/image?t=${b64}`;
-            return;
-          } catch(e) {}
+          this.src = getStealthImageUrl(p.image_url, p.referer || refererUrl);
+          return;
         }
         this.style.display = 'none';
         try { skeleton.remove(); } catch(e){}
         const errBox = document.createElement('div');
-        errBox.className = 'p-6 my-2 border border-rose-900/50 rounded-2xl bg-pitch text-center';
+        errBox.className = 'p-6 my-4 border border-rose-900/50 rounded-2xl bg-pitch text-center z-30 relative';
         
         const errP = document.createElement('p');
         errP.className = 'text-xs text-rose-400 font-bold mb-2';
-        errP.textContent = `Error cargando pág ${p.index || idx + 1}`;
+        errP.textContent = `No se pudo conectar con la pág ${p.index || idx + 1}`;
         
         const retryBtn = document.createElement('button');
         retryBtn.className = 'px-3 py-1 bg-glass text-lav text-xs rounded-lg border border-neon/30 hover:border-hot transition-colors';
-        retryBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate mr-1"></i> Reintentar';
+        retryBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate mr-1"></i> Reintentar Carga';
         retryBtn.onclick = function() {
           retryImage(this, imgUrl);
         };
@@ -9656,7 +9705,7 @@
         row.innerHTML = `
           <div class="flex items-center gap-3 overflow-hidden flex-1">
             <div class="w-12 h-12 rounded-xl bg-black overflow-hidden shrink-0 border border-purple-500/30">
-              <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" onerror="this.src='${isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG}'">
+              <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
             </div>
             <div class="truncate">
               <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300 transition-colors">${escapeHtml(it.title)}</span>
@@ -9732,7 +9781,7 @@
         row.innerHTML = `
           <div class="flex items-center gap-3 truncate flex-1 min-w-0">
             <div class="w-10 h-10 rounded-lg bg-black overflow-hidden shrink-0 border border-purple-500/30">
-              <img src="${coverSrc}" class="w-full h-full object-cover" onerror="this.src='${isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG}'">
+              <img src="${coverSrc}" class="w-full h-full object-cover" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
             </div>
             <div class="truncate flex-1 min-w-0">
               <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(h.title)}</span>
@@ -10772,14 +10821,20 @@
     // REGISTRO DE SERVICE WORKER & AUTO-OCULTAR BARRA INFERIOR CON TECLADO MÓVIL
     // =========================================================================
     if ('serviceWorker' in navigator) {
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then((reg) => {
-          reg.update(); // Actualizar de inmediato y limpiar cachés obsoletas
+          reg.update();
         }).catch(() => {});
       });
     }
 
-    // Ocultar barra inferior en Android cuando se abre el teclado virtual
     window.addEventListener('focusin', (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
         const nav = document.getElementById('mobile-navbar');

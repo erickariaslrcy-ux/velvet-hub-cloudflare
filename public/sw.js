@@ -1,9 +1,9 @@
 // Velvet Hub Ultra-Fast Turbo Service Worker (PC & Android Hardware-Accelerated Cache)
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v7-stealth-120fps';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
-const MAX_CACHED_IMAGES = 450;
+const MAX_CACHED_IMAGES = 500;
 
 const STATIC_ASSETS = [
   '/',
@@ -52,11 +52,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // 1. Exclusiones críticas: streaming de video, auth, admin
+  // 1. Exclusiones críticas: streaming de video, peticiones de rango, auth, admin
   if (
     url.pathname.startsWith('/api/video/stream') ||
     url.pathname.startsWith('/api/auth') ||
-    url.pathname.startsWith('/api/admin')
+    url.pathname.startsWith('/api/admin') ||
+    req.headers.has('range')
   ) {
     return;
   }
@@ -85,8 +86,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Caché de Imágenes (/api/image, /api/img, portadas y páginas de cómic): Cache First con fallback y guardado en segundo plano
+  // 3. Caché de Imágenes (/api/media, /api/image, /api/img, portadas y fotos): Cache First con revalidación en segundo plano
   const isImageReq =
+    (url.pathname.startsWith('/api/media') && !url.searchParams.get('t')?.includes('mp4')) ||
     url.pathname.startsWith('/api/image') ||
     url.pathname.startsWith('/api/img') ||
     url.pathname.endsWith('.png') ||
@@ -115,59 +117,26 @@ self.addEventListener('fetch', (event) => {
             return networkResp;
           })
           .catch(() => {
-            return caches.match('/velvet_logo.png');
+            return new Response('', { status: 408 });
           });
       })
     );
     return;
   }
 
-  // 4. Caché de Datos API (/api/items, /api/tags, /api/random): Stale-While-Revalidate
+  // 4. API de Datos (/api/items, /api/tags): Network first con fallback a caché
   const isApiReq = url.pathname.startsWith('/api/items') || url.pathname.startsWith('/api/tags');
   if (isApiReq) {
     event.respondWith(
-      caches.open(API_CACHE).then((cache) => {
-        return cache.match(req).then((cached) => {
-          const fetchPromise = fetch(req)
-            .then((networkResp) => {
-              if (networkResp && networkResp.status === 200) {
-                cache.put(req, networkResp.clone());
-              }
-              return networkResp;
-            })
-            .catch(() => cached);
-
-          return cached || fetchPromise;
-        });
-      })
-    );
-    return;
-  }
-
-  // 5. Recursos Estáticos (Fuentes, Tailwind, CSS): Stale-While-Revalidate
-  if (
-    url.pathname.startsWith('/_next/static') ||
-    url.pathname.endsWith('.woff2') ||
-    url.hostname.includes('cdnjs.cloudflare.com') ||
-    url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('fonts.gstatic.com')
-  ) {
-    event.respondWith(
-      caches.match(req).then((cached) => {
-        const fetchPromise = fetch(req)
-          .then((networkResp) => {
-            if (networkResp && networkResp.status === 200) {
-              const clone = networkResp.clone();
-              caches.open(STATIC_CACHE).then((cache) => {
-                cache.put(req, clone);
-              });
-            }
-            return networkResp;
-          })
-          .catch(() => cached);
-
-        return cached || fetchPromise;
-      })
+      fetch(req)
+        .then((networkResp) => {
+          if (networkResp && networkResp.status === 200) {
+            const clone = networkResp.clone();
+            caches.open(API_CACHE).then((cache) => cache.put(req, clone));
+          }
+          return networkResp;
+        })
+        .catch(() => caches.match(req))
     );
     return;
   }
