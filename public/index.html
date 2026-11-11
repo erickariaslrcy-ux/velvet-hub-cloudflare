@@ -7047,12 +7047,14 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden bg-pitch">
             <img
               src="${coverSrc}"
+              data-original-src="${coverSrc}"
+              referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
               loading="${idx < 8 ? 'eager' : 'lazy'}"
               fetchpriority="${idx < 6 ? 'high' : 'auto'}"
               decoding="async"
               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isLocked ? 'filter brightness-90' : ''}"
-              onerror="if(!this.dataset.retried && !this.src.includes('/api/image')){ this.dataset.retried='1'; this.src='/api/image?url='+encodeURIComponent('${coverSrc}'); } else { this.onerror=null; this.src=COMIC_FALLBACK_SVG; }"
+              onerror="handleCardImageError(this, 'comic')"
             />
 
             <!-- Lock Overlay on Hover -->
@@ -7447,7 +7449,7 @@
 
         card.innerHTML = `
           <div class="w-14 h-18 aspect-[3/4] rounded-xl overflow-hidden bg-pitch shrink-0 relative">
-            <img src="${coverSrc}" class="w-full h-full object-cover" onerror="this.src='${isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG}'">
+            <img src="${coverSrc}" class="w-full h-full object-cover" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
             <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-hot text-sm drop-shadow"></i>
             </div>
@@ -7791,7 +7793,7 @@
     let _readerIsRenderingChunk = false;
 
     function getReaderChunkSize() {
-      return (typeof window !== 'undefined' && window.innerWidth < 768) ? 4 : 6;
+      return (typeof window !== 'undefined' && window.innerWidth < 768) ? 3 : 4;
     }
 
     function createReaderPageItem(p, idx, refererUrl) {
@@ -7814,13 +7816,15 @@
       img.className = 'w-full reader-img bg-pitch sm:rounded-2xl sm:border sm:border-neon/15 cursor-pointer opacity-0 transition-opacity duration-200';
       img.decoding = 'async';
 
-      if (idx < 2) {
+      // Distribución inteligente de ancho de banda: 100% prioridad a la pág 1
+      if (idx === 0) {
         img.setAttribute('fetchpriority', 'high');
         img.loading = 'eager';
-      } else if (idx < 6) {
+      } else if (idx === 1) {
         img.setAttribute('fetchpriority', 'auto');
         img.loading = 'eager';
       } else {
+        img.setAttribute('fetchpriority', 'low');
         img.loading = 'lazy';
       }
 
@@ -7829,6 +7833,10 @@
         img.classList.add('opacity-100');
         skeleton.style.opacity = '0';
         setTimeout(() => { try { skeleton.remove(); } catch(e){} }, 300);
+        // Pre-cargar la siguiente página de forma secuencial sin saturar la red
+        if (idx + 1 < _readerAllPages.length) {
+          preloadSinglePage(idx + 1);
+        }
       };
 
       img.ondblclick = (e) => {
@@ -7837,16 +7845,33 @@
       };
 
       img.onerror = function() {
+        if (!this.dataset.retried && !this.src.includes('/api/image')) {
+          this.dataset.retried = '1';
+          try {
+            const payload = JSON.stringify({ u: p.image_url, r: p.referer || refererUrl || '' });
+            const b64 = btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            this.src = `/api/image?t=${b64}`;
+            return;
+          } catch(e) {}
+        }
         this.style.display = 'none';
         try { skeleton.remove(); } catch(e){}
         const errBox = document.createElement('div');
         errBox.className = 'p-6 my-2 border border-rose-900/50 rounded-2xl bg-pitch text-center';
-        errBox.innerHTML = `
-          <p class="text-xs text-rose-400 font-bold mb-2">Error cargando pág ${p.index || idx + 1}</p>
-          <button onclick="retryImage(this, '${imgUrl}')" class="px-3 py-1 bg-glass text-lav text-xs rounded-lg border border-neon/30">
-            <i class="fa-solid fa-arrows-rotate mr-1"></i> Reintentar
-          </button>
-        `;
+        
+        const errP = document.createElement('p');
+        errP.className = 'text-xs text-rose-400 font-bold mb-2';
+        errP.textContent = `Error cargando pág ${p.index || idx + 1}`;
+        
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'px-3 py-1 bg-glass text-lav text-xs rounded-lg border border-neon/30 hover:border-hot transition-colors';
+        retryBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate mr-1"></i> Reintentar';
+        retryBtn.onclick = function() {
+          retryImage(this, imgUrl);
+        };
+
+        errBox.appendChild(errP);
+        errBox.appendChild(retryBtn);
         wrapper.appendChild(errBox);
       };
 
@@ -7951,8 +7976,8 @@
       vContainer.appendChild(frag);
       _readerRenderedIndex = firstEnd;
 
-      // Precargar las primeras fotos para render 0ms
-      preloadNextImages(pages, refererUrl, 0);
+      // Precargar la siguiente página de forma secuencial
+      preloadSinglePage(firstEnd);
 
       // Si hay más fotos, añadir centinela para auto-carga fluida al bajar
       if (_readerRenderedIndex < pages.length) {
@@ -8027,35 +8052,31 @@
     }
 
     const _preloadedImageUrls = new Set();
-    function preloadNextImages(pages, refererUrl, startIndex) {
-      const endIdx = Math.min(startIndex + 8, pages.length);
-      for (let i = startIndex; i < endIdx; i++) {
-        if (!pages[i] || !pages[i].image_url) continue;
-        const url = getStealthImageUrl(pages[i].image_url, pages[i].referer || refererUrl);
-        if (_preloadedImageUrls.has(url)) continue;
-        _preloadedImageUrls.add(url);
-        if (_preloadedImageUrls.size > 500) _preloadedImageUrls.clear();
-        const img = new Image();
-        img.decoding = 'async';
-        if (i < startIndex + 2) img.fetchPriority = 'high';
-        img.src = url;
-      }
+    function preloadSinglePage(pageIndex) {
+      if (!_readerAllPages || pageIndex >= _readerAllPages.length) return;
+      const targetPage = _readerAllPages[pageIndex];
+      if (!targetPage || !targetPage.image_url) return;
+      const url = getStealthImageUrl(targetPage.image_url, targetPage.referer || _readerRefererUrl);
+      if (_preloadedImageUrls.has(url)) return;
+      _preloadedImageUrls.add(url);
+      if (_preloadedImageUrls.size > 500) _preloadedImageUrls.clear();
+      const pre = new Image();
+      pre.decoding = 'async';
+      pre.fetchPriority = 'low';
+      pre.referrerPolicy = 'no-referrer';
+      pre.src = url;
     }
 
     function retryImage(btn, originalSrc) {
-
       const parent = btn.parentElement;
-
       const wrapper = parent.parentElement;
-
       const img = wrapper.querySelector('img');
-
-      img.src = `${originalSrc}&retry=${Date.now()}`;
-
-      img.style.display = 'block';
-
+      if (img) {
+        const sep = originalSrc.includes('?') ? '&' : '?';
+        img.src = `${originalSrc}${sep}retry=${Date.now()}`;
+        img.style.display = 'block';
+      }
       parent.remove();
-
     }
 
     function setupIntersectionObserver() {
@@ -8882,35 +8903,23 @@
     }
 
     function authHeaders() {
-
-      const headers = { 'Content-Type': 'application/json' };
-
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-velvet-client': 'velvet-web-client-v2'
+      };
       const token = getAuthToken();
-
       if (token) {
-
         headers['Authorization'] = `Bearer ${token}`;
-
       }
-
       const refToken = localStorage.getItem('velvet_refresh_token');
-
       if (refToken) {
-
         headers['x-refresh-token'] = refToken;
-
       }
-
       const deviceToken = localStorage.getItem('velvet_device_token');
-
       if (deviceToken) {
-
         headers['x-device-token'] = deviceToken;
-
       }
-
       return headers;
-
     }
 
     async function initAuth() {
