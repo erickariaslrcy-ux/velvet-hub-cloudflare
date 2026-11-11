@@ -13,30 +13,39 @@ const SUPABASE_URL = "https://qnmcejlxoufheisgkuyo.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFubWNlamx4b3VmaGVpc2drdXlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTU1NzI0NiwiZXhwIjoyMTA3MTMzMjQ2fQ.lDom8ovim8HH-8oxcsSKCRQNN0UjMV_Po-VSo-zanDU";
 const MEDIA_SECRET = "velvet_ultra_stealth_secret_key_2026";
 
-// Cifrado y descifrado XOR simétrico
+// Cifrado y descifrado XOR simétrico UTF-8 seguro (soporta caracteres asiáticos y emojis sin error btoa)
 function encodeMediaToken(targetUrl, referer = "") {
   if (!targetUrl) return "";
   try {
     const raw = JSON.stringify({ u: targetUrl, r: referer || "" });
-    let enc = "";
-    for (let i = 0; i < raw.length; i++) {
-      enc += String.fromCharCode(raw.charCodeAt(i) ^ MEDIA_SECRET.charCodeAt(i % MEDIA_SECRET.length));
+    const utf8Bytes = new TextEncoder().encode(raw);
+    const keyBytes = new TextEncoder().encode(MEDIA_SECRET);
+    const xorBytes = new Uint8Array(utf8Bytes.length);
+    for (let i = 0; i < utf8Bytes.length; i++) {
+      xorBytes[i] = utf8Bytes[i] ^ keyBytes[i % keyBytes.length];
     }
-    return btoa(enc).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    let bin = "";
+    for (let i = 0; i < xorBytes.length; i++) {
+      bin += String.fromCharCode(xorBytes[i]);
+    }
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   } catch (e) {
-    return btoa(JSON.stringify({ u: targetUrl, r: referer || "" })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    return "";
   }
 }
 
 function decodeMediaToken(token) {
+  if (!token) return null;
   try {
     let b64 = token.replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
-    const binaryStr = atob(b64);
-    let dec = "";
-    for (let i = 0; i < binaryStr.length; i++) {
-      dec += String.fromCharCode(binaryStr.charCodeAt(i) ^ MEDIA_SECRET.charCodeAt(i % MEDIA_SECRET.length));
+    const bin = atob(b64);
+    const keyBytes = new TextEncoder().encode(MEDIA_SECRET);
+    const xorBytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) {
+      xorBytes[i] = bin.charCodeAt(i) ^ keyBytes[i % keyBytes.length];
     }
+    const dec = new TextDecoder().decode(xorBytes);
     return JSON.parse(dec);
   } catch (e) {
     return null;
