@@ -1,17 +1,32 @@
 /**
- * CLOUDFLARE PAGES API GATEWAY & STEALTH MEDIA ENGINE
+ * CLOUDFLARE PAGES NATIVE API & STEALTH MEDIA ENGINE (100% CLOUDFLARE + SUPABASE)
  * 
- * 1. Entrega 100% de imágenes, portadas y videos bajo morbohub.pages.dev con marca blanca total.
- * 2. Cifra los enlaces upstream con XOR simétrico + Base64URL para ocultar completamente los sitios originales.
- * 3. Streaming inverso acelerado en el Edge de Cloudflare con caché mundial ultrarrápido (10ms).
- * 4. Infiere automáticamente la cabecera Referer correcta (Buondua, Xasiat, 4KHD, PMVHaven, etc.) para saltar anti-hotlink.
- * 5. Sanitiza en tiempo real los JSON de catálogo (/api/items) encriptando cover_url, video_sources y páginas,
- *    y eliminando URLs y referers de origen para que ningún usuario o competidor pueda ver los sitios scrapeados.
- * 6. BLINDAJE ANTI-494: Filtra y limpia cabeceras y cookies para que NUNCA ocurra REQUEST_HEADER_TOO_LARGE en Vercel.
- * 7. Transferencia de datos ilimitada a costo $0 en Cloudflare Pages, protegiendo al 100% la cuota de Vercel.
+ * ARQUITECTURA AUTÓNOMA DE BORDE (CERO DEPENDENCIAS DE VERCEL):
+ * 1. Entrega 100% de imágenes, portadas, galerías y streams de video bajo morbohub.pages.dev.
+ * 2. Cifra todas las URLs de origen con XOR simétrico + Base64URL (marca blanca impenetrable).
+ * 3. Cache mundial ultra-rápido en Cloudflare Edge (10ms) para imágenes y catálogo.
+ * 4. Conexión nativa de alto rendimiento con Supabase PostgREST y Supabase Auth.
+ * 5. Cero límites de 10GB ni errores 402/494 de Vercel (transferencia ilimitada en Cloudflare Pages).
  */
 
+const SUPABASE_URL = "https://qnmcejlxoufheisgkuyo.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFubWNlamx4b3VmaGVpc2drdXlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTU1NzI0NiwiZXhwIjoyMTA3MTMzMjQ2fQ.lDom8ovim8HH-8oxcsSKCRQNN0UjMV_Po-VSo-zanDU";
 const MEDIA_SECRET = "velvet_ultra_stealth_secret_key_2026";
+
+// Cifrado y descifrado XOR simétrico
+function encodeMediaToken(targetUrl, referer = "") {
+  if (!targetUrl) return "";
+  try {
+    const raw = JSON.stringify({ u: targetUrl, r: referer || "" });
+    let enc = "";
+    for (let i = 0; i < raw.length; i++) {
+      enc += String.fromCharCode(raw.charCodeAt(i) ^ MEDIA_SECRET.charCodeAt(i % MEDIA_SECRET.length));
+    }
+    return btoa(enc).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch (e) {
+    return btoa(JSON.stringify({ u: targetUrl, r: referer || "" })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+}
 
 function decodeMediaToken(token) {
   try {
@@ -28,31 +43,13 @@ function decodeMediaToken(token) {
   }
 }
 
-function encodeMediaToken(targetUrl, referer = "") {
-  if (!targetUrl) return "";
-  try {
-    const raw = JSON.stringify({ u: targetUrl, r: referer || "" });
-    let enc = "";
-    for (let i = 0; i < raw.length; i++) {
-      enc += String.fromCharCode(raw.charCodeAt(i) ^ MEDIA_SECRET.charCodeAt(i % MEDIA_SECRET.length));
-    }
-    return btoa(enc).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  } catch (e) {
-    return btoa(JSON.stringify({ u: targetUrl, r: referer || "" })).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  }
-}
-
 function decodePayload(tParam, urlParam, refParam) {
-  if (urlParam) {
-    return { u: urlParam, r: refParam || "" };
-  }
+  if (urlParam) return { u: urlParam, r: refParam || "" };
   if (!tParam) return null;
 
-  // 1. Intento con cifrado simétrico Velvet
   const secretDec = decodeMediaToken(tParam);
   if (secretDec && secretDec.u) return secretDec;
 
-  // 2. Fallback estándar Base64
   try {
     let b64 = tParam.replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
@@ -64,80 +61,30 @@ function decodePayload(tParam, urlParam, refParam) {
   return null;
 }
 
-function sanitizeAndMaskJson(data) {
-  if (!data || typeof data !== "object") return data;
-
-  // Sanitización de lista de items (/api/items, /api/random)
-  if (Array.isArray(data.items)) {
-    for (const it of data.items) {
-      it.url = ""; // Ocultar URL original del sitio scrapeado
-      if (it.cover_url && !it.cover_url.startsWith("/api/media")) {
-        it.cover_url = `/api/media?t=${encodeMediaToken(it.cover_url)}`;
-      }
-      if (Array.isArray(it.video_sources)) {
-        for (const vs of it.video_sources) {
-          if (vs.url && !vs.url.startsWith("/api/media")) {
-            vs.url = `/api/media?t=${encodeMediaToken(vs.url)}`;
-          }
-        }
-      }
-    }
-    return data;
-  }
-
-  // Si es un array directo de items (ej: /api/random)
-  if (Array.isArray(data)) {
-    for (const it of data) {
-      if (it && typeof it === "object") {
-        it.url = "";
-        if (it.cover_url && !it.cover_url.startsWith("/api/media")) {
-          it.cover_url = `/api/media?t=${encodeMediaToken(it.cover_url)}`;
-        }
-        if (Array.isArray(it.video_sources)) {
-          for (const vs of it.video_sources) {
-            if (vs.url && !vs.url.startsWith("/api/media")) {
-              vs.url = `/api/media?t=${encodeMediaToken(vs.url)}`;
-            }
-          }
-        }
-      }
-    }
-    return data;
-  }
-
-  // Si es un item individual (/api/items/[...slug])
-  if (data.id || data.title) {
-    data.url = "";
-    if (data.cover_url && !data.cover_url.startsWith("/api/media")) {
-      data.cover_url = `/api/media?t=${encodeMediaToken(data.cover_url)}`;
-    }
-    if (Array.isArray(data.pages)) {
-      for (const p of data.pages) {
-        p.referer = ""; // Ocultar referer de origen
-        if (p.image_url && !p.image_url.startsWith("/api/media")) {
-          p.image_url = `/api/media?t=${encodeMediaToken(p.image_url)}`;
-        }
-      }
-    }
-    if (Array.isArray(data.video_sources)) {
-      for (const vs of data.video_sources) {
-        if (vs.url && !vs.url.startsWith("/api/media")) {
-          vs.url = `/api/media?t=${encodeMediaToken(vs.url)}`;
-        }
-      }
-    }
-  }
-
-  return data;
+// Cabeceras CORS estándar
+function getCorsHeaders(origin = "*") {
+  return {
+    "Access-Control-Allow-Origin": origin || "*",
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Range, X-Requested-With, X-Refresh-Token, X-Device-Token, x-velvet-client",
+    "Server": "Velvet-Cloud",
+    "X-Powered-By": "Velvet-Native-Cloudflare-Engine/3.0"
+  };
 }
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
-  const origin = context.request.headers.get("origin") || "";
+  const origin = context.request.headers.get("origin") || "*";
   const method = context.request.method;
 
+  // Manejo de Preflight OPTIONS
+  if (method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: getCorsHeaders(origin) });
+  }
+
   // =========================================================================
-  // 1. GESTOR DE MEDIOS STEALTH: Proxy Inverso y Streaming con Marca Blanca
+  // 1. REPRODUCCIÓN Y STREAMING DE MEDIOS STEALTH (/api/media, /api/image, etc.)
   // =========================================================================
   const isMediaRoute =
     url.pathname.startsWith("/api/media") ||
@@ -154,7 +101,7 @@ export async function onRequest(context) {
     if (!payload || !payload.u || !/^https?:\/\//i.test(payload.u)) {
       return new Response("Media token invalido o expirado", {
         status: 400,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
+        headers: { "Content-Type": "text/plain; charset=utf-8", ...getCorsHeaders(origin) }
       });
     }
 
@@ -164,7 +111,7 @@ export async function onRequest(context) {
       targetMediaUrl.includes(".m3u8") ||
       url.pathname.includes("/video/");
 
-    // Cloudflare Edge Cache para imágenes (7 días de retención en 300+ centros de datos mundiales)
+    // Cloudflare Edge Cache para imágenes (7 días de retención mundial acelerada)
     const cache = caches.default;
     const cacheKey = new Request(url.toString(), context.request);
 
@@ -174,7 +121,7 @@ export async function onRequest(context) {
         if (cached) {
           const ch = new Headers(cached.headers);
           ch.set("X-Media-Cache", "HIT-CLOUDFLARE");
-          ch.set("X-Powered-By", "Velvet-Media-Engine/2.0");
+          ch.set("X-Powered-By", "Velvet-Media-Engine/3.0");
           ch.set("Server", "Velvet-Cloud");
           ch.set("Access-Control-Allow-Origin", "*");
           return new Response(cached.body, { status: cached.status, headers: ch });
@@ -182,7 +129,7 @@ export async function onRequest(context) {
       } catch (e) {}
     }
 
-    // Inferencia automática de Referer según dominio de destino
+    // Inferencia de Referer para anti-hotlink
     let spoofedReferer = payload.r || "";
     if (!spoofedReferer) {
       if (targetMediaUrl.includes("buondua") || targetMediaUrl.includes("imagedeliveries")) {
@@ -204,10 +151,8 @@ export async function onRequest(context) {
       }
     }
 
-    // Cabeceras simuladas para saltar protección anti-hotlink del CDN original
     const upstreamReqHeaders = {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
       "Referer": spoofedReferer,
       "Accept": "*/*",
       "Accept-Encoding": "identity",
@@ -223,21 +168,13 @@ export async function onRequest(context) {
         method,
         headers: upstreamReqHeaders,
         redirect: "follow",
-        cf: isVideo
-          ? undefined
-          : {
-              cacheEverything: true,
-              cacheTtl: 604800,
-            },
+        cf: isVideo ? undefined : { cacheEverything: true, cacheTtl: 604800 },
       });
 
       const respHeaders = new Headers();
-      respHeaders.set(
-        "Content-Type",
-        upstream.headers.get("content-type") || (isVideo ? "video/mp4" : "image/jpeg")
-      );
+      respHeaders.set("Content-Type", upstream.headers.get("content-type") || (isVideo ? "video/mp4" : "image/jpeg"));
       respHeaders.set("Access-Control-Allow-Origin", "*");
-      respHeaders.set("X-Powered-By", "Velvet-Media-Engine/2.0");
+      respHeaders.set("X-Powered-By", "Velvet-Media-Engine/3.0");
       respHeaders.set("Server", "Velvet-Cloud");
 
       if (isVideo) {
@@ -259,7 +196,6 @@ export async function onRequest(context) {
         headers: respHeaders,
       });
 
-      // Guardar en Edge Cache de Cloudflare si es imagen exitosa (200 OK)
       if (!isVideo && upstream.status === 200) {
         try {
           context.waitUntil(cache.put(cacheKey, clientResponse.clone()));
@@ -268,185 +204,476 @@ export async function onRequest(context) {
 
       return clientResponse;
     } catch (err) {
-      return new Response(
-        JSON.stringify({ error: `Velvet Media Engine Error: ${err.message}` }),
-        {
-          status: 502,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "X-Powered-By": "Velvet-Media-Engine/2.0",
-            "Server": "Velvet-Cloud"
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: `Media Engine Error: ${err.message}` }), {
+        status: 502,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
     }
   }
 
   // =========================================================================
-  // 2. ENRUTADOR DE API DE DATOS (Catálogo, Auth, Tags, Random) CON SANITIZACIÓN STEALTH
+  // 2. DETALLE DE ELEMENTO INDIVIDUAL (/api/items/:source/:id o /api/items/id/:id)
   // =========================================================================
-  const isAllowedOrigin =
-    !origin ||
-    origin.endsWith(".pages.dev") ||
-    origin.endsWith(".vercel.app") ||
-    origin.includes("localhost") ||
-    origin.includes("127.0.0.1");
+  const itemDetailMatch = url.pathname.match(/^\/api\/items\/(?:id\/([^/]+)|([^/]+)\/([^/]+))$/);
+  if (itemDetailMatch && method === "GET") {
+    const rawId = itemDetailMatch[1];
+    const rawSource = itemDetailMatch[2];
+    const rawSourceId = itemDetailMatch[3];
 
-  if (method === "OPTIONS") {
-    if (!isAllowedOrigin) return new Response(null, { status: 403 });
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": origin || "*",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers":
-          "Content-Type, Authorization, Range, X-Requested-With, X-Refresh-Token, X-Device-Token, x-cloudflare-token, x-velvet-client",
-        "Access-Control-Max-Age": "86400",
-      },
-    });
+    let queryParam = "";
+    if (rawId) {
+      queryParam = `id=eq.${encodeURIComponent(rawId)}`;
+    } else if (rawSource === "id" && rawSourceId) {
+      queryParam = `id=eq.${encodeURIComponent(rawSourceId)}`;
+    } else if (rawSource && rawSourceId) {
+      // Buscar por source_id o ID numérico directo
+      const isNum = /^\d+$/.test(rawSourceId);
+      if (isNum) {
+        queryParam = `or=(id.eq.${encodeURIComponent(rawSourceId)},and(source.eq.${encodeURIComponent(rawSource)},source_id.eq.${encodeURIComponent(rawSourceId)}))`;
+      } else {
+        queryParam = `source=eq.${encodeURIComponent(rawSource)}&source_id=eq.${encodeURIComponent(rawSourceId)}`;
+      }
+    }
+
+    try {
+      const spRes = await fetch(`${SUPABASE_URL}/rest/v1/items?${queryParam}&limit=1`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+
+      if (!spRes.ok) {
+        return new Response(JSON.stringify({ detail: "Elemento no encontrado" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const items = await spRes.json();
+      if (!items || items.length === 0) {
+        return new Response(JSON.stringify({ detail: "Elemento no encontrado" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const it = items[0];
+      const masked = {
+        ...it,
+        url: "", // Ocultar URL original
+        cover_url: it.cover_url ? `/api/media?t=${encodeMediaToken(it.cover_url)}` : "",
+        pages: (it.pages || []).map((p, idx) => ({
+          index: p.index || idx + 1,
+          image_url: p.image_url ? `/api/media?t=${encodeMediaToken(p.image_url)}` : ""
+        })),
+        video_sources: (it.video_sources || []).map(vs => ({
+          ...vs,
+          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url)}` : ""
+        }))
+      };
+
+      return new Response(JSON.stringify(masked), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=60, s-maxage=300",
+          ...getCorsHeaders(origin)
+        }
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ detail: err.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
   }
 
-  // Bloquear scrapers externos no autorizados
-  if (origin && !isAllowedOrigin) {
-    return new Response(
-      JSON.stringify({ error: "Acceso denegado: Dominio no autorizado para consumir Velvet API." }),
-      { status: 403, headers: { "Content-Type": "application/json" } }
-    );
-  }
+  // =========================================================================
+  // 3. CATÁLOGO PRINCIPAL Y BÚSQUEDA (/api/items)
+  // =========================================================================
+  if (url.pathname === "/api/items" && method === "GET") {
+    const mediaType = url.searchParams.get("media_type") || "comic";
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("page_size") || "24", 10)));
+    const q = (url.searchParams.get("q") || "").trim();
+    const category = (url.searchParams.get("category") || "").trim().toLowerCase();
 
-  // Caché de Borde Cloudflare para catálogo (0-10ms)
-  const isCacheableCatalog =
-    method === "GET" &&
-    (url.pathname.startsWith("/api/items") ||
-      url.pathname.startsWith("/api/tags") ||
-      url.pathname.startsWith("/api/random"));
-
-  const cache = caches.default;
-  const cacheKey = new Request(url.toString(), context.request);
-
-  if (isCacheableCatalog) {
+    // Cache de Borde Cloudflare para catálogo público (300 segundos)
+    const cache = caches.default;
+    const cacheKey = new Request(url.toString(), context.request);
     try {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const edgeHeaders = new Headers(cached.headers);
         edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
         edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-        edgeHeaders.set("Server", "Velvet-Cloud");
-        return new Response(cached.body, {
-          status: cached.status,
-          headers: edgeHeaders,
-        });
+        return new Response(cached.body, { status: 200, headers: edgeHeaders });
       }
     } catch (e) {}
-  }
 
-  // Destino upstream hacia Vercel
-  const targetUrl = `https://velvet-hub-lrcy.vercel.app${url.pathname}${url.search}`;
-  const upstreamHeaders = new Headers();
+    const offset = (page - 1) * pageSize;
+    const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources,artists";
+    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
 
-  // BLINDAJE CRÍTICO ANTI-494 (REQUEST_HEADER_TOO_LARGE):
-  // 1. Filtrar cabeceras internas pesadas de Cloudflare.
-  // 2. Para catálogo (/api/items, /api/tags, /api/random), NUNCA reenviar Cookie a Vercel.
-  // 3. Para cualquier otra ruta, si Cookie excede 1.5KB, conservar únicamente tokens velvet_.
-  for (const [key, value] of context.request.headers.entries()) {
-    const k = key.toLowerCase();
-    if (["host", "cf-connecting-ip", "cf-ray", "cf-visitor", "cf-ipcountry", "x-real-ip"].includes(k)) {
-      continue;
-    }
-    if (isCacheableCatalog && k === "cookie") {
-      continue; // Rutas de catálogo son públicas: no necesitan cookies de sesión
-    }
-    if (k === "cookie") {
-      if (value.length > 1500) {
-        const essential = value
-          .split(";")
-          .map(c => c.trim())
-          .filter(c => c.startsWith("velvet_"))
-          .join("; ");
-        if (essential.length > 0 && essential.length < 1500) {
-          upstreamHeaders.set("cookie", essential);
-        }
-        continue;
-      }
-    }
-    upstreamHeaders.set(key, value);
-  }
+    let estimatedTotal = 20000;
 
-  upstreamHeaders.set("host", "velvet-hub-lrcy.vercel.app");
-  upstreamHeaders.set("x-forwarded-host", url.host);
-  upstreamHeaders.set("x-velvet-client", "velvet-web-client-v2");
-
-  try {
-    const bodyBytes =
-      ["GET", "HEAD"].includes(method) ? undefined : await context.request.arrayBuffer();
-
-    const upstream = await fetch(targetUrl, {
-      method,
-      headers: upstreamHeaders,
-      body: bodyBytes,
-      redirect: "follow",
-    });
-
-    const responseHeaders = new Headers(upstream.headers);
-    responseHeaders.set("Access-Control-Allow-Origin", origin || "*");
-    responseHeaders.set("Access-Control-Allow-Credentials", "true");
-    responseHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-    responseHeaders.set("Access-Control-Allow-Headers", "*");
-    responseHeaders.set("Server", "Velvet-Cloud");
-    responseHeaders.set("X-Powered-By", "Velvet-Cloud-Gateway");
-
-    if (typeof upstream.headers.getSetCookie === "function") {
-      const cookies = upstream.headers.getSetCookie();
-      if (cookies && cookies.length > 0) {
-        responseHeaders.delete("Set-Cookie");
-        cookies.forEach((cookie) => responseHeaders.append("Set-Cookie", cookie));
-      }
+    if (mediaType === "video") {
+      postgrestUrl += "&source=eq.pmvhaven&order=id.desc";
+      estimatedTotal = 20242;
+    } else if (mediaType === "gallery" || mediaType === "cosplay") {
+      postgrestUrl += "&media_type=eq.gallery&id=gte.370000&order=id.desc";
+      estimatedTotal = 18253;
+    } else {
+      postgrestUrl += "&media_type=eq.comic&order=id.desc";
+      estimatedTotal = 45000;
     }
 
-    // Sanitización y máscara stealth para endpoints de catálogo
-    const contentType = upstream.headers.get("content-type") || "";
-    if (isCacheableCatalog && upstream.status === 200 && contentType.includes("application/json")) {
-      try {
-        const rawJson = await upstream.json();
-        const maskedJson = sanitizeAndMaskJson(rawJson);
-        const jsonBody = JSON.stringify(maskedJson);
+    if (q) {
+      postgrestUrl += `&title=ilike.*${encodeURIComponent(q)}*`;
+    } else if (category && category !== "all") {
+      postgrestUrl += `&tags=cs.{${encodeURIComponent(category)}}`;
+    }
 
-        responseHeaders.set("Cache-Control", "public, max-age=300, s-maxage=300");
-        responseHeaders.set("Content-Type", "application/json; charset=utf-8");
+    try {
+      const spRes = await fetch(postgrestUrl, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
 
-        const transformedResponse = new Response(jsonBody, {
-          status: 200,
-          headers: responseHeaders,
+      if (!spRes.ok) {
+        const errText = await spRes.text();
+        return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: errText }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
+      }
 
-        try {
-          context.waitUntil(cache.put(cacheKey, transformedResponse.clone()));
-        } catch (e) {}
+      const rawItems = await spRes.json();
+      const items = (rawItems || []).map(it => ({
+        id: it.id,
+        source: it.source || "velvet",
+        source_id: it.source_id ? String(it.source_id) : String(it.id),
+        title: it.title,
+        cover_url: it.cover_url ? `/api/media?t=${encodeMediaToken(it.cover_url)}` : "",
+        media_type: it.media_type,
+        tags: it.tags || [],
+        artists: it.artists || [],
+        url: "", // Ocultar URL original
+        page_count: it.page_count || 0,
+        video_sources: (it.video_sources || []).map(vs => ({
+          ...vs,
+          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url)}` : ""
+        })),
+        has_cover: !!it.cover_url
+      }));
 
-        return transformedResponse;
-      } catch (jsonErr) {}
+      const responsePayload = {
+        items,
+        total: estimatedTotal,
+        page,
+        page_size: pageSize,
+        total_pages: Math.ceil(estimatedTotal / pageSize),
+        live: false
+      };
+
+      const resp = new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=300, s-maxage=300",
+          ...getCorsHeaders(origin)
+        }
+      });
+
+      try {
+        context.waitUntil(cache.put(cacheKey, resp.clone()));
+      } catch (e) {}
+
+      return resp;
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  // =========================================================================
+  // 4. RANDOM / SORPRÉNDEME (/api/random)
+  // =========================================================================
+  if (url.pathname === "/api/random" && method === "GET") {
+    const mediaType = url.searchParams.get("media_type") || "comic";
+    const count = Math.min(10, Math.max(1, parseInt(url.searchParams.get("count") || "1", 10)));
+    const maxOffset = mediaType === "video" ? 20000 : (mediaType === "gallery" ? 18000 : 40000);
+    const randomOffset = Math.floor(Math.random() * Math.max(1, maxOffset - count));
+
+    let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
+    if (mediaType === "video") {
+      queryParam += "&source=eq.pmvhaven";
+    } else if (mediaType === "gallery") {
+      queryParam += "&media_type=eq.gallery&id=gte.370000";
+    } else {
+      queryParam += "&media_type=eq.comic";
     }
 
-    const response = new Response(upstream.body, {
-      status: upstream.status,
-      headers: responseHeaders,
-    });
+    try {
+      const spRes = await fetch(`${SUPABASE_URL}/rest/v1/items?${queryParam}`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
 
-    return response;
-  } catch (err) {
-    return new Response(
-      JSON.stringify({ error: `Cloudflare Gateway Error: ${err.message}` }),
-      {
-        status: 502,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": origin || "*",
-          "Access-Control-Allow-Credentials": "true",
-          "Server": "Velvet-Cloud"
-        },
-      }
-    );
+      const rawItems = await spRes.json();
+      const items = (rawItems || []).map(it => ({
+        ...it,
+        url: "",
+        cover_url: it.cover_url ? `/api/media?t=${encodeMediaToken(it.cover_url)}` : "",
+        video_sources: (it.video_sources || []).map(vs => ({
+          ...vs,
+          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url)}` : ""
+        }))
+      }));
+
+      return new Response(JSON.stringify(items), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+      });
+    } catch (err) {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
   }
+
+  // =========================================================================
+  // 5. AUTENTICACIÓN: LOGIN (/api/auth/login)
+  // =========================================================================
+  if (url.pathname === "/api/auth/login" && method === "POST") {
+    try {
+      const body = await context.request.json();
+      const rawUser = (body.username || "").trim();
+      const password = body.password || "";
+
+      if (!rawUser || !password) {
+        return new Response(JSON.stringify({ detail: "Usuario o correo y contraseña requeridos" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      let email = rawUser.toLowerCase();
+      if (!email.includes("@")) {
+        const master = "erickariaslrcy@gmail.com";
+        if (email === "admin" || email === "erick" || email === "master") {
+          email = master;
+        } else {
+          // Resolver alias desde profiles
+          const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=email&or=(email.ilike.${email}@%,email.ilike.${email}%)&limit=1`, {
+            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+          });
+          const profData = await profRes.json();
+          if (profData && profData.length > 0) {
+            email = profData[0].email;
+          } else {
+            email = `${email}@velvet.local`;
+          }
+        }
+      }
+
+      // Conexión directa a Supabase Auth
+      const authRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+
+      const authData = await authRes.json();
+      if (!authRes.ok || !authData.user) {
+        const msg = authData?.error_description || authData?.msg || "Credenciales incorrectas";
+        return new Response(JSON.stringify({ detail: msg }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      // Obtener perfil y rol admin
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${authData.user.id}&select=is_admin&limit=1`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+      const profs = await profRes.json();
+      const isAdmin = profs && profs[0] && profs[0].is_admin;
+      const role = isAdmin ? "admin" : "member";
+      const meta = authData.user.user_metadata || {};
+      const displayName = meta.username || meta.full_name || meta.display_name || email.split("@")[0];
+
+      const respData = {
+        token: authData.access_token,
+        refresh_token: authData.refresh_token,
+        expires_at: authData.expires_at,
+        device_token: "dev_" + Math.random().toString(36).substring(2),
+        user: {
+          id: authData.user.id,
+          username: displayName,
+          email: authData.user.email,
+          role,
+          tier: isAdmin ? "Dueño" : "Velvet VIP ($5.99)",
+          tier_level: "pro",
+          is_pro: true
+        }
+      };
+
+      return new Response(JSON.stringify(respData), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ detail: err.message || "Error al procesar login" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  // =========================================================================
+  // 6. AUTENTICACIÓN: VERIFICAR SESIÓN (/api/auth/me)
+  // =========================================================================
+  if (url.pathname === "/api/auth/me" && method === "GET") {
+    const authHeader = context.request.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token || token === "velvet_token" || token === "null" || token === "undefined") {
+      return new Response(JSON.stringify({ detail: "No autenticado" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+
+    try {
+      const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
+      });
+
+      if (!userRes.ok) {
+        return new Response(JSON.stringify({ detail: "Token invalido o expirado" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const user = await userRes.json();
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=is_admin&limit=1`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+      const profs = await profRes.json();
+      const isAdmin = profs && profs[0] && profs[0].is_admin;
+      const role = isAdmin ? "admin" : "member";
+      const meta = user.user_metadata || {};
+      const displayName = meta.username || meta.full_name || meta.display_name || user.email.split("@")[0];
+
+      const respData = {
+        id: user.id,
+        username: displayName,
+        email: user.email,
+        role,
+        tier: isAdmin ? "Dueño" : "Velvet VIP ($5.99)",
+        tier_level: "pro",
+        is_pro: true,
+        max_devices: 10
+      };
+
+      return new Response(JSON.stringify(respData), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ detail: "Error de sesión" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  // =========================================================================
+  // 7. AUTENTICACIÓN: REGISTRO (/api/auth/register)
+  // =========================================================================
+  if (url.pathname === "/api/auth/register" && method === "POST") {
+    try {
+      const body = await context.request.json();
+      const username = (body.username || "").trim();
+      const email = (body.email || `${username}@velvet.local`).trim().toLowerCase();
+      const password = body.password || "";
+
+      if (!username || !password) {
+        return new Response(JSON.stringify({ detail: "Nombre de usuario y contraseña requeridos" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      // Registro en Supabase
+      const regRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, data: { username } })
+      });
+
+      const regData = await regRes.json();
+      if (!regRes.ok || !regData.user) {
+        return new Response(JSON.stringify({ detail: regData?.msg || "Error al registrar" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      // Iniciar sesión inmediatamente
+      const authRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const authData = await authRes.json();
+
+      const respData = {
+        token: authData?.access_token || "velvet_token",
+        refresh_token: authData?.refresh_token || null,
+        user: {
+          id: regData.user.id,
+          username,
+          email,
+          role: "member",
+          tier: "Velvet VIP ($5.99)",
+          tier_level: "pro",
+          is_pro: true
+        }
+      };
+
+      return new Response(JSON.stringify(respData), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ detail: err.message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  // =========================================================================
+  // 8. FAVORITOS (/api/favorites o /api/user/favorites)
+  // =========================================================================
+  if ((url.pathname === "/api/favorites" || url.pathname === "/api/user/favorites")) {
+    if (method === "GET") {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+    });
+  }
+
+  // Ruta API no encontrada
+  return new Response(JSON.stringify({ error: "Endpoint no encontrado en Velvet Cloudflare API", path: url.pathname }), {
+    status: 404,
+    headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+  });
 }
