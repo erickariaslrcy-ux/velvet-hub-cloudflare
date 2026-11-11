@@ -3594,6 +3594,55 @@
         }
       }
 
+      // Actualizar inmediatamente encabezados de seccion y hero para la nueva pestana activa
+      const titleSec = document.getElementById("grid-section-title");
+      const resCount = document.getElementById("results-count");
+      const badgeEl = document.getElementById("grid-status-badge");
+      const heroTitle = document.getElementById("hero-title");
+      const heroBadge = document.getElementById("hero-format-badge");
+      const readBtn = document.getElementById("hero-read-btn");
+
+      if (mode === "videos") {
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición';
+        if (resCount) resCount.textContent = "Actualizando videos en streaming...";
+        if (badgeEl) badgeEl.textContent = "videos en streaming directo";
+        if (heroTitle) heroTitle.textContent = "Cargando video destacado...";
+        if (heroBadge) {
+          heroBadge.textContent = "VIDEO STREAMING HD";
+          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800";
+        }
+        if (readBtn) {
+          readBtn.innerHTML = '<i class="fa-solid fa-circle-play text-xs"></i> Ver Video en HD';
+          readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
+        }
+      } else if (mode === "galleries") {
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Sets Exclusivos de Cosplay & Modelos';
+        if (resCount) resCount.textContent = "Actualizando galerías VIP...";
+        if (badgeEl) badgeEl.textContent = "sets en ultra alta definición";
+        if (heroTitle) heroTitle.textContent = "Cargando galería destacada...";
+        if (heroBadge) {
+          heroBadge.textContent = "GALERÍA VIP 4K";
+          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-hot/20 text-hot border border-hot/30";
+        }
+        if (readBtn) {
+          readBtn.innerHTML = '<i class="fa-solid fa-camera-retro text-xs"></i> Ver Galería en HD';
+          readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
+        }
+      } else {
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Últimas Novedades Calientes';
+        if (resCount) resCount.textContent = "Actualizando catálogo...";
+        if (badgeEl) badgeEl.textContent = "historias listas para leer";
+        if (heroTitle) heroTitle.textContent = "Cargando cómic destacado...";
+        if (heroBadge) {
+          heroBadge.textContent = "3D CGI NOVEL";
+          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-hot/25 text-hot border border-hot/40";
+        }
+        if (readBtn) {
+          readBtn.innerHTML = '<i class="fa-solid fa-play text-xs"></i> Comenzar a Leer';
+          readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
+        }
+      }
+
       renderCategoryChips();
       renderTrendingTags();
       renderContinueShelf();
@@ -7264,7 +7313,7 @@
 
       document.getElementById('hero-synopsis').textContent = getSensualSynopsis(item);
 
-      const isLocked = isItemLockedForUser(item);
+      const isLocked = isItemLockedForUser(item, state.heroIndex);
       const readBtn = document.getElementById('hero-read-btn');
       if (readBtn) {
         if (isLocked) {
@@ -7367,7 +7416,7 @@
     function openHeroComic() {
       const it = state.heroItems[state.heroIndex];
       if (!it) return;
-      if (isItemLockedForUser(it)) {
+      if (isItemLockedForUser(it, state.heroIndex)) {
         openProUpgradeModal(it);
         return;
       }

@@ -345,10 +345,10 @@ export async function onRequest(context) {
     let estimatedTotal = 20000;
 
     if (mediaType === "video") {
-      postgrestUrl += "&source=eq.pmvhaven&order=id.desc";
+      postgrestUrl += "&media_type=eq.video&id=lte.304214";
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
-      postgrestUrl += "&media_type=eq.gallery&id=gte.370000&order=id.desc";
+      postgrestUrl += "&media_type=eq.gallery&id=gte.370000";
       // Leakedgallery solo 0.002 (0.2%) de probabilidad ultra rara o si se busca explícitamente
       const allowLeak = (Math.random() < 0.002) || (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
       if (!allowLeak) {
@@ -356,7 +356,7 @@ export async function onRequest(context) {
       }
       estimatedTotal = 18253;
     } else {
-      postgrestUrl += "&media_type=eq.comic&id=gte.320000&order=id.desc";
+      postgrestUrl += "&media_type=eq.comic&id=gte.320000";
       estimatedTotal = 45000;
     }
 
@@ -374,14 +374,28 @@ export async function onRequest(context) {
         else if (category === "patreon") catTerm = "patreon";
       } else if (mediaType === "video") {
         if (category === "pmv") catTerm = "pmv";
+        else if (category === "milf") catTerm = "milf";
+        else if (category === "amateur") catTerm = "amateur";
+        else if (category === "anal") catTerm = "anal";
+        else if (category === "pov") catTerm = "pov";
+        else if (category === "group") catTerm = "threesome";
+        else if (category === "tits") catTerm = "tit";
+        else if (category === "blondes") catTerm = "blonde";
+        else if (category === "brunettes") catTerm = "latina";
+        else if (category === "russians") catTerm = "russian";
+        else if (category === "hd") catTerm = "1080p";
       } else {
         if (category === "manhwa") catTerm = "manhwa";
         else if (category === "3d") catTerm = "3d";
         else if (category === "doujin") catTerm = "doujin";
         else if (category === "parody") catTerm = "parodia";
+        else if (category === "western") catTerm = "comic";
       }
       postgrestUrl += `&title=ilike.*${encodeURIComponent(catTerm)}*`;
       estimatedTotal = 1500;
+    } else {
+      // Orden por defecto ultra-rápido indexado por B-tree id desc (solo cuando no hay ilike filter)
+      postgrestUrl += "&order=id.desc";
     }
 
     try {
@@ -453,16 +467,16 @@ export async function onRequest(context) {
   if (url.pathname === "/api/random" && method === "GET") {
     const mediaType = url.searchParams.get("media_type") || "comic";
     const count = Math.min(10, Math.max(1, parseInt(url.searchParams.get("count") || "1", 10)));
-    const maxOffset = mediaType === "video" ? 20000 : (mediaType === "gallery" ? 18000 : 40000);
+    const maxOffset = mediaType === "video" ? 3000 : (mediaType === "gallery" ? 3000 : 5000);
     const randomOffset = Math.floor(Math.random() * Math.max(1, maxOffset - count));
 
     let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
     if (mediaType === "video") {
-      queryParam += "&source=eq.pmvhaven";
+      queryParam += "&media_type=eq.video&id=lte.304214&order=id.desc";
     } else if (mediaType === "gallery") {
-      queryParam += "&media_type=eq.gallery&id=gte.370000";
+      queryParam += "&media_type=eq.gallery&id=gte.370000&source=neq.leakgallery&order=id.desc";
     } else {
-      queryParam += "&media_type=eq.comic";
+      queryParam += "&media_type=eq.comic&id=gte.320000&order=id.desc";
     }
 
     try {
