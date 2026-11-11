@@ -1,4 +1,31 @@
-# https://developers.cloudflare.com/workers/static-assets/headers
-# https://opennext.js.org/cloudflare/caching#static-assets-caching
+# Cloudflare Pages Static Assets & High-Performance Headers
+
+# Global Security, Timing & Speed
+/*
+  X-Content-Type-Options: nosniff
+  Timing-Allow-Origin: *
+  Access-Control-Allow-Origin: *
+
+# Next.js static builds
 /_next/static/*
-  Cache-Control: public,max-age=31536000,immutable
+  Cache-Control: public, max-age=31536000, immutable
+
+# Favicon and App Logo (30 days immutable)
+/velvet_logo.png
+  Cache-Control: public, max-age=2592000, immutable
+
+# Manifest (1 day cache + stale-while-revalidate)
+/manifest.json
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+# Service Worker (always fresh revalidation, root scope allowed)
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+  Service-Worker-Allowed: /
+
+# HTML Files (revalidate immediately for zero-delay deploys)
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/
+  Cache-Control: public, max-age=0, must-revalidate

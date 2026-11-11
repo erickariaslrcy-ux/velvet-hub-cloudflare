@@ -25,15 +25,30 @@
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://fonts.gstatic.com">
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://qnmcejlxoufheisgkuyo.supabase.co">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://qnmcejlxoufheisgkuyo.supabase.co" crossorigin>
 
-  <!-- Google Fonts: Outfit + DM Serif Display + Inter -->
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Google Fonts: Outfit + DM Serif Display + Inter (Non-blocking Swap) -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap">
+  </noscript>
 
-  <!-- FontAwesome 6 + Tailwind CSS CDN -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- FontAwesome 6 (Non-blocking) + Tailwind CSS CDN -->
+  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  </noscript>
+  <link rel="preload" as="script" href="https://cdn.tailwindcss.com">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
 
@@ -3377,7 +3392,7 @@
 
       sort: 'recent',
 
-      feedSeed: Math.floor(Math.random() * 900000) + 100000,
+      feedSeed: 0,
 
       live: true,
 
@@ -3609,8 +3624,8 @@
 
       state.query = '';
 
-      state.feedSeed = Math.floor(Math.random() * 900000) + 100000;
-      state.videoSeed = state.feedSeed;
+      state.feedSeed = 0;
+      state.videoSeed = 0;
 
       const sInput = document.getElementById('search-input');
 
@@ -4877,17 +4892,19 @@
         return;
       }
 
-      // 2. Si existe en Cache Persistente (sessionStorage), renderizar inmediatamente a 0ms sin skeletons
+      // 2. Si existe en Cache Persistente (sessionStorage o localStorage), renderizar inmediatamente a 0ms sin skeletons
       if (!skipCache) {
         try {
-          const stored = sessionStorage.getItem('vcache_' + cacheKey);
+          const stored = sessionStorage.getItem('vcache_' + cacheKey) || localStorage.getItem('vcache_' + cacheKey);
           if (stored) {
             const parsed = JSON.parse(stored);
             if (parsed && parsed.data && parsed.data.items && parsed.data.items.length > 0) {
               CLIENT_CACHE.set(cacheKey, parsed);
               renderFeedData(parsed.data);
-              // Actualizar en segundo plano de manera invisible
-              fetchLiveFeed(true);
+              // Actualizar en segundo plano de manera invisible si pasaron más de 30 segundos
+              if (Date.now() - (parsed.ts || 0) > 30000) {
+                fetchLiveFeed(true);
+              }
               return;
             }
           }
@@ -4959,8 +4976,20 @@
         }
         CLIENT_CACHE.set(cacheKey, { ts: Date.now(), data });
         try {
-          sessionStorage.setItem('vcache_' + cacheKey, JSON.stringify({ ts: Date.now(), data }));
+          const cachedJson = JSON.stringify({ ts: Date.now(), data });
+          sessionStorage.setItem('vcache_' + cacheKey, cachedJson);
+          localStorage.setItem('vcache_' + cacheKey, cachedJson);
         } catch (e) {}
+
+        // Precarga anticipada de las primeras portadas para pintarlas a 0ms en móvil
+        if (data.items && data.items.length > 0) {
+          data.items.slice(0, 4).forEach(it => {
+            if (it.cover_url) {
+              const pImg = new Image();
+              pImg.src = it.cover_url;
+            }
+          });
+        }
 
         // Turbo Prefetch de la Página Siguiente en Background (0ms navegación instantánea)
         if (data.page < (data.total_pages || 1)) {
@@ -5106,8 +5135,8 @@
               data-original-src="${coverSrc}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
-              loading="${idx < 8 ? 'eager' : 'lazy'}"
-              fetchpriority="${idx < 6 ? 'high' : 'auto'}"
+              loading="${idx < 4 ? 'eager' : 'lazy'}"
+              fetchpriority="${idx < 4 ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
               onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
@@ -5235,8 +5264,8 @@
               data-original-src="${coverSrc}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
-              loading="${idx < 8 ? 'eager' : 'lazy'}"
-              fetchpriority="${idx < 6 ? 'high' : 'auto'}"
+              loading="${idx < 4 ? 'eager' : 'lazy'}"
+              fetchpriority="${idx < 4 ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
               onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
@@ -6995,7 +7024,7 @@
 
         try {
 
-          const recSeed = Math.floor(Math.random() * 900000) + 100000;
+          const recSeed = (parseInt(String(currentId).replace(/\D/g, ''), 10) % 8) + 1 || 1;
           const resp = await fetch(`/api/items?media_type=video&page=1&page_size=18&seed=${recSeed}&live=true`, { credentials: 'omit' });
 
           if (resp.ok) {
@@ -7406,8 +7435,8 @@
               data-original-src="${coverSrc}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
-              loading="${idx < 8 ? 'eager' : 'lazy'}"
-              fetchpriority="${idx < 6 ? 'high' : 'auto'}"
+              loading="${idx < 4 ? 'eager' : 'lazy'}"
+              fetchpriority="${idx < 4 ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
               onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
@@ -7952,8 +7981,8 @@
         }
 
         const detailUrl = (itemId || /^\d+$/.test(sourceId))
-          ? `/api/items/id/${itemId || sourceId}?_t=${Date.now()}`
-          : `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}?_t=${Date.now()}`;
+          ? `/api/items/id/${itemId || sourceId}`
+          : `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`;
         const resp = await fetch(detailUrl);
 
         if (!resp.ok) {
@@ -10908,8 +10937,8 @@
     }
 
     function setCategory(cat, btn) {
-      state.feedSeed = Math.floor(Math.random() * 900000) + 100000;
-      state.videoSeed = state.feedSeed;
+      state.feedSeed = 0;
+      state.videoSeed = 0;
       state.category = cat;
 
       state.page = 1;
@@ -11058,7 +11087,9 @@
     function shuffleCurrentFeed() {
       const shuffleIcon = document.querySelector('#category-chips .fa-shuffle');
       if (shuffleIcon) shuffleIcon.classList.add('fa-spin');
-      state.feedSeed = Math.floor(Math.random() * 900000) + 100000;
+      const SEED_POOL = [1, 2, 3, 4, 5, 6, 7, 8];
+      const available = SEED_POOL.filter(s => s !== state.feedSeed);
+      state.feedSeed = available[Math.floor(Math.random() * available.length)];
       state.videoSeed = state.feedSeed;
       state.page = 1;
       CLIENT_CACHE.clear();

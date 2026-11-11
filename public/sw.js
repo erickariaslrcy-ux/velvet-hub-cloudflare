@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Turbo Service Worker (PC & Android Hardware-Accelerated Cache)
-const CACHE_VERSION = 'v7-stealth-120fps';
+const CACHE_VERSION = 'v8-android-turbo';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -108,11 +108,15 @@ self.addEventListener('fetch', (event) => {
         return fetch(req)
           .then((networkResp) => {
             if (networkResp && networkResp.status === 200) {
-              const respClone = networkResp.clone();
-              caches.open(IMAGE_CACHE).then((cache) => {
-                cache.put(req, respClone);
-                trimCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
-              });
+              const cType = networkResp.headers.get('content-type') || '';
+              // Solo almacenar imágenes reales en IMAGE_CACHE (NUNCA streams ni archivos de video grandes)
+              if (!cType.includes('video') && !cType.includes('mpegurl')) {
+                const respClone = networkResp.clone();
+                caches.open(IMAGE_CACHE).then((cache) => {
+                  cache.put(req, respClone);
+                  trimCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
+                });
+              }
             }
             return networkResp;
           })
@@ -124,19 +128,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 4. API de Datos (/api/items, /api/tags): Network first con fallback a caché
+  // 4. API de Datos (/api/items, /api/tags): Stale-While-Revalidate ultra-rápido (0ms respuesta de caché con revalidación de fondo)
   const isApiReq = url.pathname.startsWith('/api/items') || url.pathname.startsWith('/api/tags');
   if (isApiReq) {
     event.respondWith(
-      fetch(req)
-        .then((networkResp) => {
-          if (networkResp && networkResp.status === 200) {
-            const clone = networkResp.clone();
-            caches.open(API_CACHE).then((cache) => cache.put(req, clone));
-          }
-          return networkResp;
-        })
-        .catch(() => caches.match(req))
+      caches.open(API_CACHE).then(async (cache) => {
+        const cached = await cache.match(req);
+        const fetchPromise = fetch(req)
+          .then((networkResp) => {
+            if (networkResp && networkResp.status === 200) {
+              cache.put(req, networkResp.clone());
+            }
+            return networkResp;
+          })
+          .catch(() => null);
+
+        // Si existe en caché local del Service Worker, devolverlo a 0ms sin esperar la red
+        if (cached) {
+          event.waitUntil(fetchPromise);
+          return cached;
+        }
+
+        // Si es primera vez, esperar la respuesta de la red
+        const networkResp = await fetchPromise;
+        return networkResp || new Response(JSON.stringify({ error: 'Offline', items: [] }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      })
     );
     return;
   }
