@@ -337,8 +337,26 @@ export async function onRequest(context) {
 
     if (q) {
       postgrestUrl += `&title=ilike.*${encodeURIComponent(q)}*`;
+      estimatedTotal = 800;
     } else if (category && category !== "all") {
-      postgrestUrl += `&tags=cs.{${encodeURIComponent(category)}}`;
+      let catTerm = category;
+      if (mediaType === "gallery" || mediaType === "cosplay") {
+        if (category === "cosplay") catTerm = "cosplay";
+        else if (category === "artgravia") catTerm = "artgravia";
+        else if (category === "korean") catTerm = "korean";
+        else if (category === "asian" || category === "xiuren") catTerm = "xiuren";
+        else if (category === "lingerie" || category === "bikini") catTerm = "bikini";
+        else if (category === "patreon") catTerm = "patreon";
+      } else if (mediaType === "video") {
+        if (category === "pmv") catTerm = "pmv";
+      } else {
+        if (category === "manhwa") catTerm = "manhwa";
+        else if (category === "3d") catTerm = "3d";
+        else if (category === "doujin") catTerm = "doujin";
+        else if (category === "parody") catTerm = "parodia";
+      }
+      postgrestUrl += `&title=ilike.*${encodeURIComponent(catTerm)}*`;
+      estimatedTotal = 1500;
     }
 
     try {
@@ -473,7 +491,7 @@ export async function onRequest(context) {
           email = master;
         } else {
           // Resolver alias desde profiles
-          const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=email&or=(email.ilike.${email}@%,email.ilike.${email}%)&limit=1`, {
+          const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=email&or=(email.ilike.*${email}@*,email.ilike.*${email}*)&limit=1`, {
             headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
           });
           const profData = await profRes.json();
@@ -665,9 +683,13 @@ export async function onRequest(context) {
   }
 
   // =========================================================================
-  // 8. FAVORITOS (/api/favorites o /api/user/favorites)
+  // 8. FAVORITOS E HISTORIAL (/api/favorites, /api/user/favorites, /api/user/history)
   // =========================================================================
-  if ((url.pathname === "/api/favorites" || url.pathname === "/api/user/favorites")) {
+  if (
+    url.pathname.startsWith("/api/favorites") ||
+    url.pathname.startsWith("/api/user/favorites") ||
+    url.pathname.startsWith("/api/user/history")
+  ) {
     if (method === "GET") {
       return new Response(JSON.stringify([]), {
         status: 200,
@@ -677,6 +699,20 @@ export async function onRequest(context) {
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+    });
+  }
+
+  // =========================================================================
+  // 9. TAGS POPULARES (/api/tags)
+  // =========================================================================
+  if (url.pathname === "/api/tags" && method === "GET") {
+    const popularTags = [
+      "Cosplay", "ArtGravia", "Korean", "Xiuren", "Bikini", "Lingerie", "Patreon", "Fansly",
+      "PMV", "Verified Performer", "HD", "1080p", "Full Color", "3D", "Manhwa", "Doujinshi"
+    ];
+    return new Response(JSON.stringify(popularTags), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
     });
   }
 
