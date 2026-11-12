@@ -108,6 +108,7 @@ const PUBLIC_PATHS = [
   "/api/image",
   "/api/img",
   "/api/video/stream",
+  "/api/media",
   "/api/random",
   "/api/random-items",
   "/api/live-search",
@@ -230,7 +231,8 @@ export async function middleware(request: NextRequest) {
   } else if (
     path.startsWith("/api/img") ||
     path.startsWith("/api/image") ||
-    path.startsWith("/api/video/stream")
+    path.startsWith("/api/video/stream") ||
+    path.startsWith("/api/media")
   ) {
     category = "media";
   } else if (isApiRoute) {

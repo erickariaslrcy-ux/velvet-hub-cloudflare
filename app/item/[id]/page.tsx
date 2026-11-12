@@ -56,7 +56,8 @@ export default async function ItemPage({
     const rawVideoUrl = primarySource.url || primarySource.file;
     if (rawVideoUrl) {
       const stealthToken = encodeStealthToken(rawVideoUrl, orig?.url);
-      videoStreamUrl = `/api/video/stream?t=${stealthToken}`;
+      const isHls = rawVideoUrl.includes(".m3u8") || rawVideoUrl.includes("media=hls") || rawVideoUrl.includes("format=m3u8");
+      videoStreamUrl = `/api/video/stream?t=${stealthToken}${isHls ? "&format=m3u8" : ""}`;
     }
   }
 

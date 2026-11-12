@@ -5,13 +5,31 @@ export const runtime = "nodejs";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
+const MEDIA_SECRET = "velvet_ultra_stealth_secret_key_2026";
+
 function decodeStealthToken(token: string): { url: string; referer?: string } | null {
   try {
     let b64 = token.replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4 !== 0) b64 += "=";
-    const jsonStr = Buffer.from(b64, "base64").toString("utf-8");
-    const data = JSON.parse(jsonStr);
-    return { url: data.u, referer: data.r || undefined };
+    const buf = Buffer.from(b64, "base64");
+
+    // 1. Try direct JSON
+    try {
+      const jsonStr = buf.toString("utf-8");
+      const data = JSON.parse(jsonStr);
+      if (data && data.u) return { url: data.u, referer: data.r || undefined };
+    } catch {}
+
+    // 2. Try XOR decryption
+    const keyBuf = Buffer.from(MEDIA_SECRET, "utf-8");
+    const decrypted = Buffer.alloc(buf.length);
+    for (let i = 0; i < buf.length; i++) {
+      decrypted[i] = buf[i] ^ keyBuf[i % keyBuf.length];
+    }
+    const decStr = decrypted.toString("utf-8");
+    const data = JSON.parse(decStr);
+    if (data && data.u) return { url: data.u, referer: data.r || undefined };
+    return null;
   } catch {
     return null;
   }

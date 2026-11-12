@@ -30,7 +30,12 @@ export default function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
     let hlsInstance: any = null;
     let isDestroyed = false;
 
-    const isM3u8 = src.includes(".m3u8") || src.includes("media=hls") || src.includes("format=m3u8");
+    const isM3u8 =
+      src.includes(".m3u8") ||
+      src.includes("media=hls") ||
+      src.includes("format=m3u8") ||
+      src.includes("/api/video/stream") ||
+      src.includes("/api/media");
 
     const setupPlayer = () => {
       // 1. Si el navegador soporta HLS nativamente (Safari, iOS, Mac)
@@ -78,7 +83,11 @@ export default function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
                 break;
               default:
                 hlsInstance.destroy();
-                setError("No se pudo iniciar el stream. Haz clic en reintentar.");
+                if (videoRef.current && !videoRef.current.src.includes(src)) {
+                  videoRef.current.src = src;
+                } else {
+                  setError("No se pudo iniciar el stream. Haz clic en reintentar.");
+                }
                 break;
             }
           }

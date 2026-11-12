@@ -82,6 +82,97 @@ function getCorsHeaders(origin = "*") {
   };
 }
 
+// Helper para resolver usuario autenticado via Bearer Token o auto-refresh con x-refresh-token
+async function resolveAuthUser(request) {
+  const authHeader = request.headers.get("authorization") || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const refreshToken = request.headers.get("x-refresh-token") || null;
+
+  // 1. Intentar validar access_token con Supabase Auth
+  if (token && token !== "velvet_token" && token !== "null" && token !== "undefined") {
+    try {
+      const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
+      });
+      if (userRes.ok) {
+        const user = await userRes.json();
+        if (user && user.id) {
+          return { user, newToken: null, newRefreshToken: null };
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 2. Si el token expiró o falló pero se envió x-refresh-token, autorenovar sesión silenciosamente
+  if (refreshToken && refreshToken !== "null" && refreshToken !== "undefined") {
+    try {
+      const refRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      if (refRes.ok) {
+        const refData = await refRes.json();
+        if (refData && refData.user && refData.access_token) {
+          return {
+            user: refData.user,
+            newToken: refData.access_token,
+            newRefreshToken: refData.refresh_token || refreshToken
+          };
+        }
+      }
+    } catch (e) {}
+  }
+
+  return { user: null, newToken: null, newRefreshToken: null };
+}
+
+// Helper para guardar user_metadata en Supabase de forma atómica e infalible
+async function updateSupabaseUserMetadata(userId, newMetadata) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+      method: "PUT",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ user_metadata: newMetadata })
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Helper para sincronizar tabla SQL favorites si el ítem tiene ID numérico
+async function syncSqlFavorite(userId, itemId, isAdd) {
+  if (!itemId || !Number.isInteger(Number(itemId))) return;
+  const numId = Number(itemId);
+  try {
+    if (isAdd) {
+      await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "resolution=merge-duplicates"
+        },
+        body: JSON.stringify({ user_id: userId, item_id: numId })
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${userId}&item_id=eq.${numId}`, {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`
+        }
+      });
+    }
+  } catch (e) {}
+}
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
   const origin = context.request.headers.get("origin") || "*";
@@ -1002,10 +1093,9 @@ export async function onRequest(context) {
   // 6. AUTENTICACIÓN: VERIFICAR SESIÓN (/api/auth/me)
   // =========================================================================
   if (url.pathname === "/api/auth/me" && method === "GET") {
-    const authHeader = context.request.headers.get("authorization") || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+    const { user, newToken, newRefreshToken } = await resolveAuthUser(context.request);
 
-    if (!token || token === "velvet_token" || token === "null" || token === "undefined") {
+    if (!user) {
       return new Response(JSON.stringify({ detail: "No autenticado" }), {
         status: 401,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
@@ -1013,26 +1103,14 @@ export async function onRequest(context) {
     }
 
     try {
-      const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
-      });
-
-      if (!userRes.ok) {
-        return new Response(JSON.stringify({ detail: "Token invalido o expirado" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
-        });
-      }
-
-      const user = await userRes.json();
       const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=is_admin&limit=1`, {
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
       });
-      const profs = await profRes.json();
+      const profs = await profRes.json().catch(() => []);
       const isAdmin = profs && profs[0] && profs[0].is_admin;
       const role = isAdmin ? "admin" : "member";
       const meta = user.user_metadata || {};
-      const displayName = meta.username || meta.full_name || meta.display_name || user.email.split("@")[0];
+      const displayName = meta.username || meta.full_name || meta.display_name || user.email?.split("@")[0] || "Usuario VIP";
 
       const respData = {
         id: user.id,
@@ -1045,16 +1123,98 @@ export async function onRequest(context) {
         max_devices: 10
       };
 
-      return new Response(JSON.stringify(respData), {
-        status: 200,
-        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
-      });
+      if (newToken) respData.new_token = newToken;
+      if (newRefreshToken) respData.new_refresh_token = newRefreshToken;
+
+      const headers = { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) };
+      if (newToken) headers["x-new-token"] = newToken;
+
+      return new Response(JSON.stringify(respData), { status: 200, headers });
     } catch (err) {
       return new Response(JSON.stringify({ detail: "Error de sesión" }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
       });
     }
+  }
+
+  // =========================================================================
+  // 6.1 AUTENTICACIÓN: REFRESCAR SESIÓN (/api/auth/refresh)
+  // =========================================================================
+  if (url.pathname === "/api/auth/refresh" && method === "POST") {
+    try {
+      const body = await context.request.json().catch(() => ({}));
+      const refreshToken =
+        body.refresh_token ||
+        context.request.headers.get("x-refresh-token") ||
+        null;
+
+      if (!refreshToken) {
+        return new Response(JSON.stringify({ detail: "Token de actualización no provisto" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const refRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+
+      const refData = await refRes.json();
+      if (!refRes.ok || !refData.access_token) {
+        return new Response(JSON.stringify({ detail: refData?.error_description || "Sesión expirada" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const user = refData.user;
+      const meta = user?.user_metadata || {};
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=is_admin&limit=1`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+      const profs = await profRes.json().catch(() => []);
+      const isAdmin = profs && profs[0] && profs[0].is_admin;
+      const role = isAdmin ? "admin" : "member";
+      const displayName = meta.username || meta.full_name || meta.display_name || user.email?.split("@")[0] || "Usuario VIP";
+
+      const respData = {
+        token: refData.access_token,
+        refresh_token: refData.refresh_token,
+        expires_at: refData.expires_at,
+        user: {
+          id: user.id,
+          username: displayName,
+          email: user.email,
+          role,
+          tier: isAdmin ? "Dueño" : "Velvet VIP ($5.99)",
+          tier_level: "pro",
+          is_pro: true
+        }
+      };
+
+      return new Response(JSON.stringify(respData), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ detail: err.message || "Error al refrescar sesión" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  // =========================================================================
+  // 6.2 AUTENTICACIÓN: CERRAR SESIÓN (/api/auth/logout)
+  // =========================================================================
+  if (url.pathname === "/api/auth/logout" && method === "POST") {
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+    });
   }
 
   // =========================================================================
@@ -1124,23 +1284,316 @@ export async function onRequest(context) {
   }
 
   // =========================================================================
-  // 8. FAVORITOS E HISTORIAL (/api/favorites, /api/user/favorites, /api/user/history)
+  // 8. FAVORITOS (/api/user/favorites, /api/favorites)
   // =========================================================================
-  if (
-    url.pathname.startsWith("/api/favorites") ||
-    url.pathname.startsWith("/api/user/favorites") ||
-    url.pathname.startsWith("/api/user/history")
-  ) {
-    if (method === "GET") {
-      return new Response(JSON.stringify([]), {
-        status: 200,
+  const isFavoritesRoute =
+    url.pathname === "/api/favorites" ||
+    url.pathname === "/api/user/favorites" ||
+    url.pathname.startsWith("/api/favorites/") ||
+    url.pathname.startsWith("/api/user/favorites/");
+
+  if (isFavoritesRoute) {
+    const { user, newToken } = await resolveAuthUser(context.request);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "No autenticado" }), {
+        status: 401,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
       });
     }
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
-    });
+
+    const meta = user.user_metadata || {};
+    let cloudFavs = Array.isArray(meta.favorites) ? [...meta.favorites] : [];
+
+    // --- GET FAVORITOS ---
+    if (method === "GET") {
+      const favMap = new Map();
+      cloudFavs.forEach((f) => {
+        if (!f) return;
+        const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
+        favMap.set(k, f);
+      });
+
+      // Si user_metadata tiene pocos o ninguno, leer también tabla SQL
+      try {
+        const sqlRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,url)&order=created_at.desc&limit=300`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        );
+        if (sqlRes.ok) {
+          const sqlData = await sqlRes.json();
+          let addedFromSql = false;
+          (sqlData || []).forEach((r) => {
+            if (!r || !r.items) return;
+            const k = String(r.items.id);
+            if (!favMap.has(k)) {
+              favMap.set(k, {
+                id: r.items.id,
+                title: r.items.title || "Sin título",
+                cover_url: r.items.cover_url || "",
+                media_type: r.items.media_type || "comic",
+                source: r.items.source || "",
+                source_id: r.items.source_id || "",
+                url: r.items.url || "",
+                created_at: r.created_at
+              });
+              addedFromSql = true;
+            }
+          });
+
+          // Si recuperamos de SQL, actualizar user_metadata para futuras peticiones instantáneas
+          if (addedFromSql) {
+            const mergedList = Array.from(favMap.values()).slice(0, 300);
+            updateSupabaseUserMetadata(user.id, { ...meta, favorites: mergedList });
+          }
+        }
+      } catch (e) {}
+
+      const finalFavs = Array.from(favMap.values()).slice(0, 300);
+      const respHeaders = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        ...getCorsHeaders(origin)
+      };
+      if (newToken) respHeaders["x-new-token"] = newToken;
+
+      return new Response(JSON.stringify(finalFavs), { status: 200, headers: respHeaders });
+    }
+
+    // --- POST FAVORITOS (AGREGAR / SINCRONIZAR) ---
+    if (method === "POST") {
+      try {
+        const body = await context.request.json().catch(() => ({}));
+
+        // Caso A: Sincronización masiva de favoritos (ej: /sync o al iniciar sesión)
+        if (Array.isArray(body.items)) {
+          const incoming = body.items;
+          const favMap = new Map();
+          cloudFavs.forEach((f) => {
+            if (!f) return;
+            const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
+            favMap.set(k, f);
+          });
+
+          incoming.forEach((f) => {
+            if (!f) return;
+            const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
+            if (!favMap.has(k)) {
+              favMap.set(k, {
+                id: f.id || null,
+                source: f.source || "",
+                source_id: f.source_id || "",
+                title: f.title || "Sin título",
+                cover_url: f.cover_url || "",
+                url: f.url || "",
+                media_type: f.media_type || "comic",
+                created_at: f.created_at || new Date().toISOString()
+              });
+              if (f.id && Number.isInteger(Number(f.id))) {
+                syncSqlFavorite(user.id, f.id, true);
+              }
+            }
+          });
+
+          const mergedFavs = Array.from(favMap.values()).slice(0, 300);
+          await updateSupabaseUserMetadata(user.id, { ...meta, favorites: mergedFavs });
+
+          return new Response(JSON.stringify({ ok: true, success: true, count: mergedFavs.length, items: mergedFavs }), {
+            status: 200,
+            headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+          });
+        }
+
+        // Caso B: Toggle a falso (desmarcar favorito)
+        const itemId = body.id || body.item_id || null;
+        const source = body.source || "";
+        const sourceId = body.source_id || "";
+
+        if (body.favorite === false) {
+          cloudFavs = cloudFavs.filter((f) => {
+            if (itemId && f.id && Number(f.id) === Number(itemId)) return false;
+            if (source && sourceId && f.source === source && String(f.source_id) === String(sourceId)) return false;
+            return true;
+          });
+          if (itemId) syncSqlFavorite(user.id, itemId, false);
+          await updateSupabaseUserMetadata(user.id, { ...meta, favorites: cloudFavs });
+          return new Response(JSON.stringify({ ok: true, success: true, count: cloudFavs.length }), {
+            status: 200,
+            headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+          });
+        }
+
+        // Caso C: Agregar favorito individual
+        cloudFavs = cloudFavs.filter((f) => {
+          if (itemId && f.id && Number(f.id) === Number(itemId)) return false;
+          if (source && sourceId && f.source === source && String(f.source_id) === String(sourceId)) return false;
+          return true;
+        });
+
+        const newFav = {
+          id: itemId,
+          source,
+          source_id: sourceId,
+          title: body.title || "Sin título",
+          cover_url: body.cover_url || "",
+          url: body.url || "",
+          media_type: body.media_type || "comic",
+          created_at: new Date().toISOString()
+        };
+
+        cloudFavs.unshift(newFav);
+        if (cloudFavs.length > 300) cloudFavs = cloudFavs.slice(0, 300);
+
+        await updateSupabaseUserMetadata(user.id, { ...meta, favorites: cloudFavs });
+        if (itemId) syncSqlFavorite(user.id, itemId, true);
+
+        return new Response(JSON.stringify({ ok: true, success: true, item: newFav, count: cloudFavs.length }), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+
+    // --- DELETE FAVORITOS ---
+    if (method === "DELETE") {
+      try {
+        let slugParts = [];
+        if (url.pathname.startsWith("/api/user/favorites/")) {
+          slugParts = url.pathname.replace("/api/user/favorites/", "").split("/").filter(Boolean);
+        } else if (url.pathname.startsWith("/api/favorites/")) {
+          slugParts = url.pathname.replace("/api/favorites/", "").split("/").filter(Boolean);
+        }
+
+        let targetId = url.searchParams.get("id") || null;
+        let targetSource = url.searchParams.get("source") || null;
+        let targetSourceId = url.searchParams.get("source_id") || null;
+
+        if (slugParts.length === 1 && /^\d+$/.test(slugParts[0])) {
+          targetId = slugParts[0];
+        } else if (slugParts.length >= 2) {
+          targetSource = decodeURIComponent(slugParts[0]);
+          targetSourceId = decodeURIComponent(slugParts.slice(1).join("/"));
+        } else if (slugParts.length === 1) {
+          targetSourceId = decodeURIComponent(slugParts[0]);
+        }
+
+        cloudFavs = cloudFavs.filter((f) => {
+          if (targetId && f.id && Number(f.id) === Number(targetId)) return false;
+          if (targetSource && targetSourceId && f.source === targetSource && String(f.source_id) === String(targetSourceId)) return false;
+          if (targetSourceId && String(f.source_id) === String(targetSourceId)) return false;
+          return true;
+        });
+
+        if (targetId) syncSqlFavorite(user.id, targetId, false);
+        await updateSupabaseUserMetadata(user.id, { ...meta, favorites: cloudFavs });
+
+        return new Response(JSON.stringify({ ok: true, success: true, count: cloudFavs.length }), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+  }
+
+  // =========================================================================
+  // 9. HISTORIAL (/api/user/history)
+  // =========================================================================
+  if (url.pathname.startsWith("/api/user/history")) {
+    const { user, newToken } = await resolveAuthUser(context.request);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "No autenticado" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+
+    const meta = user.user_metadata || {};
+    let currentHistory = Array.isArray(meta.history) ? [...meta.history] : [];
+    let currentProgress = meta.progress && typeof meta.progress === "object" ? { ...meta.progress } : {};
+
+    if (method === "GET") {
+      const respHeaders = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "private, no-cache, no-store, must-revalidate",
+        "X-Velvet-Progress": JSON.stringify(currentProgress),
+        ...getCorsHeaders(origin)
+      };
+      if (newToken) respHeaders["x-new-token"] = newToken;
+      return new Response(JSON.stringify(currentHistory), { status: 200, headers: respHeaders });
+    }
+
+    if (method === "POST") {
+      try {
+        const body = await context.request.json().catch(() => ({}));
+        const item = body.item || body;
+        if (item && (item.id || item.source_id)) {
+          const itemId = item.id || null;
+          const itemKey = itemId ? String(itemId) : `${item.source}:${item.source_id}`;
+
+          currentHistory = currentHistory.filter((h) => {
+            if (itemId && h.id && Number(h.id) === Number(itemId)) return false;
+            if (item.source && item.source_id && h.source === item.source && String(h.source_id) === String(item.source_id)) return false;
+            return true;
+          });
+
+          const newEntry = {
+            id: itemId,
+            source: item.source || "",
+            source_id: item.source_id || "",
+            title: item.title || "Sin título",
+            cover_url: item.cover_url || "",
+            url: item.url || "",
+            media_type: item.media_type || "comic",
+            page: item.page || 1,
+            total: item.total || 1,
+            currentTime: item.currentTime || 0,
+            duration: item.duration || 0,
+            completed: !!item.completed,
+            at: Date.now()
+          };
+
+          currentHistory.unshift(newEntry);
+          if (currentHistory.length > 50) currentHistory = currentHistory.slice(0, 50);
+
+          currentProgress[itemKey] = {
+            page: newEntry.page,
+            total: newEntry.total,
+            currentTime: newEntry.currentTime,
+            duration: newEntry.duration,
+            completed: newEntry.completed,
+            at: newEntry.at
+          };
+          if (item.source && item.source_id) {
+            currentProgress[`${item.source}:${item.source_id}`] = currentProgress[itemKey];
+          }
+
+          await updateSupabaseUserMetadata(user.id, {
+            ...meta,
+            history: currentHistory,
+            progress: currentProgress
+          });
+        }
+
+        return new Response(JSON.stringify({ ok: true, success: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
   }
 
   // =========================================================================
