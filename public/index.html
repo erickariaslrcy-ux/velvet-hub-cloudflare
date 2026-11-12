@@ -52,8 +52,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
 
-  <link rel="preload" as="image" href="/velvet_logo.png">
-
   <script>
 
     tailwind.config = {
@@ -1014,40 +1012,26 @@
       <div class="hidden sm:flex items-center p-1 rounded-2xl bg-glass border border-neon/30 shadow-neon shrink-0">
 
         <button
-
           id="mode-btn-comics"
-
-          onclick="setPortalMode('comics')"
-
+          onclick="setPortalMode('comics', true)"
           class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow"
-
         >
-
           <i class="fa-solid fa-book-open text-xs"></i>
-
           <span>Cómics & Mangas</span>
-
         </button>
 
         <button
-
           id="mode-btn-videos"
-
-          onclick="setPortalMode('videos')"
-
+          onclick="setPortalMode('videos', true)"
           class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-ink"
-
         >
-
           <i class="fa-solid fa-film text-xs text-hot"></i>
-
           <span>Videos XXX</span>
-
         </button>
 
         <button
           id="mode-btn-galleries"
-          onclick="setPortalMode('galleries')"
+          onclick="setPortalMode('galleries', true)"
           class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-ink"
         >
           <i class="fa-solid fa-camera-retro text-xs text-neon"></i>
@@ -1248,10 +1232,9 @@
 
         <div class="flex sm:hidden items-center p-0.5 rounded-xl bg-glass border border-neon/30 shrink-0 mr-1">
 
-          <button id="mob-toggle-comics" onclick="setPortalMode('comics')" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow">Cómics</button>
-
-          <button id="mob-toggle-videos" onclick="setPortalMode('videos')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</button>
-          <button id="mob-toggle-galleries" onclick="setPortalMode('galleries')" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Cosplay</button>
+          <button id="mob-toggle-comics" onclick="setPortalMode('comics', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow">Cómics</button>
+          <button id="mob-toggle-videos" onclick="setPortalMode('videos', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</button>
+          <button id="mob-toggle-galleries" onclick="setPortalMode('galleries', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Cosplay</button>
 
         </div>
 
@@ -1631,23 +1614,17 @@
 
     <div class="grid grid-cols-5 h-14 sm:h-16 w-full max-w-md mx-auto px-1">
 
-      <button onclick="setPortalMode('comics')" id="tab-btn-comics" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-black text-hot transition-all">
-
+      <button onclick="setPortalMode('comics', true)" id="tab-btn-comics" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-black text-hot transition-all">
         <i class="fa-solid fa-book-open text-sm sm:text-base"></i>
-
         <span>Cómics</span>
-
       </button>
 
-      <button onclick="setPortalMode('videos')" id="tab-btn-videos" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
-
+      <button onclick="setPortalMode('videos', true)" id="tab-btn-videos" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
         <i class="fa-solid fa-film text-sm sm:text-base text-neon"></i>
-
         <span>Videos</span>
-
       </button>
 
-      <button onclick="setPortalMode('galleries')" id="tab-btn-galleries" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
+      <button onclick="setPortalMode('galleries', true)" id="tab-btn-galleries" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
         <i class="fa-solid fa-camera-retro text-sm sm:text-base text-neon"></i>
         <span>Cosplay</span>
       </button>
@@ -3602,7 +3579,7 @@
       }
     }
 
-    function setPortalMode(mode) {
+    function setPortalMode(mode, isUserClick = false) {
 
       console.log('%c🔄 [VELVET HUB] Cambiando Portal a Modo: ' + mode.toUpperCase(), 'color: #a855f7; font-weight: bold; font-size: 13px;');
 
@@ -3748,7 +3725,9 @@
       fetchLiveFeed();
       initInfiniteScrollObserver();
 
-      showToast(mode === 'videos' ? '🎬 Portal de Videos Porno Activado' : (mode === 'galleries' ? '📸 Portal de Cosplay & Modelos Activado' : '📖 Portal de Cómics & Imágenes Activado'), 'info');
+      if (isUserClick) {
+        showToast(mode === 'videos' ? '🎬 Portal de Videos Porno Activado' : (mode === 'galleries' ? '📸 Portal de Cosplay & Modelos Activado' : '📖 Portal de Cómics & Imágenes Activado'), 'info');
+      }
     }
 
     function renderCategoryChips() {
@@ -4255,6 +4234,16 @@
     // Gestión de LocalStorage por cuenta
     function loadStorage() {
       try {
+        // Limpieza proactiva de claves vcache_* huérfanas en localStorage para proteger la cuota de favoritos
+        try {
+          const toRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith('vcache_')) toRemove.push(k);
+          }
+          toRemove.forEach(k => localStorage.removeItem(k));
+        } catch (e) {}
+
         // 1. Hidratar usuario actual desde caché para disponibilidad instantánea (0ms)
         const cachedUser = localStorage.getItem('velvet_current_user');
         if (cachedUser && !state.currentUser) {
@@ -4896,10 +4885,10 @@
         return;
       }
 
-      // 2. Si existe en Cache Persistente (sessionStorage o localStorage), renderizar inmediatamente a 0ms sin skeletons
+      // 2. Si existe en Cache Persistente de Sesión (sessionStorage), renderizar inmediatamente a 0ms sin skeletons
       if (!skipCache) {
         try {
-          const stored = sessionStorage.getItem('vcache_' + cacheKey) || localStorage.getItem('vcache_' + cacheKey);
+          const stored = sessionStorage.getItem('vcache_' + cacheKey);
           if (stored) {
             const parsed = JSON.parse(stored);
             if (parsed && parsed.data && parsed.data.items && parsed.data.items.length > 0) {
@@ -4982,7 +4971,6 @@
         try {
           const cachedJson = JSON.stringify({ ts: Date.now(), data });
           sessionStorage.setItem('vcache_' + cacheKey, cachedJson);
-          localStorage.setItem('vcache_' + cacheKey, cachedJson);
         } catch (e) {}
 
         // Precarga anticipada de las primeras portadas para pintarlas a 0ms en móvil
@@ -11251,6 +11239,12 @@
         Object.keys(sessionStorage).forEach(k => {
           if (k.startsWith('vcache_')) sessionStorage.removeItem(k);
         });
+        const localKeysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const lk = localStorage.key(i);
+          if (lk && lk.startsWith('vcache_')) localKeysToRemove.push(lk);
+        }
+        localKeysToRemove.forEach(lk => localStorage.removeItem(lk));
       } catch (e) {}
       fetchLiveFeed(true);
       const grid = document.getElementById('comics-grid');

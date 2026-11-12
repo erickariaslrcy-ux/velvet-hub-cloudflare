@@ -82,6 +82,29 @@ function getCorsHeaders(origin = "*") {
   };
 }
 
+// Memoria RAM Isolate Cache (Nivel 1: < 1ms de latencia en el Edge de Cloudflare)
+const ISOLATE_CATALOG_CACHE = new Map();
+const ISOLATE_DETAIL_CACHE = new Map();
+const MAX_ISOLATE_ENTRIES = 120;
+
+function getIsolateCache(map, key, ttlMs = 900000) {
+  const entry = map.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > ttlMs) {
+    map.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setIsolateCache(map, key, data) {
+  if (map.size >= MAX_ISOLATE_ENTRIES) {
+    const firstKey = map.keys().next().value;
+    map.delete(firstKey);
+  }
+  map.set(key, { ts: Date.now(), data });
+}
+
 // Helper para resolver usuario autenticado via Bearer Token o auto-refresh con x-refresh-token
 async function resolveAuthUser(request) {
   const authHeader = request.headers.get("authorization") || "";
@@ -280,7 +303,7 @@ export async function onRequest(context) {
         method,
         headers: upstreamReqHeaders,
         redirect: "follow",
-        cf: isVideo ? undefined : { cacheEverything: true, cacheTtl: 604800 },
+        cf: isVideo ? undefined : { cacheEverything: true, cacheTtl: 2592000 },
       });
 
       const respHeaders = new Headers();
@@ -293,7 +316,7 @@ export async function onRequest(context) {
         respHeaders.set("Accept-Ranges", "bytes");
         respHeaders.set("Cache-Control", "public, max-age=7200");
       } else {
-        respHeaders.set("Cache-Control", "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400, immutable");
+        respHeaders.set("Cache-Control", "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800, immutable");
       }
 
       if (upstream.headers.has("Content-Length")) {
@@ -363,16 +386,34 @@ export async function onRequest(context) {
     const rawSource = itemDetailMatch[2];
     const rawSourceId = itemDetailMatch[3];
 
-    // Cache de Borde Cloudflare para detalle de cómics y videos (aceleración instantánea en móvil)
+    // Cache L1 de Memoria RAM Isolate (0ms)
+    const detailCacheKey = url.pathname;
+    const l1Detail = getIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, 86400000);
+    if (l1Detail) {
+      return new Response(l1Detail, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+          "X-Cloudflare-RAM-Cache": "HIT",
+          "X-Cloudflare-Detail-Cache": "HIT",
+          ...getCorsHeaders(origin)
+        }
+      });
+    }
+
+    // Cache L2 de Borde Cloudflare para detalle de cómics y videos (aceleración instantánea en móvil)
     const cache = caches.default;
     const cacheKey = new Request(url.toString(), { method: "GET" });
     try {
       const cached = await cache.match(cacheKey);
       if (cached) {
+        const bodyText = await cached.text();
+        setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, bodyText);
         const edgeHeaders = new Headers(cached.headers);
         edgeHeaders.set("X-Cloudflare-Detail-Cache", "HIT");
         edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-        return new Response(cached.body, { status: 200, headers: edgeHeaders });
+        return new Response(bodyText, { status: 200, headers: edgeHeaders });
       }
     } catch (e) {}
 
@@ -747,11 +788,16 @@ export async function onRequest(context) {
         }))
       };
 
-      const resp = new Response(JSON.stringify(masked), {
+      const jsonStr = JSON.stringify(masked);
+      if (!isEphemeral) {
+        setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, jsonStr);
+      }
+
+      const resp = new Response(jsonStr, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": isEphemeral ? "no-store, no-cache, must-revalidate" : "public, max-age=300, s-maxage=600, stale-while-revalidate=86400",
+          "Cache-Control": isEphemeral ? "no-store, no-cache, must-revalidate" : "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
           ...getCorsHeaders(origin)
         }
       });
@@ -781,20 +827,36 @@ export async function onRequest(context) {
     const q = (url.searchParams.get("q") || "").trim();
     const category = (url.searchParams.get("category") || "").trim().toLowerCase();
 
-    // Cache de Borde Cloudflare para catálogo público (300 segundos, solo sin búsqueda activa)
+    // Cache L1 de Memoria RAM Isolate (0ms de latencia)
+    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${url.searchParams.get("seed") || "0"}:${url.searchParams.get("sort") || "recent"}`;
+    const l1Catalog = getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
+    if (l1Catalog) {
+      return new Response(l1Catalog, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": q ? "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400" : "public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800",
+          "X-Cloudflare-RAM-Cache": "HIT",
+          "X-Cloudflare-Edge-Cache": "HIT",
+          ...getCorsHeaders(origin)
+        }
+      });
+    }
+
+    // Cache L2 de Borde Cloudflare para catálogo público
     const cache = caches.default;
     const cacheKey = new Request(url.toString(), { method: "GET" });
-    if (!q) {
-      try {
-        const cached = await cache.match(cacheKey);
-        if (cached) {
-          const edgeHeaders = new Headers(cached.headers);
-          edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
-          edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-          return new Response(cached.body, { status: 200, headers: edgeHeaders });
-        }
-      } catch (e) {}
-    }
+    try {
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        const bodyText = await cached.text();
+        setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, bodyText);
+        const edgeHeaders = new Headers(cached.headers);
+        edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
+        edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
+        return new Response(bodyText, { status: 200, headers: edgeHeaders });
+      }
+    } catch (e) {}
 
     const seedParam = parseInt(url.searchParams.get("seed") || "0", 10);
     const sort = url.searchParams.get("sort") || "recent";
@@ -834,7 +896,7 @@ export async function onRequest(context) {
       }
       estimatedTotal = 18261;
     } else {
-      postgrestUrl += "&media_type=eq.comic";
+      postgrestUrl += "&media_type=eq.comic&id=lte.374460";
       estimatedTotal = 105326;
     }
 
@@ -932,11 +994,14 @@ export async function onRequest(context) {
         live: false
       };
 
-      const resp = new Response(JSON.stringify(responsePayload), {
+      const jsonStr = JSON.stringify(responsePayload);
+      setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+
+      const resp = new Response(jsonStr, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "public, max-age=180, s-maxage=300, stale-while-revalidate=86400",
+          "Cache-Control": q ? "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400" : "public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800",
           ...getCorsHeaders(origin)
         }
       });
@@ -1606,7 +1671,11 @@ export async function onRequest(context) {
     ];
     return new Response(JSON.stringify(popularTags), {
       status: 200,
-      headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "public, max-age=86400, s-maxage=604800, immutable",
+        ...getCorsHeaders(origin)
+      }
     });
   }
 
