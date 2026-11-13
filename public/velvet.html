@@ -12,7 +12,7 @@
 
   <!-- PWA & Mobile Android App Integration -->
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#040209">
+  <meta name="theme-color" content="#0a0610">
   <meta name="color-scheme" content="dark">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -36,10 +36,10 @@
   <link rel="preconnect" href="https://qnmcejlxoufheisgkuyo.supabase.co" crossorigin>
 
   <!-- Google Fonts: Outfit + DM Serif Display + Inter (Non-blocking Swap) -->
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
   <noscript>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
   </noscript>
 
   <!-- FontAwesome 6 (Non-blocking) + Tailwind CSS CDN -->
@@ -96,9 +96,9 @@
 
           fontFamily: {
 
-            sans: ['Outfit', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'Outfit', 'ui-sans-serif', 'system-ui', 'sans-serif'],
 
-            display: ['"DM Serif Display"', 'Georgia', 'serif']
+            display: ['"Playfair Display"', '"DM Serif Display"', 'Georgia', 'serif']
 
           },
 
@@ -125,6 +125,84 @@
   </script>
 
   <style>
+
+    /* =======================================================================
+       VELVET HUB LUXURY NIGHTCLUB DESIGN SYSTEM TOKENS
+       ======================================================================= */
+    :root {
+      --bg-night: #0a0610;
+      --bg-night-deep: #06030a;
+      --bg-surface: #120818;
+      --bg-surface-elevated: #180c22;
+      --bg-glass: rgba(18, 8, 24, 0.82);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 45, 149, 0.40);
+      --neon-magenta: #ff2d95;
+      --neon-violet: #8b3dff;
+      --accent-peach: #ffd1b3;
+      --accent-champagne: #fae1c8;
+      --text-primary: #f8fafc;
+      --text-muted: #9d8db3;
+      --text-dim: #685980;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --radius-full: 9999px;
+      --ease-lux: cubic-bezier(0.16, 1, 0.3, 1);
+      --glow-top: rgba(255, 45, 149, 0.4);
+      --glow-bottom: rgba(139, 61, 255, 0.35);
+      --glow-left: rgba(255, 45, 149, 0.3);
+      --glow-right: rgba(139, 61, 255, 0.3);
+    }
+
+    /* Subtle Film Grain Noise Texture (Zero CPU, static SVG pattern) */
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      pointer-events: none;
+      opacity: 0.032;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    /* Velvet Logo Loader Seductive Breathing Pulse */
+    @keyframes velvetLogoPulse {
+      0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 10px rgba(255, 45, 149, 0.55)) drop-shadow(0 0 24px rgba(139, 61, 255, 0.3));
+      }
+      50% {
+        transform: scale(1.04);
+        filter: drop-shadow(0 0 20px rgba(255, 45, 149, 0.85)) drop-shadow(0 0 45px rgba(139, 61, 255, 0.6));
+      }
+    }
+    .animate-velvet-breathe {
+      animation: velvetLogoPulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    /* Velvet Ambilight Glow Soft Transition */
+    #video-ambient-glow {
+      transition: background 400ms ease, opacity 400ms ease;
+      will-change: opacity, background;
+      contain: paint;
+    }
+
+    /* Responsive Sidebar Card Transitions */
+    .sidebar-video-item {
+      transition: transform 180ms var(--ease-lux), border-color 180ms ease, background-color 180ms ease;
+    }
+    .sidebar-video-item:hover {
+      transform: scale(1.02);
+      border-color: rgba(255, 45, 149, 0.4);
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+    .sidebar-video-item.active-playing {
+      border-color: #ff2d95 !important;
+      box-shadow: 0 0 18px rgba(255, 45, 149, 0.35) !important;
+      background: rgba(255, 45, 149, 0.08) !important;
+    }
+
 
     /* =======================================================================
        ULTRA-SMOOTH NATIVE HARDWARE ACCELERATED ENGINE (120 FPS FLUID)
@@ -1544,498 +1622,319 @@
 
   <!-- ===================================================================== -->
 
+    <!-- ===================================================================== -->
+  <!-- VISTA DEDICADA DE REPRODUCCIÓN VELVET HUB (LUXURY NIGHTCLUB PRO) -->
   <!-- ===================================================================== -->
+  <div id="video-view" class="hidden min-h-screen w-full bg-[#0a0610] text-[#f8fafc] flex flex-col select-none pb-20 relative">
+    <!-- Barra Fina de Navegación Neón Superior -->
+    <div id="video-nav-progress" class="fixed top-0 inset-x-0 h-[2px] bg-gradient-to-r from-[#ff2d95] via-[#8b3dff] to-[#ffd1b3] z-50 pointer-events-none transition-all duration-300 opacity-0 w-0"></div>
 
-  <!-- VISTA DEDICADA DE VIDEO CINEMA-PRO (CARA 2) -->
-
-  <!-- ===================================================================== -->
-
-  <div id="video-view" class="hidden min-h-screen w-full bg-[#07070b] text-ink flex flex-col select-none pb-16">
-
-    <!-- Barra Superior de Navegación / Breadcrumb (Sticky Glass Pro) -->
-
-    <div class="sticky top-0 z-30 w-full bg-[#07070b]/98 border-b border-purple-500/20 shadow-md">
-
-      <div class="max-w-6xl mx-auto px-3.5 sm:px-6 py-2.5 flex items-center justify-between gap-3">
-
-        <!-- Volver al Catálogo -->
-
-        <button onclick="closeVideoPlayer()" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 hover:border-pink-500 text-xs font-black text-purple-200 hover:text-white transition-all shadow-[0_0_15px_rgba(168,85,247,0.15)] hover:shadow-[0_0_20px_rgba(236,72,153,0.35)] cursor-pointer group">
-
-          <i class="fa-solid fa-arrow-left text-pink-500 group-hover:-translate-x-1 transition-transform"></i>
-
-          <span>Volver al Catálogo</span>
-
+    <!-- Barra Superior de Navegación (Glass Ahumado y Sofisticado) -->
+    <header class="sticky top-0 z-40 w-full bg-[#0a0610]/92 backdrop-blur-md border-b border-white/[0.08] transition-colors">
+      <div class="max-w-[1760px] mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-3">
+        <!-- Volver -->
+        <button onclick="closeVideoPlayer()" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] hover:border-[#ff2d95]/40 text-xs font-semibold text-white/90 hover:text-white transition-all cursor-pointer group active:scale-95" title="Volver al catálogo">
+          <i class="fa-solid fa-arrow-left text-[#ff2d95] text-xs transition-transform group-hover:-translate-x-0.5"></i>
+          <span>Volver</span>
         </button>
 
-        <!-- Indicador Centro -->
-
-        <div class="hidden md:flex items-center gap-2 text-xs font-bold text-lav/80 bg-glass/60 px-3.5 py-1 rounded-full border border-purple-500/20 shadow-inner">
-
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-
-          <span class="text-white">Transmisión Privada HD</span>
-
-          <span class="text-lav/40">&bull;</span>
-
-          <span class="text-pink-400 text-[11px] font-black uppercase tracking-wider">Sin Publicidad</span>
-
+        <!-- Centro: Marca sutil -->
+        <div class="flex items-center gap-2 text-xs text-white/60">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#ff2d95] animate-pulse"></span>
+          <span class="font-display italic text-white/80 text-sm tracking-wide">Velvet Cinema</span>
         </div>
 
-        <!-- Acciones Rápidas -->
-
-        <div class="flex items-center gap-2 shrink-0">
-
-          <button id="video-cinema-lights-btn" onclick="toggleCinemaLights()" class="h-8 px-3 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 hover:text-white text-xs font-bold flex items-center gap-1.5 border border-purple-500/30 transition-all cursor-pointer shadow-sm" title="Apagar / Encender Luces (Modo Cine)">
-
-            <i class="fa-solid fa-lightbulb text-yellow-400" id="cinema-light-icon"></i>
-
-            <span class="hidden sm:inline">Luces</span>
-
+        <!-- Acciones Rápidas Superior -->
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <!-- Interruptor de Luces / Ambilight -->
+          <button id="video-cinema-lights-btn" onclick="cycleAmbilightMode()" class="h-8 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer" title="Luces ambientales (Apagado / Suave / Vívido)">
+            <i class="fa-solid fa-lightbulb text-amber-300/90" id="cinema-light-icon"></i>
+            <span class="hidden sm:inline" id="cinema-light-label">Luces</span>
           </button>
 
-          <button id="video-share-btn" onclick="copyCurrentVideoUrl()" class="h-8 px-3 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 hover:text-white text-xs font-bold flex items-center gap-1.5 border border-purple-500/30 transition-all cursor-pointer shadow-sm" title="Copiar Enlace Directo">
+          <!-- Atajos de Teclado (?) -->
+          <button onclick="openShortcutsModal()" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white flex items-center justify-center border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer text-xs font-mono font-bold" title="Atajos de teclado (?)">
+            ?
+          </button>
 
-            <i class="fa-solid fa-link text-purple-400"></i>
-
+          <!-- Compartir -->
+          <button id="video-share-btn" onclick="copyCurrentVideoUrl()" class="h-8 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer" title="Copiar enlace directo">
+            <i class="fa-solid fa-share-nodes text-xs text-[#8b3dff]"></i>
             <span class="hidden sm:inline">Compartir</span>
-
           </button>
 
-          <button id="video-player-fav-btn" onclick="toggleCurrentVideoFavorite()" class="w-8 h-8 rounded-xl bg-purple-950/40 hover:bg-pink-900/40 text-purple-200 hover:text-pink-400 flex items-center justify-center border border-purple-500/30 transition-all cursor-pointer shadow-sm" title="Guardar en Mi Bóveda">
-
-            <i class="fa-regular fa-heart" id="video-player-fav-icon"></i>
-
+          <!-- Favorito / Bóveda -->
+          <button id="video-player-fav-btn" onclick="toggleCurrentVideoFavorite()" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-[#ff2d95] flex items-center justify-center border border-white/[0.1] hover:border-[#ff2d95]/40 transition-all cursor-pointer" title="Guardar en Mi Bóveda">
+            <i class="fa-regular fa-heart text-xs" id="video-player-fav-icon"></i>
           </button>
         </div>
       </div>
-    </div>
-
-    <!-- Contenedor Principal del Reproductor y Contenido -->
-
-    <main class="w-full max-w-6xl mx-auto px-2 sm:px-4 lg:px-6 flex-1 flex flex-col items-center">
-
-      <!-- Video Stage (El Reproductor Pro) -->
-
-      <div class="relative w-full flex flex-col items-center">
-
-        <!-- Ambient Glow Halo (Ambilight Mode) -->
-
-        <div id="video-ambient-glow" class="absolute -inset-2 sm:-inset-4 bg-gradient-to-r from-purple-600/20 via-pink-600/15 to-indigo-600/20 rounded-2xl blur-lg opacity-40 -z-10 pointer-events-none transition-opacity duration-300"></div>
-
-        <!-- Dimmer de Modo Cine / Luces -->
-        <div id="cinema-dimmer" class="fixed inset-0 bg-black/92 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300 z-20" onclick="toggleCinemaLights(event)"></div>
-
-        <div id="video-stage" class="w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl relative border border-purple-500/30 select-none group/player transition-all duration-300">
-
-        <!-- Video Element (Hardware Acelerado y Protegido) -->
-        <video
-          id="html5-video-player"
-          referrerpolicy="no-referrer"
-          controlslist="nodownload noplaybackrate"
-          oncontextmenu="return false;"
-          class="w-full h-full object-contain cursor-pointer will-change-transform select-none"
-          playsinline
-          preload="auto"
-        ></video>
-
-        <!-- Spinner / Loader de Conexión -->
-
-                <!-- Diablita Neo Erotic Loader (Negro, Rosa y Neón Hot) -->
-
-                <!-- Velvet "V" Devil Lips & Tongue Loader (Neon Pink, Black & Rose) -->
-
-                <!-- Velvet Exact Brand Logo Loader (Animado con la imagen oficial del logo) -->
-
-        <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-black/92 backdrop-blur-md z-20 pointer-events-none transition-opacity duration-300">
-
-          <div class="logo-loader-container">
-
-            <!-- Ambient Orbiting Halo -->
-
-            <svg class="ambient-orbit" viewBox="0 0 200 200" fill="none">
-
-              <circle cx="100" cy="100" r="88" stroke="#ff2a85" stroke-width="1.2" stroke-dasharray="6 8" />
-
-              <circle cx="100" cy="12" r="3" fill="#ff77bb" filter="drop-shadow(0 0 6px #ff2a85)" />
-
-              <circle cx="188" cy="100" r="2.5" fill="#ef4444" />
-
-              <circle cx="12" cy="100" r="2.5" fill="#ff1a75" />
-
-              <circle cx="100" cy="188" r="3" fill="#ff77bb" />
-
-            </svg>
-
-            <!-- The Exact Velvet Devil Lips Logo -->
-
-            <div class="logo-img-wrapper">
-
-              <img src="/velvet_logo.png" alt="Velvet Devil Logo" class="velvet-exact-logo" />
-
-            </div>
-
-            <!-- Iconic Brand Text -->
-
-            <div class="mt-4 flex flex-col items-center text-center select-none">
-
-              <span class="text-sm font-black tracking-[0.4em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-pink-400 to-rose-400 drop-shadow-[0_0_15px_rgba(255,42,133,0.9)]">
-
-                VELVET
-
-              </span>
-
-              <span class="text-[11px] font-bold text-pink-300/80 tracking-widest mt-1 italic drop-shadow">
-
-                Pecando en privado...
-
-              </span>
-
-            </div>
-
-          </div>
-
-        </div><!-- Indicador de Pulso Central (Play / Pause animado al hacer clic) -->
-
-        <div id="video-pulse-indicator" class="absolute inset-0 flex items-center justify-center pointer-events-none z-20 opacity-0 scale-50 transition-all duration-300">
-
-          <div class="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md border border-white/30 flex items-center justify-center text-white text-2xl shadow-2xl">
-
-            <i id="video-pulse-icon" class="fa-solid fa-play"></i>
-
-          </div>
-
-        </div>
-
-        <!-- Spinner de Buffering Sutil / No Invasivo (Mantiene el video visible sin parpadeos negros) -->
-        <div id="video-buffering-spinner" class="hidden absolute inset-0 flex items-center justify-center pointer-events-none z-20 transition-opacity duration-200">
-          <div class="relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
-            <div class="w-full h-full video-buffering-ring shadow-[0_0_30px_rgba(236,72,153,0.8)]"></div>
-            <div class="absolute w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center">
-              <i class="fa-solid fa-bolt text-pink-400 text-xs animate-pulse"></i>
-            </div>
-          </div>
-        </div>
-
-        <!-- Boton Central de Play Grande (Visible en Pausa o Autoplay diferido) -->
-        <div id="video-center-play-btn" class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
-          <button type="button" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-tr from-hot to-neon text-white flex items-center justify-center text-3xl sm:text-4xl shadow-[0_0_50px_rgba(236,72,153,0.7)] hover:scale-110 hover:shadow-[0_0_80px_rgba(236,72,153,1)] active:scale-95 transition-all duration-200 backdrop-blur-md border border-white/40 pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
-            <i class="fa-solid fa-play ml-1.5 drop-shadow-lg"></i>
-          </button>
-        </div>
-
-        <!-- Badges de Salto Rápido Izquierda / Derecha (+/- 10s) -->
-
-        <div id="video-skip-left-badge" class="absolute left-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-2 rounded-2xl bg-black/75 border border-white/20 text-white font-black text-sm pointer-events-none opacity-0 transition-all duration-200 z-20">
-
-          <i class="fa-solid fa-rotate-left"></i> -10s
-
-        </div>
-
-        <div id="video-skip-right-badge" class="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-2 rounded-2xl bg-black/75 border border-white/20 text-white font-black text-sm pointer-events-none opacity-0 transition-all duration-200 z-20">
-
-          +10s <i class="fa-solid fa-rotate-right"></i>
-
-        </div>
-
-        <!-- HUD Toast Superior (Volumen, Velocidad, etc.) -->
-
-        <div id="video-hud-toast" class="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-black/85 border border-neon/40 text-xs font-bold text-white shadow-2xl pointer-events-none opacity-0 transition-all duration-200 z-30 flex items-center gap-2">
-
-          <i id="video-hud-icon" class="fa-solid fa-volume-high text-hot"></i>
-
-          <span id="video-hud-text">Volumen: 100%</span>
-
-        </div>
-
-        <!-- POPUP: Selector de Calidad -->
-
-        <div id="video-quality-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-16 bg-obsidian/95 border border-neon/30 rounded-2xl p-2 shadow-2xl backdrop-blur-md z-40 min-w-[140px] max-h-[60%] sm:max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
-
-          <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-lav/60 border-b border-neon/20 sticky top-0 bg-obsidian/95 backdrop-blur-md">Resolución</div>
-
-          <div id="video-quality-options" class="flex flex-col gap-1"></div>
-
-        </div>
-
-        <!-- POPUP: Selector de Velocidad -->
-
-        <div id="video-speed-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-8 bg-obsidian/95 border border-neon/30 rounded-2xl p-2 shadow-2xl backdrop-blur-md z-40 min-w-[120px] max-h-[60%] sm:max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
-
-          <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-lav/60 border-b border-neon/20 sticky top-0 bg-obsidian/95 backdrop-blur-md">Velocidad</div>
-
-          <button onclick="setPlaybackSpeed(0.5, event)" class="px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt cursor-pointer" data-speed="0.5">0.5x</button>
-
-          <button onclick="setPlaybackSpeed(0.75, event)" class="px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt cursor-pointer" data-speed="0.75">0.75x</button>
-
-          <button onclick="setPlaybackSpeed(1, event)" class="px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt font-bold text-hot cursor-pointer" data-speed="1">1.0x (Normal) <i class="fa-solid fa-check text-[10px]"></i></button>
-
-          <button onclick="setPlaybackSpeed(1.25, event)" class="px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt cursor-pointer" data-speed="1.25">1.25x</button>
-
-          <button onclick="setPlaybackSpeed(1.5, event)" class="px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt cursor-pointer" data-speed="1.5">1.5x</button>
-
-          <button onclick="setPlaybackSpeed(2, event)" class="px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt cursor-pointer" data-speed="2.0x">2.0x</button>
-
-        </div>
-
-        <!-- BARRA DE CONTROLES PRO (Auto-hide tras 3.5s) -->
-
-        <div id="video-controls-bar" class="absolute bottom-0 inset-x-0 z-30 bg-gradient-to-t from-black/95 via-black/75 to-transparent pt-10 pb-3 px-3 sm:px-5 flex flex-col gap-2.5 transition-all duration-300 opacity-100" onclick="event.stopPropagation()">
-
-          <!-- SEEK / SCRUB BAR INTERACTIVA -->
-
-          <div id="video-scrub-container" class="relative w-full h-7 py-2 group/scrub flex items-center cursor-pointer select-none touch-none" onclick="event.stopPropagation()">
-
-            <!-- Pista Fondo -->
-
-            <div class="w-full h-1.5 group-hover/scrub:h-2.5 rounded-full bg-white/20 relative overflow-hidden transition-all duration-150">
-
-              <!-- Barra de Buffer (Pre-cargado en RAM) -->
-
-              <div id="video-buffer-bar" class="absolute left-0 top-0 bottom-0 bg-white/35 rounded-full w-0 transition-all duration-200"></div>
-
-              <!-- Barra de Progreso Reproducido -->
-
-              <div id="video-progress-bar" class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-violet via-hot to-cyan rounded-full w-0"></div>
-
-            </div>
-
-            <!-- Pin Scrubber Luminoso (Visible en móvil y al hacer hover en PC) -->
-
-            <div id="video-scrubber-pin" class="absolute top-1/2 -translate-y-1/2 -ml-2 w-4 h-4 rounded-full bg-white shadow-hot-glow scale-100 sm:scale-0 sm:group-hover/scrub:scale-100 transition-transform pointer-events-none z-10"></div>
-
-            <!-- Tooltip de Tiempo al pasar el Cursor -->
-
-            <div id="video-time-tooltip" class="absolute -top-7 px-2 py-0.5 rounded-md bg-black/90 text-[11px] font-mono font-bold text-white border border-neon/40 pointer-events-none opacity-0 transition-opacity -translate-x-1/2 z-20">00:00</div>
-
-          </div>
-
-          <!-- FILA DE BOTONES DE CONTROL -->
-
-          <div class="flex items-center justify-between text-white text-sm">
-
-            <!-- Grupo Izquierdo -->
-
-            <div class="flex items-center gap-2 sm:gap-3">
-
-              <!-- Play / Pause -->
-
-              <button id="video-btn-play" onclick="toggleVideoPlay(event)" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center text-white hover:text-hot transition-colors cursor-pointer" title="Reproducir / Pausar (Espacio)">
-
-                <i class="fa-solid fa-play text-base" id="video-play-icon"></i>
-
-              </button>
-
-              <!-- Retroceder 10s -->
-
-              <button onclick="skipVideo(-10, event)" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center text-lav hover:text-white transition-colors relative cursor-pointer" title="Retroceder 10 segundos (Flecha Izq)">
-
-                <i class="fa-solid fa-rotate-left text-sm"></i>
-
-                <span class="text-[9px] font-bold absolute -bottom-0.5">10</span>
-
-              </button>
-
-              <!-- Avanzar 10s -->
-
-              <button onclick="skipVideo(10, event)" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center text-lav hover:text-white transition-colors relative cursor-pointer" title="Adelantar 10 segundos (Flecha Der)">
-
-                <i class="fa-solid fa-rotate-right text-sm"></i>
-
-                <span class="text-[9px] font-bold absolute -bottom-0.5">10</span>
-
-              </button>
-
-              <!-- Volumen & Slider -->
-
-              <div class="flex items-center gap-1.5 group/vol" onclick="event.stopPropagation()">
-
-                <button id="video-btn-vol" onclick="toggleVideoMute(event)" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center text-lav hover:text-white transition-colors cursor-pointer" title="Silenciar (M)">
-
-                  <i id="video-vol-icon" class="fa-solid fa-volume-high text-sm"></i>
-
+    </header>
+
+    <!-- Contenedor Principal Ultra-Espacioso (hasta 1760px) -->
+    <main class="w-full max-w-[1760px] mx-auto px-2 sm:px-4 lg:px-6 py-4 flex-1">
+      <!-- Grid de 2 Columnas (70% Reproductor + Info / 30% Relacionados Sticky) -->
+      <div id="video-layout-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
+        
+        <!-- COLUMNA PRINCIPAL (70% en lg:col-span-8 o 12 en modo cine) -->
+        <div id="video-primary-column" class="lg:col-span-8 flex flex-col gap-4 w-full transition-all duration-300">
+          
+          <!-- Escenario del Reproductor + Glow Ambilight -->
+          <div id="video-stage-wrapper" class="relative w-full flex flex-col items-center">
+            
+            <!-- Glow Ambiental Neón (Ambilight Mode con 4 Zonas Sutiles) -->
+            <div id="video-ambient-glow" class="absolute -inset-3 sm:-inset-6 rounded-3xl blur-[75px] opacity-45 -z-10 pointer-events-none transition-all duration-500"></div>
+
+            <!-- Dimmer de Luces / Modo Cine -->
+            <div id="cinema-dimmer" class="fixed inset-0 bg-[#06030a]/92 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300 z-20" onclick="toggleCinemaLights(event)"></div>
+
+            <!-- Stage Box -->
+            <div id="video-stage" class="w-full aspect-video bg-[#000000] rounded-2xl overflow-hidden shadow-2xl relative border border-white/[0.08] hover:border-[#ff2d95]/20 select-none group/player transition-all duration-300">
+              
+              <!-- Backdrop borroso dinámico para videos verticales (9:16) sin decodificar segundo video -->
+              <div id="video-vertical-backdrop" class="absolute inset-0 bg-cover bg-center blur-2xl opacity-35 scale-125 pointer-events-none hidden transition-opacity duration-500"></div>
+
+              <!-- HTML5 Video Player -->
+              <video
+                id="html5-video-player"
+                referrerpolicy="no-referrer"
+                controlslist="nodownload noplaybackrate"
+                oncontextmenu="return false;"
+                class="w-full h-full object-contain cursor-pointer will-change-transform select-none relative z-10"
+                playsinline
+                preload="auto"
+              ></video>
+
+              <!-- Logo Loader de Carga / Buffering con Pulso Neón -->
+              <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0610]/90 backdrop-blur-md z-30 pointer-events-none transition-opacity duration-300">
+                <div class="relative w-28 h-28 flex items-center justify-center">
+                  <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-[#ff2d95]/30 to-[#8b3dff]/20 blur-xl animate-pulse"></div>
+                  <img src="/velvet_logo.png" alt="Velvet Hub" class="w-20 h-20 object-contain relative z-10 animate-velvet-breathe select-none" />
+                </div>
+                <span class="mt-2 text-xs font-medium tracking-wider text-white/70">Cargando experiencia...</span>
+              </div>
+
+              <!-- Indicador Buffering Sutil / No Invasivo -->
+              <div id="video-buffering-spinner" class="hidden absolute inset-0 flex items-center justify-center pointer-events-none z-20 transition-opacity duration-200">
+                <div class="relative w-16 h-16 flex items-center justify-center">
+                  <div class="w-16 h-16 rounded-full border-2 border-transparent border-t-[#ff2d95] border-r-[#8b3dff] animate-spin"></div>
+                  <img src="/velvet_logo.png" alt="Logo" class="w-6 h-6 object-contain absolute opacity-80" />
+                </div>
+              </div>
+
+              <!-- Botón Central de Play Grande (Pausado) -->
+              <div id="video-center-play-btn" class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
+                <button type="button" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/80 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_40px_rgba(255,45,149,0.45)] hover:scale-105 active:scale-95 transition-all duration-200 backdrop-blur-md border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
+                  <i class="fa-solid fa-play ml-1 drop-shadow"></i>
                 </button>
-
-                <input id="video-vol-slider" type="range" min="0" max="1" step="0.05" value="1" oninput="setVideoVolume(this.value, event)" onclick="event.stopPropagation()" class="hidden sm:block w-14 sm:w-20 h-1.5 accent-hot bg-white/25 rounded-lg cursor-pointer transition-all opacity-80 hover:opacity-100" title="Ajustar volumen">
-
               </div>
 
-              <!-- Contador de Tiempo -->
-
-              <div class="text-[10px] sm:text-xs font-mono text-lav/80 ml-0.5 sm:ml-1 select-none">
-
-                <span id="video-time-current" class="text-white font-bold">00:00</span> / <span id="video-time-duration">00:00</span>
-
+              <!-- Badges de Salto Rápido Izquierda / Derecha (+/- 10s) -->
+              <div id="video-skip-left-badge" class="absolute left-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-black/80 border border-white/10 text-white font-semibold text-xs pointer-events-none opacity-0 transition-all duration-200 z-20">
+                <i class="fa-solid fa-rotate-left text-[#ff2d95]"></i> -10s
+              </div>
+              <div id="video-skip-right-badge" class="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-black/80 border border-white/10 text-white font-semibold text-xs pointer-events-none opacity-0 transition-all duration-200 z-20">
+                +10s <i class="fa-solid fa-rotate-right text-[#ff2d95]"></i>
               </div>
 
+              <!-- HUD Toast Superior -->
+              <div id="video-hud-toast" class="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-[#120818]/90 border border-white/15 text-xs font-medium text-white shadow-xl pointer-events-none opacity-0 transition-all duration-200 z-30 flex items-center gap-2 backdrop-blur-md">
+                <i id="video-hud-icon" class="fa-solid fa-volume-high text-[#ff2d95]"></i>
+                <span id="video-hud-text">Volumen: 100%</span>
+              </div>
+
+              <!-- Pulse Indicator (Click en pantalla) -->
+              <div id="video-pulse-indicator" class="absolute inset-0 flex items-center justify-center pointer-events-none z-20 opacity-0 scale-50 transition-all duration-300">
+                <div class="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md border border-white/20 flex items-center justify-center text-white text-xl shadow-2xl">
+                  <i id="video-pulse-icon" class="fa-solid fa-play"></i>
+                </div>
+              </div>
+
+              <!-- Menús Emergentes de Calidad y Velocidad -->
+              <div id="video-quality-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-16 bg-[#120818]/95 border border-white/15 rounded-xl p-1.5 shadow-2xl backdrop-blur-md z-40 min-w-[130px] max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
+                <div class="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50 border-b border-white/10">Calidad</div>
+                <div id="video-quality-options" class="flex flex-col gap-0.5"></div>
+              </div>
+
+              <div id="video-speed-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-8 bg-[#120818]/95 border border-white/15 rounded-xl p-1.5 shadow-2xl backdrop-blur-md z-40 min-w-[120px] max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
+                <div class="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50 border-b border-white/10">Velocidad</div>
+                <button onclick="setPlaybackSpeed(0.5, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt" data-speed="0.5">0.5x</button>
+                <button onclick="setPlaybackSpeed(0.75, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt" data-speed="0.75">0.75x</button>
+                <button onclick="setPlaybackSpeed(1, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-[#ff2d95] font-semibold transition-colors flex items-center justify-between speed-opt" data-speed="1">1.0x (Normal) <i class="fa-solid fa-check text-[10px]"></i></button>
+                <button onclick="setPlaybackSpeed(1.25, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt" data-speed="1.25">1.25x</button>
+                <button onclick="setPlaybackSpeed(1.5, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt" data-speed="1.5">1.5x</button>
+                <button onclick="setPlaybackSpeed(2, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt" data-speed="2">2.0x</button>
+              </div>
+
+              <!-- BARRA DE CONTROLES FLOTANTE CON AUTO-HIDE A 2.5s -->
+              <div id="video-controls-bar" class="absolute bottom-0 inset-x-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-10 pb-2 px-3 sm:px-5 flex flex-col gap-2 transition-all duration-300 opacity-100" onclick="event.stopPropagation()">
+                <!-- SCRUB BAR -->
+                <div id="video-scrub-container" class="relative w-full h-6 group/scrub flex items-center cursor-pointer select-none touch-none" onclick="event.stopPropagation()">
+                  <div class="w-full h-1 group-hover/scrub:h-2 rounded-full bg-white/20 relative overflow-hidden transition-all duration-150">
+                    <div id="video-buffer-bar" class="absolute left-0 top-0 bottom-0 bg-white/30 rounded-full w-0 transition-all duration-200"></div>
+                    <div id="video-progress-bar" class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] rounded-full w-0"></div>
+                  </div>
+                  <div id="video-scrubber-pin" class="absolute top-1/2 -translate-y-1/2 -ml-2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,45,149,0.8)] scale-100 sm:scale-0 sm:group-hover/scrub:scale-100 transition-transform pointer-events-none z-10"></div>
+                  <div id="video-time-tooltip" class="absolute -top-7 px-2 py-0.5 rounded-md bg-black/90 text-[10px] font-mono font-semibold text-white border border-white/20 pointer-events-none opacity-0 transition-opacity -translate-x-1/2 z-20">00:00</div>
+                </div>
+
+                <!-- FILA DE BOTONES DE CONTROL -->
+                <div class="flex items-center justify-between text-white text-xs sm:text-sm">
+                  <!-- Izquierda -->
+                  <div class="flex items-center gap-1.5 sm:gap-2.5">
+                    <button id="video-btn-play" onclick="toggleVideoPlay(event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white hover:text-[#ff2d95] transition-colors cursor-pointer" title="Reproducir / Pausar (Espacio)">
+                      <i class="fa-solid fa-play" id="video-play-icon"></i>
+                    </button>
+
+                    <button onclick="skipVideo(-10, event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer text-xs" title="Retroceder 10s (J)">
+                      <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button onclick="skipVideo(10, event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer text-xs" title="Adelantar 10s (L)">
+                      <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+
+                    <!-- Volumen & Slider -->
+                    <div class="flex items-center gap-1 group/vol" onclick="event.stopPropagation()">
+                      <button id="video-btn-vol" onclick="toggleVideoMute(event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer" title="Silenciar (M)">
+                        <i id="video-vol-icon" class="fa-solid fa-volume-high text-xs"></i>
+                      </button>
+                      <input id="video-vol-slider" type="range" min="0" max="1" step="0.05" value="1" oninput="setVideoVolume(this.value, event)" onclick="event.stopPropagation()" class="hidden sm:block w-14 sm:w-18 h-1 accent-[#ff2d95] bg-white/20 rounded-lg cursor-pointer transition-all opacity-70 hover:opacity-100" title="Ajustar volumen">
+                    </div>
+
+                    <!-- Contador de Tiempo -->
+                    <div class="text-[11px] font-mono text-white/70 ml-1 select-none">
+                      <span id="video-time-current" class="text-white font-semibold">00:00</span> / <span id="video-time-duration">00:00</span>
+                    </div>
+                  </div>
+
+                  <!-- Derecha -->
+                  <div class="flex items-center gap-1 sm:gap-1.5">
+                    <!-- Calidad -->
+                    <button id="video-btn-quality" onclick="toggleQualityMenu(event)" class="px-2 py-1 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-[11px] font-semibold text-white/90 border border-white/10 transition-all flex items-center gap-1 cursor-pointer" title="Calidad">
+                      <span id="video-quality-label">1080p</span>
+                    </button>
+
+                    <!-- Velocidad -->
+                    <button id="video-btn-speed" onclick="toggleSpeedMenu(event)" class="px-2 py-1 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-[11px] font-semibold text-white/90 border border-white/10 transition-all flex items-center gap-1 cursor-pointer" title="Velocidad">
+                      <span id="video-speed-label">1x</span>
+                    </button>
+
+                    <!-- PiP -->
+                    <button onclick="toggleVideoPiP(event)" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo PiP (P)">
+                      <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                    </button>
+
+                    <!-- Modo Teatro -->
+                    <button id="video-btn-theater" onclick="toggleTheaterMode(event)" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo Cine (T)">
+                      <i class="fa-solid fa-film text-xs"></i>
+                    </button>
+
+                    <!-- Pantalla Completa -->
+                    <button id="video-btn-fullscreen" onclick="toggleVideoFullscreen(event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Pantalla completa (F)">
+                      <i id="video-fullscreen-icon" class="fa-solid fa-expand text-xs"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <!-- Grupo Derecho -->
-
-            <div class="flex items-center gap-1 sm:gap-2">
-
-              <!-- Selector de Calidad -->
-
-              <button id="video-btn-quality" onclick="toggleQualityMenu(event)" class="px-2 sm:px-2.5 py-1 rounded-lg bg-white/10 hover:bg-hot/20 text-[11px] sm:text-xs font-bold text-white border border-white/20 hover:border-hot transition-all flex items-center gap-1 cursor-pointer" title="Cambiar resolución">
-
-                <i class="fa-solid fa-sliders text-[9px] sm:text-[10px] text-hot"></i>
-
-                <span id="video-quality-label">1080p</span>
-
-              </button>
-
-              <!-- Selector de Velocidad -->
-
-              <button id="video-btn-speed" onclick="toggleSpeedMenu(event)" class="px-1.5 sm:px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] sm:text-xs font-bold text-white transition-colors flex items-center gap-1 cursor-pointer" title="Velocidad de reproducción">
-
-                <span id="video-speed-label">1x</span>
-
-              </button>
-
-              <!-- Picture-in-Picture -->
-
-              <button onclick="toggleVideoPiP(event)" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/20 items-center justify-center text-lav hover:text-white transition-colors cursor-pointer" title="Modo PiP (P)">
-
-                <i class="fa-solid fa-arrow-up-right-from-square text-sm"></i>
-
-              </button>
-
-              <!-- Modo Teatro -->
-
-              <button id="video-btn-theater" onclick="toggleTheaterMode(event)" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center text-lav hover:text-white transition-colors hidden sm:flex cursor-pointer" title="Modo Cine / Teatro (T)">
-
-                <i class="fa-solid fa-film text-sm"></i>
-
-              </button>
-
-              <!-- Pantalla Completa -->
-
-              <button id="video-btn-fullscreen" onclick="toggleVideoFullscreen(event)" class="w-8 h-8 rounded-lg hover:bg-white/20 flex items-center justify-center text-lav hover:text-white transition-colors cursor-pointer" title="Pantalla Completa (F)">
-
-                <i id="video-fullscreen-icon" class="fa-solid fa-expand text-sm"></i>
-
-              </button>
-
-            </div>
-
           </div>
 
+          <!-- DETALLES DEL VIDEO: Título, Metadatos Reales, Acciones y Chips -->
+          <div class="w-full p-4 sm:p-5 rounded-2xl bg-[#120818]/60 border border-white/[0.08] backdrop-blur-sm flex flex-col gap-3">
+            <!-- Título & Metadatos Principales -->
+            <div class="flex flex-col gap-1.5">
+              <h1 id="video-player-title" class="font-display text-lg sm:text-xl md:text-2xl font-medium text-white tracking-tight leading-snug">Cargando video...</h1>
+              
+              <!-- Línea única y sobria de metadatos (Cero fake marketing) -->
+              <div class="flex flex-wrap items-center gap-2 text-xs text-white/60">
+                <span id="video-player-source" class="px-2 py-0.5 rounded-md bg-white/[0.04] text-white/80 font-medium border border-white/10">Velvet VIP</span>
+                <span id="video-player-quality-badge" class="px-2 py-0.5 rounded-md bg-[#ff2d95]/15 text-[#ff2d95] font-semibold border border-[#ff2d95]/25">1080p</span>
+                <span id="video-meta-duration" class="text-white/60">HD</span>
+                <span id="video-meta-views" class="hidden text-white/50">&bull; <span></span></span>
+                <span class="text-white/30">&bull;</span>
+                <span class="text-white/40 text-[11px]">18 U.S.C. 2257</span>
+              </div>
+            </div>
+
+            <!-- Acciones y Selector de Calidades Alternativas -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/[0.06] text-xs">
+              <div class="flex flex-wrap items-center gap-1.5" id="video-qualities-buttons">
+                <!-- Botones limpios de resolución -->
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button onclick="toggleVideoLoop()" id="video-loop-toggle" class="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 transition-all font-medium flex items-center gap-1.5 cursor-pointer" title="Repetir reproducción">
+                  <i class="fa-solid fa-repeat text-xs text-[#ff2d95]"></i>
+                  <span>Repetir</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Fila de Chips de Etiquetas con Scroll Horizontal Suave -->
+            <div class="relative w-full overflow-hidden pt-2">
+              <div id="video-popular-tags" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                <!-- Chips generados dinámicamente -->
+              </div>
+            </div>
+          </div>
         </div>
+
+        <!-- COLUMNA DERECHA STICKY: VIDEOS RELACIONADOS (30% en lg:col-span-4) -->
+        <aside id="video-sidebar-column" class="lg:col-span-4 flex flex-col gap-3 lg:sticky lg:top-20 max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar">
+          <div class="flex items-center justify-between pb-1 border-b border-white/[0.06]">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-white/70 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#ff2d95]"></span>
+              <span>Relacionados</span>
+            </h3>
+            <span id="video-sidebar-count" class="text-[11px] text-white/40 font-mono"></span>
+          </div>
+
+          <!-- Lista Compacta de Tarjetas Relacionadas -->
+          <div id="video-sidebar-list" class="flex flex-col gap-2.5">
+            <!-- Items renderizados dinámicamente -->
+          </div>
+        </aside>
 
       </div>
 
-      <!-- Tarjeta de Información y Metadatos del Video (Estilo YouTube / Netflix Cyberpunk) -->
-
-      <div class="w-full mt-4 p-4 sm:p-6 rounded-2xl glass-card-pro border border-purple-500/25 shadow-[0_0_35px_rgba(168,85,247,0.12)] flex flex-col gap-4">
-
-        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-
-          <div class="flex flex-col gap-1.5 flex-1">
-
-            <h1 id="video-player-title" class="text-lg sm:text-xl md:text-2xl font-black text-white tracking-tight leading-snug">Cargando video...</h1>
-
-            <div class="flex flex-wrap items-center gap-2.5 text-xs text-lav/70 pt-1">
-
-              <span class="px-2.5 py-0.5 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1.5 shadow-sm">
-
-                <i class="fa-solid fa-bolt text-gold"></i> Buffer Turbo SSD Activo
-
-              </span>
-
-              <span class="text-lav/40">&bull;</span>
-
-              <span class="text-lav/70 flex items-center gap-1"><i class="fa-solid fa-circle-play text-pink-400"></i> Streaming Privado</span>
-
-              <span class="text-lav/40">&bull;</span>
-
-              <span class="text-lav/70 flex items-center gap-1"><i class="fa-solid fa-shield-halved text-emerald-400"></i> Sin Interrupciones</span>
-
-            </div>
-
-          </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-
-            <span id="video-player-source" class="px-3 py-1 rounded-xl bg-purple-950/60 text-purple-300 font-black uppercase tracking-wider text-xs border border-purple-500/40 shadow-sm"></span>
-
-            <span id="video-player-quality-badge" class="px-3 py-1 rounded-xl bg-gradient-to-r from-emerald-950 to-teal-950 text-emerald-300 font-black uppercase text-xs border border-emerald-500/40 shadow-sm">1080p HD</span>
-
-            <span class="text-emerald-400 text-xs hidden md:inline px-2 py-1 rounded-lg bg-emerald-950/30 border border-emerald-800/40"><i class="fa-solid fa-circle-check text-[10px] mr-1"></i>18 U.S.C. 2257</span>
-
-          </div>
-
+      <!-- SECCIÓN INFERIOR: GRID DE RELACIONADOS (Visible en Modo Cine o Pantallas Chicas) -->
+      <section id="video-bottom-related-section" class="hidden w-full mt-8 flex flex-col gap-4">
+        <div class="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
+          <span class="w-2 h-2 rounded-full bg-[#ff2d95]"></span>
+          <h3 class="text-sm font-semibold tracking-wide text-white">Más títulos recomendados</h3>
         </div>
-
-        <!-- Resoluciones Disponibles y Status -->
-
-        <div class="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t border-purple-500/20 text-xs">
-
-          <div class="flex flex-wrap items-center gap-2.5">
-
-            <span class="font-black text-pink-400 text-xs flex items-center gap-1.5"><i class="fa-solid fa-sliders"></i> Resoluciones Disponibles:</span>
-
-            <div id="video-qualities-buttons" class="flex flex-wrap items-center gap-1.5">
-
-              <!-- Botones dinámicos de calidad -->
-
-            </div>
-
-          </div>
-
-          <div class="text-[11px] text-lav/60 flex items-center gap-3">
-
-            <button onclick="toggleVideoLoop()" id="video-loop-toggle" class="px-3 py-1 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/25 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer">
-
-              <i class="fa-solid fa-repeat text-pink-400"></i>
-
-              <span>Repetir Video</span>
-
-            </button>
-
-          </div>
-
-        </div>
-
-      </div>
-
-      <!-- VIDEOS RECOMENDADOS (BINGE WATCHING) -->
-
-      <div class="w-full mt-6 space-y-3 pb-8">
-
-        <h4 class="text-sm font-black uppercase tracking-wider text-hot flex items-center gap-2">
-
-          <i class="fa-solid fa-fire"></i> Más Videos Recomendados en Tendencia:
-
-        </h4>
-
         <div id="video-recommendations-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-
-          <!-- Recomendaciones dinámicas -->
-
+          <!-- Grid dinámico -->
         </div>
-
-        <!-- EXPLORAR POR CATEGORÍAS POPULARES -->
-
-        <div class="w-full mt-4 p-4 sm:p-5 rounded-2xl glass-card-pro border border-purple-500/20 flex flex-col gap-2.5">
-
-          <span class="text-xs font-black uppercase tracking-wider text-pink-400 flex items-center gap-1.5">
-
-            <i class="fa-solid fa-tags"></i> Explorar Temáticas en Tendencia:
-
-          </span>
-
-          <div class="flex flex-wrap items-center gap-2 pt-1" id="video-popular-tags">
-
-            <!-- Chips de tags generados dinámicamente -->
-
-          </div>
-
-        </div>
-
-      </div>
+      </section>
 
     </main>
 
+    <!-- Modal Atajos de Teclado (?) -->
+    <div id="video-shortcuts-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeShortcutsModal(event)">
+      <div class="bg-[#120818] border border-white/15 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between border-b border-white/10 pb-3">
+          <h4 class="font-display text-lg text-white font-medium flex items-center gap-2">
+            <i class="fa-solid fa-keyboard text-[#ff2d95]"></i> Atajos de Teclado
+          </h4>
+          <button onclick="closeShortcutsModal()" class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-white/70 hover:text-white flex items-center justify-center text-xs cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs text-white/80">
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Reproducir / Pausa</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">Espacio / K</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Saltar ±5s</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">← / →</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Saltar ±10s</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">J / L</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Volumen ±10%</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">↑ / ↓</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Silenciar</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">M</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Pantalla completa</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">F</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Modo Cine</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">T</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Picture-in-Picture</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">P</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Porcentaje 0-90%</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">0-9</kbd></div>
+          <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.03]"><span>Fotograma ±1</span> <kbd class="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[11px]">, / .</kbd></div>
+        </div>
+      </div>
+    </div>
   </div>
 
 <div id="reader-modal" class="hidden fixed inset-0 z-50 bg-pitch overflow-hidden select-none">
@@ -5123,64 +5022,295 @@
       grid.classList.remove('hidden');
     }
 
-    // =======================================================================
+    // =====================================================================
+    // REPRODUCTOR DE VIDEO CINEMA-PRO VELVET HUB (LUXURY NIGHTCLUB ENGINE)
+    // =====================================================================
 
-    // REPRODUCTOR DE VIDEO CINEMA-PRO (CARA 2) & ROUTING
-
-    // =======================================================================
+    // Diccionario Centralizado de Microcopy (Español Neutro, Limpio y Sofisticado)
+    const UI_TEXT = {
+      back: "Volver",
+      related: "Relacionados",
+      tags: "Etiquetas",
+      duration: "Duración",
+      quality: "Calidad",
+      lights: "Luces",
+      theater: "Modo Cine",
+      repeat: "Repetir",
+      share: "Compartir",
+      copied: "Enlace directo copiado al portapapeles",
+      shortcuts: "Atajos de teclado",
+      retry: "Reintentar Conexión",
+      switchServer: "Cambiar Servidor",
+      playingNow: "Reproduciendo ahora",
+      compliance2257: "18 U.S.C. 2257",
+      sourceUnavailable: "El servidor de origen no respondió a tiempo. Tus preferencias se mantienen intactas."
+    };
 
     let videoPendingSeekTime = null;
     let videoHideControlsTimer = null;
     let videoHudTimer = null;
     let videoIsSeeking = false;
     let videoIsHoveringControls = false;
-    let videoLastTapTime = 0;
-    let videoTapCount = 0;
-    let videoTapTimeout = null;
-    let videoTurboPrefetchTimer = null;
-    let videoStallCount = 0;
     let videoWatchdogTimer = null;
+    let videoPreviousVolume = 1;
+    let hlsInstance = null;
+    let videoFailoverAttempts = 0;
+    const MAX_FAILOVER_ATTEMPTS = 3;
+
+    // --- Dynamic Favicon Loader Pulse Engine ---
+    let faviconCanvas = null;
+    let faviconAnimTimer = null;
+    const FAVICON_ORIGINAL = '/velvet_logo.png';
+
+    function startFaviconPulse() {
+      if (document.hidden) return;
+      if (!faviconCanvas) {
+        faviconCanvas = document.createElement('canvas');
+        faviconCanvas.width = 32;
+        faviconCanvas.height = 32;
+      }
+      const ctx = faviconCanvas.getContext('2d');
+      const favLink = document.querySelector("link[rel*='icon']");
+      if (!favLink) return;
+
+      let step = 0;
+      function tick() {
+        if (document.hidden) {
+          stopFaviconPulse();
+          return;
+        }
+        step += 0.18;
+        ctx.clearRect(0, 0, 32, 32);
+        const rad = 10 + Math.sin(step) * 3;
+        const g = ctx.createRadialGradient(16, 16, 2, 16, 16, rad);
+        g.addColorStop(0, '#ff2d95');
+        g.addColorStop(0.7, '#8b3dff');
+        g.addColorStop(1, 'rgba(139, 61, 255, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(16, 16, rad, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(16, 16, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        favLink.href = faviconCanvas.toDataURL('image/png');
+        faviconAnimTimer = setTimeout(tick, 130);
+      }
+      if (!faviconAnimTimer) tick();
+    }
+
+    function stopFaviconPulse() {
+      if (faviconAnimTimer) {
+        clearTimeout(faviconAnimTimer);
+        faviconAnimTimer = null;
+      }
+      const favLink = document.querySelector("link[rel*='icon']");
+      if (favLink) favLink.href = FAVICON_ORIGINAL;
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        stopFaviconPulse();
+      }
+    });
+
+    // --- Slim Navigation Progress Bar ---
+    let navProgTimer = null;
+    function startNavProgress() {
+      const bar = document.getElementById('video-nav-progress');
+      if (!bar) return;
+      clearTimeout(navProgTimer);
+      bar.classList.remove('opacity-0');
+      bar.style.width = '25%';
+      navProgTimer = setTimeout(() => {
+        bar.style.width = '75%';
+      }, 80);
+    }
+
+    function finishNavProgress() {
+      const bar = document.getElementById('video-nav-progress');
+      if (!bar) return;
+      clearTimeout(navProgTimer);
+      bar.style.width = '100%';
+      navProgTimer = setTimeout(() => {
+        bar.classList.add('opacity-0');
+        setTimeout(() => { bar.style.width = '0%'; }, 300);
+      }, 180);
+    }
+
+    // --- Ambilight Neon 4-Zone Sampling Engine (6-8 fps, 0% CPU Idle) ---
+    let ambilightCanvas = null;
+    let ambilightCtx = null;
+    let ambilightInterval = null;
+    let ambilightRvfcHandle = null;
+    let ambilightLastTime = 0;
+    let ambilightMode = localStorage.getItem('velvet_ambilight_mode') || 'vivid'; // 'vivid' | 'soft' | 'off'
+    let ambilightTainted = false;
+
+    function initAmbilightEngine() {
+      if (ambilightCanvas) return;
+      ambilightCanvas = document.createElement('canvas');
+      ambilightCanvas.width = 16;
+      ambilightCanvas.height = 9;
+      ambilightCanvas.style.display = 'none';
+      document.body.appendChild(ambilightCanvas);
+      try {
+        ambilightCtx = ambilightCanvas.getContext('2d', { willReadFrequently: true });
+      } catch (e) {
+        ambilightCtx = ambilightCanvas.getContext('2d');
+      }
+    }
+
+    function updateAmbilightGlow() {
+      const player = document.getElementById('html5-video-player');
+      const glow = document.getElementById('video-ambient-glow');
+      if (!player || !glow || ambilightMode === 'off') {
+        if (glow) glow.style.opacity = '0';
+        return;
+      }
+
+      if (player.paused || player.ended || document.hidden || player.readyState < 2) {
+        return;
+      }
+
+      if (ambilightTainted) {
+        glow.style.opacity = ambilightMode === 'soft' ? '0.30' : '0.48';
+        glow.style.background = 'radial-gradient(circle at 50% 50%, rgba(255,45,149,0.35) 0%, rgba(139,61,255,0.25) 50%, transparent 80%)';
+        return;
+      }
+
+      try {
+        if (!ambilightCtx) initAmbilightEngine();
+        ambilightCtx.drawImage(player, 0, 0, 16, 9);
+        const imgData = ambilightCtx.getImageData(0, 0, 16, 9).data;
+
+        function sampleZone(startX, endX, startY, endY) {
+          let r = 0, g = 0, b = 0, count = 0;
+          for (let y = startY; y < endY; y++) {
+            for (let x = startX; x < endX; x++) {
+              const idx = (y * 16 + x) * 4;
+              r += imgData[idx];
+              g += imgData[idx + 1];
+              b += imgData[idx + 2];
+              count++;
+            }
+          }
+          if (count === 0) return 'rgba(255,45,149,0.4)';
+          r /= count; g /= count; b /= count;
+          // Saturation Boost (1.35x)
+          const avg = (r + g + b) / 3;
+          r = Math.min(255, Math.max(0, avg + (r - avg) * 1.35));
+          g = Math.min(255, Math.max(0, avg + (g - avg) * 1.35));
+          b = Math.min(255, Math.max(0, avg + (b - avg) * 1.35));
+          return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+        }
+
+        const topColor = sampleZone(2, 14, 0, 3);
+        const bottomColor = sampleZone(2, 14, 6, 9);
+        const leftColor = sampleZone(0, 3, 2, 7);
+        const rightColor = sampleZone(13, 16, 2, 7);
+
+        const op = ambilightMode === 'soft' ? '0.35' : '0.55';
+        glow.style.opacity = op;
+        glow.style.background = `radial-gradient(ellipse at 50% 0%, ${topColor} 0%, transparent 60%),
+                                 radial-gradient(ellipse at 50% 100%, ${bottomColor} 0%, transparent 60%),
+                                 radial-gradient(ellipse at 0% 50%, ${leftColor} 0%, transparent 60%),
+                                 radial-gradient(ellipse at 100% 50%, ${rightColor} 0%, transparent 60%)`;
+      } catch (err) {
+        ambilightTainted = true;
+        glow.style.opacity = ambilightMode === 'soft' ? '0.30' : '0.48';
+        glow.style.background = 'radial-gradient(circle at 50% 50%, rgba(255,45,149,0.35) 0%, rgba(139,61,255,0.25) 50%, transparent 80%)';
+      }
+    }
+
+    function scheduleAmbilightLoop() {
+      const player = document.getElementById('html5-video-player');
+      if (!player) return;
+      if ('requestVideoFrameCallback' in player) {
+        ambilightRvfcHandle = player.requestVideoFrameCallback((now) => {
+          if (now - ambilightLastTime >= 135) { // ~7 fps
+            ambilightLastTime = now;
+            updateAmbilightGlow();
+          }
+          if (!player.paused && !player.ended) {
+            scheduleAmbilightLoop();
+          }
+        });
+      } else {
+        if (!ambilightInterval) {
+          ambilightInterval = setInterval(updateAmbilightGlow, 140);
+        }
+      }
+    }
+
+    function stopAmbilightLoop() {
+      if (ambilightInterval) {
+        clearInterval(ambilightInterval);
+        ambilightInterval = null;
+      }
+    }
+
+    function cycleAmbilightMode() {
+      const modes = ['vivid', 'soft', 'off'];
+      const curIdx = modes.indexOf(ambilightMode);
+      ambilightMode = modes[(curIdx + 1) % modes.length];
+      localStorage.setItem('velvet_ambilight_mode', ambilightMode);
+      updateAmbilightUI();
+      updateAmbilightGlow();
+      showVideoHud('fa-lightbulb', `Luces: ${ambilightMode === 'off' ? 'Apagadas' : (ambilightMode === 'soft' ? 'Suaves' : 'Vívidas')}`);
+    }
+
+    function updateAmbilightUI() {
+      const label = document.getElementById('cinema-light-label');
+      const icon = document.getElementById('cinema-light-icon');
+      const glow = document.getElementById('video-ambient-glow');
+      if (!label || !icon) return;
+      if (ambilightMode === 'off') {
+        label.textContent = 'Luces: Off';
+        icon.className = 'fa-regular fa-lightbulb text-white/40';
+        if (glow) glow.style.opacity = '0';
+      } else if (ambilightMode === 'soft') {
+        label.textContent = 'Luces: Suave';
+        icon.className = 'fa-solid fa-lightbulb text-amber-300/60';
+        if (glow) glow.style.opacity = '0.35';
+      } else {
+        label.textContent = 'Luces: Vívido';
+        icon.className = 'fa-solid fa-lightbulb text-amber-300';
+        if (glow) glow.style.opacity = '0.55';
+      }
+    }
 
     function startTurboBufferWorker() {
-
-      // Buffer optimizado nativo del navegador (cero saturación de sockets)
-
-      if (videoTurboPrefetchTimer) clearInterval(videoTurboPrefetchTimer);
-
+      // Buffer optimizado nativo del navegador
     }
 
     function formatVideoTime(secs) {
-
       if (isNaN(secs) || secs < 0) return '00:00';
-
       const h = Math.floor(secs / 3600);
-
       const m = Math.floor((secs % 3600) / 60);
-
       const s = Math.floor(secs % 60);
-
       if (h > 0) {
-
         return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-
       }
-
       return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-
     }
 
     function initVideoPlayerEngine() {
       const player = document.getElementById('html5-video-player');
       const stage = document.getElementById('video-stage');
-      const controlsBar = document.getElementById('video-controls-bar');
       const scrubContainer = document.getElementById('video-scrub-container');
       const timeTooltip = document.getElementById('video-time-tooltip');
       const playIcon = document.getElementById('video-play-icon');
       const loader = document.getElementById('video-player-loader');
       const buffSpinner = document.getElementById('video-buffering-spinner');
-      const volSlider = document.getElementById('video-vol-slider');
 
       if (!player || !stage) return;
+
+      // Cargar configuración de luces persistida
+      updateAmbilightUI();
 
       // Cargar volumen persistido
       const savedVol = localStorage.getItem('velvet_video_vol');
@@ -5193,9 +5323,17 @@
         updateVolumeUI(player.volume, player.muted);
       }
 
+      // Cargar velocidad persistida
+      const savedSpeed = localStorage.getItem('velvet_video_speed');
+      if (savedSpeed !== null) {
+        const s = parseFloat(savedSpeed);
+        if (!isNaN(s) && s > 0) setPlaybackSpeed(s);
+      }
+
       // Eventos del reproductor
       let lastVideoProgressSave = 0;
       let _timeupdateRaf = null;
+
       player.ontimeupdate = () => {
         const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
         if (!videoIsSeeking && dur > 0) {
@@ -5230,6 +5368,8 @@
       };
 
       player.onended = () => {
+        stopAmbilightLoop();
+        stopFaviconPulse();
         const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
         if (dur > 0) {
           saveVideoPlaybackProgress(dur, dur, true);
@@ -5261,12 +5401,29 @@
           videoWatchdogTimer = null;
         }
         const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
-        console.log('%c🎬 [VIDEO PRO] Metadatos listos | Duración:', 'color: #10b981; font-weight: bold;', formatVideoTime(dur));
         const durEl = document.getElementById('video-time-duration');
+        const metaDur = document.getElementById('video-meta-duration');
         if (durEl) durEl.textContent = formatVideoTime(dur);
+        if (metaDur) metaDur.textContent = formatVideoTime(dur);
+
+        // Detección automática de video vertical (9:16) sin decodificar segundo video
+        if (player.videoWidth > 0 && player.videoHeight > 0) {
+          const isVertical = (player.videoHeight / player.videoWidth) > 1.15;
+          const vBackdrop = document.getElementById('video-vertical-backdrop');
+          if (vBackdrop) {
+            if (isVertical && state.currentVideo && state.currentVideo.cover_url) {
+              vBackdrop.style.backgroundImage = `url("${state.currentVideo.cover_url}")`;
+              vBackdrop.classList.remove('hidden');
+            } else {
+              vBackdrop.classList.add('hidden');
+            }
+          }
+        }
 
         if (loader) loader.classList.add('hidden');
         if (buffSpinner) buffSpinner.classList.add('hidden');
+        finishNavProgress();
+        stopFaviconPulse();
 
         if (videoPendingSeekTime !== null && videoPendingSeekTime > 0) {
           player.currentTime = videoPendingSeekTime;
@@ -5274,7 +5431,6 @@
         }
 
         player.play().catch(e => {
-          console.log('Autoplay diferido por política del navegador:', e);
           const centerPlay = document.getElementById('video-center-play-btn');
           if (centerPlay) centerPlay.classList.remove('hidden');
           showControls();
@@ -5282,27 +5438,27 @@
       };
 
       player.onplay = () => {
-        if (playIcon) playIcon.className = 'fa-solid fa-pause text-base';
+        if (playIcon) playIcon.className = 'fa-solid fa-pause';
         const centerPlay = document.getElementById('video-center-play-btn');
         if (centerPlay) centerPlay.classList.add('hidden');
         if (buffSpinner) buffSpinner.classList.add('hidden');
+        stopFaviconPulse();
+        scheduleAmbilightLoop();
         resetControlsTimeout();
       };
 
       player.onpause = () => {
-        if (playIcon) playIcon.className = 'fa-solid fa-play text-base';
+        if (playIcon) playIcon.className = 'fa-solid fa-play';
         const centerPlay = document.getElementById('video-center-play-btn');
         if (centerPlay) centerPlay.classList.remove('hidden');
+        stopAmbilightLoop();
+        stopFaviconPulse();
         showControls();
       };
 
-      // Buffering suave: Solo activar spinner sutil, NUNCA pantalla negra opaca
       player.onwaiting = () => {
         if (buffSpinner) buffSpinner.classList.remove('hidden');
-        videoStallCount++;
-        if (videoStallCount === 3) {
-          showToast('⚡ Sugerencia: Si tu conexión remota se pausa, cambia a 720p o 480p para carga fluida', 'info');
-        }
+        startFaviconPulse();
       };
 
       player.onseeking = () => {
@@ -5320,6 +5476,10 @@
         }
         if (loader) loader.classList.add('hidden');
         if (buffSpinner) buffSpinner.classList.add('hidden');
+        finishNavProgress();
+        stopFaviconPulse();
+        scheduleAmbilightLoop();
+        videoFailoverAttempts = 0;
       };
 
       player.oncanplay = () => {
@@ -5329,6 +5489,8 @@
         }
         if (loader) loader.classList.add('hidden');
         if (buffSpinner) buffSpinner.classList.add('hidden');
+        finishNavProgress();
+        stopFaviconPulse();
       };
 
       player.onerror = (e) => {
@@ -5336,68 +5498,12 @@
         if (!player.getAttribute('src') && !player.currentSrc) return;
         if (!player.error || player.error.code === 1) return;
 
-        console.warn('[PRO PLAYER] Evento de error en reproductor:', player.error);
-
-        // Fallback 1: Si falló en stream directo, intentar a través de proxy seguro
-        if (player._currentVs && player.src && !player.src.includes('/api/video/stream')) {
-          const ref = (state.currentVideo && state.currentVideo.url) ? state.currentVideo.url : '';
-          const proxyUrl = getStealthStreamUrl(player._currentVs.url, ref);
-          console.log('⚡ [FALLBACK PROXY] Probando con proxy:', proxyUrl);
-          player.src = proxyUrl;
-          player.load();
-          player.play().catch(() => {});
-          return;
-        }
-
-        // Fallback 2: Intentar volver a la última calidad funcional para no dejar pantalla negra
-        if (player._lastWorkingVs && player._currentVs && player._lastWorkingVs.url !== player._currentVs.url) {
-          showToast('Resolución no disponible en el servidor de origen. Volviendo a la calidad previa...', 'info');
-          playVideoSource(player._lastWorkingVs, null, true);
-          return;
-        }
-
-        // Fallback 3: Intentar siguiente calidad disponible
-        const allSources = (state.currentVideo && state.currentVideo.video_sources) || [];
-        if (allSources.length > 1 && player._currentVs) {
-          const currentIdx = allSources.findIndex(s => s.url === player._currentVs.url);
-          if (currentIdx !== -1 && currentIdx + 1 < allSources.length) {
-            const nextVs = allSources[currentIdx + 1];
-            console.log('⚡ [AUTO-FAILOVER] Probando calidad alternativa:', nextVs.quality);
-            playVideoSource(nextVs, null, true);
-            return;
-          }
-        }
-
-        if (loader) loader.classList.add('hidden');
-        if (buffSpinner) buffSpinner.classList.add('hidden');
-        if (state.currentVideo) {
-          showVideoUnavailableState(state.currentVideo);
-        } else {
-          showToast('Error al reproducir el video. Prueba otra resolución.', 'error');
-        }
+        console.warn('[VELVET PLAYER] Error en stream de video:', player.error);
+        handleVideoPlaybackFailover();
       };
 
-      // Auto-hide de controles y puntero tras inactividad
-      stage.onmousemove = () => {
-        showControls();
-        resetControlsTimeout();
-      };
-
-      stage.onmouseleave = () => {
-        if (!player.paused && !videoIsHoveringControls && !videoIsSeeking) {
-          hideControls();
-        }
-      };
-
-      document.addEventListener('mousemove', (e) => {
-        const view = document.getElementById('video-view');
-        if (!view || view.classList.contains('hidden')) return;
-        if (document.fullscreenElement || stage.contains(e.target)) {
-          showControls();
-          resetControlsTimeout();
-        }
-      }, { passive: true });
-
+      // Hover y visibilidad en controles
+      const controlsBar = document.getElementById('video-controls-bar');
       if (controlsBar) {
         controlsBar.onmouseenter = () => {
           videoIsHoveringControls = true;
@@ -5410,195 +5516,127 @@
         };
       }
 
-      // Sistema Unificado de Click / Tap / Doble Toque (Gestos Fluidos Anti-Bugs en Android)
-      let videoLastTapTime = 0;
-      let videoLastTapX = 0;
-      let videoTapTimer = null;
-      let videoLastTouchEndTime = 0;
-
-      function handleVideoStageInteraction(e) {
-        // Suprimir clics sintéticos fantasma generados por Android Chrome tras touchend
-        if (e.type === 'click' && Date.now() - videoLastTouchEndTime < 450) {
-          return;
-        }
-        if (e.type === 'touchend') {
-          videoLastTouchEndTime = Date.now();
-        }
-
-        if (
-          e.target.closest('#video-controls-bar') ||
-          e.target.closest('#video-quality-menu') ||
-          e.target.closest('#video-speed-menu') ||
-          e.target.closest('#video-unavailable-banner') ||
-          e.target.closest('#video-center-play-btn button') ||
-          e.target.closest('#cinema-dimmer')
-        ) {
-          return;
-        }
-
-        const now = Date.now();
-        const rect = stage.getBoundingClientRect();
-        const clientX = (e.changedTouches && e.changedTouches.length > 0) ? e.changedTouches[0].clientX : e.clientX;
-        const clickX = clientX - rect.left;
-        const width = rect.width;
-
-        const timeDiff = now - videoLastTapTime;
-        const distDiff = Math.abs(clientX - videoLastTapX);
-
-        // Doble toque / doble clic rápido
-        if (timeDiff > 60 && timeDiff < 320 && distDiff < 80) {
-          clearTimeout(videoTapTimer);
-          videoTapTimer = null;
-          videoLastTapTime = 0;
-
-          if (clickX < width * 0.35) {
-            skipVideo(-10, e);
-          } else if (clickX > width * 0.65) {
-            skipVideo(10, e);
-          } else {
-            toggleVideoFullscreen(e);
-          }
-          return;
-        }
-
-        videoLastTapTime = now;
-        videoLastTapX = clientX;
-
-        // Toque simple: instantáneo en PC con mouse (0ms), con leve defer en touch
-        const isTouch = (e.type === 'touchend');
-        const tapDelay = isTouch ? 200 : 0;
-
-        clearTimeout(videoTapTimer);
-        videoTapTimer = setTimeout(() => {
-          videoTapTimer = null;
-          const bar = document.getElementById('video-controls-bar');
-          const isControlsHidden = bar && (bar.classList.contains('opacity-0') || bar.classList.contains('pointer-events-none'));
-          if (isControlsHidden) {
-            showControls();
-            resetControlsTimeout();
-          } else {
-            toggleVideoPlay(e);
-          }
-        }, tapDelay);
-      }
-
-      stage.onclick = handleVideoStageInteraction;
-      stage.addEventListener('touchend', (e) => {
-        if (
-          e.target.closest('#video-controls-bar') ||
-          e.target.closest('#video-quality-menu') ||
-          e.target.closest('#video-speed-menu') ||
-          e.target.closest('#video-center-play-btn button')
-        ) return;
-        handleVideoStageInteraction(e);
-      }, { passive: true });
-
-      // Barra de Scrubbing Interactiva con Pointer Events (Soporta Mouse y Touch a prueba de fallos)
-      let pendingSeekPct = null;
-
-      function updateScrubUI(pct) {
-        const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
-        const progBar = document.getElementById('video-progress-bar');
-        const pin = document.getElementById('video-scrubber-pin');
-        const curTime = document.getElementById('video-time-current');
-        const pctClamped = Math.max(0, Math.min(1, pct));
-        if (progBar) progBar.style.width = (pctClamped * 100) + '%';
-        if (pin) pin.style.left = (pctClamped * 100) + '%';
-        if (curTime && dur > 0) curTime.textContent = formatVideoTime(pctClamped * dur);
-      }
-
-      function handleScrubPointer(e) {
-        const dur = (Number.isFinite(player.duration) && player.duration > 0)
-          ? player.duration
-          : (player.seekable && player.seekable.length ? player.seekable.end(player.seekable.length - 1) : 0);
-        const rect = scrubContainer.getBoundingClientRect();
-        const clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
-        const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-        pendingSeekPct = pct;
-        updateScrubUI(pct);
-        if (timeTooltip && dur > 0) {
-          timeTooltip.textContent = formatVideoTime(pct * dur);
-          timeTooltip.style.left = (pct * 100) + '%';
-          timeTooltip.style.opacity = '1';
-        }
-      }
-
-      function commitSeek() {
-        if (!videoIsSeeking && pendingSeekPct === null) return;
-        const dur = (Number.isFinite(player.duration) && player.duration > 0)
-          ? player.duration
-          : (player.seekable && player.seekable.length ? player.seekable.end(player.seekable.length - 1) : 0);
-        if (pendingSeekPct !== null && dur > 0) {
-          player.currentTime = pendingSeekPct * dur;
-          pendingSeekPct = null;
-        }
-        videoIsSeeking = false;
-        if (timeTooltip) timeTooltip.style.opacity = '0';
-        resetControlsTimeout();
-      }
-
-      scrubContainer.onpointerdown = (e) => {
-        videoIsSeeking = true;
-        clearTimeout(videoHideControlsTimer);
+      stage.onmousemove = () => {
         showControls();
-        try { scrubContainer.setPointerCapture(e.pointerId); } catch(err) {}
-        handleScrubPointer(e);
+        resetControlsTimeout();
       };
 
-      scrubContainer.onpointermove = (e) => {
-        if (videoIsSeeking) {
-          handleScrubPointer(e);
-        } else {
-          // Mostrar tooltip previo al pasar cursor en PC
+      stage.onclick = (e) => {
+        if (e.target.closest('#video-controls-bar') || e.target.closest('#video-quality-menu') || e.target.closest('#video-speed-menu') || e.target.closest('#video-center-play-btn')) {
+          return;
+        }
+        toggleVideoPlay();
+      };
+
+      // Scrub bar interactiva con pointer events
+      if (scrubContainer) {
+        let isScrubbing = false;
+
+        const updateScrubPos = (clientX) => {
+          const rect = scrubContainer.getBoundingClientRect();
+          const pos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
           const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
-          if (dur > 0) {
+          const progBar = document.getElementById('video-progress-bar');
+          const pin = document.getElementById('video-scrubber-pin');
+          const curTime = document.getElementById('video-time-current');
+
+          if (progBar) progBar.style.width = (pos * 100) + '%';
+          if (pin) pin.style.left = (pos * 100) + '%';
+          if (timeTooltip) {
+            timeTooltip.style.left = (pos * 100) + '%';
+            timeTooltip.textContent = formatVideoTime(pos * dur);
+            timeTooltip.classList.remove('opacity-0');
+          }
+          if (curTime && isScrubbing) curTime.textContent = formatVideoTime(pos * dur);
+          return pos * dur;
+        };
+
+        scrubContainer.onpointerdown = (e) => {
+          e.stopPropagation();
+          isScrubbing = true;
+          videoIsSeeking = true;
+          scrubContainer.setPointerCapture(e.pointerId);
+          clearTimeout(videoHideControlsTimer);
+          updateScrubPos(e.clientX);
+        };
+
+        scrubContainer.onpointermove = (e) => {
+          if (isScrubbing) {
+            updateScrubPos(e.clientX);
+          } else {
             const rect = scrubContainer.getBoundingClientRect();
-            const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-            if (timeTooltip) {
-              timeTooltip.textContent = formatVideoTime(pct * dur);
-              timeTooltip.style.left = (pct * 100) + '%';
-              timeTooltip.style.opacity = '1';
+            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
+            if (timeTooltip && dur > 0) {
+              timeTooltip.style.left = (pos * 100) + '%';
+              timeTooltip.textContent = formatVideoTime(pos * dur);
+              timeTooltip.classList.remove('opacity-0');
             }
           }
-        }
-      };
+        };
 
-      scrubContainer.onpointerup = (e) => {
-        try { scrubContainer.releasePointerCapture(e.pointerId); } catch(err) {}
-        commitSeek();
-      };
+        scrubContainer.onpointerup = (e) => {
+          if (isScrubbing) {
+            isScrubbing = false;
+            videoIsSeeking = false;
+            try { scrubContainer.releasePointerCapture(e.pointerId); } catch(err) {}
+            const targetTime = updateScrubPos(e.clientX);
+            player.currentTime = targetTime;
+            resetControlsTimeout();
+          }
+        };
 
-      scrubContainer.onpointercancel = (e) => {
-        try { scrubContainer.releasePointerCapture(e.pointerId); } catch(err) {}
-        commitSeek();
-      };
+        scrubContainer.onpointerleave = () => {
+          if (!isScrubbing && timeTooltip) {
+            timeTooltip.classList.add('opacity-0');
+          }
+        };
+      }
 
-      window.addEventListener('pointerup', () => {
-        if (videoIsSeeking) commitSeek();
-      });
-      window.addEventListener('pointercancel', () => {
-        if (videoIsSeeking) commitSeek();
-      });
-
-      scrubContainer.onmouseleave = () => {
-        if (!videoIsSeeking && timeTooltip) timeTooltip.style.opacity = '0';
-      };
-
-      // Cerrar menús emergentes al hacer clic fuera
-      document.addEventListener('click', (e) => {
-        const qMenu = document.getElementById('video-quality-menu');
-        const sMenu = document.getElementById('video-speed-menu');
-        if (qMenu && !qMenu.classList.contains('hidden') && !e.target.closest('#video-btn-quality') && !e.target.closest('#video-quality-menu')) {
-          qMenu.classList.add('hidden');
-          resetControlsTimeout();
-        }
-        if (sMenu && !sMenu.classList.contains('hidden') && !e.target.closest('#video-btn-speed') && !e.target.closest('#video-speed-menu')) {
-          sMenu.classList.add('hidden');
-          resetControlsTimeout();
-        }
-      });
+      // Touch gestures en mobile (Double tap ±10s)
+      setupTouchGestures(stage, player);
     }
 
+    function setupTouchGestures(stage, player) {
+      if (!stage || !player) return;
+      let touchStartX = 0;
+      let touchStartTime = 0;
+      let lastTapTime = 0;
+
+      stage.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          touchStartX = e.touches[0].clientX;
+          touchStartTime = Date.now();
+        }
+      }, { passive: true });
+
+      stage.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        const elapsed = now - touchStartTime;
+        if (elapsed > 300) return;
+
+        const tapX = touchStartX;
+        const rect = stage.getBoundingClientRect();
+        const relX = tapX - rect.left;
+        const width = rect.width;
+
+        if (now - lastTapTime < 280) {
+          // Double Tap
+          if (relX < width * 0.4) {
+            skipVideo(-10);
+          } else if (relX > width * 0.6) {
+            skipVideo(10);
+          } else {
+            toggleVideoFullscreen();
+          }
+          lastTapTime = 0;
+        } else {
+          lastTapTime = now;
+        }
+      }, { passive: true });
+    }
+
+    // Auto-hide controls con timer exacto de 2.5s
     function showControls() {
       const controlsBar = document.getElementById('video-controls-bar');
       const stage = document.getElementById('video-stage');
@@ -5615,8 +5653,6 @@
       }
       if (player) {
         player.style.cursor = 'pointer';
-
-        // Sincronizar inmediatamente la barra y el tiempo actual
         const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
         if (dur > 0 && !videoIsSeeking) {
           const pct = Math.max(0, Math.min(100, (player.currentTime / dur) * 100));
@@ -5679,6 +5715,7 @@
         showControls();
         return;
       }
+      // Exactamente 2.5 segundos (2500ms) de inactividad
       videoHideControlsTimer = setTimeout(() => {
         const p = document.getElementById('html5-video-player');
         const qM = document.getElementById('video-quality-menu');
@@ -5688,7 +5725,7 @@
         if (p && !p.paused && !videoIsHoveringControls && !videoIsSeeking) {
           hideControls();
         }
-      }, 3500);
+      }, 2500);
     }
 
     function toggleVideoPlay(e) {
@@ -5698,7 +5735,6 @@
 
       if (player.paused) {
         player.play().catch(e => {
-          console.log('Play blocked:', e);
           const centerPlay = document.getElementById('video-center-play-btn');
           if (centerPlay) centerPlay.classList.remove('hidden');
         });
@@ -5724,7 +5760,6 @@
     }
 
     let videoSkipBadgeTimer = null;
-
     function showSkipBadge(isRight) {
       const badge = document.getElementById(isRight ? 'video-skip-right-badge' : 'video-skip-left-badge');
       const otherBadge = document.getElementById(isRight ? 'video-skip-left-badge' : 'video-skip-right-badge');
@@ -5776,8 +5811,6 @@
       resetControlsTimeout();
     }
 
-    let videoPreviousVolume = 1;
-
     function setVideoVolume(val, e) {
       if (e && e.stopPropagation) e.stopPropagation();
       const player = document.getElementById('html5-video-player');
@@ -5825,11 +5858,11 @@
       if (slider) slider.value = muted ? 0 : vol;
       if (!icon) return;
       if (muted || vol <= 0) {
-        icon.className = 'fa-solid fa-volume-xmark text-sm text-rose-400';
+        icon.className = 'fa-solid fa-volume-xmark text-xs text-rose-400';
       } else if (vol < 0.5) {
-        icon.className = 'fa-solid fa-volume-low text-sm text-lav';
+        icon.className = 'fa-solid fa-volume-low text-xs text-white/70';
       } else {
-        icon.className = 'fa-solid fa-volume-high text-sm text-white';
+        icon.className = 'fa-solid fa-volume-high text-xs text-white';
       }
     }
 
@@ -5839,16 +5872,17 @@
       if (!player) return;
 
       player.playbackRate = speed;
+      localStorage.setItem('velvet_video_speed', speed);
       const label = document.getElementById('video-speed-label');
       if (label) label.textContent = `${speed}x`;
 
       document.querySelectorAll('.speed-opt').forEach(btn => {
         const s = parseFloat(btn.getAttribute('data-speed'));
         if (s === speed) {
-          btn.className = 'px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt font-bold text-hot cursor-pointer';
+          btn.className = 'px-2.5 py-1 rounded-lg text-left bg-white/[0.08] text-[#ff2d95] font-semibold transition-colors flex items-center justify-between speed-opt';
           btn.innerHTML = `${speed === 1 ? '1.0x (Normal)' : speed + 'x'} <i class="fa-solid fa-check text-[10px]"></i>`;
         } else {
-          btn.className = 'px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between speed-opt cursor-pointer';
+          btn.className = 'px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt';
           btn.innerHTML = `${s === 1 ? '1.0x (Normal)' : s + 'x'}`;
         }
       });
@@ -5896,23 +5930,26 @@
     function toggleTheaterMode(e) {
       if (e && e.stopPropagation) e.stopPropagation();
       const stage = document.getElementById('video-stage');
-      const main = document.querySelector('#video-view main');
-      if (!stage) return;
-      const isTheater = stage.classList.contains('theater-mode');
+      const primaryCol = document.getElementById('video-primary-column');
+      const sidebarCol = document.getElementById('video-sidebar-column');
+      const bottomSec = document.getElementById('video-bottom-related-section');
+      if (!stage || !primaryCol) return;
+
+      const isTheater = primaryCol.classList.contains('lg:col-span-12');
       if (isTheater) {
-        stage.classList.remove('theater-mode');
-        if (main) {
-          main.classList.remove('max-w-none', 'px-1');
-          main.classList.add('max-w-6xl', 'px-2', 'sm:px-4', 'lg:px-6');
-        }
+        primaryCol.classList.remove('lg:col-span-12');
+        primaryCol.classList.add('lg:col-span-8');
+        if (sidebarCol) sidebarCol.classList.remove('hidden');
+        if (bottomSec) bottomSec.classList.add('hidden');
+        localStorage.setItem('velvet_theater_mode', 'false');
         showVideoHud('fa-film', 'Modo Normal');
       } else {
-        stage.classList.add('theater-mode');
-        if (main) {
-          main.classList.remove('max-w-6xl', 'px-2', 'sm:px-4', 'lg:px-6');
-          main.classList.add('max-w-none', 'px-1');
-        }
-        showVideoHud('fa-film', 'Modo Cine Activado');
+        primaryCol.classList.remove('lg:col-span-8');
+        primaryCol.classList.add('lg:col-span-12');
+        if (sidebarCol) sidebarCol.classList.add('hidden');
+        if (bottomSec) bottomSec.classList.remove('hidden');
+        localStorage.setItem('velvet_theater_mode', 'true');
+        showVideoHud('fa-film', 'Modo Cine');
       }
       resetControlsTimeout();
     }
@@ -5926,7 +5963,6 @@
         document.exitPictureInPicture().catch(() => {});
       } else if (player.requestPictureInPicture) {
         player.requestPictureInPicture().catch((err) => {
-          console.warn('[PiP]', err);
           showToast('Modo PiP no soportado o bloqueado en este navegador', 'info');
         });
       } else if (player.webkitSetPresentationMode) {
@@ -5974,11 +6010,9 @@
           try { stage.webkitRequestFullscreen(); } catch (err) {}
         } else if (player.webkitEnterFullscreen) {
           try { player.webkitEnterFullscreen(); } catch (err) {}
-        } else if (player.requestFullscreen) {
-          try { player.requestFullscreen().catch(() => {}); } catch (err) {}
         }
 
-        if (fsIcon) fsIcon.className = 'fa-solid fa-compress text-sm';
+        if (fsIcon) fsIcon.className = 'fa-solid fa-compress text-xs';
         if (fsBtn) fsBtn.title = 'Salir de Pantalla Completa (F)';
         showVideoHud('fa-expand', 'Pantalla Completa');
       } else {
@@ -5994,16 +6028,10 @@
             if (exitP && typeof exitP.catch === 'function') exitP.catch(() => {});
           } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
-          } else if (document.mozCancelFullScreen) {
-            document.mozCancelFullScreen();
-          } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-          } else if (player.webkitExitFullscreen) {
-            player.webkitExitFullscreen();
           }
         } catch (err) {}
 
-        if (fsIcon) fsIcon.className = 'fa-solid fa-expand text-sm';
+        if (fsIcon) fsIcon.className = 'fa-solid fa-expand text-xs';
         if (fsBtn) fsBtn.title = 'Pantalla Completa (F)';
         showVideoHud('fa-compress', 'Pantalla Normal');
       }
@@ -6019,55 +6047,45 @@
         );
         const fsIcon = document.getElementById('video-fullscreen-icon');
         const fsBtn = document.getElementById('video-btn-fullscreen');
-        if (fsIcon) fsIcon.className = isFs ? 'fa-solid fa-compress text-sm' : 'fa-solid fa-expand text-sm';
+        if (fsIcon) fsIcon.className = isFs ? 'fa-solid fa-compress text-xs' : 'fa-solid fa-expand text-xs';
         if (fsBtn) fsBtn.title = isFs ? 'Salir de Pantalla Completa (F)' : 'Pantalla Completa (F)';
-        if (!isFs && screen.orientation && typeof screen.orientation.unlock === 'function') {
-          try {
-            screen.orientation.unlock();
-          } catch (err) {}
-        }
       });
     });
 
     function showVideoHud(iconClass, text) {
-
       const toast = document.getElementById('video-hud-toast');
-
       const icon = document.getElementById('video-hud-icon');
-
       const label = document.getElementById('video-hud-text');
-
       if (!toast || !icon || !label) return;
 
-      icon.className = `fa-solid ${iconClass} text-hot`;
-
+      icon.className = `fa-solid ${iconClass} text-[#ff2d95]`;
       label.textContent = text;
-
       toast.classList.remove('opacity-0');
 
       clearTimeout(videoHudTimer);
-
       videoHudTimer = setTimeout(() => toast.classList.add('opacity-0'), 1500);
+    }
 
+    function openShortcutsModal() {
+      const modal = document.getElementById('video-shortcuts-modal');
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeShortcutsModal(e) {
+      if (e && e.target && e.target.id !== 'video-shortcuts-modal' && !e.target.closest('button')) return;
+      const modal = document.getElementById('video-shortcuts-modal');
+      if (modal) modal.classList.add('hidden');
     }
 
     function copyCurrentVideoUrl() {
-
-      navigator.clipboard.writeText(window.location.href);
-
-      showToast('Enlace directo del video copiado al portapapeles', 'info');
-
+      try {
+        navigator.clipboard.writeText(window.location.href);
+        showToast(UI_TEXT.copied, 'info');
+      } catch (e) {
+        showToast('Enlace listo en la barra de direcciones', 'info');
+      }
     }
 
-    // =======================================================================
-
-    // APERTURA Y CONTROL DE REPRODUCCIÓN ULTRA-RÁPIDA
-
-    // =======================================================================
-
-    // =======================================================================
-    // CONTROL DE ACCESO: ACCESO TOTAL (PATREON O LLAVE) vs 75% GRATIS (25% VIP)
-    // =======================================================================
     function hasFullAccess() {
       if (!state.currentUser) return false;
       if (state.currentUser.role === 'admin' || state.currentUser.role === 'member') return true;
@@ -6076,21 +6094,12 @@
     }
 
     function isItemLockedForUser(it, idx = null) {
-      // 1. Usuarios con cuenta activa (Patreon, VIP o Admin) tienen ACCESO TOTAL (100% libre)
-      if (hasFullAccess()) {
-        return false;
-      }
+      if (hasFullAccess()) return false;
       if (!it) return false;
-
-      // 2. Patron alternado no monotono ("uno si, uno no", ~50% libre y 50% VIP Premium)
-      // Grilla PC (4 columnas): Fila 1 [Free, VIP, Free, VIP], Fila 2 [VIP, Free, VIP, Free]
-      // Grilla Android (2 columnas): Fila 1 [Free, VIP], Fila 2 [Free, VIP], Fila 3 [VIP, Free], Fila 4 [VIP, Free]
       if (typeof idx === 'number' && idx >= 0) {
         const pattern = [false, true, false, true, true, false, true, false];
         return pattern[idx % pattern.length];
       }
-
-      // 3. Fallback determinista por ID si no hay indice
       let num = parseInt(it.id, 10);
       if (!num || isNaN(num)) {
         const str = String(it.source || '') + ':' + String(it.source_id || it.title || '');
@@ -6126,7 +6135,6 @@
       if (modal) modal.classList.add('hidden');
     }
 
-    
     function showVideoUnavailableState(item, customMsg = null) {
       const stage = document.getElementById('video-stage');
       const loader = document.getElementById('video-player-loader');
@@ -6135,30 +6143,32 @@
       if (centerPlay) centerPlay.classList.add('hidden');
       const buffSpinner = document.getElementById('video-buffering-spinner');
       if (buffSpinner) buffSpinner.classList.add('hidden');
+      stopFaviconPulse();
+      finishNavProgress();
 
       let banner = document.getElementById('video-unavailable-banner');
       if (!banner) {
         banner = document.createElement('div');
         banner.id = 'video-unavailable-banner';
-        banner.className = 'absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/92 backdrop-blur-md z-30 text-center select-none';
+        banner.className = 'absolute inset-0 flex flex-col items-center justify-center p-6 bg-[#0a0610]/95 backdrop-blur-md z-30 text-center select-none';
         stage.appendChild(banner);
       }
       banner.classList.remove('hidden');
-      const desc = customMsg || 'El servidor de origen no respondió a tiempo. Tus preferencias se mantienen intactas.';
+      const desc = customMsg || UI_TEXT.sourceUnavailable;
       banner.innerHTML = `
-        <div class="w-16 h-16 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 text-2xl mb-4 shadow-[0_0_30px_rgba(244,63,94,0.3)] animate-pulse">
+        <div class="w-14 h-14 rounded-full bg-[#ff2d95]/15 border border-[#ff2d95]/30 flex items-center justify-center text-[#ff2d95] text-xl mb-4 shadow-[0_0_25px_rgba(255,45,149,0.25)] animate-pulse">
           <i class="fa-solid fa-triangle-exclamation"></i>
         </div>
-        <h3 class="text-base sm:text-lg font-black text-white mb-1.5">Fuente de Video No Disponible</h3>
-        <p class="text-xs text-lav/70 max-w-md mb-5 leading-relaxed">
+        <h3 class="text-base sm:text-lg font-medium text-white mb-1.5 font-display">Conexión no disponible</h3>
+        <p class="text-xs text-white/60 max-w-md mb-5 leading-relaxed">
           ${escapeHtml(desc)}
         </p>
         <div class="flex items-center gap-3">
-          <button onclick="retryCurrentVideo()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-hot to-neon hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-hot-glow transition-all cursor-pointer">
-            <i class="fa-solid fa-rotate-right"></i> Reintentar Conexión
+          <button onclick="retryCurrentVideo()" class="px-4 py-2 rounded-xl bg-[#ff2d95] hover:opacity-90 text-white font-semibold text-xs flex items-center gap-2 shadow-[0_0_15px_rgba(255,45,149,0.4)] transition-all cursor-pointer">
+            <i class="fa-solid fa-rotate-right"></i> ${UI_TEXT.retry}
           </button>
-          <button onclick="closeVideoPlayer()" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-lav hover:text-white font-bold text-xs border border-white/20 transition-all cursor-pointer">
-            <i class="fa-solid fa-arrow-left"></i> Volver al Catálogo
+          <button onclick="closeVideoPlayer()" class="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/80 hover:text-white font-medium text-xs border border-white/10 transition-all cursor-pointer">
+            <i class="fa-solid fa-arrow-left"></i> ${UI_TEXT.back}
           </button>
         </div>
       `;
@@ -6168,8 +6178,38 @@
       const banner = document.getElementById('video-unavailable-banner');
       if (banner) banner.classList.add('hidden');
       if (state.currentVideo) {
+        videoFailoverAttempts = 0;
         openVideoPlayer(state.currentVideo.source, state.currentVideo.source_id, state.currentVideo.title, state.currentVideo.cover_url, state.currentVideo.url, false, state.currentVideo.id);
       }
+    }
+
+    // Manejo de Failover Automático con Reintentos Exponenciales (1s, 2s, 4s)
+    function handleVideoPlaybackFailover() {
+      const player = document.getElementById('html5-video-player');
+      const allSources = (state.currentVideo && state.currentVideo.video_sources) || [];
+
+      if (videoFailoverAttempts < MAX_FAILOVER_ATTEMPTS) {
+        videoFailoverAttempts++;
+        const backoffMs = Math.pow(2, videoFailoverAttempts - 1) * 1000;
+        console.warn(`[VELVET FAILOVER] Intento ${videoFailoverAttempts} en ${backoffMs}ms...`);
+        showVideoHud('fa-rotate', `Reintentando en ${backoffMs/1000}s...`);
+
+        setTimeout(() => {
+          if (allSources.length > 1) {
+            const nextSrc = allSources[videoFailoverAttempts % allSources.length];
+            playVideoSource(nextSrc, null, true);
+          } else if (player && player._currentVs) {
+            const ref = state.currentVideo?.url || '';
+            const proxyUrl = getStealthStreamUrl(player._currentVs.url, ref);
+            player.src = proxyUrl;
+            player.load();
+            player.play().catch(() => {});
+          }
+        }, backoffMs);
+        return;
+      }
+
+      showVideoUnavailableState(state.currentVideo, 'No se pudo conectar con los servidores de video tras varios intentos.');
     }
 
     function setupVideoQualityButtons(sources) {
@@ -6180,10 +6220,10 @@
 
       sources.forEach((vs, idx) => {
         const qBtn = document.createElement('button');
-        qBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+        qBtn.className = `px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
           idx === 0
-            ? 'bg-gradient-to-r from-hot to-neon text-white border-hot shadow-hot-glow active-quality'
-            : 'bg-glass text-lav border-neon/30 hover:border-hot'
+            ? 'bg-[#ff2d95] text-white border-[#ff2d95] shadow-[0_0_12px_rgba(255,45,149,0.4)]'
+            : 'bg-white/[0.04] text-white/70 border-white/10 hover:border-[#ff2d95]/40 hover:text-white'
         }`;
         qBtn.textContent = vs.quality || `Opción ${idx + 1}`;
         qBtn.onclick = (e) => {
@@ -6193,16 +6233,16 @@
         if (qualitiesContainer) qualitiesContainer.appendChild(qBtn);
 
         const optBtn = document.createElement('button');
-        optBtn.className = `px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white transition-colors flex items-center justify-between ${
-          idx === 0 ? 'text-hot font-bold' : 'text-lav'
+        optBtn.className = `px-2.5 py-1.5 rounded-lg text-left hover:bg-white/[0.08] transition-colors flex items-center justify-between ${
+          idx === 0 ? 'text-[#ff2d95] font-semibold' : 'text-white/80'
         }`;
-        optBtn.innerHTML = `<span>${vs.quality || 'Opción ' + (idx + 1)}</span> ${idx === 0 ? '<i class="fa-solid fa-check text-[10px]"></i>' : ''}`;
+        optBtn.innerHTML = `<span>${vs.quality || 'Opción ' + (idx + 1)}</span> ${idx === 0 ? '<i class="fa-solid fa-check text-[10px] text-[#ff2d95]"></i>' : ''}`;
         optBtn.onclick = (e) => {
           if (e) e.stopPropagation();
           playVideoSource(vs, qBtn, true);
           const qMenu = document.getElementById('video-quality-menu');
           if (qMenu) qMenu.classList.add('hidden');
-          resetVideoControlsTimeout();
+          resetControlsTimeout();
         };
         if (qualityOptions) qualityOptions.appendChild(optBtn);
       });
@@ -6213,6 +6253,9 @@
         openProUpgradeModal({ id: itemId, source, sourceId, title: initialTitle, media_type: 'video' });
         return;
       }
+
+      startNavProgress();
+      startFaviconPulse();
 
       const prevBanner = document.getElementById('video-unavailable-banner');
       if (prevBanner) prevBanner.classList.add('hidden');
@@ -6237,11 +6280,9 @@
 
       stopHeroAutoPlay();
       view.classList.remove('hidden');
-      videoStallCount = 0;
-      startTurboBufferWorker();
       loader.classList.remove('hidden');
+      videoFailoverAttempts = 0;
 
-      if (videoTurboPrefetchTimer) clearInterval(videoTurboPrefetchTimer);
       if (hlsInstance) {
         try { hlsInstance.destroy(); } catch(e) {}
         hlsInstance = null;
@@ -6258,9 +6299,9 @@
       player.loop = false;
       const loopBtn = document.getElementById('video-loop-toggle');
       if (loopBtn) {
-        loopBtn.className = 'px-3 py-1 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/25 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer';
+        loopBtn.className = 'px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 transition-all font-medium flex items-center gap-1.5 cursor-pointer';
       }
-      srcBadge.innerHTML = '<i class="fa-solid fa-crown text-amber-400"></i> Velvet VIP';
+      srcBadge.innerHTML = 'Velvet VIP';
 
       window.scrollTo(0, 0);
 
@@ -6287,7 +6328,7 @@
         state.currentVideo.media_type = 'video';
         titleEl.textContent = cachedVid.title;
         const displayBadge = getReliableBadge(cachedVid);
-        srcBadge.innerHTML = `<i class="fa-solid fa-bolt text-hot"></i> ${displayBadge}`;
+        srcBadge.innerHTML = displayBadge || 'Velvet VIP';
         updateVideoFavIcon();
         recordVideoHistory(cachedVid);
         if (pushRoute) {
@@ -6317,7 +6358,7 @@
         titleEl.textContent = item.title;
 
         const displayBadge = getReliableBadge(item);
-        srcBadge.innerHTML = `<i class="fa-solid fa-bolt text-hot"></i> ${displayBadge}`;
+        srcBadge.innerHTML = displayBadge || 'Velvet VIP';
 
         updateVideoFavIcon();
         recordVideoHistory(item);
@@ -6326,7 +6367,6 @@
         const savedProg = state.progress[vKey];
         if (savedProg && savedProg.currentTime > 5 && !savedProg.completed && savedProg.duration && savedProg.currentTime < (savedProg.duration - 15)) {
           videoPendingSeekTime = savedProg.currentTime;
-          console.log('%c⚡ [RESUME VIDEO] Reanudando automáticamente en minuto:', 'color: #ff2a85; font-weight: bold;', formatVideoTime(savedProg.currentTime));
         }
 
         if (pushRoute) {
@@ -6343,7 +6383,6 @@
           return;
         }
 
-        // Priorizar streams directos MP4 sobre HLS para reproducción nativa instantánea (<300ms)
         sources.sort((a, b) => {
           const aIsMp4 = (a.format === 'mp4' || (a.url && (a.url.includes('.mp4') || a.url.includes('format=mp4'))) || (a.quality && !a.format?.includes('m3u8') && a.quality.includes('1080p'))) ? 1 : 0;
           const bIsMp4 = (b.format === 'mp4' || (b.url && (b.url.includes('.mp4') || b.url.includes('format=mp4'))) || (b.quality && !b.format?.includes('m3u8') && b.quality.includes('1080p'))) ? 1 : 0;
@@ -6367,38 +6406,31 @@
       }
     }
 
-    let hlsInstance = null;
-
     function playVideoSource(vs, clickedBtn = null, preserveTime = false) {
       const player = document.getElementById('html5-video-player');
       const loader = document.getElementById('video-player-loader');
       const qualityBadge = document.getElementById('video-player-quality-badge');
       const qualityLabel = document.getElementById('video-quality-label');
-      
       const buffSpinner = document.getElementById('video-buffering-spinner');
 
       if (!player) return;
 
-      // Guardar fuente previa funcional para failover sin pantalla negra
       if (!player._lastWorkingVs && player._currentVs) {
         player._lastWorkingVs = player._currentVs;
       }
 
-      let targetSeek = 0;
       if (preserveTime && player.currentTime > 0) {
-        targetSeek = player.currentTime;
         videoPendingSeekTime = player.currentTime;
       }
 
-      // Sincronizar botones en barra inferior y opciones del popup
       const targetLabel = (vs.quality || '1080p').toLowerCase().replace(' ', '');
       document.querySelectorAll('#video-qualities-buttons button').forEach((b) => {
         const bText = b.textContent.toLowerCase().replace(' ', '');
         const isActive = (clickedBtn && b === clickedBtn) || bText.startsWith(targetLabel) || targetLabel.startsWith(bText);
         if (isActive) {
-          b.className = 'px-2.5 py-1 rounded-lg text-xs font-bold border transition-all bg-gradient-to-r from-hot to-neon text-white border-hot shadow-hot-glow active-quality cursor-pointer';
+          b.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all bg-[#ff2d95] text-white border-[#ff2d95] shadow-[0_0_12px_rgba(255,45,149,0.4)] cursor-pointer';
         } else {
-          b.className = 'px-2.5 py-1 rounded-lg text-xs font-bold border transition-all bg-glass text-lav border-neon/30 hover:border-hot cursor-pointer';
+          b.className = 'px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all bg-white/[0.04] text-white/70 border-white/10 hover:border-[#ff2d95]/40 hover:text-white cursor-pointer';
         }
       });
 
@@ -6407,24 +6439,20 @@
         const isActive = oText.startsWith(targetLabel) || targetLabel.startsWith(oText);
         const rawLabel = opt.querySelector('span')?.textContent || opt.textContent.trim();
         if (isActive) {
-          opt.className = 'px-2.5 py-1.5 rounded-lg text-left bg-hot/20 text-white font-bold transition-colors flex items-center justify-between';
-          opt.innerHTML = `<span>${rawLabel}</span> <i class="fa-solid fa-check text-[10px] text-hot"></i>`;
+          opt.className = 'px-2.5 py-1.5 rounded-lg text-left bg-white/[0.08] text-[#ff2d95] font-semibold transition-colors flex items-center justify-between';
+          opt.innerHTML = `<span>${rawLabel}</span> <i class="fa-solid fa-check text-[10px] text-[#ff2d95]"></i>`;
         } else {
-          opt.className = 'px-2.5 py-1.5 rounded-lg text-left hover:bg-hot/20 hover:text-white text-lav transition-colors flex items-center justify-between';
+          opt.className = 'px-2.5 py-1.5 rounded-lg text-left hover:bg-white/[0.08] text-white/80 transition-colors flex items-center justify-between';
           opt.innerHTML = `<span>${rawLabel}</span>`;
         }
       });
 
-      const qText = vs.quality || '1080p HD';
+      const qText = vs.quality || '1080p';
       if (qualityBadge) qualityBadge.textContent = qText;
       if (qualityLabel) qualityLabel.textContent = qText;
 
       const refUrl = (state.currentVideo && state.currentVideo.url) ? state.currentVideo.url : '';
 
-      // ANTI-PANTALLA NEGRA:
-      // Si estamos cambiando de calidad durante reproducción (preserveTime=true),
-      // NUNCA activamos el loader opaco (bg-black/92). Dejamos visible el fotograma actual
-      // y solo mostramos el spinner suave centrado mientras descarga la nueva calidad.
       if (preserveTime) {
         if (loader) loader.classList.add('hidden');
         if (buffSpinner) buffSpinner.classList.remove('hidden');
@@ -6432,7 +6460,6 @@
         if (loader) loader.classList.remove('hidden');
       }
 
-      // Limpiar watchdog previo
       if (videoWatchdogTimer) {
         clearTimeout(videoWatchdogTimer);
         videoWatchdogTimer = null;
@@ -6445,9 +6472,9 @@
         }
         if (loader) loader.classList.add('hidden');
         if (buffSpinner) buffSpinner.classList.add('hidden');
+        stopFaviconPulse();
       };
 
-      // Limpiar HLS anterior si existía
       if (hlsInstance) {
         try {
           hlsInstance.stopLoad();
@@ -6457,7 +6484,6 @@
         hlsInstance = null;
       }
 
-      // Servidores CDN con streaming directo nativo sin proxy (OVH S3, AnyPorn, AlotPorn, RedPorn, MP4s)
       const isDirectClient = vs.url.includes('anyporn.com') ||
         vs.url.includes('v-acctoken') ||
         vs.url.includes('alotporn.com') ||
@@ -6471,102 +6497,65 @@
         vs.url.includes('.mp4');
 
       const streamUrl = getStealthStreamUrl(vs.url, refUrl);
-      
 
-      console.log('%c🚀 [STREAM] Cargando calidad de video:', 'color: #10b981; font-weight: bold;', vs.quality, streamUrl);
-
-      // WATCHDOG SEGURO ANTI-DEADLOCK (2.2s failover rápido sin bloqueos)
+      // Watchdog Inteligente (8 segundos sin respuesta)
       videoWatchdogTimer = setTimeout(() => {
         if (player.readyState >= 2 || !player.paused) {
           clearVideoWatchdog();
           return;
         }
-
-        console.warn('⚡ [WATCHDOG] La resolución tardó en responder. Restaurando reproducción fluida...');
-        if (isDirectClient && !player.src.includes('/api/video/stream')) {
-          const proxyUrl = getStealthStreamUrl(vs.url, refUrl);
-          player.src = proxyUrl;
-          player.load();
-          player.play().catch(() => {});
-        } else if (player._lastWorkingVs && player._lastWorkingVs.url !== vs.url) {
-          showToast('Esta calidad no respondió a tiempo. Restaurando calidad previa...', 'info');
-          playVideoSource(player._lastWorkingVs, null, true);
-        } else {
-          clearVideoWatchdog();
-        }
-      }, 2200);
+        console.warn('⚡ [WATCHDOG] Tiempo de respuesta excedido (8s). Ejecutando failover suave...');
+        handleVideoPlaybackFailover();
+      }, 8000);
 
       const isHls = (vs.format && (vs.format.toLowerCase() === 'hls' || vs.format.toLowerCase() === 'm3u8')) ||
         vs.url.includes('.m3u8') ||
-        vs.url.includes('media=hls') ||
-        vs.url.includes('media%3Dhls') ||
-        vs.url.includes('__TPL_') ||
-        (state.currentVideo && (state.currentVideo.source === 'redporn' || vs.url.includes('redporn.porn')));
+        vs.url.includes('/master.m3u8') ||
+        vs.url.includes('/playlist.m3u8');
 
       player._currentVs = vs;
 
-      // Restauración segura de posición de reproducción
       const applySeekSafely = () => {
-        if (targetSeek > 0) {
+        if (videoPendingSeekTime !== null && videoPendingSeekTime > 0) {
           try {
-            player.currentTime = targetSeek;
-          } catch (err) {
-            console.warn('[SEEK TIME ERROR]', err);
-          }
-          targetSeek = 0;
-          videoPendingSeekTime = 0;
+            player.currentTime = videoPendingSeekTime;
+          } catch(e) {}
+          videoPendingSeekTime = null;
         }
       };
 
-      if (isHls && window.Hls && Hls.isSupported()) {
+      if (isHls && window.Hls && Hls.isSupported() && !player.canPlayType('application/vnd.apple.mpegurl')) {
         hlsInstance = new Hls({
+          capLevelToPlayerSize: true,
+          autoStartLoad: true,
           enableWorker: true,
           lowLatencyMode: false,
-          backBufferLength: 90,
-          maxBufferLength: 60,
-          maxMaxBufferLength: 120,
-          startPosition: targetSeek > 0 ? targetSeek : -1
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+          backBufferLength: 15
         });
 
         hlsInstance.loadSource(streamUrl);
         hlsInstance.attachMedia(player);
 
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           clearVideoWatchdog();
           applySeekSafely();
           player.play().then(() => {
             player._lastWorkingVs = vs;
-          }).catch(e => console.log('Autoplay diferido:', e));
+          }).catch(() => {});
         });
 
-        hlsInstance.on(Hls.Events.ERROR, function(event, data) {
-          console.warn('[HLS ERROR]', data);
+        hlsInstance.on(Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
-            switch(data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                hlsInstance.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                hlsInstance.recoverMediaError();
-                break;
-              default:
-                try { hlsInstance.destroy(); } catch(e) {}
-                hlsInstance = null;
-                if (player._lastWorkingVs && player._lastWorkingVs.url !== vs.url) {
-                  showToast('Error en stream HLS, volviendo a calidad previa...', 'info');
-                  playVideoSource(player._lastWorkingVs, null, true);
-                  return;
-                }
-                clearVideoWatchdog();
-                if (state.currentVideo) {
-                  showVideoUnavailableState(state.currentVideo, 'No se pudo reproducir este formato. Prueba otra opción de calidad.');
-                }
-                break;
-            }
+            console.warn('[HLS FATAL ERROR]', data);
+            clearVideoWatchdog();
+            handleVideoPlaybackFailover();
           }
         });
+
       } else {
-        // Stream MP4 nativo de alta velocidad con hardware decoding instantáneo (<300ms)
+        player.pause();
         player.removeAttribute('src');
         player.preload = 'auto';
         player.src = streamUrl;
@@ -6591,75 +6580,31 @@
     let cinemaLightsOn = true;
 
     function toggleCinemaLights() {
-
       cinemaLightsOn = !cinemaLightsOn;
-
       const dimmer = document.getElementById('cinema-dimmer');
-
       const lightIcon = document.getElementById('cinema-light-icon');
-
       const stage = document.getElementById('video-stage');
 
-      const glow = document.getElementById('video-ambient-glow');
-
       if (!cinemaLightsOn) {
-
         if (dimmer) {
-
           dimmer.classList.remove('opacity-0', 'pointer-events-none');
-
           dimmer.classList.add('opacity-90');
-
         }
-
-        if (stage) stage.classList.add('z-30', 'relative', 'shadow-[0_0_80px_rgba(168,85,247,0.5)]');
-
-        if (glow) {
-
-          glow.classList.add('z-20', 'ambient-glow-active');
-
-          glow.style.opacity = '1';
-
-        }
-
-        if (lightIcon) lightIcon.className = 'fa-regular fa-lightbulb text-lav/60';
-
-        showToast('Modo Cine activado: Luces apagadas', 'info');
-
+        if (stage) stage.classList.add('z-30', 'relative');
+        if (lightIcon) lightIcon.className = 'fa-regular fa-lightbulb text-white/50';
       } else {
-
         if (dimmer) {
-
           dimmer.classList.add('opacity-0', 'pointer-events-none');
-
           dimmer.classList.remove('opacity-90');
-
         }
-
-        if (stage) stage.classList.remove('z-30', 'shadow-[0_0_80px_rgba(168,85,247,0.5)]');
-
-        if (glow) {
-
-          glow.classList.remove('z-20', 'ambient-glow-active');
-
-          glow.style.opacity = '';
-
-        }
-
-        if (lightIcon) lightIcon.className = 'fa-solid fa-lightbulb text-yellow-400';
-
-        showToast('Luces encendidas', 'info');
-
+        if (stage) stage.classList.remove('z-30');
+        if (lightIcon) lightIcon.className = 'fa-solid fa-lightbulb text-amber-300';
       }
-
     }
 
     function toggleVideoLoop() {
-
       const player = document.getElementById('html5-video-player');
-
       const btn = document.getElementById('video-loop-toggle');
-
       if (!player) return;
 
       player.loop = !player.loop;
@@ -6669,28 +6614,21 @@
       }
 
       if (btn) {
-
         if (player.loop) {
-
-          btn.className = 'px-3 py-1 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-white border border-pink-500 shadow-hot-glow transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer';
-
-          showToast('Repetición en bucle activada', 'info');
-
+          btn.className = 'px-3 py-1.5 rounded-xl bg-[#ff2d95] text-white border border-[#ff2d95] shadow-[0_0_15px_rgba(255,45,149,0.4)] transition-all font-semibold flex items-center gap-1.5 cursor-pointer';
+          showToast('Repetición activada', 'info');
         } else {
-
-          btn.className = 'px-3 py-1 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/25 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer';
-
+          btn.className = 'px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 transition-all font-medium flex items-center gap-1.5 cursor-pointer';
           showToast('Reproducción normal', 'info');
-
         }
-
       }
-
     }
 
     function closeVideoPlayer(pushRoute = true) {
-
       if (!cinemaLightsOn) toggleCinemaLights();
+      stopAmbilightLoop();
+      stopFaviconPulse();
+      finishNavProgress();
 
       flushStorageNow();
 
@@ -6700,7 +6638,6 @@
       }
 
       const player = document.getElementById('html5-video-player');
-      if (videoTurboPrefetchTimer) clearInterval(videoTurboPrefetchTimer);
       if (videoWatchdogTimer) {
         clearTimeout(videoWatchdogTimer);
         videoWatchdogTimer = null;
@@ -6738,10 +6675,8 @@
       if (gHeader) gHeader.classList.remove('hidden');
 
       startHeroAutoPlay();
-
       state.currentVideo = null;
 
-      // Restaurar posición de scroll previa en el feed
       if (typeof state.savedHomeScroll === 'number') {
         requestAnimationFrame(() => {
           window.scrollTo({ top: state.savedHomeScroll, behavior: 'instant' });
@@ -6766,28 +6701,19 @@
     }
 
     function updateVideoFavIcon() {
-
       const icon = document.getElementById('video-player-fav-icon');
-
       if (!icon || !state.currentVideo) return;
-
       const isFav = isFavorite(state.currentVideo.source, state.currentVideo.source_id);
-
-      icon.className = isFav ? 'fa-solid fa-heart text-hot' : 'fa-regular fa-heart text-lav';
-
+      icon.className = isFav ? 'fa-solid fa-heart text-[#ff2d95]' : 'fa-regular fa-heart text-white/70';
     }
 
     function toggleCurrentVideoFavorite() {
-
       if (!state.currentVideo) return;
-
       toggleFavorite(state.currentVideo);
-
       updateVideoFavIcon();
-
     }
 
-        let _cloudProgDebounceTimer = null;
+    let _cloudProgDebounceTimer = null;
     function syncProgressToCloudDebounced(item, progressData) {
       if (!state.currentUser || !item) return;
       clearTimeout(_cloudProgDebounceTimer);
@@ -6874,187 +6800,190 @@
       }
     }
 
-    async function renderVideoRecommendations() {
-
-      const container = document.getElementById('video-recommendations-grid');
-
-      const tagsContainer = document.getElementById('video-popular-tags');
-
-      if (!container) return;
-
-      container.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4';
-
-      const currentId = state.currentVideo ? state.currentVideo.source_id : '';
-
-      let recs = (state.catalogCache || [])
-
-        .filter(it => it.media_type === 'video' && it.source_id !== currentId);
-
-      // Si la caché está vacía (ej: carga directa por URL), descargamos recomendaciones de la API en vivo
-
-      if (recs.length === 0) {
-
-        container.innerHTML = `
-
-          <div class="col-span-full flex items-center justify-center py-8 gap-3 text-lav/60">
-
-            <div class="w-5 h-5 rounded-full border-2 border-hot/30 border-t-hot animate-spin"></div>
-
-            <span class="text-xs font-semibold">Cargando recomendaciones en alta definición...</span>
-
-          </div>
-
-        `;
-
-        try {
-
-          const recSeed = (parseInt(String(currentId).replace(/\D/g, ''), 10) % 8) + 1 || 1;
-          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=18&seed=${recSeed}&live=true`, { credentials: 'omit' });
-
-          if (resp.ok) {
-
-            const data = await resp.json();
-
-            if (data && data.items && data.items.length > 0) {
-
-              state.catalogCache = data.items;
-
-              recs = data.items.filter(it => it.media_type === 'video' && it.source_id !== currentId);
-
+    // Prefetch de metadatos en hover (>150ms)
+    let prefetchHoverTimer = null;
+    function prefetchVideoOnHover(item) {
+      clearTimeout(prefetchHoverTimer);
+      prefetchHoverTimer = setTimeout(() => {
+        if (!item) return;
+        const vKey = String(item.id || `${item.source}_${item.source_id}`);
+        if (getCachedItem(vKey)) return;
+        const detailUrl = item.id ? `/api/items/id/${item.id}` : `/api/items/${item.source}/${encodeURIComponent(item.source_id)}`;
+        fetch(detailUrl, { credentials: 'omit' })
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data && data.video_sources) {
+              setCachedItem(vKey, data);
             }
-
-          }
-
-        } catch (e) {
-
-          console.warn('[RECOMENDACIONES] Error cargando items:', e);
-
-        }
-
-      }
-
-      container.innerHTML = '';
-
-      if (recs.length === 0) {
-
-        container.innerHTML = '<p class="text-xs text-lav/50 col-span-full py-4 text-center">Explora más videos en el catálogo principal.</p>';
-
-      } else {
-
-        recs.slice(0, 12).forEach(r => {
-          const isLocked = isItemLockedForUser(r);
-          const div = document.createElement('div');
-          if (isLocked) {
-            div.className = 'group flex flex-col glass-card-pro rounded-xl overflow-hidden cursor-pointer transition-all duration-300 relative border border-amber-500/40 hover:border-amber-400 hover:shadow-[0_0_20px_rgba(245,158,11,0.35)]';
-            div.onclick = () => openProUpgradeModal(r);
-          } else {
-            div.className = 'group flex flex-col glass-card-pro rounded-xl overflow-hidden cursor-pointer transition-all duration-300 relative border border-purple-500/20 hover:border-pink-500 hover:shadow-[0_0_20px_rgba(236,72,153,0.35)]';
-            div.onclick = () => openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
-          }
-
-          const duration = (r.extra && r.extra.duration) || 'HD';
-
-          const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%23060212"><rect width="100%" height="100%"/></svg>';
-
-          div.innerHTML = `
-
-            <div class="aspect-video w-full overflow-hidden bg-black relative">
-
-              <img
-
-                src="${coverSrc}"
-
-                alt="${escapeHtml(r.title)}"
-
-                loading="lazy"
-
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-
-                onerror="handleCardImageError(this, 'video')"
-
-              />
-
-              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-
-                <div class="w-10 h-10 rounded-full bg-pink-600/90 text-white flex items-center justify-center shadow-[0_0_15px_rgba(236,72,153,0.8)] scale-75 group-hover:scale-100 transition-transform">
-
-                  <i class="fa-solid fa-play ml-0.5 text-xs"></i>
-
-                </div>
-
-              </div>
-
-              <span class="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-bold text-white border border-white/10">
-
-                ${duration}
-
-              </span>
-
-              <span class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-purple-950/80 backdrop-blur-md text-[9px] font-black uppercase text-pink-300 border border-pink-500/30 flex items-center gap-1">
-                <i class="fa-solid fa-bolt text-[8px] text-hot"></i> 1080p HD
-              </span>
-
-            </div>
-
-            <div class="p-2.5 flex flex-col gap-1">
-
-              <h5 class="text-xs font-bold text-white line-clamp-2 group-hover:text-pink-400 transition-colors leading-tight">
-
-                ${escapeHtml(r.title)}
-
-              </h5>
-
-            </div>
-
-          `;
-
-          container.appendChild(div);
-
-        });
-
-      }
-
-      // Renderizar tags populares interactivos debajo de los videos
-
-      if (tagsContainer) {
-
-        tagsContainer.innerHTML = '';
-
-        const popTags = ['1080p', '4k', 'Milf', 'Amateur', 'Blowjob', 'Threesome', 'Blonde', 'POV', 'Anal', 'Latina', 'Cosplay', 'SinCensura'];
-
-        popTags.forEach(t => {
-
-          const btn = document.createElement('button');
-
-          btn.className = 'px-3 py-1 rounded-xl bg-purple-950/40 hover:bg-pink-600 hover:text-white border border-purple-500/25 hover:border-pink-500 text-xs font-bold text-purple-200 transition-all cursor-pointer shadow-sm';
-
-          btn.innerHTML = `<span class="text-pink-400 font-black mr-0.5">#</span>${t}`;
-
-          btn.onclick = () => {
-
-            closeVideoPlayer();
-
-            state.mode = 'videos';
-
-            state.query = t;
-
-            const sInput = document.getElementById('search-input');
-
-            if (sInput) sInput.value = t;
-
-            fetchLiveFeed(true);
-
-          };
-
-          tagsContainer.appendChild(btn);
-
-        });
-
-      }
-
+          })
+          .catch(() => {});
+      }, 150);
     }
 
-    // =======================================================================
+    function cancelVideoPrefetch() {
+      clearTimeout(prefetchHoverTimer);
+    }
+
+    async function renderVideoRecommendations() {
+      const sidebarContainer = document.getElementById('video-sidebar-list');
+      const gridContainer = document.getElementById('video-recommendations-grid');
+      const tagsContainer = document.getElementById('video-popular-tags');
+      const countLabel = document.getElementById('video-sidebar-count');
+
+      if (!sidebarContainer && !gridContainer) return;
+
+      const currentId = state.currentVideo ? state.currentVideo.source_id : '';
+      let recs = (state.catalogCache || []).filter(it => it.media_type === 'video' && it.source_id !== currentId);
+
+      if (recs.length === 0) {
+        if (sidebarContainer) {
+          sidebarContainer.innerHTML = `
+            <div class="flex items-center justify-center py-8 gap-2 text-white/50 text-xs">
+              <div class="w-4 h-4 rounded-full border-2 border-[#ff2d95]/40 border-t-[#ff2d95] animate-spin"></div>
+              <span>Buscando sugerencias...</span>
+            </div>
+          `;
+        }
+        try {
+          const recSeed = (parseInt(String(currentId).replace(/\D/g, ''), 10) % 8) + 1 || 1;
+          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=20&seed=${recSeed}&live=true`, { credentials: 'omit' });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.items && data.items.length > 0) {
+              state.catalogCache = data.items;
+              recs = data.items.filter(it => it.media_type === 'video' && it.source_id !== currentId);
+            }
+          }
+        } catch (e) {
+          console.warn('[RECOMENDACIONES] Error cargando items:', e);
+        }
+      }
+
+      if (countLabel) countLabel.textContent = recs.length > 0 ? `${recs.length} títulos` : '';
+
+      // 1. Renderizar Sidebar de Escritorio (Lista Compacta con Thumbnail 16:9 de ~140px)
+      if (sidebarContainer) {
+        sidebarContainer.innerHTML = '';
+        if (recs.length === 0) {
+          sidebarContainer.innerHTML = '<p class="text-xs text-white/40 py-4 text-center">Explora más videos en el catálogo principal.</p>';
+        } else {
+          recs.slice(0, 15).forEach((r, idx) => {
+            const isLocked = isItemLockedForUser(r, idx);
+            const duration = (r.extra && r.extra.duration) || 'HD';
+            const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
+
+            const itemEl = document.createElement('div');
+            itemEl.className = 'sidebar-video-item flex items-center gap-3 p-1.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.06] cursor-pointer group select-none';
+            itemEl.onmouseenter = () => prefetchVideoOnHover(r);
+            itemEl.onmouseleave = () => cancelVideoPrefetch();
+            itemEl.onclick = () => {
+              if (isLocked) {
+                openProUpgradeModal(r);
+              } else {
+                openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
+              }
+            };
+
+            itemEl.innerHTML = `
+              <div class="relative w-36 sm:w-40 aspect-video rounded-lg overflow-hidden bg-black shrink-0">
+                <img
+                  src="${coverSrc}"
+                  alt="${escapeHtml(r.title)}"
+                  loading="lazy"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  onerror="handleCardImageError(this, 'video')"
+                />
+                <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 text-[10px] font-mono text-white/90">
+                  ${duration}
+                </span>
+                <span class="absolute top-1 left-1 px-1 py-0.5 rounded bg-[#ff2d95]/80 text-[9px] font-semibold text-white">
+                  1080p
+                </span>
+              </div>
+              <div class="flex-1 flex flex-col justify-center min-w-0 pr-1">
+                <h4 class="text-xs font-medium text-white/90 group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-snug" title="${escapeHtml(r.title)}">
+                  ${escapeHtml(r.title)}
+                </h4>
+                <div class="flex items-center gap-2 text-[11px] text-white/50 pt-1">
+                  <span>${getReliableBadge(r) || 'Velvet'}</span>
+                  <span>&bull;</span>
+                  <span>HD</span>
+                </div>
+              </div>
+            `;
+            sidebarContainer.appendChild(itemEl);
+          });
+        }
+      }
+
+      // 2. Renderizar Grid Inferior (Visible en Modo Cine o Pantallas Móviles)
+      if (gridContainer) {
+        gridContainer.innerHTML = '';
+        recs.slice(0, 12).forEach((r, idx) => {
+          const isLocked = isItemLockedForUser(r, idx);
+          const duration = (r.extra && r.extra.duration) || 'HD';
+          const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
+
+          const card = document.createElement('div');
+          card.className = 'group flex flex-col rounded-xl overflow-hidden bg-white/[0.03] border border-white/[0.08] hover:border-[#ff2d95]/40 transition-all cursor-pointer relative';
+          card.onmouseenter = () => prefetchVideoOnHover(r);
+          card.onmouseleave = () => cancelVideoPrefetch();
+          card.onclick = () => {
+            if (isLocked) {
+              openProUpgradeModal(r);
+            } else {
+              openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
+            }
+          };
+
+          card.innerHTML = `
+            <div class="aspect-video w-full overflow-hidden bg-black relative">
+              <img
+                src="${coverSrc}"
+                alt="${escapeHtml(r.title)}"
+                loading="lazy"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                onerror="handleCardImageError(this, 'video')"
+              />
+              <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 text-[10px] font-mono text-white/90">
+                ${duration}
+              </span>
+              <span class="absolute top-1 left-1 px-1 py-0.5 rounded bg-[#ff2d95]/80 text-[9px] font-semibold text-white">
+                1080p
+              </span>
+            </div>
+            <div class="p-2 flex flex-col gap-0.5">
+              <h5 class="text-xs font-medium text-white/90 group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-tight">
+                ${escapeHtml(r.title)}
+              </h5>
+            </div>
+          `;
+          gridContainer.appendChild(card);
+        });
+      }
+
+      // 3. Renderizar Chips de Tags Elegantes
+      if (tagsContainer) {
+        tagsContainer.innerHTML = '';
+        const popTags = ['1080p', '4k', 'Milf', 'Amateur', 'Blowjob', 'Threesome', 'Blonde', 'POV', 'Anal', 'Latina', 'Cosplay', 'SinCensura'];
+        popTags.forEach(t => {
+          const btn = document.createElement('button');
+          btn.className = 'px-3 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-[#ff2d95]/40 text-xs font-medium text-white/80 hover:text-white transition-all cursor-pointer shrink-0';
+          btn.innerHTML = `<span class="text-[#ff2d95] font-semibold mr-0.5">#</span>${t}`;
+          btn.onclick = () => {
+            closeVideoPlayer();
+            state.mode = 'videos';
+            state.query = t;
+            const sInput = document.getElementById('search-input');
+            if (sInput) sInput.value = t;
+            fetchLiveFeed(true);
+          };
+          tagsContainer.appendChild(btn);
+        });
+      }
+    }
+
+// =======================================================================
 
     // ROUTING POPSTATE & SHORTCUTS GLOBALES
 
@@ -7155,14 +7084,18 @@
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const videoView = document.getElementById('video-view');
-
       const readerModal = document.getElementById('reader-modal');
 
       // Si el reproductor de video está visible
-
       if (videoView && !videoView.classList.contains('hidden')) {
+        const player = document.getElementById('html5-video-player');
 
         if (e.key === 'Escape') {
+          const shortcutsModal = document.getElementById('video-shortcuts-modal');
+          if (shortcutsModal && !shortcutsModal.classList.contains('hidden')) {
+            closeShortcutsModal();
+            return;
+          }
           const isFs = !!(
             document.fullscreenElement ||
             document.webkitFullscreenElement ||
@@ -7174,75 +7107,122 @@
             return;
           }
           closeVideoPlayer();
+          return;
+        }
 
-        } else if (e.key === ' ' || e.key.toLowerCase() === 'k') {
-
+        if (e.key === ' ' || e.key.toLowerCase() === 'k') {
           e.preventDefault();
-
           toggleVideoPlay();
+          return;
+        }
 
-        } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'j') {
-
+        if (e.key === 'ArrowLeft') {
           e.preventDefault();
+          skipVideo(-5);
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          skipVideo(5);
+          return;
+        }
 
+        if (e.key.toLowerCase() === 'j') {
+          e.preventDefault();
           skipVideo(-10);
-
-        } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'l') {
-
+          return;
+        }
+        if (e.key.toLowerCase() === 'l') {
           e.preventDefault();
-
           skipVideo(10);
+          return;
+        }
 
-        } else if (e.key === 'ArrowUp') {
-
+        if (e.key === 'ArrowUp') {
           e.preventDefault();
-
           changeVideoVolume(0.1);
-
-        } else if (e.key === 'ArrowDown') {
-
+          return;
+        }
+        if (e.key === 'ArrowDown') {
           e.preventDefault();
-
           changeVideoVolume(-0.1);
+          return;
+        }
 
-        } else if (e.key.toLowerCase() === 'm') {
-
+        if (e.key.toLowerCase() === 'm') {
           e.preventDefault();
-
           toggleVideoMute();
+          return;
+        }
 
-        } else if (e.key.toLowerCase() === 'f') {
-
+        if (e.key.toLowerCase() === 'f') {
           e.preventDefault();
-
           toggleVideoFullscreen();
+          return;
+        }
 
-        } else if (e.key.toLowerCase() === 't') {
-
+        if (e.key.toLowerCase() === 't') {
           e.preventDefault();
-
           toggleTheaterMode();
+          return;
+        }
 
-        } else if (e.key.toLowerCase() === 'p') {
-
+        if (e.key.toLowerCase() === 'p') {
           e.preventDefault();
-
           toggleVideoPiP();
+          return;
+        }
 
-        } else if (e.key >= '0' && e.key <= '9') {
-
-          const player = document.getElementById('html5-video-player');
-
+        if (e.key >= '0' && e.key <= '9') {
           if (player && player.duration) {
-
             player.currentTime = (parseInt(e.key) / 10) * player.duration;
-
+            showVideoHud('fa-clock', `Saltar al ${parseInt(e.key) * 10}%`);
           }
+          return;
+        }
 
+        if (e.key === '>' || (e.shiftKey && e.key === '.')) {
+          e.preventDefault();
+          if (player) {
+            const rates = [0.5, 0.75, 1, 1.25, 1.5, 2];
+            const nextRate = rates.find(r => r > player.playbackRate) || 2;
+            setPlaybackSpeed(nextRate);
+          }
+          return;
+        }
+        if (e.key === '<' || (e.shiftKey && e.key === ',')) {
+          e.preventDefault();
+          if (player) {
+            const rates = [2, 1.5, 1.25, 1, 0.75, 0.5];
+            const prevRate = rates.find(r => r < player.playbackRate) || 0.5;
+            setPlaybackSpeed(prevRate);
+          }
+          return;
+        }
+
+        if (e.key === '.' && player && player.paused) {
+          e.preventDefault();
+          player.currentTime = Math.min(player.duration || 0, player.currentTime + (1 / 30));
+          return;
+        }
+        if (e.key === ',' && player && player.paused) {
+          e.preventDefault();
+          player.currentTime = Math.max(0, player.currentTime - (1 / 30));
+          return;
+        }
+
+        if (e.key === '?') {
+          e.preventDefault();
+          const modal = document.getElementById('video-shortcuts-modal');
+          if (modal && modal.classList.contains('hidden')) {
+            openShortcutsModal();
+          } else {
+            closeShortcutsModal();
+          }
+          return;
         }
 
         return;
-
       }
 
       // Si el lector de cómics está visible

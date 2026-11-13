@@ -23,6 +23,23 @@
   Cache-Control: public, max-age=0, must-revalidate
   Service-Worker-Allowed: /
 
+# JavaScript Modules (/js/*)
+/js/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+# Rutas Privadas del Usuario (No indexar en buscadores, sin almacenamiento en proxy)
+/boveda/*
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Cache-Control: private, no-store, must-revalidate
+
+/cuenta
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Cache-Control: private, no-store, must-revalidate
+
+/acceso
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Cache-Control: private, no-store, must-revalidate
+
 # HTML Files (revalidate immediately for zero-delay deploys)
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
