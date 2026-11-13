@@ -1297,21 +1297,9 @@
 
             </span>
 
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-800">
+            <span id="hero-views-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 bg-black/60 border border-amber-500/30 shadow-sm">
 
-              <i class="fa-solid fa-circle-check mr-1"></i>100% Sin Censura
-
-            </span>
-
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 bg-black/60 border border-amber-500/30">
-
-              <i class="fa-solid fa-star mr-1"></i>9.9 / 10
-
-            </span>
-
-            <span id="hero-views-badge" class="hidden sm:inline px-2.5 py-0.5 rounded-full text-[10px] font-medium text-purple-200/80 bg-black/40 border border-white/10">
-
-              <i class="fa-solid fa-eye mr-1 text-pink-400"></i>58.4K Lecturas
+              <i class="fa-solid fa-star mr-1"></i>9.9 · Sin Censura
 
             </span>
 
@@ -1334,19 +1322,15 @@
 
           <div id="hero-tags" class="flex flex-wrap items-center justify-center md:justify-start gap-1.5 text-xs text-purple-200/70 font-medium">
 
-            <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.05] border border-white/10">#SinCensura</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px]">#SinCensura</span>
 
-            <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.05] border border-white/10">#FullColor</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px]">#FullColor</span>
 
-            <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.05] border border-white/10">#HD</span>
+            <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px]">#HD</span>
 
           </div>
 
-          <p id="hero-synopsis" class="text-xs sm:text-sm text-purple-200/70 line-clamp-2 max-w-2xl font-light leading-relaxed">
-
-            Una electrizante historia erótica a todo color y en máxima definición. Sumérgete en viñetas sin censura con gráficos hiperrealistas y lectura fluida cuadro por cuadro.
-
-          </p>
+          <p id="hero-synopsis" class="hidden text-xs sm:text-sm text-purple-200/70 line-clamp-2 max-w-2xl font-light leading-relaxed"></p>
 
           <!-- Botones de Acción Comercial -->
 
@@ -2641,7 +2625,7 @@
 
   <div id="vault-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 select-none">
 
-    <div class="bg-[#0c051a] border border-purple-500/30 rounded-3xl max-w-2xl w-full p-5 sm:p-7 h-[80vh] min-h-[460px] max-h-[750px] flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative">
+    <div style="height: 78vh; min-height: 480px; max-height: 720px;" class="bg-[#0c051a] border border-purple-500/30 rounded-3xl max-w-2xl w-full p-5 sm:p-7 flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative">
 
       <!-- Cabecera de Mi Bóveda -->
 
@@ -2699,9 +2683,9 @@
 
       <!-- Contenido Tab 1: Favoritos en la Nube -->
 
-      <div id="vpanel-pro-favorites" class="flex-1 min-h-0 overflow-y-auto space-y-3 py-1 custom-scrollbar">
+      <div id="vpanel-pro-favorites" style="flex: 1 1 0%; min-height: 250px;" class="overflow-y-auto space-y-3 py-1 custom-scrollbar">
 
-        <div id="vault-favs-pro-list" class="space-y-2">
+        <div id="vault-favs-pro-list" class="space-y-2 pb-4">
 
           <!-- Renderizado dinámicamente -->
 
@@ -2711,7 +2695,7 @@
 
       <!-- Contenido Tab 2: Historial en la Nube -->
 
-      <div id="vpanel-pro-history" class="hidden flex-1 min-h-0 overflow-y-auto space-y-3 py-1 custom-scrollbar">
+      <div id="vpanel-pro-history" style="flex: 1 1 0%; min-height: 250px;" class="hidden overflow-y-auto space-y-3 py-1 custom-scrollbar">
 
         <div class="flex items-center justify-between pb-2 border-b border-purple-500/15">
 
@@ -2725,7 +2709,7 @@
 
         </div>
 
-        <div id="vault-hist-pro-list" class="space-y-2">
+        <div id="vault-hist-pro-list" class="space-y-2 pb-4">
 
           <!-- Renderizado dinámicamente -->
 
@@ -2735,7 +2719,7 @@
 
       <!-- Contenido Tab 3: Detalles de la Cuenta -->
 
-      <div id="vpanel-pro-account" class="hidden flex-1 overflow-y-auto space-y-4 py-2 custom-scrollbar">
+      <div id="vpanel-pro-account" style="flex: 1 1 0%; min-height: 250px;" class="hidden overflow-y-auto space-y-4 py-2 custom-scrollbar">
 
         <div class="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/30 flex items-center justify-between">
 
@@ -3511,6 +3495,8 @@
 
       state.page = 1;
 
+      state.category = 'all';
+
       state.query = '';
 
       if (state.catalogMode === 'dynamic') {
@@ -3751,7 +3737,7 @@
 
     };
 
-    // Parser y Embellecedor de Títulos: Extrae autor y elimina ruido de escaneo ([Spanish], [joselillo], etc.)
+    // Parser y Embellecedor de Títulos: Extrae autor y elimina ruido de escaneo ([Spanish], [joselito], etc.)
     function parseComicTitle(rawTitle) {
       if (!rawTitle) return { title: '', author: '' };
       let str = String(rawTitle).trim();
@@ -3762,7 +3748,7 @@
       if (leadingAuthorMatch) {
         const candidate = leadingAuthorMatch[1].trim();
         const candidateLower = candidate.toLowerCase();
-        const NON_AUTHOR_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'completo', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'manhwa', 'color', 'full color'];
+        const NON_AUTHOR_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'completo', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'manhwa', 'color', 'full color', 'joselito', 'joselillo'];
         if (!NON_AUTHOR_TAGS.some(t => candidateLower === t || candidateLower.startsWith(t + ' '))) {
           author = candidate;
           str = leadingAuthorMatch[2].trim();
@@ -3774,7 +3760,7 @@
       if (trailingBracketMatch) {
         const candidate = trailingBracketMatch[2].trim();
         const candidateLower = candidate.toLowerCase();
-        const SCAN_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'color', 'joselillo', 'rip', 'mtl'];
+        const SCAN_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'color', 'joselillo', 'joselito', 'rip', 'mtl', 'hentai', 'manga'];
         if (SCAN_TAGS.some(t => candidateLower.includes(t))) {
           str = trailingBracketMatch[1].trim();
         } else if (!author && candidate.length <= 30) {
@@ -3784,8 +3770,8 @@
       }
 
       // 3. Limpiar tags de uploader / scanlation restantes en cualquier parte del título
-      str = str.replace(/\[(?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|mtl|webtoon|cómics|scan|hentai)[^\]]*\]/gi, '');
-      str = str.replace(/\((?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|mtl|webtoon|cómics|scan|hentai)[^)]*\)/gi, '');
+      str = str.replace(/\[(?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|joselito|mtl|webtoon|cómics|scan|hentai|manga|rip|translated)[^\]]*\]/gi, '');
+      str = str.replace(/\((?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|joselito|mtl|webtoon|cómics|scan|hentai|manga|rip|translated)[^)]*\)/gi, '');
 
       str = str.replace(/\s+/g, ' ').trim();
       str = str.replace(/^[-\s:|]+|[-\s:|]+$/g, '').trim();
@@ -4126,7 +4112,7 @@
     }
 
     function getStealthImageUrl(url, referer) {
-      if (!url) return '';
+      if (!url || typeof url !== 'string') return '';
       if (url.startsWith('data:') || url.startsWith('blob:')) return url;
       if (url.startsWith('/api/media?t=')) return url;
       if (url.startsWith('/api/') && !url.includes('url=') && !url.includes('t=')) return url;
@@ -4135,7 +4121,7 @@
     }
 
     function getStealthStreamUrl(streamUrl, referer) {
-      if (!streamUrl) return '';
+      if (!streamUrl || typeof streamUrl !== 'string') return '';
       if (streamUrl.startsWith('blob:') || streamUrl.startsWith('/api/media?t=')) return streamUrl;
       const token = encodeMediaToken(streamUrl, referer);
       return `/api/media?t=${token}`;
@@ -7563,18 +7549,21 @@
       if (viewsBadge) {
         if (isVid) {
           const views = (item.extra && item.extra.views) ? `${item.extra.views} Vistas` : '120K Vistas';
-          viewsBadge.innerHTML = `<i class="fa-solid fa-eye mr-1 text-pink-400"></i>${views}`;
+          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-eye ml-1 mr-0.5 text-pink-400"></i>${views}`;
         } else {
-          viewsBadge.innerHTML = `<i class="fa-solid fa-book-open mr-1 text-purple-400"></i>${item.page_count ? item.page_count + ' Págs' : '58.4K Lecturas'}`;
+          const reads = item.page_count ? `${item.page_count} Páginas` : '58.4K Lecturas';
+          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-book-open ml-1 mr-0.5 text-purple-400"></i>${reads}`;
         }
       }
 
       const synopsisEl = document.getElementById('hero-synopsis');
       if (synopsisEl) {
-        if (isVid) {
-          synopsisEl.textContent = 'Producción erótica en streaming directo 1080p sin censura con máxima velocidad y nitidez.';
+        if (item.synopsis && item.synopsis.length > 25 && !item.synopsis.toLowerCase().includes('scrape')) {
+          synopsisEl.textContent = item.synopsis;
+          synopsisEl.classList.remove('hidden');
         } else {
-          synopsisEl.textContent = getSensualSynopsis(item);
+          synopsisEl.textContent = '';
+          synopsisEl.classList.add('hidden');
         }
       }
 
@@ -7599,30 +7588,19 @@
         }
       }
 
-      // Tags del hero
-
+      // Tags del hero estilizados
       const tagsContainer = document.getElementById('hero-tags');
-
       const FORBIDDEN_SITES = new Set(['pornhd', 'damplips', 'pornone', 'redporn', 'anyporn', 'alotporn', 'pmvhaven']);
-
-      const cleanTags = (item.tags || []).filter(t => t.length > 2 && !t.toLowerCase().includes('comic') && !FORBIDDEN_SITES.has(t.toLowerCase().trim())).slice(0, 4);
+      const cleanTags = (item.tags || []).filter(t => t && t.length > 2 && !t.toLowerCase().includes('comic') && !FORBIDDEN_SITES.has(t.toLowerCase().trim())).slice(0, 4);
 
       if (cleanTags.length > 0) {
-
-        tagsContainer.innerHTML = cleanTags.map(t => `<span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#${escapeHtml(t)}</span>`).join(' ');
-
+        tagsContainer.innerHTML = cleanTags.map(t => `<span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-purple-200/80">#${escapeHtml(t.replace(/^#/, ''))}</span>`).join(' ');
       } else {
-
         tagsContainer.innerHTML = `
-
-          <span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#SinCensura</span>
-
-          <span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#FullColor</span>
-
-          <span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#HD</span>
-
+          <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-purple-200/80">#SinCensura</span>
+          <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-purple-200/80">#FullColor</span>
+          <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-purple-200/80">#1080pHD</span>
         `;
-
       }
 
       const favIcon = document.getElementById('hero-fav-icon');
@@ -8328,21 +8306,25 @@
       if (!pages || pages.length === 0) {
         const thumbbar = document.getElementById('reader-thumbbar');
         if (thumbbar) thumbbar.classList.add('hidden');
-        const pillText = document.getElementById('reader-pill-text');
-        if (pillText) pillText.textContent = 'Pág. 1 / 1 • 0%';
+        const controls = document.getElementById('reader-controls');
+        if (controls) controls.classList.add('hidden');
+        const pill = document.getElementById('reader-pill-container');
+        if (pill) pill.classList.add('hidden');
+        const endCard = document.getElementById('reader-end-card');
+        if (endCard) endCard.classList.add('hidden');
 
         vContainer.innerHTML = `
-          <div class="py-16 px-4 text-center flex flex-col items-center justify-center max-w-md mx-auto z-10">
+          <div class="py-20 px-4 text-center flex flex-col items-center justify-center max-w-md mx-auto z-10">
             <div class="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center mb-4 text-pink-400 text-2xl shadow-lg">
               <i class="fa-solid fa-triangle-exclamation"></i>
             </div>
             <h4 class="text-base font-bold text-white mb-2">Imágenes no disponibles</h4>
             <p class="text-lav/70 text-xs mb-6 leading-relaxed">
-              Este cómic no contiene páginas cargadas en nuestros servidores. Te sugerimos descubrir otro contenido similar:
+              Este cómic no tiene páginas disponibles actualmente en nuestros servidores. Te invitamos a descubrir miles de títulos disponibles en el catálogo.
             </p>
             <div class="flex items-center gap-3">
               <button onclick="fetchRandom()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-xs shadow-md hover:scale-105 transition-all cursor-pointer">
-                <i class="fa-solid fa-dice mr-1.5"></i> Ver Otro Aleatorio
+                <i class="fa-solid fa-dice mr-1.5"></i> Ver Cómic Aleatorio
               </button>
               <button onclick="closeReader()" class="px-4 py-2 rounded-xl bg-purple-950/60 border border-purple-500/30 text-purple-200 font-bold text-xs hover:bg-purple-900/50 transition-all cursor-pointer">
                 <i class="fa-solid fa-arrow-left mr-1.5"></i> Volver al Catálogo
@@ -8350,13 +8332,15 @@
             </div>
           </div>
         `;
-        const endCardTitle = document.getElementById('end-card-title');
-        if (endCardTitle) endCardTitle.textContent = 'Recomendaciones destacadas';
-        const endCardDesc = document.querySelector('#end-card-title + p');
-        if (endCardDesc) endCardDesc.textContent = 'Continúa descubriendo más historias disponibles en nuestro catálogo.';
         return;
       }
 
+      const endCardEl = document.getElementById('reader-end-card');
+      if (endCardEl) endCardEl.classList.remove('hidden');
+      const controlsEl = document.getElementById('reader-controls');
+      if (controlsEl) controlsEl.classList.remove('hidden');
+      const pillEl = document.getElementById('reader-pill-container');
+      if (pillEl) pillEl.classList.remove('hidden');
       const thumbbar = document.getElementById('reader-thumbbar');
       if (thumbbar) thumbbar.classList.remove('hidden');
 
@@ -10061,47 +10045,54 @@
       }
 
       state.favorites.forEach(it => {
-        const row = document.createElement('div');
-        row.className = 'p-2.5 rounded-2xl bg-purple-950/30 border border-purple-500/20 hover:border-pink-500/60 flex items-center justify-between gap-3 transition-all group cursor-pointer';
-        const isVid = it.media_type === 'video';
-        const badge = isVid ? 'VIDEO XXX' : 'CÓMIC';
+        try {
+          if (!it) return;
+          const row = document.createElement('div');
+          row.className = 'p-2.5 rounded-2xl bg-purple-950/30 border border-purple-500/20 hover:border-pink-500/60 flex items-center justify-between gap-3 transition-all group cursor-pointer';
+          const isVid = it.media_type === 'video' || (it.video_sources && it.video_sources.length > 0);
+          const badge = isVid ? 'VIDEO XXX' : (it.media_type === 'gallery' ? 'GALERÍA' : 'CÓMIC');
 
-        row.onclick = (e) => {
-          if (e.target.closest('button')) return;
-          handleOpenVaultItem(it.source, it.source_id, it.media_type, it.title, it.cover_url, it.url, it.id);
-        };
+          row.onclick = (e) => {
+            if (e.target.closest('button')) return;
+            handleOpenVaultItem(it.source, it.source_id, it.media_type, it.title, it.cover_url, it.url, it.id);
+          };
 
-        const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
-          : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
+          const coverSrc = (it.cover_url && typeof it.cover_url === 'string')
+            ? getStealthImageUrl(it.cover_url, it.url || '')
+            : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
-        row.innerHTML = `
-          <div class="flex items-center gap-3 overflow-hidden flex-1">
-            <div class="w-12 h-12 rounded-xl bg-black overflow-hidden shrink-0 border border-purple-500/30">
-              <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
-            </div>
-            <div class="truncate">
-              <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300 transition-colors">${escapeHtml(it.title)}</span>
-              <div class="flex items-center gap-2 text-[10px] text-purple-300/70 pt-0.5">
-                <span class="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-500/30 font-black uppercase text-[9px]">${badge}</span>
-                <span class="text-pink-400/80 font-bold flex items-center gap-1"><i class="fa-solid fa-crown text-[8px] text-amber-400"></i> Velvet VIP</span>
+          const titleText = it.title || (isVid ? 'Video sin título' : 'Cómic sin título');
+
+          row.innerHTML = `
+            <div class="flex items-center gap-3 overflow-hidden flex-1">
+              <div class="w-12 h-12 rounded-xl bg-black overflow-hidden shrink-0 border border-purple-500/30">
+                <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+              </div>
+              <div class="truncate">
+                <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300 transition-colors">${escapeHtml(titleText)}</span>
+                <div class="flex items-center gap-2 text-[10px] text-purple-300/70 pt-0.5">
+                  <span class="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-500/30 font-black uppercase text-[9px]">${badge}</span>
+                  <span class="text-pink-400/80 font-bold flex items-center gap-1"><i class="fa-solid fa-crown text-[8px] text-amber-400"></i> Velvet VIP</span>
+                </div>
               </div>
             </div>
-          </div>
-          <button class="vault-fav-del-btn p-2 text-purple-400 hover:text-rose-400 transition-colors cursor-pointer" title="Quitar de Mi Bóveda">
-            <i class="fa-solid fa-trash-can text-sm"></i>
-          </button>
-        `;
+            <button class="vault-fav-del-btn p-2 text-purple-400 hover:text-rose-400 transition-colors cursor-pointer" title="Quitar de Mi Bóveda">
+              <i class="fa-solid fa-trash-can text-sm"></i>
+            </button>
+          `;
 
-        const delBtn = row.querySelector('.vault-fav-del-btn');
-        if (delBtn) {
-          delBtn.onclick = (ev) => {
-            ev.stopPropagation();
-            handleRemoveVaultFavorite(it.source, it.source_id, it.id);
-          };
+          const delBtn = row.querySelector('.vault-fav-del-btn');
+          if (delBtn) {
+            delBtn.onclick = (ev) => {
+              ev.stopPropagation();
+              handleRemoveVaultFavorite(it.source, it.source_id, it.id);
+            };
+          }
+
+          container.appendChild(row);
+        } catch (itemErr) {
+          console.warn('[VAULT ITEM RENDER WARN]:', itemErr);
         }
-
-        container.appendChild(row);
       });
     }
 
@@ -10122,65 +10113,72 @@
       }
 
       state.history.forEach(h => {
-        const row = document.createElement('div');
-        row.className = 'p-2.5 rounded-2xl bg-purple-950/30 border border-purple-500/20 hover:border-purple-400 flex items-center justify-between gap-3 transition-all cursor-pointer group';
-        const isVid = (h.media_type === 'video');
-        const key = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
-        const p = state.progress[key] || state.progress[`${h.source}:${h.source_id}`];
+        try {
+          if (!h) return;
+          const row = document.createElement('div');
+          row.className = 'p-2.5 rounded-2xl bg-purple-950/30 border border-purple-500/20 hover:border-purple-400 flex items-center justify-between gap-3 transition-all cursor-pointer group';
+          const isVid = (h.media_type === 'video');
+          const key = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
+          const p = state.progress[key] || state.progress[`${h.source}:${h.source_id}`];
 
-        let isCompleted = h.completed || (p && p.completed);
-        let pct = 0;
-        if (isVid) {
-          const cur = (p && p.currentTime) || h.currentTime || 0;
-          const dur = (p && p.duration) || h.duration || 1;
-          pct = Math.min(100, Math.round((cur / dur) * 100));
-          if (pct >= 90) isCompleted = true;
-        } else {
-          const cur = (p && p.page) || h.page || 1;
-          const total = (p && p.total) || h.total || 1;
-          pct = Math.min(100, Math.round((cur / total) * 100));
-          if (pct >= 100) isCompleted = true;
-        }
+          let isCompleted = h.completed || (p && p.completed);
+          let pct = 0;
+          if (isVid) {
+            const cur = (p && p.currentTime) || h.currentTime || 0;
+            const dur = (p && p.duration) || h.duration || 1;
+            pct = Math.min(100, Math.round((cur / dur) * 100));
+            if (pct >= 90) isCompleted = true;
+          } else {
+            const cur = (p && p.page) || h.page || 1;
+            const total = (p && p.total) || h.total || 1;
+            pct = Math.min(100, Math.round((cur / total) * 100));
+            if (pct >= 100) isCompleted = true;
+          }
 
-        row.onclick = (e) => {
-          if (e.target.closest('button')) return;
-          handleOpenVaultItem(h.source, h.source_id, h.media_type, h.title, h.cover_url, h.url, h.id);
-        };
-
-        const coverSrc = h.cover_url
-          ? getStealthImageUrl(h.cover_url, h.url)
-          : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
-
-        row.innerHTML = `
-          <div class="flex items-center gap-3 truncate flex-1 min-w-0">
-            <div class="w-10 h-10 rounded-lg bg-black overflow-hidden shrink-0 border border-purple-500/30">
-              <img src="${coverSrc}" class="w-full h-full object-cover" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
-            </div>
-            <div class="truncate flex-1 min-w-0">
-              <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(h.title)}</span>
-              <span class="text-[10px] text-purple-300/60 flex items-center gap-1"><i class="fa-solid ${isVid ? 'fa-film text-pink-400' : 'fa-book-open text-purple-400'} text-[9px]"></i> ${isVid ? 'Video Streaming HD' : 'Cómic Digital VIP'}</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
-            ${isCompleted
-              ? `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black flex items-center gap-1"><i class="fa-solid fa-check"></i> ${isVid ? 'Visto' : 'Leído'}</span>`
-              : `<span class="px-2.5 py-1 rounded-lg bg-hot/20 text-hot border border-hot/30 text-[10px] font-bold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left"></i> ${isVid ? `${pct}%` : `Pág ${p ? p.page : 1}/${p ? p.total : '?'}`}</span>`
-            }
-            <button class="vault-hist-del-btn w-6 h-6 rounded-lg bg-black/40 hover:bg-rose-600 text-lav hover:text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-all cursor-pointer" title="Eliminar de mi historial">
-              <i class="fa-solid fa-trash-can text-[10px]"></i>
-            </button>
-          </div>
-        `;
-
-        const delBtn = row.querySelector('.vault-hist-del-btn');
-        if (delBtn) {
-          delBtn.onclick = (ev) => {
-            ev.stopPropagation();
-            removeVaultHistoryItem(h.source, h.source_id, h.id);
+          row.onclick = (e) => {
+            if (e.target.closest('button')) return;
+            handleOpenVaultItem(h.source, h.source_id, h.media_type, h.title, h.cover_url, h.url, h.id);
           };
-        }
 
-        container.appendChild(row);
+          const coverSrc = (h.cover_url && typeof h.cover_url === 'string')
+            ? getStealthImageUrl(h.cover_url, h.url || '')
+            : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
+
+          const titleText = h.title || (isVid ? 'Video sin título' : 'Cómic sin título');
+
+          row.innerHTML = `
+            <div class="flex items-center gap-3 truncate flex-1 min-w-0">
+              <div class="w-10 h-10 rounded-lg bg-black overflow-hidden shrink-0 border border-purple-500/30">
+                <img src="${coverSrc}" class="w-full h-full object-cover" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+              </div>
+              <div class="truncate flex-1 min-w-0">
+                <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(titleText)}</span>
+                <span class="text-[10px] text-purple-300/60 flex items-center gap-1"><i class="fa-solid ${isVid ? 'fa-film text-pink-400' : 'fa-book-open text-purple-400'} text-[9px]"></i> ${isVid ? 'Video Streaming HD' : 'Cómic Digital VIP'}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              ${isCompleted
+                ? `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black flex items-center gap-1"><i class="fa-solid fa-check"></i> ${isVid ? 'Visto' : 'Leído'}</span>`
+                : `<span class="px-2.5 py-1 rounded-lg bg-hot/20 text-hot border border-hot/30 text-[10px] font-bold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left"></i> ${isVid ? `${pct}%` : `Pág ${p ? p.page : 1}/${p ? p.total : '?'}`}</span>`
+              }
+              <button class="vault-hist-del-btn w-6 h-6 rounded-lg bg-black/40 hover:bg-rose-600 text-purple-300 hover:text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-all cursor-pointer" title="Eliminar de mi historial">
+                <i class="fa-solid fa-trash-can text-[10px]"></i>
+              </button>
+            </div>
+          `;
+
+          const delBtn = row.querySelector('.vault-hist-del-btn');
+          if (delBtn) {
+            delBtn.onclick = (ev) => {
+              ev.stopPropagation();
+              removeVaultHistoryItem(h.source, h.source_id, h.id);
+            };
+          }
+
+          container.appendChild(row);
+        } catch (histErr) {
+          console.warn('[VAULT HIST RENDER WARN]:', histErr);
+        }
       });
     }
 

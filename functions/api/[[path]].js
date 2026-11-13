@@ -624,6 +624,55 @@ export async function onRequest(context) {
               }).catch(() => {})
             );
           }
+        } else if (it.source === "hentaipaw" || (it.cover_url && it.cover_url.includes("imagedeliveries.com"))) {
+          // Caso A2: hentaipaw (cdn.imagedeliveries.com) auto-reparación y detección rápida de páginas
+          const sid = it.source_id;
+          let pCount = parseInt(it.page_count || "0", 10);
+          if (pCount <= 0 && sid) {
+            const r1 = await fetch(`https://cdn.imagedeliveries.com/${sid}/thumbnails/1.webp`, { method: "HEAD" }).catch(() => null);
+            if (r1 && r1.ok) {
+              let low = 1;
+              let high = 60;
+              let detected = 1;
+              while (low <= high) {
+                const mid = Math.floor((low + high) / 2);
+                const testRes = await fetch(`https://cdn.imagedeliveries.com/${sid}/thumbnails/${mid}.webp`, { method: "HEAD" }).catch(() => null);
+                if (testRes && testRes.ok) {
+                  detected = mid;
+                  low = mid + 1;
+                } else {
+                  high = mid - 1;
+                }
+              }
+              pCount = detected;
+            }
+          }
+
+          if (pCount > 0 && sid) {
+            it.page_count = pCount;
+            it.pages = [];
+            for (let pNum = 1; pNum <= pCount; pNum++) {
+              it.pages.push({
+                index: pNum,
+                image_url: `https://cdn.imagedeliveries.com/${sid}/thumbnails/${pNum}.webp`,
+                referer: it.url || `https://es.hentaipaw.com/articles/${sid}`
+              });
+            }
+            if (context.waitUntil) {
+              context.waitUntil(
+                fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
+                  method: "PATCH",
+                  headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                  },
+                  body: JSON.stringify({ pages: it.pages, page_count: it.page_count })
+                }).catch(() => {})
+              );
+            }
+          }
         } else if (it.url && it.url.startsWith("http")) {
           // Caso B: Cómics web / WordPress (melapelocondibujos, melapelacomics, reycomix, pornocomic, vercomicporno, etc.)
           try {
@@ -1087,13 +1136,13 @@ export async function onRequest(context) {
     if (mediaType === "video") {
       postgrestUrl += "&media_type=eq.video";
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
-      postgrestUrl += "&media_type=eq.gallery";
+      postgrestUrl += "&media_type=eq.gallery&page_count=gt.0";
       const allowLeak = (Math.random() < 0.002) || (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
       if (!allowLeak) {
         postgrestUrl += "&source=neq.leakgallery";
       }
     } else {
-      postgrestUrl += "&media_type=eq.comic";
+      postgrestUrl += "&media_type=eq.comic&page_count=gt.0";
     }
 
     if (q) {
@@ -1103,6 +1152,9 @@ export async function onRequest(context) {
       } else {
         const orClauses = words.map(w => `search_text.ilike.*${encodeURIComponent(w)}*`).join(",");
         postgrestUrl += `&or=(${orClauses})`;
+      }
+      if (mediaType !== "video") {
+        postgrestUrl += "&page_count=gt.0";
       }
       estimatedTotal = 800;
     } else if (category && category !== "all") {
@@ -1134,6 +1186,9 @@ export async function onRequest(context) {
         else if (category === "western") catTerm = "comic";
       }
       postgrestUrl += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
+      if (mediaType !== "video") {
+        postgrestUrl += "&page_count=gt.0";
+      }
       estimatedTotal = 1500;
     } else {
       // Orden por defecto ultra-rápido indexado por B-tree (id desc o id asc según la mitad)
