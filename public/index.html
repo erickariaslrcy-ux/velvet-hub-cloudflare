@@ -4865,13 +4865,22 @@
 
       empty.classList.add('hidden');
 
-      let itemsToRender = data.items;
+      // Filtro estricto: nunca renderizar cómics o galerías que tengan 0 páginas
+      const safeItems = (data.items || []).filter(it => {
+        if (!it) return false;
+        if (state.mode === 'comics' || state.mode === 'galleries') {
+          return it.page_count && it.page_count > 0;
+        }
+        return true;
+      });
+
+      let itemsToRender = safeItems;
       if (append) {
         const seen = new Set((state.catalogCache || []).map(x => String(x.id || `${x.source}_${x.source_id}`)));
-        itemsToRender = data.items.filter(x => !seen.has(String(x.id || `${x.source}_${x.source_id}`)));
+        itemsToRender = safeItems.filter(x => !seen.has(String(x.id || `${x.source}_${x.source_id}`)));
         state.catalogCache = (state.catalogCache || []).concat(itemsToRender);
       } else {
-        state.catalogCache = data.items;
+        state.catalogCache = safeItems;
       }
 
       const totalItemsCount = data.total || (data.total_pages ? data.total_pages * state.pageSize : (state.catalogCache ? state.catalogCache.length : 100));
@@ -8540,7 +8549,29 @@
       pages.forEach((p, idx) => { p.index = idx + 1; });
 
       if (!pages || pages.length === 0) {
-        vContainer.innerHTML = '<p class="text-lav/60 text-xs py-16 text-center z-10">No se encontraron imágenes en este cómic o galería.</p>';
+        vContainer.innerHTML = `
+          <div class="py-16 px-4 text-center flex flex-col items-center justify-center max-w-md mx-auto z-10">
+            <div class="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center mb-4 text-pink-400 text-2xl shadow-lg">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h4 class="text-base font-bold text-white mb-2">Imágenes no disponibles</h4>
+            <p class="text-lav/70 text-xs mb-6 leading-relaxed">
+              Este cómic no contiene páginas cargadas en nuestros servidores. Te sugerimos descubrir otro contenido similar:
+            </p>
+            <div class="flex items-center gap-3">
+              <button onclick="fetchRandom()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-xs shadow-md hover:scale-105 transition-all cursor-pointer">
+                <i class="fa-solid fa-dice mr-1.5"></i> Ver Otro Aleatorio
+              </button>
+              <button onclick="closeReader()" class="px-4 py-2 rounded-xl bg-purple-950/60 border border-purple-500/30 text-purple-200 font-bold text-xs hover:bg-purple-900/50 transition-all cursor-pointer">
+                <i class="fa-solid fa-arrow-left mr-1.5"></i> Volver al Catálogo
+              </button>
+            </div>
+          </div>
+        `;
+        const endCardTitle = document.getElementById('end-card-title');
+        if (endCardTitle) endCardTitle.textContent = 'Recomendaciones destacadas';
+        const endCardDesc = document.querySelector('#end-card-title + p');
+        if (endCardDesc) endCardDesc.textContent = 'Continúa descubriendo más historias disponibles en nuestro catálogo.';
         return;
       }
 

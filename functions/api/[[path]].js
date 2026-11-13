@@ -789,7 +789,10 @@ export async function onRequest(context) {
       };
 
       const jsonStr = JSON.stringify(masked);
-      if (!isEphemeral) {
+      const isComicEmpty = isComic && (!masked.pages || masked.pages.length === 0) && (!it.chapters || it.chapters.length === 0);
+      const shouldCache = !isEphemeral && !isComicEmpty;
+
+      if (shouldCache) {
         setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, jsonStr);
       }
 
@@ -797,12 +800,12 @@ export async function onRequest(context) {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": isEphemeral ? "no-store, no-cache, must-revalidate" : "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+          "Cache-Control": shouldCache ? "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800" : "no-store, no-cache, must-revalidate",
           ...getCorsHeaders(origin)
         }
       });
 
-      if (!isEphemeral && method === "GET") {
+      if (shouldCache && method === "GET") {
         try {
           context.waitUntil(cache.put(cacheKey, resp.clone()));
         } catch (e) {}
@@ -1002,7 +1005,15 @@ export async function onRequest(context) {
       }
 
       const rawItems = await spRes.json();
-      const items = (rawItems || []).map(it => ({
+      // Filtro defensivo estricto: descartar permanentemente ítems con 0 páginas en cómics o galerías
+      const validRawItems = (rawItems || []).filter(it => {
+        if (!it) return false;
+        if (it.media_type === "comic" || it.media_type === "gallery") {
+          return it.page_count && it.page_count > 0;
+        }
+        return true;
+      });
+      const items = validRawItems.map(it => ({
         id: it.id,
         source: it.source || "velvet",
         source_id: it.source_id ? String(it.source_id) : String(it.id),
