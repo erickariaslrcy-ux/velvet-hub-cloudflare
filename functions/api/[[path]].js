@@ -861,31 +861,66 @@ export async function onRequest(context) {
     const seedParam = parseInt(url.searchParams.get("seed") || "0", 10);
     const sort = url.searchParams.get("sort") || "recent";
 
+    // Grupos y anclas de alta densidad y diversidad de fuentes para modo dinámico / aleatorio
+    const COMIC_CLUSTERS = [
+      { anchor: 374460, maxOffset: 1200 }, // melapelocondibujos / estrenos
+      { anchor: 350000, maxOffset: 1500 }, // comics18_org / 3hentai
+      { anchor: 325000, maxOffset: 1500 }, // melapelacomics / 3hentai
+      { anchor: 238000, maxOffset: 1000 }, // melapelocondibujos clásicos
+      { anchor: 84070,  maxOffset: 1000 }, // Sexkomix2 / vercomicporno
+      { anchor: 50000,  maxOffset: 1500 }, // 3hentai doujinshi
+      { anchor: 10000,  maxOffset: 1000 }, // comics18_org retro
+    ];
+
+    const VIDEO_CLUSTERS = [
+      { anchor: 304215, maxOffset: 800 },  // pmvhaven HD estrenos
+      { anchor: 250000, maxOffset: 800 },  // redporn / brazzers
+      { anchor: 200000, maxOffset: 800 },  // pornone
+      { anchor: 150000, maxOffset: 800 },  // redporn family hookups
+      { anchor: 100000, maxOffset: 800 },  // pornhd
+      { anchor: 4510,   maxOffset: 200 },  // pmvhaven classics
+      { anchor: 2000,   maxOffset: 150 },  // damplips
+    ];
+
+    const GALLERY_CLUSTERS = [
+      { anchor: 398651, maxOffset: 400 },  // mitaku cosplay
+      { anchor: 390000, maxOffset: 400 },  // mitaku / buondua
+      { anchor: 385000, maxOffset: 400 },  // 4khd
+      { anchor: 380000, maxOffset: 400 },  // 4khd / xasiat
+      { anchor: 375000, maxOffset: 300 },  // buondua asian models
+    ];
+
+    let clusters = COMIC_CLUSTERS;
+    let maxId = 374460;
+    if (mediaType === "video") {
+      clusters = VIDEO_CLUSTERS;
+      maxId = 304215;
+    } else if (mediaType === "gallery" || mediaType === "cosplay") {
+      clusters = GALLERY_CLUSTERS;
+      maxId = 398651;
+    }
+
     let offset = (page - 1) * pageSize;
-    if (seedParam > 0 && !q && sort === "recent") {
-      let baseWindow = 40;
-      let multiplier = 7919;
-      if (mediaType === "video") {
-        multiplier = 1337;
-        baseWindow = (category && category !== "all") ? 10 : 30;
-      } else if (mediaType === "gallery" || mediaType === "cosplay") {
-        multiplier = 7919;
-        baseWindow = (category && category !== "all") ? 10 : 40;
-      } else {
-        multiplier = 3137;
-        baseWindow = (category && category !== "all") ? 10 : 40;
-      }
-      const basePage = Math.abs(seedParam * multiplier) % baseWindow;
-      offset = (basePage + (page - 1)) * pageSize;
+    let anchorId = maxId;
+
+    if (seedParam > 0 && !q && (sort === "recent" || sort === "random")) {
+      // MODO DINÁMICO / ALEATORIO:
+      // Rota determinísticamente entre diferentes fuentes y épocas según seed y página
+      const clusterIdx = Math.abs(seedParam + (page - 1)) % clusters.length;
+      const cluster = clusters[clusterIdx];
+      anchorId = cluster.anchor;
+      const maxWindowPages = Math.max(1, Math.floor(cluster.maxOffset / pageSize));
+      const windowPage = Math.abs((seedParam * 13) + Math.floor((page - 1) / clusters.length)) % maxWindowPages;
+      offset = windowPage * pageSize;
     }
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources,artists";
-    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
+    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}&id=lte.${anchorId}`;
 
     let estimatedTotal = 100000;
 
     if (mediaType === "video") {
-      postgrestUrl += "&source=eq.pmvhaven&id=lte.304215";
+      postgrestUrl += "&media_type=eq.video";
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery";
@@ -896,7 +931,7 @@ export async function onRequest(context) {
       }
       estimatedTotal = 18261;
     } else {
-      postgrestUrl += "&media_type=eq.comic&id=lte.374460";
+      postgrestUrl += "&media_type=eq.comic";
       estimatedTotal = 105326;
     }
 

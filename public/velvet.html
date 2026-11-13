@@ -1256,16 +1256,12 @@
 
           </div>
 
-          <!-- Selector de Orden -->
-
+          <!-- Selector de Orden y Modo de Catálogo -->
           <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-glass border border-neon/25 text-lav text-xs font-semibold rounded-xl px-2.5 py-1 focus:outline-none focus:border-hot cursor-pointer">
-
-            <option value="recent">🔥 Más Populares</option>
-
+            <option value="random">🎲 Modo Aleatorio (Mezclado)</option>
+            <option value="recent">📌 Modo Estático (Recientes)</option>
             <option value="rating">⭐ Mejor Valorados</option>
-
             <option value="pages">📚 Más Páginas</option>
-
           </select>
 
         </div>
@@ -2898,6 +2894,28 @@
 
         </div>
 
+        <!-- Ajuste de Navegación del Catálogo -->
+        <div class="p-3.5 rounded-2xl bg-purple-950/20 border border-purple-500/20 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-sliders text-pink-400"></i>
+              <span class="text-xs font-bold text-white">Modo de Exploración del Catálogo</span>
+            </div>
+            <span class="text-[10px] text-purple-300/60 font-mono" id="vault-catalog-mode-status">🎲 Aleatorio</span>
+          </div>
+          <p class="text-[11px] text-purple-300/70">
+            Elige si prefieres descubrir contenido variado al azar en cada visita o navegar páginas fijas ordenadas por número de item.
+          </p>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button type="button" onclick="setCatalogMode('dynamic')" id="vault-mode-btn-dynamic" class="p-2 rounded-xl border border-pink-500/40 bg-pink-500/15 text-pink-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer">
+              <i class="fa-solid fa-dice text-pink-400"></i> <span>Aleatorio (Mezclado)</span>
+            </button>
+            <button type="button" onclick="setCatalogMode('static')" id="vault-mode-btn-static" class="p-2 rounded-xl border border-purple-500/20 bg-purple-950/40 text-purple-300/70 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer">
+              <i class="fa-solid fa-thumbtack text-purple-400"></i> <span>Estático (Fijo)</span>
+            </button>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -3371,9 +3389,11 @@
 
       category: 'all',
 
-      sort: 'recent',
+      sort: 'random',
 
-      feedSeed: 0,
+      catalogMode: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode')) || 'dynamic',
+
+      feedSeed: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode') === 'static') ? 0 : (Math.floor(Math.random() * 500) + 1),
 
       live: true,
 
@@ -3605,8 +3625,15 @@
 
       state.query = '';
 
-      state.feedSeed = 0;
-      state.videoSeed = 0;
+      if (state.catalogMode === 'dynamic') {
+        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.videoSeed = state.feedSeed;
+        state.sort = 'random';
+      } else {
+        state.feedSeed = 0;
+        state.videoSeed = 0;
+        state.sort = 'recent';
+      }
 
       const sInput = document.getElementById('search-input');
 
@@ -3745,6 +3772,24 @@
       shuffleBtn.title = 'Mezclar y descubrir nuevo contenido variado';
       shuffleBtn.onclick = () => shuffleCurrentFeed();
       container.appendChild(shuffleBtn);
+
+      // Botón global de Modo de Catálogo (Dinámico / Estático)
+      const modeChipBtn = document.createElement('button');
+      modeChipBtn.id = 'catalog-mode-chip-btn';
+      const isDyn = state.catalogMode === 'dynamic';
+      modeChipBtn.className = `cat-chip px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 ${
+        isDyn
+          ? 'text-pink-300 bg-pink-500/15 border border-pink-500/40 hover:bg-pink-500/25 shadow-[0_0_15px_rgba(236,72,153,0.2)]'
+          : 'text-purple-300/80 bg-purple-950/40 border border-purple-500/25 hover:bg-purple-900/40'
+      }`;
+      modeChipBtn.innerHTML = isDyn
+        ? '<i class="fa-solid fa-dice text-pink-400"></i> <span>Aleatorio</span>'
+        : '<i class="fa-solid fa-thumbtack text-purple-400"></i> <span>Estático</span>';
+      modeChipBtn.title = isDyn
+        ? 'Modo Aleatorio activo: mezcla y rota contenido de todo el catálogo. Clic para cambiar a Estático.'
+        : 'Modo Estático activo: páginas fijas y cronológicas por número de item. Clic para cambiar a Aleatorio.';
+      modeChipBtn.onclick = () => toggleCatalogMode();
+      container.appendChild(modeChipBtn);
 
       if (state.mode === 'galleries') {
         GALLERY_CATEGORIES.forEach(cat => {
@@ -4286,11 +4331,28 @@
 
         const oled = localStorage.getItem('velvet_oled');
         if (oled === 'true') enableOled(true);
+
+        const savedCatalogMode = localStorage.getItem('velvet_catalog_mode');
+        if (savedCatalogMode === 'static' || savedCatalogMode === 'dynamic') {
+          state.catalogMode = savedCatalogMode;
+        } else {
+          state.catalogMode = 'dynamic';
+        }
+        if (state.catalogMode === 'dynamic' && !state.feedSeed) {
+          state.feedSeed = Math.floor(Math.random() * 500) + 1;
+          state.videoSeed = state.feedSeed;
+          state.sort = 'random';
+        } else if (state.catalogMode === 'static') {
+          state.feedSeed = 0;
+          state.videoSeed = 0;
+          state.sort = 'recent';
+        }
       } catch (e) {
         state.user = { name: 'Invitado', avatar: '🔑', avatarBg: 'from-purple-900 to-slate-900', isVip: false };
       }
       updateUserUI();
       updateVaultCounts();
+      updateCatalogModeUI();
     }
 
     function saveStorage() {
@@ -10167,7 +10229,7 @@
     }
 
     function renderVaultFavoritesPro() {
-      const container = document.getElementById('vault-fav-pro-list');
+      const container = document.getElementById('vault-favs-pro-list') || document.getElementById('vault-fav-pro-list');
       if (!container) return;
       container.innerHTML = '';
 
@@ -11079,32 +11141,99 @@
     }
 
     function setCategory(cat, btn) {
-      state.feedSeed = 0;
-      state.videoSeed = 0;
+      if (state.catalogMode === 'dynamic') {
+        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.videoSeed = state.feedSeed;
+      } else {
+        state.feedSeed = 0;
+        state.videoSeed = 0;
+      }
       state.category = cat;
-
       state.page = 1;
 
       document.querySelectorAll('.cat-chip').forEach(c => {
-
         c.className = 'cat-chip px-3.5 py-1.5 rounded-xl text-xs font-bold text-lav/80 bg-glass border border-neon/25 hover:border-hot transition-all';
-
       });
 
       btn.className = 'cat-chip active px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-neon to-hot text-white shadow-neon transition-all';
 
-      fetchLiveFeed();
-
+      fetchLiveFeed(true);
     }
 
     function handleSortChange(sortVal) {
-
+      if (sortVal === 'random') {
+        setCatalogMode('dynamic');
+        return;
+      } else if (sortVal === 'recent') {
+        setCatalogMode('static');
+        return;
+      }
       state.sort = sortVal;
-
       state.page = 1;
+      fetchLiveFeed(true);
+    }
 
-      fetchLiveFeed();
+    function toggleCatalogMode() {
+      const target = state.catalogMode === 'dynamic' ? 'static' : 'dynamic';
+      setCatalogMode(target);
+    }
 
+    function setCatalogMode(mode) {
+      state.catalogMode = mode;
+      try { localStorage.setItem('velvet_catalog_mode', mode); } catch(e) {}
+      if (mode === 'dynamic') {
+        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.videoSeed = state.feedSeed;
+        state.sort = 'random';
+        showToast('🎲 Modo Aleatorio activado: las páginas rotan y mezclan contenido', 'info');
+      } else {
+        state.feedSeed = 0;
+        state.videoSeed = 0;
+        state.sort = 'recent';
+        showToast('📌 Modo Estático activado: páginas fijas y cronológicas por fecha', 'info');
+      }
+      updateCatalogModeUI();
+      state.page = 1;
+      fetchLiveFeed(true);
+    }
+
+    function updateCatalogModeUI() {
+      const isDyn = state.catalogMode === 'dynamic';
+      const sSelect = document.getElementById('sort-select');
+      if (sSelect) {
+        sSelect.value = isDyn ? 'random' : (state.sort === 'random' ? 'recent' : state.sort);
+      }
+      const chipBtn = document.getElementById('catalog-mode-chip-btn');
+      if (chipBtn) {
+        chipBtn.className = `cat-chip px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 ${
+          isDyn
+            ? 'text-pink-300 bg-pink-500/15 border border-pink-500/40 hover:bg-pink-500/25 shadow-[0_0_15px_rgba(236,72,153,0.2)]'
+            : 'text-purple-300/80 bg-purple-950/40 border border-purple-500/25 hover:bg-purple-900/40'
+        }`;
+        chipBtn.innerHTML = isDyn
+          ? '<i class="fa-solid fa-dice text-pink-400"></i> <span>Aleatorio</span>'
+          : '<i class="fa-solid fa-thumbtack text-purple-400"></i> <span>Estático</span>';
+        chipBtn.title = isDyn
+          ? 'Modo Aleatorio activo: mezcla y rota contenido de todo el catálogo. Clic para cambiar a Estático.'
+          : 'Modo Estático activo: páginas fijas y cronológicas por número de item. Clic para cambiar a Aleatorio.';
+      }
+
+      // Sincronizar en el modal de la Bóveda (Tab Cuenta)
+      const vStatus = document.getElementById('vault-catalog-mode-status');
+      if (vStatus) {
+        vStatus.textContent = isDyn ? '🎲 Aleatorio' : '📌 Estático';
+      }
+      const vBtnDyn = document.getElementById('vault-mode-btn-dynamic');
+      const vBtnSta = document.getElementById('vault-mode-btn-static');
+      if (vBtnDyn && vBtnSta) {
+        if (isDyn) {
+          vBtnDyn.className = 'p-2 rounded-xl border border-pink-500/40 bg-pink-500/25 text-pink-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-[0_0_15px_rgba(236,72,153,0.25)]';
+          vBtnSta.className = 'p-2 rounded-xl border border-purple-500/20 bg-purple-950/40 text-purple-300/60 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:bg-purple-900/40';
+        } else {
+          vBtnDyn.className = 'p-2 rounded-xl border border-purple-500/20 bg-purple-950/40 text-purple-300/60 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:bg-purple-900/40';
+          vBtnSta.className = 'p-2 rounded-xl border border-pink-500/40 bg-pink-500/25 text-pink-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-[0_0_15px_rgba(236,72,153,0.25)]';
+        }
+      }
     }
 
     function switchTab(tab) {
@@ -11229,9 +11358,10 @@
     function shuffleCurrentFeed() {
       const shuffleIcon = document.querySelector('#category-chips .fa-shuffle');
       if (shuffleIcon) shuffleIcon.classList.add('fa-spin');
-      const SEED_POOL = [1, 2, 3, 4, 5, 6, 7, 8];
-      const available = SEED_POOL.filter(s => s !== state.feedSeed);
-      state.feedSeed = available[Math.floor(Math.random() * available.length)];
+      state.catalogMode = 'dynamic';
+      try { localStorage.setItem('velvet_catalog_mode', 'dynamic'); } catch(e) {}
+      updateCatalogModeUI();
+      state.feedSeed = Math.floor(Math.random() * 999) + 1;
       state.videoSeed = state.feedSeed;
       state.page = 1;
       CLIENT_CACHE.clear();
@@ -11257,7 +11387,7 @@
       setTimeout(() => {
         if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
       }, 700);
-      showToast('?? Cat�logo renovado con nuevo contenido variado', 'info');
+      showToast('🎲 Catálogo renovado con nuevo contenido variado', 'info');
     }
 
     function shuffleVideoFeed() {
