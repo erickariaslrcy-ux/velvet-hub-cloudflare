@@ -979,27 +979,19 @@
 
       <div class="flex items-center gap-1.5 sm:gap-2.5 cursor-pointer select-none group shrink-0" onclick="switchTab('home')">
 
-        <div style="width:38px;height:38px;min-width:38px;max-width:38px;overflow:hidden;" class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-black/60 border border-pink-500/40 flex items-center justify-center p-0.5 sm:p-1 shadow-[0_0_15px_rgba(255,42,133,0.4)] group-hover:scale-105 group-hover:shadow-[0_0_25px_rgba(255,42,133,0.8)] transition-all overflow-hidden shrink-0">
+        <div style="width:36px;height:36px;min-width:36px;max-width:36px;overflow:hidden;" class="w-9 h-9 rounded-xl bg-black/60 border border-pink-500/40 flex items-center justify-center p-0.5 shadow-[0_0_15px_rgba(255,42,133,0.4)] group-hover:scale-105 transition-all overflow-hidden shrink-0">
 
           <img src="/velvet_logo.png" alt="Velvet Devil Logo" style="max-width:100%;max-height:100%;object-fit:contain;display:block;" class="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(255,26,117,0.9)]" />
 
         </div>
 
-        <div class="flex flex-col">
+        <div class="flex items-center gap-1 sm:gap-1.5">
 
           <span class="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-1 sm:gap-1.5 font-sans">
 
-            VELVET<span id="brand-suffix" class="text-hot glow-hot font-bold">HUB</span>
+            VELVET<span id="brand-suffix" class="text-pink-500 font-extrabold">HUB</span>
 
-            <span class="text-[9px] uppercase font-black tracking-widest px-1 sm:px-1.5 py-0.5 rounded-full bg-hot/20 text-hot border border-hot/40 shadow-sm">+18</span>
-
-          </span>
-
-          <span id="brand-tagline" class="hidden sm:flex text-[10px] text-lav/80 font-semibold tracking-wider items-center gap-1">
-
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-
-            Cómics & Videos &bull; 100% Sin Censura
+            <span class="text-[9px] uppercase font-black tracking-widest px-1 sm:px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/40 shadow-sm">+18</span>
 
           </span>
 
@@ -1007,14 +999,14 @@
 
       </div>
 
-      <!-- Selector de Modo / Las Dos Caras: Cómics vs Videos -->
+      <!-- Selector de Modo / Cómics vs Videos vs Modelos -->
 
-      <div class="hidden sm:flex items-center p-1 rounded-2xl bg-black/60 border border-purple-500/30 backdrop-blur-md shadow-inner shrink-0">
+      <div class="hidden sm:flex items-center p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-inner shrink-0">
 
         <button
           id="mode-btn-comics"
           onclick="setPortalMode('comics', true)"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow cursor-pointer"
+          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer"
         >
           <i class="fa-solid fa-book-open text-xs"></i>
           <span>Cómics</span>
@@ -1023,18 +1015,18 @@
         <button
           id="mode-btn-videos"
           onclick="setPortalMode('videos', true)"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-white cursor-pointer"
+          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer"
         >
-          <i class="fa-solid fa-film text-xs text-hot"></i>
+          <i class="fa-solid fa-film text-xs text-pink-400"></i>
           <span>Videos</span>
         </button>
 
         <button
           id="mode-btn-galleries"
           onclick="setPortalMode('galleries', true)"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-white cursor-pointer"
+          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer"
         >
-          <i class="fa-solid fa-camera-retro text-xs text-neon"></i>
+          <i class="fa-solid fa-camera-retro text-xs text-purple-400"></i>
           <span>Modelos</span>
         </button>
 
@@ -1042,7 +1034,7 @@
 
       <!-- Barra de Búsqueda de Cómics y Videos Calientes -->
 
-      <div class="flex-1 min-w-[140px] sm:min-w-[200px] max-w-lg mx-1 sm:mx-3">
+      <div class="flex-1 min-w-[150px] sm:min-w-[220px] max-w-lg mx-2 sm:mx-4">
 
         <form id="search-form" onsubmit="handleSearch(event)" class="relative w-full">
 
@@ -1052,15 +1044,15 @@
 
             id="search-input"
 
-            placeholder="Buscar cómics o videos..."
+            placeholder="Buscar cómics, mangas..."
 
-            class="w-full bg-[#120726]/90 border border-neon/30 rounded-2xl pl-8 sm:pl-10 pr-7 sm:pr-9 py-2 sm:py-2.5 text-xs sm:text-sm text-ink placeholder-lav/50 focus:outline-none focus:border-hot focus:ring-2 focus:ring-hot/30 transition-all shadow-inner"
+            class="w-full bg-white/[0.05] hover:bg-white/[0.08] focus:bg-[#120726] border border-white/10 focus:border-pink-500 rounded-full pl-9 sm:pl-10 pr-8 sm:pr-9 py-2 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-pink-500 transition-all shadow-inner"
 
           />
 
-          <i class="fa-solid fa-magnifying-glass absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-lav/50 text-xs sm:text-sm"></i>
+          <i class="fa-solid fa-magnifying-glass absolute left-3 sm:left-3.5 top-2.5 sm:top-3 text-white/40 text-xs sm:text-sm"></i>
 
-          <button type="button" id="clear-search-btn" onclick="clearSearch()" class="hidden absolute right-2.5 sm:right-3 top-2.5 sm:top-3 text-lav hover:text-white text-xs sm:text-sm">
+          <button type="button" id="clear-search-btn" onclick="clearSearch()" class="hidden absolute right-3 top-2.5 sm:top-3 text-white/50 hover:text-white text-xs sm:text-sm">
 
             <i class="fa-solid fa-xmark"></i>
 
@@ -1072,43 +1064,23 @@
 
       <!-- Acciones de Cabecera -->
 
-      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
-        <!-- Toggle Modo Oscuro OLED -->
-
-        <button
-
-          onclick="toggleOledMode()"
-
-          id="oled-header-btn"
-
-          title="Modo Oscuro Puro OLED (#000000)"
-
-          class="hidden sm:flex h-9 w-9 xl:w-auto xl:px-2.5 rounded-xl bg-purple-950/40 border border-purple-500/25 hover:border-hot text-lav hover:text-ink text-xs font-semibold items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
-
-        >
-
-          <i class="fa-solid fa-moon text-neon"></i>
-
-          <span class="hidden xl:inline">OLED</span>
-
-        </button>
-
-        <!-- Botón Cómic Caliente Aleatorio -->
+        <!-- Botón Aleatorio -->
 
         <button
 
           onclick="fetchRandom()"
 
-          title="Abrir cómic aleatorio sin censura"
+          title="Descubrir contenido al azar"
 
-          class="hidden sm:flex h-9 w-9 xl:w-auto xl:px-2.5 rounded-xl bg-purple-950/40 border border-purple-500/25 hover:border-hot text-lav hover:text-ink text-xs font-semibold items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+          class="hidden sm:flex h-9 px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-white/80 hover:text-white text-xs font-semibold items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
 
         >
 
-          <i class="fa-solid fa-dice text-hot"></i>
+          <i class="fa-solid fa-dice text-pink-400"></i>
 
-          <span class="hidden xl:inline">Al Azar</span>
+          <span>Al Azar</span>
 
         </button>
 
@@ -1122,11 +1094,11 @@
 
             id="user-profile-btn"
 
-            class="flex items-center justify-center gap-1.5 h-9 px-2 sm:px-3 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 hover:border-pink-500 text-xs font-bold text-white shadow-[0_0_15px_rgba(168,85,247,0.2)] transition-all cursor-pointer"
+            class="flex items-center justify-center gap-1.5 h-9 px-2.5 sm:px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-xs font-bold text-white transition-all cursor-pointer"
 
           >
 
-            <div id="user-avatar-badge" class="w-6 h-6 rounded-lg bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-xs text-white font-black shadow shrink-0">
+            <div id="user-avatar-badge" class="w-6 h-6 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-xs text-white font-black shadow shrink-0">
 
               <i class="fa-solid fa-key" id="user-avatar-icon"></i>
 
@@ -1246,7 +1218,7 @@
 
       <div class="hidden md:flex items-center gap-2.5 shrink-0">
 
-        <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-2.5 py-1 rounded-xl">
+        <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-white/[0.04] border border-white/10 px-3 py-1.5 rounded-full">
 
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
 
@@ -1255,10 +1227,11 @@
         </div>
 
         <!-- Selector de Orden y Modo de Catálogo -->
-        <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-purple-950/40 border border-purple-500/25 text-purple-200 hover:text-white text-xs font-semibold rounded-xl px-2.5 py-1 focus:outline-none focus:border-pink-500 cursor-pointer">
-          <option value="recent">📌 Fijo (Recientes)</option>
-          <option value="random">🎲 Aleatorio (Mezclado)</option>
-          <option value="rating">⭐ Mejor Valorados</option>
+        <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-white/[0.05] border border-white/10 text-white/80 hover:text-white text-xs font-semibold rounded-full px-3 py-1.5 focus:outline-none focus:border-pink-500 cursor-pointer">
+          <option value="recent">📌 Más Recientes</option>
+          <option value="random">🎲 Modo Aleatorio</option>
+          <option value="rating">⭐ Más Valorados</option>
+          <option value="views">🔥 Más Vistos</option>
           <option value="pages">📚 Más Páginas</option>
         </select>
 
@@ -1278,33 +1251,33 @@
 
     <!-- 1. HERO SPOTLIGHT CAROUSEL CINEMATOGRÁFICO (TOP 5 ESTRENOS) -->
 
-    <section id="hero-section" class="relative rounded-3xl overflow-hidden border border-neon/30 bg-glasscard shadow-neon-strong group">
+    <section id="hero-section" class="relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d061c]/90 backdrop-blur-2xl shadow-2xl group">
 
       <!-- Fondo Atmosférico con Desenfoque Dinámico -->
 
-      <div id="hero-backdrop" class="absolute inset-0 bg-cover bg-center blur-3xl opacity-25 scale-125 transition-all duration-700 pointer-events-none"></div>
+      <div id="hero-backdrop" class="absolute inset-0 bg-cover bg-center blur-3xl opacity-20 scale-125 transition-all duration-700 pointer-events-none"></div>
 
-      <div class="absolute inset-0 bg-gradient-to-r from-obsidian via-obsidian/80 to-transparent pointer-events-none"></div>
+      <div class="absolute inset-0 bg-gradient-to-r from-[#0d061c] via-[#0d061c]/80 to-transparent pointer-events-none"></div>
 
-      <div class="absolute inset-0 bg-gradient-to-t from-obsidian via-transparent to-transparent pointer-events-none"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-[#0d061c] via-transparent to-transparent pointer-events-none"></div>
 
       <!-- Contenido del Hero Slide -->
 
-      <div class="relative z-10 p-4 sm:p-7 md:p-9 flex flex-col md:flex-row items-center gap-4 sm:gap-6 min-h-[340px] w-full max-w-full">
+      <div class="relative z-10 p-4 sm:p-7 md:p-8 flex flex-col md:flex-row items-center gap-5 sm:gap-7 min-h-[300px] w-full max-w-full">
 
         <!-- Portada Destacada con Zoom y Badges -->
 
-        <div class="w-36 sm:w-48 md:w-56 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-hot/50 relative group/cover cursor-pointer" onclick="openHeroComic()">
+        <div id="hero-cover-container" class="w-36 sm:w-44 md:w-52 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/15 relative group/cover cursor-pointer hover:border-pink-500/50 transition-all" onclick="openHeroComic()">
 
           <img id="hero-cover" referrerpolicy="no-referrer" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='600' fill='%23120b22'><rect width='100%' height='100%'/></svg>" alt="Portada destacada" class="w-full h-full object-cover group-hover/cover:scale-105 transition-transform duration-500" onerror="handleCardImageError(this, 'comic')">
 
-          <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/90 backdrop-blur-md text-[10px] font-black text-gold border border-gold/40 shadow-gold">
+          <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/90 backdrop-blur-md text-[10px] font-black text-amber-400 border border-amber-500/30 shadow">
 
             ★ TOP #1 TENDENCIA
 
           </span>
 
-          <span class="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-md bg-hot/90 text-white font-black text-[10px] shadow">
+          <span class="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-md bg-pink-600 text-white font-black text-[10px] shadow">
 
             4K HD
 
@@ -1314,31 +1287,31 @@
 
         <!-- Información y Metadata del Cómic Destacado -->
 
-        <div class="flex-1 text-center md:text-left space-y-3.5">
+        <div class="flex-1 text-center md:text-left space-y-3">
 
           <div class="flex flex-wrap items-center justify-center md:justify-start gap-2">
 
-            <span id="hero-format-badge" class="px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-hot/20 text-hot border border-hot/40 shadow-sm">
+            <span id="hero-format-badge" class="px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-400 border border-pink-500/30 shadow-sm">
 
               3D CGI NOVEL
 
             </span>
 
-            <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-800">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-800">
 
               <i class="fa-solid fa-circle-check mr-1"></i>100% Sin Censura
 
             </span>
 
-            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold text-gold bg-pitch/80 border border-gold/30">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 bg-black/60 border border-amber-500/30">
 
               <i class="fa-solid fa-star mr-1"></i>9.9 / 10
 
             </span>
 
-            <span class="hidden sm:inline px-2 py-0.5 rounded-md text-[10px] font-medium text-lav/80 bg-pitch/60 border border-neon/20">
+            <span id="hero-views-badge" class="hidden sm:inline px-2.5 py-0.5 rounded-full text-[10px] font-medium text-purple-200/80 bg-black/40 border border-white/10">
 
-              <i class="fa-solid fa-eye mr-1"></i>58.4K Lecturas
+              <i class="fa-solid fa-eye mr-1 text-pink-400"></i>58.4K Lecturas
 
             </span>
 
@@ -1351,7 +1324,7 @@
             <span id="hero-author" class="text-pink-300 font-extrabold hover:underline"></span>
           </div>
 
-          <h1 id="hero-title" class="font-display text-2xl sm:text-3xl md:text-4xl text-ink font-bold leading-tight">
+          <h1 id="hero-title" class="font-display text-2xl sm:text-3xl md:text-4xl text-white font-black leading-tight">
 
             Cargando cómic destacado...
 
@@ -1359,19 +1332,17 @@
 
           <!-- Etiquetas Fetiche del Hero -->
 
-          <div id="hero-tags" class="flex flex-wrap items-center justify-center md:justify-start gap-1.5 text-xs text-lav/80 font-medium">
+          <div id="hero-tags" class="flex flex-wrap items-center justify-center md:justify-start gap-1.5 text-xs text-purple-200/70 font-medium">
 
-            <span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#Milf</span>
+            <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.05] border border-white/10">#SinCensura</span>
 
-            <span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#3D</span>
+            <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.05] border border-white/10">#FullColor</span>
 
-            <span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#FullColor</span>
-
-            <span class="px-2 py-0.5 rounded-md bg-pitch/60 border border-neon/20">#SinCensura</span>
+            <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.05] border border-white/10">#HD</span>
 
           </div>
 
-          <p id="hero-synopsis" class="text-xs sm:text-sm text-lav/80 line-clamp-3 max-w-2xl font-light leading-relaxed">
+          <p id="hero-synopsis" class="text-xs sm:text-sm text-purple-200/70 line-clamp-2 max-w-2xl font-light leading-relaxed">
 
             Una electrizante historia erótica a todo color y en máxima definición. Sumérgete en viñetas sin censura con gráficos hiperrealistas y lectura fluida cuadro por cuadro.
 
@@ -1379,29 +1350,19 @@
 
           <!-- Botones de Acción Comercial -->
 
-          <div class="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-center md:justify-start gap-2.5 sm:gap-3 w-full sm:w-auto">
+          <div class="pt-1 flex flex-wrap items-center justify-center md:justify-start gap-2.5 sm:gap-3 w-full sm:w-auto">
 
-            <button id="hero-read-btn" onclick="openHeroComic()" class="h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
+            <button id="hero-read-btn" onclick="openHeroComic()" class="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer">
 
               <i class="fa-solid fa-play text-xs"></i> Comenzar a Leer
 
             </button>
 
-            <div class="flex items-center gap-2 w-full sm:w-auto">
+            <button id="hero-fav-btn" onclick="toggleHeroFavorite()" class="h-10 sm:h-11 px-4 sm:px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-white/90 hover:text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer">
 
-              <button id="hero-fav-btn" onclick="toggleHeroFavorite()" class="flex-1 sm:flex-initial h-11 sm:h-12 px-4 sm:px-5 rounded-2xl bg-glass border border-neon/30 hover:border-hot text-lav hover:text-ink font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2">
+              <i class="fa-regular fa-heart" id="hero-fav-icon"></i> Guardar en Bóveda
 
-                <i class="fa-regular fa-heart" id="hero-fav-icon"></i> Guardar en Bóveda
-
-              </button>
-
-              <button onclick="fetchRandom()" class="h-11 sm:h-12 px-3.5 sm:px-4 rounded-2xl bg-glass border border-neon/30 hover:border-gold text-gold font-bold text-xs transition-all flex items-center justify-center gap-1.5" title="Abrir otro cómic">
-
-                <i class="fa-solid fa-dice text-sm"></i> <span class="inline">Al Azar</span>
-
-              </button>
-
-            </div>
+            </button>
 
           </div>
 
@@ -1436,29 +1397,29 @@
     <!-- 2. SHELF: CONTINUAR LEYENDO / VIENDO (RESUME PROGRESS) -->
     <section id="continue-section" class="hidden space-y-3">
       <div class="flex items-center justify-between">
-        <h2 class="font-display text-xl sm:text-2xl text-ink font-bold flex items-center gap-2">
-          <i class="fa-solid fa-clock-rotate-left text-hot"></i> <span id="continue-shelf-title">Continuar Leyendo</span>
+        <h2 class="font-display text-xl sm:text-2xl text-white font-black flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-pink-500"></i> <span id="continue-shelf-title">Continuar Leyendo</span>
         </h2>
-        <span id="continue-shelf-subtitle" class="text-xs text-lav/60">Reanuda donde lo dejaste con 1 toque</span>
+        <span id="continue-shelf-subtitle" class="text-xs text-purple-200/60">Reanuda donde lo dejaste con 1 toque</span>
       </div>
       <div id="continue-shelf-cards" class="flex gap-4 overflow-x-auto no-scrollbar pb-2">
         <!-- Tarjetas dinámicas de continuar leyendo / viendo -->
       </div>
     </section>
 
-    <!-- 3. GRID PRINCIPAL DE CÓMICS -->
+    <!-- 3. GRID PRINCIPAL DE CONTENIDO -->
 
     <section class="space-y-4">
 
       <div class="flex items-center justify-between">
 
-        <h2 id="grid-section-title" class="font-display text-xl sm:text-2xl text-ink font-bold flex items-center gap-2">
+        <h2 id="grid-section-title" class="font-display text-xl sm:text-2xl text-white font-black flex items-center gap-2">
 
-          <i class="fa-solid fa-fire text-hot"></i> Últimas Novedades Calientes
+          <i class="fa-solid fa-fire text-pink-500"></i> Últimas Novedades Calientes
 
         </h2>
 
-        <span id="grid-status-badge" class="text-xs font-semibold text-lav/70 bg-glass border border-neon/20 px-3 py-1 rounded-xl">
+        <span id="grid-status-badge" class="text-xs font-semibold text-purple-200/70 bg-white/[0.04] border border-white/10 px-3 py-1 rounded-full">
 
           Actualizado hace instantes
 
@@ -3438,31 +3399,18 @@
     // =======================================================================
 
     const VIDEO_CATEGORIES = [
-
       { id: 'all', label: '🔥 Todos los Videos' },
-
       { id: 'pmv', label: '🎵 PMV & Edits' },
-
-      { id: 'milf', label: '💋 MILF & Maduras' },
-
-      { id: 'amateur', label: '📹 Casero & Amateur' },
-
-      { id: 'anal', label: '🍑 Anal & DP' },
-
+      { id: 'milf', label: '💋 MILF' },
+      { id: 'amateur', label: '📹 Amateur' },
+      { id: 'anal', label: '🍑 Anal' },
       { id: 'pov', label: '👀 POV' },
-
-      { id: 'group', label: '👯 Tríos & Grupal' },
-
+      { id: 'group', label: '👯 Tríos' },
       { id: 'tits', label: '🍈 Tetonas' },
-
       { id: 'blondes', label: '👱‍♀️ Rubias' },
-
-      { id: 'brunettes', label: '🍫 Latinas & Morenas' },
-
-      { id: 'russians', label: '🇷🇺 Rusas & Europeas' },
-
-      { id: 'hd', label: '🎬 1080p Ultra HD' }
-
+      { id: 'brunettes', label: '🍫 Latinas' },
+      { id: 'russians', label: '🇷🇺 Rusas' },
+      { id: 'hd', label: '🎬 1080p HD' }
     ];
 
     const VIDEO_SOURCES = VIDEO_CATEGORIES;
@@ -3509,10 +3457,10 @@
       const btnVideos = document.getElementById('mode-btn-videos');
       const btnGalleries = document.getElementById('mode-btn-galleries');
       if (btnComics && btnVideos) {
-        btnComics.className = mode === 'comics' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-ink';
-        btnVideos.className = mode === 'videos' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-ink';
+        btnComics.className = mode === 'comics' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer';
+        btnVideos.className = mode === 'videos' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer';
         if (btnGalleries) {
-          btnGalleries.className = mode === 'galleries' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-ink';
+          btnGalleries.className = mode === 'galleries' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer';
         }
       }
 
@@ -3520,10 +3468,10 @@
       const mobVideos = document.getElementById('mob-toggle-videos');
       const mobGalleries = document.getElementById('mob-toggle-galleries');
       if (mobComics && mobVideos) {
-        mobComics.className = mode === 'comics' ? 'px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow' : 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white';
-        mobVideos.className = mode === 'videos' ? 'px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow' : 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white';
+        mobComics.className = mode === 'comics' ? 'px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm' : 'px-3 py-1 rounded-full text-[11px] font-bold text-white/70 hover:text-white';
+        mobVideos.className = mode === 'videos' ? 'px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm' : 'px-3 py-1 rounded-full text-[11px] font-bold text-white/70 hover:text-white';
         if (mobGalleries) {
-          mobGalleries.className = mode === 'galleries' ? 'px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow' : 'px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white';
+          mobGalleries.className = mode === 'galleries' ? 'px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm' : 'px-3 py-1 rounded-full text-[11px] font-bold text-white/70 hover:text-white';
         }
       }
 
@@ -3609,11 +3557,11 @@
       // Actualizar placeholder del buscador
       if (sInput) {
         if (mode === 'videos') {
-          sInput.placeholder = 'Buscar videos porno en vivo (ej: milf, blowjob, amateur, anal, trio)...';
+          sInput.placeholder = 'Buscar videos HD, actrices, tags...';
         } else if (mode === 'galleries') {
-          sInput.placeholder = 'Buscar cosplayers, modelos, sets (ej: Kang, Genshin, ArtGravia)...';
+          sInput.placeholder = 'Buscar modelos, cosplayers, sets...';
         } else {
-          sInput.placeholder = 'Buscar cómics por personaje, fetiche o saga (ej: Milf, Marvel, Madre, 3D)...';
+          sInput.placeholder = 'Buscar cómics, mangas, artistas...';
         }
       }
 
@@ -3698,92 +3646,31 @@
     }
 
     function renderCategoryChips() {
-
       const container = document.getElementById('category-chips');
-
       if (!container) return;
-
       container.innerHTML = '';
 
-      // Botón global para Mezclar y descubrir contenido variado en la pestaña activa
-      const shuffleBtn = document.createElement('button');
-      shuffleBtn.className = 'cat-chip px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/25 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0';
-      shuffleBtn.innerHTML = '<i class="fa-solid fa-shuffle text-amber-400"></i> <span>Mezclar</span>';
-      shuffleBtn.title = 'Mezclar y descubrir nuevo contenido variado';
-      shuffleBtn.onclick = () => shuffleCurrentFeed();
-      container.appendChild(shuffleBtn);
-
-      // Botón global de Modo de Catálogo (Dinámico / Estático)
-      const modeChipBtn = document.createElement('button');
-      modeChipBtn.id = 'catalog-mode-chip-btn';
-      const isDyn = state.catalogMode === 'dynamic';
-      modeChipBtn.className = `cat-chip px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 ${
-        isDyn
-          ? 'text-pink-300 bg-pink-500/15 border border-pink-500/40 hover:bg-pink-500/25 shadow-[0_0_15px_rgba(236,72,153,0.2)]'
-          : 'text-purple-300/80 bg-purple-950/40 border border-purple-500/25 hover:bg-purple-900/40'
-      }`;
-      modeChipBtn.innerHTML = isDyn
-        ? '<i class="fa-solid fa-dice text-pink-400"></i> <span>Aleatorio</span>'
-        : '<i class="fa-solid fa-thumbtack text-purple-400"></i> <span>Estático</span>';
-      modeChipBtn.title = isDyn
-        ? 'Modo Aleatorio activo: mezcla y rota contenido de todo el catálogo. Clic para cambiar a Estático.'
-        : 'Modo Estático activo: páginas fijas y cronológicas por número de item. Clic para cambiar a Aleatorio.';
-      modeChipBtn.onclick = () => toggleCatalogMode();
-      container.appendChild(modeChipBtn);
-
+      let cats = [];
       if (state.mode === 'galleries') {
-        GALLERY_CATEGORIES.forEach(cat => {
-          const btn = document.createElement('button');
-          const isActive = (state.category === cat.id) || (state.category === 'all' && cat.id === 'all');
-          btn.className = `cat-chip px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-            isActive
-              ? 'active font-extrabold bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow'
-              : 'text-lav/80 bg-glass border border-neon/25 hover:border-hot'
-          }`;
-          btn.textContent = cat.label;
-          btn.onclick = () => setCategory(cat.id, btn);
-          container.appendChild(btn);
-        });
+        cats = GALLERY_CATEGORIES;
       } else if (state.mode === 'comics') {
-        COMIC_CATEGORIES.forEach(cat => {
-          const btn = document.createElement('button');
-          const isActive = (state.category === cat.id) || (state.category === 'all' && cat.id === 'all');
-          btn.className = `cat-chip px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-            isActive
-              ? 'active font-extrabold bg-gradient-to-r from-neon to-hot text-white shadow-neon'
-              : 'text-lav/80 bg-glass border border-neon/25 hover:border-hot'
-          }`;
-          btn.textContent = cat.label;
-          btn.onclick = () => setCategory(cat.id, btn);
-          container.appendChild(btn);
-        });
+        cats = COMIC_CATEGORIES;
       } else {
-        VIDEO_CATEGORIES.forEach(cat => {
-
-          const btn = document.createElement('button');
-
-          const isActive = (state.category === cat.id) || (state.category === 'all' && cat.id === 'all');
-
-          btn.className = `cat-chip px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-
-            isActive
-
-              ? 'active font-extrabold bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow'
-
-              : 'text-lav/80 bg-glass border border-neon/25 hover:border-hot'
-
-          }`;
-
-          btn.textContent = cat.label;
-
-          btn.onclick = () => setCategory(cat.id, btn);
-
-          container.appendChild(btn);
-
-        });
-
+        cats = VIDEO_CATEGORIES;
       }
 
+      cats.forEach(cat => {
+        const btn = document.createElement('button');
+        const isActive = (state.category === cat.id) || (state.category === 'all' && cat.id === 'all');
+        btn.className = `cat-chip whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+          isActive
+            ? 'active font-extrabold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.35)] border border-pink-400/50'
+            : 'text-white/70 bg-white/[0.04] border border-white/10 hover:border-pink-500/50 hover:text-white hover:bg-white/[0.08]'
+        }`;
+        btn.textContent = cat.label;
+        btn.onclick = () => setCategory(cat.id, btn);
+        container.appendChild(btn);
+      });
     }
 
     function setVideoSource(srcId, btn) {
@@ -3797,15 +3684,11 @@
       state.page = 1;
 
       document.querySelectorAll('#category-chips .cat-chip').forEach(c => {
-
-        c.className = 'cat-chip px-3.5 py-1.5 rounded-xl text-xs font-bold text-lav/80 bg-glass border border-neon/25 hover:border-hot transition-all';
-
+        c.className = 'cat-chip whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold text-white/70 bg-white/[0.04] border border-white/10 hover:border-pink-500/50 hover:text-white transition-all shrink-0 cursor-pointer';
       });
 
       if (btn) {
-
-        btn.className = 'cat-chip active px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow transition-all';
-
+        btn.className = 'cat-chip active whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-extrabold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.35)] border border-pink-400/50 transition-all shrink-0 cursor-pointer';
       }
 
       fetchLiveFeed();
@@ -5141,7 +5024,7 @@
       const grid = document.getElementById('comics-grid');
       if (!append) {
         grid.innerHTML = '';
-        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6';
+        grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6';
       }
 
       const existingCards = new Set(
@@ -5163,7 +5046,7 @@
           card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
           card.onclick = () => openProUpgradeModal(it);
         } else {
-          card.className = 'group velvet-card-enter flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#0f0720]/80 hover:bg-[#180c32] border border-white/10 hover:border-pink-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_30px_rgba(236,72,153,0.25)] transition-all duration-300 cursor-pointer relative';
           card.onclick = () => {
             if (it.id) setCachedItem(String(it.id), it);
             if (it.source && it.source_id) setCachedItem(`${it.source}_${it.source_id}`, it);
@@ -5176,10 +5059,10 @@
           ? getStealthImageUrl(it.cover_url, it.url)
           : VIDEO_FALLBACK_SVG;
         const duration = (it.extra && it.extra.duration) || '1080p HD';
-        const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || (it.source ? it.source.toUpperCase() : 'VIDEO HD');
+        const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || (it.source ? it.source.toUpperCase() : 'PMV Edit');
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-[#130924] select-none">
+          <div class="relative aspect-video w-full overflow-hidden bg-black select-none">
             <div class="skeleton-shimmer absolute inset-0"></div>
             <img
               src="${coverSrc}"
@@ -5193,78 +5076,59 @@
               onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
               onerror="handleCardImageError(this, 'video')"
             />
-            <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
+            <div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors pointer-events-none"></div>
 
-            <!-- Play / Lock Overlay on Hover -->
-            ${isLocked ? `
-              <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 z-10">
-                <div class="px-3 py-1.5 rounded-xl bg-amber-500/95 text-black font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_20px_rgba(245,158,11,0.7)] transform scale-90 group-hover:scale-100 transition-transform">
-                  <i class="fa-solid fa-lock text-xs"></i> Desbloquear ($5.99)
-                </div>
+            <!-- Play Icon on Hover -->
+            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
+              <div class="w-12 h-12 rounded-full bg-pink-600/90 text-white flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100 transition-transform duration-300">
+                <i class="fa-solid fa-play ml-0.5 text-sm"></i>
               </div>
-            ` : `
-              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
-                <div class="w-10 h-10 rounded-full bg-hot/90 text-white flex items-center justify-center shadow-hot-glow transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                  <i class="fa-solid fa-play ml-0.5 text-xs"></i>
-                </div>
-              </div>
-            `}
+            </div>
 
-            <!-- Badge Superior Izquierda: Duración / Calidad -->
-            <span class="absolute top-2 left-2 bg-black/85 border border-hot/40 text-hot px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shadow flex items-center gap-1">
-              <i class="fa-solid fa-circle-play text-[8px]"></i> ${duration}
+            <!-- Quality Badge Top-Left -->
+            <span class="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow">
+              1080p HD
             </span>
 
-            <!-- Indicador Bloqueado VIP (visible desde antes) -->
-            ${isLocked ? `
-              <span class="absolute top-2 right-10 px-2 py-0.5 rounded-lg bg-black/90 border border-amber-500/80 text-[9px] font-black uppercase text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.5)] flex items-center gap-1 z-20">
-                <i class="fa-solid fa-crown text-amber-400 text-[8px]"></i> VIP PREMIUM
-              </span>
-            ` : ''}
+            <!-- Duration Badge Bottom-Right -->
+            <span class="absolute bottom-2 right-2 bg-black/90 backdrop-blur-md text-white px-2 py-0.5 rounded-md text-[10px] font-black tabular-nums shadow border border-white/10">
+              <i class="fa-solid fa-clock text-[8px] mr-1 text-pink-400"></i>${duration}
+            </span>
 
-            <!-- Botón Favorito Flotante -->
-            <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
+            <!-- Favorite Heart Button Top-Right -->
+            <div class="absolute top-2 right-2 z-10">
               <button
                 onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="card-fav-btn w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                class="card-fav-btn w-7 h-7 rounded-lg bg-black/80 backdrop-blur-md border border-white/20 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
                 data-fav-source="${it.source || ''}"
                 data-fav-source-id="${it.source_id || ''}"
                 data-fav-id="${it.id || ''}"
                 title="Favorito"
               >
-                <i class="${isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70'} fa-heart"></i>
+                <i class="${isFav ? 'fa-solid text-pink-500' : 'fa-regular text-white/70'} fa-heart"></i>
               </button>
-            </div>
-
-            <!-- Badge Inferior Izquierda: Nombre de la actriz / performer -->
-            <div class="absolute bottom-2 left-2 right-2">
-              <span class="inline-block px-2 py-0.5 rounded-md bg-obsidian/90 text-lav border border-neon/30 text-[9px] font-bold uppercase truncate max-w-full">
-                ${escapeHtml(performerName)}
-              </span>
             </div>
           </div>
 
-          <!-- Pie de Tarjeta -->
-          <div class="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
-            <h4 class="text-xs font-bold text-ink group-hover:text-hot transition-colors line-clamp-2 leading-snug" title="${escapeHtml(it.title)}">
-              ${escapeHtml(it.title)}
-            </h4>
-            <div class="mt-2 pt-2 border-t border-neon/15 flex items-center justify-between text-[11px]">
-              ${isLocked ? `
-                <span class="text-[10px] font-bold text-amber-400 flex items-center gap-1">
-                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Exclusivo VIP
-                </span>
-                <span class="text-amber-300 font-black bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center gap-1 text-[10px] shadow-sm">
-                  <i class="fa-solid fa-crown text-[9px] text-amber-400"></i> VIP ($5.99)
-                </span>
-              ` : `
-                <span class="text-emerald-400 font-bold flex items-center gap-1 text-[10px]">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Completo
-                </span>
-                <span class="text-hot font-extrabold group-hover:translate-x-1 transition-transform flex items-center gap-1 text-[10px]">
-                  Ver Video &rarr;
-                </span>
-              `}
+          <!-- Info debajo de la miniatura (Estilo YouTube / Streaming) -->
+          <div class="p-3 flex-1 flex flex-col justify-between">
+            <div>
+              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-pink-400 transition-colors line-clamp-2 leading-snug" title="${escapeHtml(it.title)}">
+                ${escapeHtml(it.title)}
+              </h4>
+              <div class="flex items-center gap-2 text-[11px] text-purple-300/70 pt-1.5">
+                <span class="font-semibold text-pink-300/80 truncate">${escapeHtml(performerName)}</span>
+                <span>&bull;</span>
+                <span>${it.extra && it.extra.views ? it.extra.views + ' vistas' : 'PMV Edit'}</span>
+              </div>
+            </div>
+            <div class="mt-2.5 pt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
+              <span class="text-emerald-400 font-bold flex items-center gap-1.5 text-[10px]">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Streaming 1080p
+              </span>
+              <span class="text-pink-400 font-extrabold group-hover:translate-x-1 transition-transform flex items-center gap-1 text-[10px]">
+                Ver Video &rarr;
+              </span>
             </div>
           </div>
         `;
@@ -7654,9 +7518,20 @@
         ? getStealthImageUrl(item.cover_url, item.url)
         : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
-      document.getElementById('hero-cover').src = coverSrc;
+      const heroCover = document.getElementById('hero-cover');
+      if (heroCover) heroCover.src = coverSrc;
 
-      document.getElementById('hero-backdrop').style.backgroundImage = `url('${coverSrc}')`;
+      const heroBackdrop = document.getElementById('hero-backdrop');
+      if (heroBackdrop) heroBackdrop.style.backgroundImage = `url('${coverSrc}')`;
+
+      const coverContainer = document.getElementById('hero-cover-container');
+      if (coverContainer) {
+        if (isVid) {
+          coverContainer.className = 'w-full max-w-xs sm:max-w-sm md:max-w-md aspect-video rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-pink-500/30 relative group/cover cursor-pointer hover:border-pink-500 transition-all';
+        } else {
+          coverContainer.className = 'w-36 sm:w-44 md:w-52 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-purple-500/30 relative group/cover cursor-pointer hover:border-pink-500 transition-all';
+        }
+      }
 
       const parsedTitle = parseComicTitle(item.title);
       document.getElementById('hero-title').textContent = parsedTitle.title;
@@ -7673,30 +7548,53 @@
         }
       }
 
-      document.getElementById('hero-format-badge').textContent = fmt.label;
+      const heroBadge = document.getElementById('hero-format-badge');
+      if (heroBadge) {
+        if (isVid) {
+          heroBadge.textContent = 'VIDEO STREAMING 1080P';
+          heroBadge.className = 'px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 shadow-sm';
+        } else {
+          heroBadge.textContent = fmt.label;
+          heroBadge.className = `px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${fmt.color}`;
+        }
+      }
 
-      document.getElementById('hero-format-badge').className = `px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${fmt.color}`;
+      const viewsBadge = document.getElementById('hero-views-badge');
+      if (viewsBadge) {
+        if (isVid) {
+          const views = (item.extra && item.extra.views) ? `${item.extra.views} Vistas` : '120K Vistas';
+          viewsBadge.innerHTML = `<i class="fa-solid fa-eye mr-1 text-pink-400"></i>${views}`;
+        } else {
+          viewsBadge.innerHTML = `<i class="fa-solid fa-book-open mr-1 text-purple-400"></i>${item.page_count ? item.page_count + ' Págs' : '58.4K Lecturas'}`;
+        }
+      }
 
-      document.getElementById('hero-synopsis').textContent = getSensualSynopsis(item);
+      const synopsisEl = document.getElementById('hero-synopsis');
+      if (synopsisEl) {
+        if (isVid) {
+          synopsisEl.textContent = 'Producción erótica en streaming directo 1080p sin censura con máxima velocidad y nitidez.';
+        } else {
+          synopsisEl.textContent = getSensualSynopsis(item);
+        }
+      }
 
       const isLocked = isItemLockedForUser(item, state.heroIndex);
       const readBtn = document.getElementById('hero-read-btn');
       if (readBtn) {
         if (isLocked) {
           readBtn.innerHTML = '<i class="fa-solid fa-lock text-xs text-amber-300"></i> Desbloquear VIP ($5.99)';
-          readBtn.className = 'h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-amber-500 via-pink-600 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-[0_0_25px_rgba(245,158,11,0.5)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2';
+          readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-amber-500 via-pink-600 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
         } else {
-          readBtn.className = 'h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2';
-          if (state.mode === 'videos' || item.media_type === 'video') {
-            readBtn.innerHTML = '<i class="fa-solid fa-circle-play text-xs"></i> Ver Video en HD';
-            document.getElementById('hero-format-badge').textContent = 'VIDEO STREAMING HD';
-            document.getElementById('hero-format-badge').className = 'px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800';
-          } else if (state.mode === 'galleries' || item.media_type === 'gallery') {
-            readBtn.innerHTML = '<i class="fa-solid fa-camera-retro text-xs"></i> Ver Galería en HD';
-            document.getElementById('hero-format-badge').textContent = 'GALERÍA VIP 4K';
-            document.getElementById('hero-format-badge').className = 'px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-hot/20 text-hot border border-hot/30';
+          readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
+          if (isVid) {
+            readBtn.innerHTML = '<i class="fa-solid fa-play text-xs"></i> Ver Video en HD';
+            readBtn.onclick = () => {
+              if (item.id) setCachedItem(String(item.id), item);
+              openVideoPlayer(item.source, item.source_id, item.title, item.cover_url, item.url, true, item.id);
+            };
           } else {
-            readBtn.innerHTML = '<i class="fa-solid fa-play text-xs"></i> Comenzar a Leer';
+            readBtn.innerHTML = '<i class="fa-solid fa-book-open text-xs"></i> Comenzar a Leer';
+            readBtn.onclick = () => openHeroComic();
           }
         }
       }
@@ -7881,7 +7779,7 @@
 
         const isLocked = isItemLockedForUser(h);
         const card = document.createElement('div');
-        card.className = 'group relative w-56 sm:w-64 shrink-0 bg-glasscard border border-neon/25 hover:border-hot rounded-2xl overflow-hidden cursor-pointer shadow-neon p-2.5 flex items-center gap-3 transition-all hover:scale-[1.02]';
+        card.className = `group relative ${isVid ? 'w-64 sm:w-72' : 'w-56 sm:w-64'} shrink-0 bg-[#0e061e]/90 border border-white/10 hover:border-pink-500 rounded-2xl overflow-hidden cursor-pointer shadow-lg p-2.5 flex items-center gap-3 transition-all hover:scale-[1.02]`;
         card.onclick = () => {
           if (isLocked) {
             openProUpgradeModal(h);
@@ -7899,21 +7797,21 @@
           : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
         card.innerHTML = `
-          <div class="w-14 h-18 aspect-[3/4] rounded-xl overflow-hidden bg-pitch shrink-0 relative select-none">
+          <div class="${isVid ? 'w-24 h-14 aspect-video' : 'w-12 h-16 aspect-[3/4]'} rounded-xl overflow-hidden bg-black shrink-0 relative select-none border border-white/10">
             <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
             <img src="${coverSrc}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
             <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-hot text-sm drop-shadow"></i>
+              <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-pink-400 text-sm drop-shadow"></i>
             </div>
           </div>
-          <div class="flex-1 min-w-0 pr-4">
-            <h5 class="text-xs font-bold text-ink truncate">${escapeHtml(h.title)}</h5>
-            <span class="text-[10px] text-hot font-bold block mt-0.5 truncate">${progressLabel}</span>
-            <div class="w-full bg-pitch rounded-full h-1.5 mt-1.5 overflow-hidden border border-neon/20">
-              <div class="bg-gradient-to-r from-hot to-neon h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+          <div class="flex-1 min-w-0 pr-3">
+            <h5 class="text-xs font-bold text-white truncate group-hover:text-pink-300 transition-colors">${escapeHtml(h.title)}</h5>
+            <span class="text-[10px] text-pink-400 font-bold block mt-0.5 truncate">${progressLabel}</span>
+            <div class="w-full bg-black/60 rounded-full h-1.5 mt-1.5 overflow-hidden border border-white/10">
+              <div class="bg-gradient-to-r from-pink-500 to-purple-600 h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
             </div>
           </div>
-          <button class="dismiss-continue-btn absolute top-2 right-2 w-5 h-5 rounded-full bg-black/70 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all cursor-pointer" title="Quitar de continuar">
+          <button class="dismiss-continue-btn absolute top-2 right-2 w-5 h-5 rounded-full bg-black/70 hover:bg-pink-600 text-white/70 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all cursor-pointer" title="Quitar de continuar">
             <i class="fa-solid fa-xmark"></i>
           </button>
         `;
@@ -11070,10 +10968,10 @@
       state.page = 1;
 
       document.querySelectorAll('.cat-chip').forEach(c => {
-        c.className = 'cat-chip px-3.5 py-1.5 rounded-xl text-xs font-bold text-lav/80 bg-glass border border-neon/25 hover:border-hot transition-all';
+        c.className = 'cat-chip whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold text-white/70 bg-white/[0.04] border border-white/10 hover:border-pink-500/50 hover:text-white transition-all shrink-0 cursor-pointer';
       });
 
-      btn.className = 'cat-chip active px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-neon to-hot text-white shadow-neon transition-all';
+      btn.className = 'cat-chip active whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-extrabold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.35)] border border-pink-400/50 transition-all shrink-0 cursor-pointer';
 
       fetchLiveFeed(true);
     }
