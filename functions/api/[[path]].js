@@ -389,7 +389,7 @@ export async function onRequest(context) {
     // Cache L1 de Memoria RAM Isolate (0ms)
     const detailCacheKey = url.pathname;
     const l1Detail = getIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, 86400000);
-    if (l1Detail) {
+    if (l1Detail && (!l1Detail.includes('"pages":[]') || l1Detail.includes('"chapters":['))) {
       return new Response(l1Detail, {
         status: 200,
         headers: {
@@ -409,11 +409,13 @@ export async function onRequest(context) {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const bodyText = await cached.text();
-        setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, bodyText);
-        const edgeHeaders = new Headers(cached.headers);
-        edgeHeaders.set("X-Cloudflare-Detail-Cache", "HIT");
-        edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-        return new Response(bodyText, { status: 200, headers: edgeHeaders });
+        if (!bodyText.includes('"pages":[]') || bodyText.includes('"chapters":[')) {
+          setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, bodyText);
+          const edgeHeaders = new Headers(cached.headers);
+          edgeHeaders.set("X-Cloudflare-Detail-Cache", "HIT");
+          edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
+          return new Response(bodyText, { status: 200, headers: edgeHeaders });
+        }
       }
     } catch (e) {}
 
