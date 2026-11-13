@@ -1516,87 +1516,32 @@
         <span class="text-xs font-black text-lav">Cargando siguiente página en alta definición...</span>
       </div>
 
-      <!-- Barra de Navegación Rápida Flotante / Ergonómica para Android & Desktop -->
-      <div id="load-more-btn-container" class="w-full max-w-md flex flex-col items-center gap-2.5">
-        
-        <!-- Botón Grande de Acción: Página Siguiente (Limpieza de RAM Instantánea) -->
-        <button id="load-more-btn" onclick="loadNextPage()" class="group w-full py-4 px-6 bg-gradient-to-r from-hot via-purple-600 to-neon hover:opacity-95 text-white rounded-2xl text-sm font-black shadow-hot-glow hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-between cursor-pointer border border-white/10">
-          <span class="flex items-center gap-2">
-            <i class="fa-solid fa-bolt text-amber-300 text-xs"></i>
-            <span id="load-more-btn-text">Página Siguiente</span>
+      <!-- Barra de Paginación Clásica Velvet Pro -->
+      <nav id="velvet-pagination-container" aria-label="Navegación del Catálogo" class="w-full max-w-2xl mx-auto flex flex-col items-center justify-center gap-3 py-6 my-4 select-none">
+        <!-- Fila de Botones Numerados (1, 2, 3...) -->
+        <div id="pagination-numbers-row" class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 w-full px-2"></div>
+
+        <!-- Fila de Salto Rápido y Total de Páginas -->
+        <div class="flex flex-wrap items-center justify-center gap-3 text-xs text-lav/80 bg-[#0d061e]/90 border border-purple-500/25 px-4 py-2 rounded-2xl backdrop-blur-md shadow-lg">
+          <span>
+            Página <strong id="pagination-current-label" class="text-pink-400 font-extrabold text-sm">1</strong> de <span id="pagination-total-label" class="text-purple-300 font-mono font-bold">1,562</span>
           </span>
-          <span class="flex items-center gap-2">
-            <span id="load-more-counter" class="text-[11px] bg-black/40 px-2.5 py-1 rounded-xl text-lav border border-white/10 font-bold tabular-nums">Pág. 1 / 4,389</span>
-            <i class="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition-transform"></i>
-          </span>
-        </button>
-
-        <!-- Barra de Controles Táctiles Rápidos: Anterior / Salto / Siguiente -->
-        <div class="flex items-center justify-between w-full gap-2 p-1.5 rounded-2xl bg-[#0c061d]/90 border border-neon/25 shadow-lg backdrop-blur-md">
-          <button id="prev-page-btn" onclick="changePage(-1)" title="Página anterior" class="flex-1 h-10 px-3 flex items-center justify-center gap-1.5 bg-glass border border-neon/20 hover:border-hot text-lav hover:text-white rounded-xl text-xs font-bold disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer">
-            <i class="fa-solid fa-chevron-left text-[10px]"></i>
-            <span>Ant</span>
-          </button>
-
-          <!-- Botón central para desplegar salto directo -->
-          <button onclick="togglePageJumpDrawer()" class="h-10 px-4 bg-hot/15 border border-hot/35 hover:bg-hot/25 text-white rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-sm">
-            <i class="fa-solid fa-compass text-hot text-[11px]"></i>
-            <span id="quick-page-counter" class="tabular-nums font-mono text-[11px]">Pág. 1</span>
-            <i class="fa-solid fa-chevron-up text-[9px] text-lav/60"></i>
-          </button>
-
-          <button id="next-page-btn" onclick="changePage(1)" title="Página siguiente" class="flex-1 h-10 px-3 flex items-center justify-center gap-1.5 bg-glass border border-neon/20 hover:border-hot text-lav hover:text-white rounded-xl text-xs font-bold disabled:opacity-25 disabled:pointer-events-none transition-all cursor-pointer">
-            <span>Sig</span>
-            <i class="fa-solid fa-chevron-right text-[10px]"></i>
-          </button>
+          <span class="text-purple-500/40">|</span>
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-lav/60">Ir a:</span>
+            <input id="direct-page-input-quick" type="number" min="1" class="w-16 h-8 text-center text-xs font-black text-white bg-black/80 border border-purple-500/30 rounded-xl focus:outline-none focus:border-pink-500" placeholder="1" onkeydown="if(event.key==='Enter') executeQuickJump()" />
+            <button type="button" onclick="executeQuickJump()" class="px-3 h-8 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white text-xs font-black shadow-md cursor-pointer transition-all">
+              Ir
+            </button>
+          </div>
         </div>
-
-        <!-- Indicador de Memoria Limpia Android -->
-        <div class="flex items-center gap-1.5 text-[10px] text-lav/50 font-medium">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-          <span>Motor Ligero Velvet Android &bull; Cero saturación de memoria</span>
-        </div>
-      </div>
-
-      <!-- Drawer colapsable para salto manual (limpio, elegante y táctil) -->
-      <div id="page-jump-drawer" class="hidden flex flex-wrap items-center justify-center gap-2 p-3 bg-obsidian/95 border border-neon/30 rounded-2xl backdrop-blur-xl shadow-neon-strong transition-all max-w-md w-full">
-        <button id="first-page-btn" onclick="jumpToPage(1)" title="Primera página" class="w-9 h-9 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
-          <i class="fa-solid fa-angles-left"></i>
-        </button>
-
-        <div class="flex items-center gap-1.5 px-2 border-x border-neon/20 flex-1 justify-center">
-          <span class="text-xs text-lav font-bold">Ir a pág:</span>
-          <input id="direct-page-input" type="number" min="1" class="w-20 h-9 px-2 text-center text-xs font-bold text-white bg-black/80 border border-neon/40 focus:border-hot rounded-xl focus:outline-none" placeholder="1" onkeydown="if(event.key==='Enter') executeDirectJump()" />
-          <button onclick="executeDirectJump()" class="px-4 h-9 bg-gradient-to-r from-hot to-neon text-white text-xs font-black rounded-xl hover:shadow-hot-glow cursor-pointer">
-            Saltar
-          </button>
-        </div>
-
-        <button id="last-page-btn" onclick="jumpToLastPage()" title="Última página" class="w-9 h-9 flex items-center justify-center bg-glass border border-neon/20 hover:border-hot text-ink rounded-xl text-xs font-bold disabled:opacity-30 cursor-pointer">
-          <i class="fa-solid fa-angles-right"></i>
-        </button>
-      </div>
-
-      <!-- Contenedores ocultos de compatibilidad -->
-      <div id="pagination-pills" class="hidden"></div>
-      <div id="pagination-controls" class="hidden"></div>
+      </nav>
 
       <!-- Fin del catálogo -->
       <div id="infinite-end-reached" class="hidden text-center py-4 space-y-1">
         <p class="text-xs font-bold text-lav/80"><i class="fa-solid fa-circle-check text-hot mr-1"></i> Has llegado al final de este catálogo</p>
         <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" class="text-[11px] text-hot hover:underline font-bold cursor-pointer">Volver al inicio &uarr;</button>
       </div>
-    </div>
-
-    <!-- Bolita / Cápsula Flotante Interactiva de Página Siguiente (Pull-Up & Tap Android / PC) -->
-    <div id="velvet-page-orb-container" class="fixed bottom-16 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 transition-all duration-300 pointer-events-none opacity-0 translate-y-14 select-none">
-      <button id="velvet-page-orb" onclick="transitionToNextPage()" class="pointer-events-auto group px-5 py-3 rounded-full bg-gradient-to-r from-[#ff2a85] via-purple-700 to-[#00f2fe] text-white font-black text-xs shadow-[0_8px_32px_rgba(255,42,133,0.5)] hover:shadow-[0_8px_38px_rgba(0,242,254,0.6)] border border-white/30 flex items-center gap-2.5 backdrop-blur-xl hover:scale-105 active:scale-95 transition-all cursor-pointer">
-        <span id="velvet-orb-icon" class="w-5 h-5 rounded-full bg-black/30 flex items-center justify-center text-[10px] text-amber-300">
-          <i class="fa-solid fa-angles-up group-hover:-translate-y-0.5 transition-transform"></i>
-        </span>
-        <span id="velvet-orb-text" class="tracking-wide font-extrabold text-xs">Página Siguiente</span>
-        <span id="velvet-orb-page" class="text-[10px] bg-black/40 px-2.5 py-0.5 rounded-full font-mono text-lav border border-white/10">Pág. 2</span>
-      </button>
     </div>
 </main>
 
@@ -3389,11 +3334,11 @@
 
       category: 'all',
 
-      sort: 'random',
+      sort: 'recent',
 
-      catalogMode: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode')) || 'dynamic',
+      catalogMode: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode')) || 'static',
 
-      feedSeed: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode') === 'static') ? 0 : (Math.floor(Math.random() * 500) + 1),
+      feedSeed: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode') === 'dynamic') ? (Math.floor(Math.random() * 500) + 1) : 0,
 
       live: true,
 
@@ -4336,7 +4281,7 @@
         if (savedCatalogMode === 'static' || savedCatalogMode === 'dynamic') {
           state.catalogMode = savedCatalogMode;
         } else {
-          state.catalogMode = 'dynamic';
+          state.catalogMode = 'static';
         }
         if (state.catalogMode === 'dynamic' && !state.feedSeed) {
           state.feedSeed = Math.floor(Math.random() * 500) + 1;
@@ -4677,37 +4622,7 @@
             grid.style.transform = 'none';
           }
 
-          // Pre-fetch en segundo plano de la siguiente página para respuesta instantánea (0ms)
-          if (nextPage < (data.total_pages || 1)) {
-            const pNext = nextPage + 1;
-            const pNextKey = `${state.mode}:${state.category}:${pNext}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
-            if (!CLIENT_CACHE.has(pNextKey)) {
-              const pNextParams = new URLSearchParams({
-                page: pNext,
-                page_size: state.pageSize,
-                sort: state.sort,
-                live: 'true'
-              });
-              if (state.mode === 'videos') {
-                pNextParams.append('media_type', 'video');
-                if (state.feedSeed) pNextParams.append('seed', String(state.feedSeed));
-                if (state.category && state.category !== 'all') pNextParams.append('category', state.category);
-              } else if (state.mode === 'galleries') {
-                pNextParams.append('media_type', 'gallery');
-                if (state.feedSeed) pNextParams.append('seed', String(state.feedSeed));
-                if (state.category && state.category !== 'all') pNextParams.append('category', state.category);
-              } else {
-                pNextParams.append('media_type', 'comic');
-                if (state.feedSeed) pNextParams.append('seed', String(state.feedSeed));
-                if (state.category && state.category !== 'all') pNextParams.append('category', state.category);
-              }
-              if (state.query) pNextParams.append('q', state.query);
-              fetch(`/api/items?${pNextParams.toString()}`, { credentials: 'omit' })
-                .then(r => r.ok ? r.json() : null)
-                .then(nd => { if (nd) CLIENT_CACHE.set(pNextKey, { ts: Date.now(), data: nd }); })
-                .catch(() => {});
-            }
-          }
+
         } else {
           const endEl = document.getElementById('infinite-end-reached');
           if (endEl) endEl.classList.remove('hidden');
@@ -4762,71 +4677,7 @@
       _feedObserver.observe(sentinel);
     }
 
-    let _touchStartY = 0;
-    let _isPullingAtBottom = false;
-
-    window.addEventListener('touchstart', (e) => {
-      if (e.touches && e.touches.length === 1) {
-        _touchStartY = e.touches[0].clientY;
-      }
-    }, { passive: true });
-
-    window.addEventListener('touchmove', (e) => {
-      if (!e.touches || e.touches.length !== 1 || _isLoadingMore) return;
-      const currentY = e.touches[0].clientY;
-      const deltaY = _touchStartY - currentY;
-      const isAtBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 70);
-
-      const orb = document.getElementById('velvet-page-orb');
-      if (isAtBottom && deltaY > 15) {
-        if (orb) {
-          const lift = Math.min(22, (deltaY - 15) * 0.35);
-          const scale = Math.min(1.12, 1 + (deltaY - 15) * 0.002);
-          orb.style.transform = `translateY(-${lift}px) scale(${scale})`;
-        }
-        if (deltaY > 80 && !_isPullingAtBottom && state.page < (state.totalPages || 1)) {
-          _isPullingAtBottom = true;
-          transitionToNextPage();
-        }
-      }
-    }, { passive: true });
-
-    window.addEventListener('touchend', () => {
-      _isPullingAtBottom = false;
-      const orb = document.getElementById('velvet-page-orb');
-      if (orb) {
-        orb.style.transform = '';
-      }
-    }, { passive: true });
-
-    window.addEventListener('scroll', () => {
-      const orbCont = document.getElementById('velvet-page-orb-container');
-      if (!orbCont) return;
-      const homeView = document.getElementById('home-view');
-      const readerModal = document.getElementById('reader-modal');
-      const videoView = document.getElementById('video-view');
-      const isHomeVisible = homeView && !homeView.classList.contains('hidden') &&
-                            (!readerModal || readerModal.classList.contains('hidden')) &&
-                            (!videoView || videoView.classList.contains('hidden'));
-
-      if (!isHomeVisible || (state.totalPages && state.page >= state.totalPages)) {
-        orbCont.classList.add('opacity-0', 'translate-y-14');
-        orbCont.classList.remove('opacity-100', 'translate-y-0');
-        return;
-      }
-
-      const scrollY = window.scrollY;
-      const docHeight = document.documentElement.scrollHeight;
-      const winHeight = window.innerHeight;
-
-      if (scrollY + winHeight >= docHeight * 0.45 && docHeight > winHeight * 1.2) {
-        orbCont.classList.remove('opacity-0', 'translate-y-14');
-        orbCont.classList.add('opacity-100', 'translate-y-0');
-      } else {
-        orbCont.classList.add('opacity-0', 'translate-y-14');
-        orbCont.classList.remove('opacity-100', 'translate-y-0');
-      }
-    }, { passive: true });
+    // Eliminado el listener invasivo de arrastre táctil para que el scroll sea 100% natural
 
     function renderFeedData(data, append = false) {
 
@@ -4950,9 +4801,7 @@
       if (!skipCache && CLIENT_CACHE.has(cacheKey)) {
         const cached = CLIENT_CACHE.get(cacheKey);
         renderFeedData(cached.data);
-        if (Date.now() - cached.ts > 90000) {
-          fetchLiveFeed(true);
-        }
+
         return;
       }
 
@@ -4965,10 +4814,7 @@
             if (parsed && parsed.data && parsed.data.items && parsed.data.items.length > 0) {
               CLIENT_CACHE.set(cacheKey, parsed);
               renderFeedData(parsed.data);
-              // Actualizar en segundo plano de manera invisible si pasaron más de 30 segundos
-              if (Date.now() - (parsed.ts || 0) > 30000) {
-                fetchLiveFeed(true);
-              }
+
               return;
             }
           }
@@ -5044,38 +4890,7 @@
           sessionStorage.setItem('vcache_' + cacheKey, cachedJson);
         } catch (e) {}
 
-        // Precarga anticipada de las primeras portadas para pintarlas a 0ms en móvil
-        if (data.items && data.items.length > 0) {
-          data.items.slice(0, 4).forEach(it => {
-            if (it.cover_url) {
-              const pImg = new Image();
-              pImg.src = it.cover_url;
-            }
-          });
-        }
 
-        // Turbo Prefetch de la Página Siguiente en Background (0ms navegación instantánea)
-        if (data.page < (data.total_pages || 1)) {
-          const nextP = data.page + 1;
-          const nextKey = `${state.mode}:${state.category}:${nextP}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
-          if (!CLIENT_CACHE.has(nextKey)) {
-            const nextParams = new URLSearchParams(params);
-            nextParams.set('page', nextP);
-            fetch(`/api/items?${nextParams.toString()}`, { credentials: 'omit' })
-              .then(r => r.ok ? r.json() : null)
-              .then(nextData => {
-                if (nextData && nextData.items) {
-                  CLIENT_CACHE.set(nextKey, { ts: Date.now(), data: nextData });
-                  nextData.items.slice(0, 6).forEach(it => {
-                    if (it.cover_url) {
-                      const preImg = new Image();
-                      preImg.src = it.cover_url;
-                    }
-                  });
-                }
-              }).catch(() => {});
-          }
-        }
 
         renderFeedData(data);
 
@@ -11317,57 +11132,131 @@
 
     function renderPaginationControls(currentPage, totalPages) {
       currentPage = parseInt(currentPage, 10);
-      if (isNaN(currentPage) || currentPage < 1) currentPage = state.page || 1;
+      if (isNaN(currentPage) || currentPage < 1) currentPage = 1;
       totalPages = parseInt(totalPages, 10);
-      if (isNaN(totalPages) || totalPages < 1) totalPages = state.totalPages || 1;
+      if (isNaN(totalPages) || totalPages < 1) totalPages = 1;
+      if (currentPage > totalPages) currentPage = totalPages;
+
       state.page = currentPage;
       state.totalPages = totalPages;
 
-      const firstBtn = document.getElementById('first-page-btn');
-      const prevBtn = document.getElementById('prev-page-btn');
-      const nextBtn = document.getElementById('next-page-btn');
-      const lastBtn = document.getElementById('last-page-btn');
-      const directInput = document.getElementById('direct-page-input');
+      const currLabel = document.getElementById('pagination-current-label');
+      const totalLabel = document.getElementById('pagination-total-label');
+      const inputQuick = document.getElementById('direct-page-input-quick');
+      if (currLabel) currLabel.textContent = currentPage.toLocaleString();
+      if (totalLabel) totalLabel.textContent = totalPages.toLocaleString();
+      if (inputQuick) {
+        inputQuick.max = totalPages;
+        inputQuick.placeholder = String(currentPage);
+      }
 
-      if (firstBtn) firstBtn.disabled = currentPage <= 1;
-      if (prevBtn) prevBtn.disabled = currentPage <= 1;
-      if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
-      if (lastBtn) lastBtn.disabled = currentPage >= totalPages;
-      if (directInput) {
-        directInput.max = totalPages;
-        directInput.placeholder = String(currentPage);
+      const container = document.getElementById('pagination-numbers-row');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (totalPages <= 1) return;
+
+      // Botón Anterior
+      const prevBtn = document.createElement('button');
+      prevBtn.type = 'button';
+      prevBtn.disabled = currentPage <= 1;
+      prevBtn.className = `px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+        currentPage <= 1
+          ? 'opacity-30 border-purple-500/10 text-lav/40 pointer-events-none'
+          : 'border-purple-500/25 bg-purple-950/40 text-purple-200 hover:border-pink-500 hover:text-white active:scale-95'
+      }`;
+      prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left text-[10px]"></i> <span class="hidden sm:inline">Ant</span>';
+      prevBtn.onclick = () => jumpToPage(currentPage - 1);
+      container.appendChild(prevBtn);
+
+      // Ventana de páginas numeradas
+      const delta = window.innerWidth < 640 ? 1 : 2;
+      const left = Math.max(1, currentPage - delta);
+      const right = Math.min(totalPages, currentPage + delta);
+
+      if (left > 1) {
+        container.appendChild(createPageNumBtn(1, currentPage));
+        if (left > 2) {
+          const dots = document.createElement('span');
+          dots.className = 'px-1 text-lav/40 text-xs font-bold';
+          dots.textContent = '...';
+          container.appendChild(dots);
+        }
       }
-      const counterEl = document.getElementById('load-more-counter');
-      if (counterEl) {
-        counterEl.textContent = `Pág. ${currentPage} / ${totalPages}`;
+
+      for (let p = left; p <= right; p++) {
+        container.appendChild(createPageNumBtn(p, currentPage));
       }
+
+      if (right < totalPages) {
+        if (right < totalPages - 1) {
+          const dots = document.createElement('span');
+          dots.className = 'px-1 text-lav/40 text-xs font-bold';
+          dots.textContent = '...';
+          container.appendChild(dots);
+        }
+        container.appendChild(createPageNumBtn(totalPages, currentPage));
+      }
+
+      // Botón Siguiente
+      const nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.disabled = currentPage >= totalPages;
+      nextBtn.className = `px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+        currentPage >= totalPages
+          ? 'opacity-30 border-purple-500/10 text-lav/40 pointer-events-none'
+          : 'border-purple-500/25 bg-purple-950/40 text-purple-200 hover:border-pink-500 hover:text-white active:scale-95'
+      }`;
+      nextBtn.innerHTML = '<span class="hidden sm:inline">Sig</span> <i class="fa-solid fa-chevron-right text-[10px]"></i>';
+      nextBtn.onclick = () => jumpToPage(currentPage + 1);
+      container.appendChild(nextBtn);
+    }
+
+    function createPageNumBtn(pageNum, currentPage) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isActive = pageNum === currentPage;
+      btn.className = `min-w-[36px] h-9 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+        isActive
+          ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white border border-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.4)] scale-105 pointer-events-none'
+          : 'border border-purple-500/25 bg-purple-950/40 text-purple-200 hover:border-pink-400 hover:text-white active:scale-95'
+      }`;
+      btn.textContent = pageNum.toLocaleString();
+      btn.onclick = () => jumpToPage(pageNum);
+      return btn;
+    }
+
+    function executeQuickJump() {
+      const input = document.getElementById('direct-page-input-quick');
+      if (!input || !input.value) return;
+      let target = parseInt(input.value.trim(), 10);
+      input.value = '';
+      if (isNaN(target) || target < 1) target = 1;
+      if (state.totalPages && target > state.totalPages) target = state.totalPages;
+      jumpToPage(target);
     }
 
     function jumpToPage(targetPage) {
       targetPage = parseInt(targetPage, 10);
       if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
       if (state.totalPages && targetPage > state.totalPages) targetPage = state.totalPages;
-      transitionToNextPage(targetPage);
-    }
+      if (targetPage === state.page) return;
 
-    function jumpToLastPage() {
-      if (state.totalPages) {
-        jumpToPage(state.totalPages);
+      state.page = targetPage;
+      const grid = document.getElementById('comics-grid');
+      if (grid) {
+        const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
+        window.scrollTo({ top: Math.max(0, topOffset), behavior: 'smooth' });
       }
-    }
-
-    function executeDirectJump() {
-      const input = document.getElementById('direct-page-input');
-      if (!input || !input.value) return;
-      const target = parseInt(input.value.trim(), 10);
-      input.value = '';
-      if (!isNaN(target)) {
-        jumpToPage(target);
-      }
+      fetchLiveFeed();
     }
 
     function changePage(delta) {
       jumpToPage(state.page + delta);
+    }
+
+    function jumpToLastPage() {
+      if (state.totalPages) jumpToPage(state.totalPages);
     }
 
     function resetHome() {

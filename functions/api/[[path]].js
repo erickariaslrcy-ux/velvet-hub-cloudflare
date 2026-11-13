@@ -895,47 +895,60 @@ export async function onRequest(context) {
 
     let clusters = COMIC_CLUSTERS;
     let maxId = 374460;
+    let estimatedTotal = 37485;
+
     if (mediaType === "video") {
       clusters = VIDEO_CLUSTERS;
       maxId = 304215;
+      estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       clusters = GALLERY_CLUSTERS;
       maxId = 398651;
+      estimatedTotal = 18260;
     }
 
-    let offset = (page - 1) * pageSize;
+    const maxPageEstimate = Math.max(1, Math.ceil(estimatedTotal / pageSize));
+    const safePage = Math.min(Math.max(1, page), maxPageEstimate);
+    let offset = (safePage - 1) * pageSize;
     let anchorId = maxId;
+    let isAscending = false;
 
     if (seedParam > 0 && !q && (sort === "recent" || sort === "random")) {
       // MODO DINÁMICO / ALEATORIO:
       // Rota determinísticamente entre diferentes fuentes y épocas según seed y página
-      const clusterIdx = Math.abs(seedParam + (page - 1)) % clusters.length;
+      const clusterIdx = Math.abs(seedParam + (safePage - 1)) % clusters.length;
       const cluster = clusters[clusterIdx];
       anchorId = cluster.anchor;
       const maxWindowPages = Math.max(1, Math.floor(cluster.maxOffset / pageSize));
-      const windowPage = Math.abs((seedParam * 13) + Math.floor((page - 1) / clusters.length)) % maxWindowPages;
+      const windowPage = Math.abs((seedParam * 13) + Math.floor((safePage - 1) / clusters.length)) % maxWindowPages;
       offset = windowPage * pageSize;
+    } else if (!q && (!category || category === "all")) {
+      // MODO ESTÁNDAR: DUAL-DIRECTION B-TREE INDEX ENGINE
+      // Páginas 1 .. mitad: escaneo directo descendente (order=id.desc)
+      // Páginas mitad+1 .. final: escaneo ascendente desde la base (order=id.asc) y reverse al responder.
+      // Esto elimina los timeouts de PostgreSQL al consultar páginas profundas (ej: pág. 1000..1562 en <200ms)
+      if (safePage > Math.floor(maxPageEstimate / 2)) {
+        isAscending = true;
+        offset = Math.max(0, (maxPageEstimate - safePage) * pageSize);
+      }
     }
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources,artists";
-    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}&id=lte.${anchorId}`;
-
-    let estimatedTotal = 100000;
+    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
+    if (!isAscending) {
+      postgrestUrl += `&id=lte.${anchorId}`;
+    }
 
     if (mediaType === "video") {
       postgrestUrl += "&media_type=eq.video";
-      estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery";
-      // Leakedgallery solo 0.002 (0.2%) de probabilidad ultra rara o si se busca explícitamente
       const allowLeak = (Math.random() < 0.002) || (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
       if (!allowLeak) {
         postgrestUrl += "&source=neq.leakgallery";
       }
-      estimatedTotal = 18261;
     } else {
       postgrestUrl += "&media_type=eq.comic";
-      estimatedTotal = 105326;
     }
 
     if (q) {
@@ -978,8 +991,8 @@ export async function onRequest(context) {
       postgrestUrl += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
       estimatedTotal = 1500;
     } else {
-      // Orden por defecto ultra-rápido indexado por B-tree id desc (solo cuando no hay ilike filter)
-      postgrestUrl += "&order=id.desc";
+      // Orden por defecto ultra-rápido indexado por B-tree (id desc o id asc según la mitad)
+      postgrestUrl += isAscending ? "&order=id.asc" : "&order=id.desc";
     }
 
     try {
@@ -988,8 +1001,9 @@ export async function onRequest(context) {
       });
 
       if (!spRes.ok) {
-        // Fallback seguro anti-timeout para garantizar cero errores 500 al usuario
-        const safeFallbackUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&${mediaType === "video" ? "source=eq.pmvhaven&id=lte.304215" : (mediaType === "gallery" || mediaType === "cosplay" ? "media_type=eq.gallery" : "media_type=eq.comic")}&order=id.desc`;
+        // Fallback seguro anti-timeout manteniendo el sentido de navegación
+        const fbOffset = isAscending ? 0 : Math.min(offset, 1000);
+        const safeFallbackUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${fbOffset}&${mediaType === "video" ? "source=eq.pmvhaven" : (mediaType === "gallery" || mediaType === "cosplay" ? "media_type=eq.gallery" : "media_type=eq.comic")}&order=${isAscending ? "id.asc" : "id.desc"}`;
         const fbRes = await fetch(safeFallbackUrl, {
           headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
         });
@@ -1004,7 +1018,10 @@ export async function onRequest(context) {
         }
       }
 
-      const rawItems = await spRes.json();
+      let rawItems = await spRes.json();
+      if (isAscending && Array.isArray(rawItems)) {
+        rawItems.reverse();
+      }
       // Filtro defensivo estricto: descartar permanentemente ítems con 0 páginas en cómics o galerías
       const validRawItems = (rawItems || []).filter(it => {
         if (!it) return false;
@@ -1034,7 +1051,7 @@ export async function onRequest(context) {
       const responsePayload = {
         items,
         total: estimatedTotal,
-        page,
+        page: safePage,
         page_size: pageSize,
         total_pages: Math.ceil(estimatedTotal / pageSize),
         live: false
