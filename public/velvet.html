@@ -50,7 +50,10 @@
   </noscript>
   <link rel="preload" as="script" href="https://cdn.tailwindcss.com">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
+    <!-- Modular Architecture: Store, Router & Vault -->
+  <script defer src="/js/store.js"></script>
+  <script defer src="/js/router.js"></script>
+  <script defer src="/js/vault.js"></script>
 
   <script>
 
@@ -125,6 +128,106 @@
   </script>
 
   <style>
+    /* =======================================================================
+       Z-INDEX HIERARCHY & HARDWARE ISOLATION (ZERO SOFTWARE PAINT BOTTLENECK)
+       ======================================================================= */
+    :root {
+      --z-video-base: 1;
+      --z-controls: 20;
+      --z-header: 100;
+      --z-menu: 200;
+      --z-modal: 300;
+    }
+    .isolation-isolate { isolation: isolate; }
+    .contain-paint { contain: layout paint style; }
+    .translate-z-0 { transform: translateZ(0); }
+    .content-visibility-auto { content-visibility: auto; }
+    
+    #video-top-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background-color: #0a0610 !important;
+    }
+    
+    #video-stage-wrapper {
+      isolation: isolate;
+      contain: layout paint style;
+    }
+    
+    #video-stage {
+      isolation: isolate;
+      contain: layout paint style;
+    }
+    
+    #html5-video-player {
+      transform: translateZ(0);
+      will-change: auto;
+    }
+
+    #video-sidebar-column {
+      z-index: 10;
+      position: relative;
+    }
+
+    /* Software-only rendering fallbacks (0% CPU GPU overhead) */
+    .velvet-software-mode * {
+      box-shadow: none !important;
+      text-shadow: none !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+    }
+    .velvet-software-mode #video-ambilight-canvas {
+      display: none !important;
+    }
+
+
+    
+    /* =======================================================================
+       VELVET HUB DESIGN SYSTEM & VIEW TRANSITIONS API TOKENS
+       ======================================================================= */
+    :root {
+      --velvet-bg-base: #0a0610;
+      --velvet-bg-surface: #120818;
+      --velvet-bg-card: #0e071c;
+      --velvet-bg-hover: #170b2e;
+      --velvet-neon-pink: #ff2d95;
+      --velvet-neon-violet: #8b3dff;
+      --velvet-text-lav: #c4b5fd;
+      --velvet-border-subtle: rgba(139, 61, 255, 0.2);
+    }
+    @keyframes velvet-fade-in {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes velvet-fade-out {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    ::view-transition-old(root) {
+      animation: 90ms cubic-bezier(0.4, 0, 1, 1) both velvet-fade-out;
+    }
+    ::view-transition-new(root) {
+      animation: 160ms cubic-bezier(0, 0, 0.2, 1) both velvet-fade-in;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      ::view-transition-group(*),
+      ::view-transition-old(*),
+      ::view-transition-new(*) {
+        animation: none !important;
+      }
+      * {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+    .reduce-motion * {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+    .velvet-card-enter {
+      contain: layout paint;
+    }
 
     /* =======================================================================
        VELVET HUB LUXURY NIGHTCLUB DESIGN SYSTEM TOKENS
@@ -155,16 +258,7 @@
       --glow-right: rgba(139, 61, 255, 0.3);
     }
 
-    /* Subtle Film Grain Noise Texture (Zero CPU, static SVG pattern) */
-    body::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      z-index: 99999;
-      pointer-events: none;
-      opacity: 0.032;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    }
+    /* Film Grain Noise Disabled for 100% Zero-CPU Performance */
 
     /* Velvet Logo Loader Seductive Breathing Pulse */
     @keyframes velvetLogoPulse {
@@ -237,13 +331,9 @@
     }
 
     #comics-grid > div {
-      contain: layout style paint;
-      content-visibility: auto;
-      contain-intrinsic-size: 260px 380px;
-      background-color: #0b0714;
+      contain: layout paint;
+      background-color: #0e071c;
       border-radius: 1rem;
-      transform: translateZ(0);
-      backface-visibility: hidden;
     }
 
     /* OPTIMIZACIÓN MÓVIL ANDROID (CERO LAG, 120 FPS NATIVO) */
@@ -287,10 +377,9 @@
         transform: none !important;
       }
     }
-    /* Aceleración por hardware limpia (CERO cuadros negros al hacer scroll rápido) */
+    /* Renderizado ligero y fluido en 60fps */
     #comics-grid > div {
-      transform: translateZ(0);
-      backface-visibility: hidden;
+      contain: layout paint;
     }
 
     .skeleton-shimmer {
@@ -1055,7 +1144,7 @@
 
       <!-- Logo Branding: Velvet Hub +18 -->
 
-      <div class="flex items-center gap-1.5 sm:gap-2.5 cursor-pointer select-none group shrink-0" onclick="switchTab('home')">
+      <a href="/" class="flex items-center gap-1.5 sm:gap-2.5 select-none group shrink-0" aria-label="Velvet Hub Inicio">
 
         <div style="width:36px;height:36px;min-width:36px;max-width:36px;overflow:hidden;" class="w-9 h-9 rounded-xl bg-black/60 border border-pink-500/40 flex items-center justify-center p-0.5 shadow-[0_0_15px_rgba(255,42,133,0.4)] group-hover:scale-105 transition-all overflow-hidden shrink-0">
 
@@ -1075,38 +1164,38 @@
 
         </div>
 
-      </div>
+      </a>
 
       <!-- Selector de Modo / Cómics vs Videos vs Modelos -->
 
       <div class="hidden sm:flex items-center p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-inner shrink-0">
 
-        <button
+        <a
           id="mode-btn-comics"
-          onclick="setPortalMode('comics', true)"
+          href="/comics"
           class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer"
         >
           <i class="fa-solid fa-book-open text-xs"></i>
           <span>Cómics</span>
-        </button>
+        </a>
 
-        <button
+        <a
           id="mode-btn-videos"
-          onclick="setPortalMode('videos', true)"
+          href="/videos"
           class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer"
         >
           <i class="fa-solid fa-film text-xs text-pink-400"></i>
           <span>Videos</span>
-        </button>
+        </a>
 
-        <button
+        <a
           id="mode-btn-galleries"
-          onclick="setPortalMode('galleries', true)"
+          href="/cosplay"
           class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer"
         >
           <i class="fa-solid fa-camera-retro text-xs text-purple-400"></i>
           <span>Modelos</span>
-        </button>
+        </a>
 
       </div>
 
@@ -1190,7 +1279,7 @@
 
           <!-- Menú Desplegable de Usuario Logueado -->
 
-          <div id="user-dropdown-menu" class="hidden absolute right-0 top-full mt-2 w-56 rounded-2xl bg-[#0b0416] border border-purple-500/40 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl p-2 z-[100] flex flex-col gap-1 text-xs">
+          <div id="user-dropdown-menu" class="hidden absolute right-0 top-full mt-2 w-56 rounded-2xl bg-[#0b0416] border border-purple-500/40 shadow-[0_20px_50px_rgba(0,0,0,0.95)] p-2 z-[100] flex flex-col gap-1 text-xs">
 
             <!-- Header con Usuario y Rol -->
 
@@ -1206,9 +1295,9 @@
 
             </div>
 
-            <!-- Enlaces del Menú -->
+            <!-- Enlaces del Menú Reales -->
 
-            <button onclick="openVaultModal('favorites')" class="w-full px-3 py-2 rounded-xl text-left hover:bg-purple-900/40 text-purple-200 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer">
+            <a href="/boveda/favoritos" class="w-full px-3 py-2 rounded-xl text-left hover:bg-purple-900/40 text-purple-200 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer">
 
               <i class="fa-solid fa-heart text-pink-500 text-sm"></i>
 
@@ -1216,23 +1305,23 @@
 
               <span id="dropdown-fav-count" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-purple-950 border border-purple-500/30 font-mono">0</span>
 
-            </button>
+            </a>
 
-            <button onclick="openVaultModal('history')" class="w-full px-3 py-2 rounded-xl text-left hover:bg-purple-900/40 text-purple-200 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer">
+            <a href="/boveda/historial" class="w-full px-3 py-2 rounded-xl text-left hover:bg-purple-900/40 text-purple-200 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer">
 
               <i class="fa-solid fa-clock-rotate-left text-purple-400 text-sm"></i>
 
               <span>Mi Historial</span>
 
-            </button>
+            </a>
 
-            <button onclick="openVaultModal('account')" class="w-full px-3 py-2 rounded-xl text-left hover:bg-purple-900/40 text-purple-200 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer">
+            <a href="/cuenta" class="w-full px-3 py-2 rounded-xl text-left hover:bg-purple-900/40 text-purple-200 hover:text-white flex items-center gap-2.5 transition-colors cursor-pointer">
 
               <i class="fa-solid fa-id-badge text-indigo-400 text-sm"></i>
 
               <span>Detalles de Cuenta</span>
 
-            </button>
+            </a>
 
             <!-- Botón exclusivo para Admin -->
 
@@ -1270,7 +1359,7 @@
 
   <!-- ===================================================================== -->
 
-  <div id="filter-bar" class="w-full max-w-full overflow-hidden bg-[#0c061d]/95 border-b border-purple-500/15 py-2 px-2.5 sm:px-6 lg:px-8 sticky top-16 z-30 backdrop-blur-xl shadow-lg">
+  <div id="filter-bar" class="w-full max-w-full overflow-hidden bg-[#0c061d]/98 border-b border-purple-500/15 py-2 px-2.5 sm:px-6 lg:px-8 sticky top-16 z-30 shadow-lg">
 
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-2.5 sm:gap-4 w-full">
 
@@ -1278,9 +1367,9 @@
 
       <div class="flex sm:hidden items-center p-0.5 rounded-xl bg-black/60 border border-purple-500/30 shrink-0">
 
-        <button id="mob-toggle-comics" onclick="setPortalMode('comics', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm">Cómics</button>
-        <button id="mob-toggle-videos" onclick="setPortalMode('videos', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</button>
-        <button id="mob-toggle-galleries" onclick="setPortalMode('galleries', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Modelos</button>
+        <a href="/comics" id="mob-toggle-comics" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm">Cómics</a>
+        <a href="/videos" id="mob-toggle-videos" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</a>
+        <a href="/cosplay" id="mob-toggle-galleries" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Modelos</a>
 
       </div>
 
@@ -1329,11 +1418,11 @@
 
     <!-- 1. HERO SPOTLIGHT CAROUSEL CINEMATOGRÁFICO (TOP 5 ESTRENOS) -->
 
-    <section id="hero-section" class="relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d061c]/90 backdrop-blur-2xl shadow-2xl group">
+    <section id="hero-section" class="relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d061c] shadow-2xl group">
 
       <!-- Fondo Atmosférico con Desenfoque Dinámico -->
 
-      <div id="hero-backdrop" class="absolute inset-0 bg-cover bg-center blur-3xl opacity-20 scale-125 transition-all duration-700 pointer-events-none"></div>
+      <div id="hero-backdrop" class="absolute inset-0 bg-cover bg-center opacity-30 transition-all duration-700 pointer-events-none"></div>
 
       <div class="absolute inset-0 bg-gradient-to-r from-[#0d061c] via-[#0d061c]/80 to-transparent pointer-events-none"></div>
 
@@ -1349,17 +1438,9 @@
 
           <img id="hero-cover" referrerpolicy="no-referrer" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='600' fill='%23120b22'><rect width='100%' height='100%'/></svg>" alt="Portada destacada" class="w-full h-full object-cover group-hover/cover:scale-105 transition-transform duration-500" onerror="handleCardImageError(this, 'comic')">
 
-          <span class="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/90 backdrop-blur-md text-[10px] font-black text-amber-400 border border-amber-500/30 shadow">
+          
 
-            ★ TOP #1 TENDENCIA
-
-          </span>
-
-          <span class="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded-md bg-pink-600 text-white font-black text-[10px] shadow">
-
-            4K HD
-
-          </span>
+          
 
         </div>
 
@@ -1414,11 +1495,11 @@
 
           <div class="pt-1 flex flex-wrap items-center justify-center md:justify-start gap-2.5 sm:gap-3 w-full sm:w-auto">
 
-            <button id="hero-read-btn" onclick="openHeroComic()" class="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer">
+            <a id="hero-read-btn" href="#" onclick="openHeroComic(event)" class="h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer">
 
               <i class="fa-solid fa-play text-xs"></i> Comenzar a Leer
 
-            </button>
+            </a>
 
             <button id="hero-fav-btn" onclick="toggleHeroFavorite()" class="h-10 sm:h-11 px-4 sm:px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-white/90 hover:text-white font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer">
 
@@ -1564,53 +1645,431 @@
 </main>
 
   <!-- ===================================================================== -->
+  <!-- VISTA REAL: MI BÓVEDA, HISTORIAL Y CUENTA (/boveda/*, /cuenta) -->
+  <!-- ===================================================================== -->
+  <section id="view-vault" class="velvet-view hidden w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10 pb-24">
+    <!-- Encabezado de la Bóveda -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-purple-500/20">
+      <div>
+        <h1 class="font-display text-2xl sm:text-3xl lg:text-4xl font-normal text-white flex items-center gap-3">
+          <i class="fa-solid fa-crown text-pink-500 text-xl sm:text-2xl drop-shadow-[0_0_12px_rgba(255,45,149,0.5)]"></i>
+          <span>Mi Bóveda Personal</span>
+        </h1>
+        <p class="text-xs sm:text-sm text-lav/70 mt-1">
+          Tus favoritos e historial, sincronizados permanentemente en la nube.
+        </p>
+      </div>
+
+      <!-- Acciones de cabecera -->
+      <div class="flex items-center gap-2 self-start sm:self-auto">
+        <button
+          type="button"
+          onclick="window.VelvetVault?.toggleMultiSelect()"
+          id="vault-multiselect-toggle-btn"
+          class="px-3.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs font-bold text-lav hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
+        >
+          <i class="fa-solid fa-list-check text-pink-400"></i>
+          <span>Seleccionar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Pestañas Móviles (Scroll Horizontal en pantallas < lg) -->
+    <div class="lg:hidden flex items-center gap-2 overflow-x-auto no-scrollbar py-3 border-b border-purple-500/20 mb-6">
+      <a
+        href="/boveda/favoritos"
+        id="vault-mobile-tab-favorites"
+        class="px-4 py-2.5 rounded-full bg-pink-500 text-white font-black text-xs shrink-0 shadow-md flex items-center gap-2"
+      >
+        <i class="fa-solid fa-heart text-xs"></i>
+        <span>Favoritos</span>
+        <span class="vault-fav-counter px-1.5 py-0.2 rounded-full bg-black/40 text-[10px] font-mono">0</span>
+      </a>
+
+      <a
+        href="/boveda/historial"
+        id="vault-mobile-tab-history"
+        class="px-4 py-2.5 rounded-full bg-white/[0.05] text-lav/70 font-semibold text-xs shrink-0 hover:text-white flex items-center gap-2"
+      >
+        <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+        <span>Historial</span>
+        <span class="vault-hist-counter px-1.5 py-0.2 rounded-full bg-black/40 text-[10px] font-mono">0</span>
+      </a>
+
+      <a
+        href="/cuenta"
+        id="vault-mobile-tab-account"
+        class="px-4 py-2.5 rounded-full bg-white/[0.05] text-lav/70 font-semibold text-xs shrink-0 hover:text-white flex items-center gap-2"
+      >
+        <i class="fa-solid fa-circle-user text-xs"></i>
+        <span>Cuenta</span>
+      </a>
+    </div>
+
+    <!-- Layout Principal de Escritorio: Sidebar Izquierda + Contenido Amplio a la Derecha -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <!-- Sidebar Izquierda Fija en Desktop -->
+      <aside class="hidden lg:block lg:col-span-3 sticky top-24 space-y-2">
+        <nav class="space-y-1.5 bg-[#0e071c] p-2.5 rounded-3xl border border-purple-500/20 shadow-xl">
+          <a
+            href="/boveda/favoritos"
+            id="vault-sidebar-tab-favorites"
+            class="w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-pink-500/20 to-purple-500/10 border border-pink-500/40 text-white font-bold flex items-center justify-between text-xs transition-all shadow-sm"
+          >
+            <span class="flex items-center gap-2.5">
+              <i class="fa-solid fa-heart text-pink-500 text-sm"></i>
+              <span>Favoritos</span>
+            </span>
+            <span class="vault-fav-counter px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-mono text-[10px] font-black border border-pink-500/40">0</span>
+          </a>
+
+          <a
+            href="/boveda/historial"
+            id="vault-sidebar-tab-history"
+            class="w-full px-4 py-3 rounded-2xl hover:bg-white/[0.04] text-lav/70 hover:text-white font-medium flex items-center justify-between text-xs transition-all border border-transparent"
+          >
+            <span class="flex items-center gap-2.5">
+              <i class="fa-solid fa-clock-rotate-left text-purple-400 text-sm"></i>
+              <span>Mi Historial</span>
+            </span>
+            <span class="vault-hist-counter px-2 py-0.5 rounded-full bg-purple-950 text-lav font-mono text-[10px] border border-purple-500/20">0</span>
+          </a>
+
+          <a
+            href="/cuenta"
+            id="vault-sidebar-tab-account"
+            class="w-full px-4 py-3 rounded-2xl hover:bg-white/[0.04] text-lav/70 hover:text-white font-medium flex items-center justify-between text-xs transition-all border border-transparent"
+          >
+            <span class="flex items-center gap-2.5">
+              <i class="fa-solid fa-circle-user text-indigo-400 text-sm"></i>
+              <span>Detalles de Cuenta</span>
+            </span>
+          </a>
+        </nav>
+
+        <div class="p-3.5 rounded-2xl bg-[#0e071c]/60 border border-purple-500/15 text-[11px] text-lav/60 flex items-center gap-2">
+          <i class="fa-solid fa-cloud-arrow-up text-pink-400 shrink-0"></i>
+          <span>Sincronizado con Supabase en tiempo real.</span>
+        </div>
+      </aside>
+
+      <!-- Contenido Amplio a la Derecha (hasta ~1400px) -->
+      <div class="lg:col-span-9 min-w-0">
+        <!-- ========================================== -->
+        <!-- PANEL 1: FAVORITOS (/boveda/favoritos) -->
+        <!-- ========================================== -->
+        <div id="vault-panel-favorites" class="space-y-4">
+          <!-- Barra de Filtros, Orden y Buscador -->
+          <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[#0e071c] border border-purple-500/20">
+            <!-- Chips por tipo -->
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <button onclick="window.VelvetVault?.setFavFilter('all')" class="px-3 py-1.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/40 text-xs font-bold cursor-pointer">Todo</button>
+              <button onclick="window.VelvetVault?.setFavFilter('comic')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Cómics</button>
+              <button onclick="window.VelvetVault?.setFavFilter('video')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Videos</button>
+              <button onclick="window.VelvetVault?.setFavFilter('gallery')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Galerías</button>
+            </div>
+
+            <!-- Buscador y Vista Grilla/Lista -->
+            <div class="flex items-center gap-2">
+              <div class="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar en favoritos..."
+                  oninput="window.VelvetVault?.setFavSearch(this.value)"
+                  class="w-36 sm:w-48 bg-white/[0.05] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-pink-500 transition-colors"
+                />
+                <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-[10px] text-white/40"></i>
+              </div>
+
+              <!-- Orden A-Z / Recientes -->
+              <select onchange="window.VelvetVault?.setFavSort(this.value)" class="bg-[#120726] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-lav focus:outline-none focus:border-pink-500 cursor-pointer">
+                <option value="recent">Más recientes</option>
+                <option value="az">A &ndash; Z</option>
+              </select>
+
+              <!-- Conmutador Grilla / Lista -->
+              <div class="flex items-center p-0.5 rounded-xl bg-white/[0.04] border border-white/10">
+                <button onclick="window.VelvetVault?.setVaultViewMode('grid')" title="Vista Grilla" class="w-7 h-7 rounded-lg flex items-center justify-center text-xs text-white bg-pink-500/30 cursor-pointer">
+                  <i class="fa-solid fa-grip"></i>
+                </button>
+                <button onclick="window.VelvetVault?.setVaultViewMode('list')" title="Vista Lista" class="w-7 h-7 rounded-lg flex items-center justify-center text-xs text-lav/60 hover:text-white cursor-pointer">
+                  <i class="fa-solid fa-list"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra flotante de acciones multi-selección -->
+          <div id="vault-multiselect-bar" class="hidden p-3 rounded-2xl bg-gradient-to-r from-pink-950/60 to-purple-950/60 border border-pink-500/40 flex items-center justify-between text-xs">
+            <span class="font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-check-double text-pink-400"></i>
+              <span id="vault-selected-count">0</span> seleccionados
+            </span>
+            <div class="flex items-center gap-2">
+              <button onclick="window.VelvetVault?.deleteSelectedFavorites()" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold cursor-pointer">
+                Eliminar seleccionados
+              </button>
+              <button onclick="window.VelvetVault?.toggleMultiSelect()" class="px-3 py-1.5 rounded-xl bg-white/[0.08] text-white cursor-pointer">
+                Cancelar
+              </button>
+            </div>
+          </div>
+
+          <!-- Grilla / Lista de Favoritos -->
+          <div id="vault-favorites-list" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5">
+            <!-- Renderizado dinámico por vault.js -->
+          </div>
+
+          <!-- Estado Vacío -->
+          <div id="vault-favorites-empty" class="hidden py-16 px-4 rounded-3xl bg-[#0e071c] border border-purple-500/20 text-center flex flex-col items-center justify-center">
+            <div class="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(255,45,149,0.2)]">
+              <i class="fa-solid fa-heart-crack text-2xl text-pink-500"></i>
+            </div>
+            <h3 class="font-serif text-xl font-bold text-white mb-2">Tu Bóveda está vacía</h3>
+            <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
+              Toca el icono del corazón en cualquier video, cómic o galería para guardarlo aquí y acceder sin conexión o desde cualquier dispositivo.
+            </p>
+            <div class="flex items-center gap-3">
+              <a href="/videos" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md">
+                Explorar Videos
+              </a>
+              <a href="/comics" class="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-lav hover:text-white text-xs font-bold transition-all border border-white/10">
+                Ver Cómics
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PANEL 2: HISTORIAL (/boveda/historial) -->
+        <!-- ========================================== -->
+        <div id="vault-panel-history" class="hidden space-y-4">
+          <!-- Barra de Controles de Historial -->
+          <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[#0e071c] border border-purple-500/20">
+            <!-- Chips de tipo -->
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <button onclick="window.VelvetVault?.setHistoryFilter('all')" class="px-3 py-1.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-bold cursor-pointer">Todo</button>
+              <button onclick="window.VelvetVault?.setHistoryFilter('video')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Videos</button>
+              <button onclick="window.VelvetVault?.setHistoryFilter('comic')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Cómics</button>
+            </div>
+
+            <!-- Filtros: Solo sin terminar & Borrado por rangos -->
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-2 text-xs text-lav/80 cursor-pointer select-none">
+                <input type="checkbox" onchange="window.VelvetVault?.setHistoryOnlyUnfinished(this.checked)" class="w-4 h-4 rounded accent-pink-500 cursor-pointer">
+                <span>Solo sin terminar</span>
+              </label>
+
+              <!-- Menú de Borrado por Rangos -->
+              <div class="relative group">
+                <button type="button" class="px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
+                  <i class="fa-solid fa-trash-can text-[11px]"></i>
+                  <span>Borrar Historial</span>
+                  <i class="fa-solid fa-chevron-down text-[9px] ml-1"></i>
+                </button>
+                <div class="hidden group-hover:flex flex-col absolute right-0 top-full mt-1.5 w-48 rounded-2xl bg-[#0b0416] border border-purple-500/40 shadow-2xl p-1.5 z-30 text-xs">
+                  <button onclick="window.VelvetVault?.clearHistoryByRange('today')" class="w-full text-left px-3 py-2 rounded-xl text-lav hover:text-white hover:bg-white/[0.06] cursor-pointer">Borrar el de Hoy</button>
+                  <button onclick="window.VelvetVault?.clearHistoryByRange('week')" class="w-full text-left px-3 py-2 rounded-xl text-lav hover:text-white hover:bg-white/[0.06] cursor-pointer">Últimos 7 días</button>
+                  <div class="h-px bg-white/10 my-1"></div>
+                  <button onclick="window.VelvetVault?.clearHistoryByRange('all')" class="w-full text-left px-3 py-2 rounded-xl text-rose-300 hover:text-rose-100 hover:bg-rose-950/60 font-bold cursor-pointer">Borrar Todo</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lista de Historial Estructurado por Fecha -->
+          <div id="vault-history-list" class="space-y-4">
+            <!-- Renderizado dinámico por vault.js con grupos y progreso -->
+          </div>
+
+          <!-- Estado Vacío -->
+          <div id="vault-history-empty" class="hidden py-16 px-4 rounded-3xl bg-[#0e071c] border border-purple-500/20 text-center flex flex-col items-center justify-center">
+            <div class="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center mb-4">
+              <i class="fa-solid fa-clock-rotate-left text-2xl text-purple-400"></i>
+            </div>
+            <h3 class="font-serif text-xl font-bold text-white mb-2">No hay reproducciones recientes</h3>
+            <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
+              Los videos y cómics que comiences a disfrutar se registrarán aquí automáticamente para que continúes justo donde lo dejaste.
+            </p>
+            <a href="/" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md">
+              Comenzar a Explorar
+            </a>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- PANEL 3: CUENTA Y PREFERENCIAS (/cuenta) -->
+        <!-- ========================================== -->
+        <div id="vault-panel-account" class="hidden space-y-6">
+          <!-- Tarjeta de Perfil -->
+          <div class="p-6 rounded-3xl bg-[#0e071c] border border-purple-500/25 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+            <div class="flex items-center gap-4">
+              <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-pink-600 to-purple-600 flex items-center justify-center text-2xl text-white font-black shadow-[0_0_20px_rgba(255,45,149,0.35)] shrink-0">
+                <i class="fa-solid fa-crown text-amber-300"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2.5">
+                  <h3 id="vault-acc-username" class="text-lg font-black text-white">Usuario VIP</h3>
+                  <span id="vault-acc-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">MIEMBRO VIP</span>
+                </div>
+                <p id="vault-acc-created" class="text-xs text-lav/70 mt-1">Registrado recientemente</p>
+                <p class="text-[11px] font-mono text-pink-400/90 mt-0.5">Llave: <span id="vault-acc-key">---</span></p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onclick="handleLogout()"
+              class="px-4 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 text-rose-200 border border-rose-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-2"
+            >
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+              <span>Cerrar Sesión</span>
+            </button>
+          </div>
+
+          <!-- Canjear Llave VIP -->
+          <div class="p-5 rounded-3xl bg-[#0e071c] border border-purple-500/20">
+            <div class="flex items-center gap-2.5 mb-2">
+              <i class="fa-solid fa-key text-pink-400 text-sm"></i>
+              <h4 class="text-sm font-bold text-white">Canjear Llave de Acceso VIP</h4>
+            </div>
+            <p class="text-xs text-lav/70 mb-4">
+              Si tienes una llave emitida por el administrador o de Patreon, actívala aquí para desbloquear el 100% de la plataforma de por vida.
+            </p>
+            <div class="flex flex-col sm:flex-row items-center gap-2.5">
+              <input
+                type="text"
+                id="vault-redeem-key-input"
+                placeholder="VELVET-XXXX-XXXX-XXXX"
+                oninput="this.value = this.value.toUpperCase()"
+                class="w-full sm:flex-1 bg-[#120726] border border-pink-500/40 rounded-xl px-4 py-2.5 font-mono text-xs font-black text-pink-300 placeholder-pink-400/30 focus:outline-none focus:border-pink-500 transition-colors uppercase tracking-wider"
+              />
+              <button
+                type="button"
+                onclick="submitVaultKeyRedeem()"
+                class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer shrink-0"
+              >
+                Canjear Llave
+              </button>
+            </div>
+          </div>
+
+          <!-- Panel de Preferencias del Sistema (Versionadas) -->
+          <div class="p-5 rounded-3xl bg-[#0e071c] border border-purple-500/20 space-y-4">
+            <div class="flex items-center gap-2.5 pb-2 border-b border-purple-500/20">
+              <i class="fa-solid fa-sliders text-pink-400 text-sm"></i>
+              <h4 class="text-sm font-bold text-white">Preferencias de Experiencia</h4>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <!-- Calidad de Video por defecto -->
+              <div class="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-white block">Calidad de Video por Defecto</span>
+                  <span class="text-[11px] text-lav/60">Resolución inicial preferida</span>
+                </div>
+                <select id="pref-default-quality" onchange="window.VelvetVault?.updateQualityPref(this.value)" class="bg-[#120726] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-lav focus:outline-none focus:border-pink-500 cursor-pointer">
+                  <option value="auto">Automática (Auto)</option>
+                  <option value="1080p">1080p HD</option>
+                  <option value="720p">720p</option>
+                  <option value="480p">480p SD</option>
+                </select>
+              </div>
+
+              <!-- Autoplay Siguiente -->
+              <div class="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-white block">Auto-reproducir Siguiente</span>
+                  <span class="text-[11px] text-lav/60">Pasar al siguiente contenido al terminar</span>
+                </div>
+                <input type="checkbox" id="pref-autoplay-next" onchange="window.VelvetVault?.togglePref('autoplayNext', this.checked)" class="w-5 h-5 rounded accent-pink-500 cursor-pointer">
+              </div>
+
+              <!-- Luces Ambientales (Theater Glow) -->
+              <div class="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-white block">Iluminación Ambiental</span>
+                  <span class="text-[11px] text-lav/60">Reflejo neón difuminado en reproductor</span>
+                </div>
+                <input type="checkbox" id="pref-ambient-lighting" onchange="window.VelvetVault?.togglePref('ambientLighting', this.checked)" class="w-5 h-5 rounded accent-pink-500 cursor-pointer">
+              </div>
+
+              <!-- Reducir Movimiento (Accesibilidad) -->
+              <div class="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-white block">Reducir Movimiento</span>
+                  <span class="text-[11px] text-lav/60">Desactivar transiciones intensas</span>
+                </div>
+                <input type="checkbox" id="pref-reduce-motion" onchange="window.VelvetVault?.togglePref('reduceMotion', this.checked)" class="w-5 h-5 rounded accent-pink-500 cursor-pointer">
+              </div>
+
+              <!-- Modo Ahorro de Datos -->
+              <div class="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-white block">Ahorro de Datos</span>
+                  <span class="text-[11px] text-lav/60">Desactiva precargas automáticas en hover</span>
+                </div>
+                <input type="checkbox" id="pref-data-saver" onchange="window.VelvetVault?.togglePref('dataSaver', this.checked)" class="w-5 h-5 rounded accent-pink-500 cursor-pointer">
+              </div>
+
+              <!-- Pausar Historial (Privacidad) -->
+              <div class="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-white block">Pausar Historial</span>
+                  <span class="text-[11px] text-lav/60">No registrar nuevas reproducciones o lecturas</span>
+                </div>
+                <input type="checkbox" id="pref-pause-history" onchange="window.VelvetVault?.togglePref('pauseHistory', this.checked)" class="w-5 h-5 rounded accent-pink-500 cursor-pointer">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Flotante de Deshacer (Undo) -->
+    <div id="vault-undo-toast" class="hidden fixed bottom-6 right-6 z-50 bg-[#0e071c] border border-pink-500/50 rounded-2xl p-4 shadow-[0_0_30px_rgba(255,45,149,0.3)] flex items-center gap-4 text-xs">
+      <span id="vault-undo-text" class="text-white font-medium">Elemento quitado</span>
+      <button onclick="window.VelvetVault?.undoRemoveFavorite()" class="px-3 py-1.5 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-400 transition-colors cursor-pointer">
+        Deshacer
+      </button>
+    </div>
+  </section>
+
+
+  <!-- ===================================================================== -->
 
   <!-- BARRA DE NAVEGACIÓN INFERIOR PARA TELÉFONOS (MOBILE THUMB BAR) -->
 
   <!-- ===================================================================== -->
 
-  <nav id="mobile-navbar" aria-label="Navegación Móvil" class="fixed inset-x-0 bottom-0 z-40 bg-obsidian/95 border-t border-neon/20 backdrop-blur-md shadow-thumb lg:hidden w-full max-w-full" style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);">
+  <nav id="mobile-navbar" aria-label="Navegación Móvil" class="fixed inset-x-0 bottom-0 z-40 bg-[#0a0610]/95 border-t border-purple-500/20 shadow-thumb lg:hidden w-full max-w-full" style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);">
 
     <div class="grid grid-cols-5 h-14 sm:h-16 w-full max-w-md mx-auto px-1">
 
-      <button onclick="setPortalMode('comics', true)" id="tab-btn-comics" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-black text-hot transition-all">
-        <i class="fa-solid fa-book-open text-sm sm:text-base"></i>
-        <span>Cómics</span>
-      </button>
+      <a href="/" id="tab-btn-home" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-bold text-lav/70 hover:text-white transition-all">
+        <i class="fa-solid fa-house text-sm sm:text-base"></i>
+        <span>Inicio</span>
+      </a>
 
-      <button onclick="setPortalMode('videos', true)" id="tab-btn-videos" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
-        <i class="fa-solid fa-film text-sm sm:text-base text-neon"></i>
+      <a href="/videos" id="tab-btn-videos" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
+        <i class="fa-solid fa-film text-sm sm:text-base text-pink-400"></i>
         <span>Videos</span>
-      </button>
+      </a>
 
-      <button onclick="setPortalMode('galleries', true)" id="tab-btn-galleries" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
-        <i class="fa-solid fa-camera-retro text-sm sm:text-base text-neon"></i>
-        <span>Cosplay</span>
-      </button>
+      <a href="/comics" id="tab-btn-comics" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-black text-pink-400 transition-all">
+        <i class="fa-solid fa-book-open text-sm sm:text-base text-purple-400"></i>
+        <span>Cómics</span>
+      </a>
 
-      <button onclick="focusSearch()" id="tab-btn-explore" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
-
-        <i class="fa-solid fa-magnifying-glass text-sm sm:text-base"></i>
-
-        <span>Buscar</span>
-
-      </button>
-
-      <button onclick="shuffleCurrentFeed()" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-gold hover:text-amber-300 transition-all">
-
-        <i class="fa-solid fa-dice-d20 text-sm sm:text-base"></i>
-
-        <span>Al Azar</span>
-
-      </button>
-
-      <button onclick="switchTab('vault')" id="tab-btn-vault" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-ink transition-all">
-
-        <i class="fa-solid fa-crown text-sm sm:text-base text-gold"></i>
-
+      <a href="/boveda/favoritos" id="tab-btn-vault" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
+        <i class="fa-solid fa-heart text-sm sm:text-base text-pink-500"></i>
         <span>Bóveda</span>
+      </a>
 
-      </button>
+      <a href="/cuenta" id="tab-btn-account" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
+        <i class="fa-solid fa-circle-user text-sm sm:text-base text-indigo-400"></i>
+        <span>Cuenta</span>
+      </a>
 
     </div>
 
@@ -1623,14 +2082,15 @@
   <!-- ===================================================================== -->
 
     <!-- ===================================================================== -->
-  <!-- VISTA DEDICADA DE REPRODUCCIÓN VELVET HUB (LUXURY NIGHTCLUB PRO) -->
   <!-- ===================================================================== -->
-  <div id="video-view" class="hidden min-h-screen w-full bg-[#0a0610] text-[#f8fafc] flex flex-col select-none pb-20 relative">
+  <!-- VISTA DEDICADA DE REPRODUCCIÓN VELVET HUB (HIGH-PERFORMANCE CINEMA) -->
+  <!-- ===================================================================== -->
+  <div id="video-view" class="hidden min-h-screen w-full bg-[#0a0610] text-[#f8fafc] flex flex-col select-none pb-16 relative">
     <!-- Barra Fina de Navegación Neón Superior -->
-    <div id="video-nav-progress" class="fixed top-0 inset-x-0 h-[2px] bg-gradient-to-r from-[#ff2d95] via-[#8b3dff] to-[#ffd1b3] z-50 pointer-events-none transition-all duration-300 opacity-0 w-0"></div>
+    <div id="video-nav-progress" class="fixed top-0 inset-x-0 h-[2px] bg-gradient-to-r from-[#ff2d95] via-[#8b3dff] to-[#ffd1b3] z-[150] pointer-events-none transition-all duration-300 opacity-0 w-0"></div>
 
-    <!-- Barra Superior de Navegación (Glass Ahumado y Sofisticado) -->
-    <header class="sticky top-0 z-40 w-full bg-[#0a0610]/92 backdrop-blur-md border-b border-white/[0.08] transition-colors">
+    <!-- Barra Superior de Navegación (Sólida, 0% Backdrop-Filter, Z-Index 100) -->
+    <header id="video-top-header" class="sticky top-0 z-[100] w-full bg-[#0a0610] border-b border-white/[0.08] transition-colors">
       <div class="max-w-[1760px] mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-3">
         <!-- Volver -->
         <button onclick="closeVideoPlayer()" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] hover:border-[#ff2d95]/40 text-xs font-semibold text-white/90 hover:text-white transition-all cursor-pointer group active:scale-95" title="Volver al catálogo">
@@ -1671,92 +2131,91 @@
       </div>
     </header>
 
-    <!-- Contenedor Principal Ultra-Espacioso (hasta 1760px) -->
-    <main class="w-full max-w-[1760px] mx-auto px-2 sm:px-4 lg:px-6 py-4 flex-1">
-      <!-- Grid de 2 Columnas (70% Reproductor + Info / 30% Relacionados Sticky) -->
+    <!-- Contenedor Principal Ultra-Espacioso (hasta 1760px) con Padding Top Coordinado -->
+    <main class="w-full max-w-[1760px] mx-auto px-2 sm:px-4 lg:px-6 pt-3 pb-6 flex-1">
+      <!-- Grid de 2 Columnas (70% Reproductor + Info / 30% Relacionados en Flujo Natural) -->
       <div id="video-layout-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
         
         <!-- COLUMNA PRINCIPAL (70% en lg:col-span-8 o 12 en modo cine) -->
         <div id="video-primary-column" class="lg:col-span-8 flex flex-col gap-4 w-full transition-all duration-300">
           
-          <!-- Escenario del Reproductor + Glow Ambilight -->
-          <div id="video-stage-wrapper" class="relative w-full flex flex-col items-center">
+          <!-- Escenario del Reproductor con Aislamiento de Capa (Hardware Layer) -->
+          <div id="video-stage-wrapper" class="relative w-full flex flex-col items-center isolation-isolate contain-paint">
             
-            <!-- Glow Ambiental Neón (Ambilight Mode con 4 Zonas Sutiles) -->
-            <div id="video-ambient-glow" class="absolute -inset-3 sm:-inset-6 rounded-3xl blur-[75px] opacity-45 -z-10 pointer-events-none transition-all duration-500"></div>
+            <!-- Canvas Ambilight 32x18 escalado por CSS al tamaño del contenedor (CERO BLUR CSS) -->
+            <canvas id="video-ambilight-canvas" width="32" height="18" class="absolute -inset-3 sm:-inset-5 w-[calc(100%+1.5rem)] sm:w-[calc(100%+2.5rem)] h-[calc(100%+1.5rem)] sm:h-[calc(100%+2.5rem)] rounded-2xl opacity-0 pointer-events-none -z-10 transition-opacity duration-300"></canvas>
 
             <!-- Dimmer de Luces / Modo Cine -->
-            <div id="cinema-dimmer" class="fixed inset-0 bg-[#06030a]/92 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300 z-20" onclick="toggleCinemaLights(event)"></div>
+            <div id="cinema-dimmer" class="fixed inset-0 bg-[#06030a]/92 opacity-0 pointer-events-none transition-opacity duration-300 z-20" onclick="toggleCinemaLights(event)"></div>
 
             <!-- Stage Box -->
-            <div id="video-stage" class="w-full aspect-video bg-[#000000] rounded-2xl overflow-hidden shadow-2xl relative border border-white/[0.08] hover:border-[#ff2d95]/20 select-none group/player transition-all duration-300">
+            <div id="video-stage" class="w-full aspect-video bg-[#000000] rounded-2xl overflow-hidden shadow-2xl relative border border-white/[0.08] select-none group/player transition-all duration-300 isolation-isolate contain-paint">
               
-              <!-- Backdrop borroso dinámico para videos verticales (9:16) sin decodificar segundo video -->
-              <div id="video-vertical-backdrop" class="absolute inset-0 bg-cover bg-center blur-2xl opacity-35 scale-125 pointer-events-none hidden transition-opacity duration-500"></div>
+              <!-- Backdrop estático para videos verticales (9:16) sin blur en vivo -->
+              <div id="video-vertical-backdrop" class="absolute inset-0 bg-cover bg-center opacity-30 scale-110 pointer-events-none hidden"></div>
 
-              <!-- HTML5 Video Player -->
+              <!-- HTML5 Video Player Acelerado por Hardware -->
               <video
                 id="html5-video-player"
                 referrerpolicy="no-referrer"
                 controlslist="nodownload noplaybackrate"
                 oncontextmenu="return false;"
-                class="w-full h-full object-contain cursor-pointer will-change-transform select-none relative z-10"
+                class="w-full h-full object-contain cursor-pointer will-change-auto select-none relative z-10 translate-z-0"
                 playsinline
                 preload="auto"
               ></video>
 
               <!-- Logo Loader de Carga / Buffering con Pulso Neón -->
-              <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0610]/90 backdrop-blur-md z-30 pointer-events-none transition-opacity duration-300">
-                <div class="relative w-28 h-28 flex items-center justify-center">
-                  <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-[#ff2d95]/30 to-[#8b3dff]/20 blur-xl animate-pulse"></div>
-                  <img src="/velvet_logo.png" alt="Velvet Hub" class="w-20 h-20 object-contain relative z-10 animate-velvet-breathe select-none" />
+              <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0610]/95 z-30 pointer-events-none transition-opacity duration-300">
+                <div class="relative w-24 h-24 flex items-center justify-center">
+                  <img src="/velvet_logo.png" alt="Velvet Hub" class="w-16 h-16 object-contain relative z-10 animate-velvet-breathe select-none" />
                 </div>
                 <span class="mt-2 text-xs font-medium tracking-wider text-white/70">Cargando experiencia...</span>
               </div>
 
               <!-- Indicador Buffering Sutil / No Invasivo -->
               <div id="video-buffering-spinner" class="hidden absolute inset-0 flex items-center justify-center pointer-events-none z-20 transition-opacity duration-200">
-                <div class="relative w-16 h-16 flex items-center justify-center">
-                  <div class="w-16 h-16 rounded-full border-2 border-transparent border-t-[#ff2d95] border-r-[#8b3dff] animate-spin"></div>
-                  <img src="/velvet_logo.png" alt="Logo" class="w-6 h-6 object-contain absolute opacity-80" />
+                <div class="relative w-14 h-14 flex items-center justify-center">
+                  <div class="w-14 h-14 rounded-full border-2 border-transparent border-t-[#ff2d95] border-r-[#8b3dff] animate-spin"></div>
+                  <img src="/velvet_logo.png" alt="Logo" class="w-5 h-5 object-contain absolute opacity-80" />
                 </div>
               </div>
 
               <!-- Botón Central de Play Grande (Pausado) -->
               <div id="video-center-play-btn" class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
-                <button type="button" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/80 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_40px_rgba(255,45,149,0.45)] hover:scale-105 active:scale-95 transition-all duration-200 backdrop-blur-md border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
+                <button type="button" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/85 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_30px_rgba(255,45,149,0.35)] hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
                   <i class="fa-solid fa-play ml-1 drop-shadow"></i>
                 </button>
               </div>
 
               <!-- Badges de Salto Rápido Izquierda / Derecha (+/- 10s) -->
-              <div id="video-skip-left-badge" class="absolute left-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-black/80 border border-white/10 text-white font-semibold text-xs pointer-events-none opacity-0 transition-all duration-200 z-20">
+              <div id="video-skip-left-badge" class="absolute left-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-black/85 border border-white/10 text-white font-semibold text-xs pointer-events-none opacity-0 transition-all duration-200 z-20">
                 <i class="fa-solid fa-rotate-left text-[#ff2d95]"></i> -10s
               </div>
-              <div id="video-skip-right-badge" class="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-black/80 border border-white/10 text-white font-semibold text-xs pointer-events-none opacity-0 transition-all duration-200 z-20">
+              <div id="video-skip-right-badge" class="absolute right-8 top-1/2 -translate-y-1/2 flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-black/85 border border-white/10 text-white font-semibold text-xs pointer-events-none opacity-0 transition-all duration-200 z-20">
                 +10s <i class="fa-solid fa-rotate-right text-[#ff2d95]"></i>
               </div>
 
               <!-- HUD Toast Superior -->
-              <div id="video-hud-toast" class="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-[#120818]/90 border border-white/15 text-xs font-medium text-white shadow-xl pointer-events-none opacity-0 transition-all duration-200 z-30 flex items-center gap-2 backdrop-blur-md">
+              <div id="video-hud-toast" class="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-[#120818] border border-white/15 text-xs font-medium text-white shadow-xl pointer-events-none opacity-0 transition-all duration-200 z-30 flex items-center gap-2">
                 <i id="video-hud-icon" class="fa-solid fa-volume-high text-[#ff2d95]"></i>
                 <span id="video-hud-text">Volumen: 100%</span>
               </div>
 
               <!-- Pulse Indicator (Click en pantalla) -->
               <div id="video-pulse-indicator" class="absolute inset-0 flex items-center justify-center pointer-events-none z-20 opacity-0 scale-50 transition-all duration-300">
-                <div class="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md border border-white/20 flex items-center justify-center text-white text-xl shadow-2xl">
+                <div class="w-14 h-14 rounded-full bg-black/80 border border-white/20 flex items-center justify-center text-white text-xl shadow-2xl">
                   <i id="video-pulse-icon" class="fa-solid fa-play"></i>
                 </div>
               </div>
 
-              <!-- Menús Emergentes de Calidad y Velocidad -->
-              <div id="video-quality-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-16 bg-[#120818]/95 border border-white/15 rounded-xl p-1.5 shadow-2xl backdrop-blur-md z-40 min-w-[130px] max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
+              <!-- Menús Emergentes de Calidad y Velocidad (Z-Index 50) -->
+              <div id="video-quality-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-16 bg-[#120818] border border-white/15 rounded-xl p-1.5 shadow-2xl z-50 min-w-[130px] max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
                 <div class="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50 border-b border-white/10">Calidad</div>
                 <div id="video-quality-options" class="flex flex-col gap-0.5"></div>
               </div>
 
-              <div id="video-speed-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-8 bg-[#120818]/95 border border-white/15 rounded-xl p-1.5 shadow-2xl backdrop-blur-md z-40 min-w-[120px] max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
+              <div id="video-speed-menu" onclick="event.stopPropagation()" class="hidden absolute bottom-16 right-4 sm:right-8 bg-[#120818] border border-white/15 rounded-xl p-1.5 shadow-2xl z-50 min-w-[120px] max-h-[220px] overflow-y-auto flex flex-col gap-1 text-xs">
                 <div class="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50 border-b border-white/10">Velocidad</div>
                 <button onclick="setPlaybackSpeed(0.5, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt" data-speed="0.5">0.5x</button>
                 <button onclick="setPlaybackSpeed(0.75, event)" class="px-2.5 py-1 rounded-lg text-left hover:bg-white/[0.08] text-white/80 hover:text-white transition-colors speed-opt" data-speed="0.75">0.75x</button>
@@ -1774,7 +2233,7 @@
                     <div id="video-buffer-bar" class="absolute left-0 top-0 bottom-0 bg-white/30 rounded-full w-0 transition-all duration-200"></div>
                     <div id="video-progress-bar" class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] rounded-full w-0"></div>
                   </div>
-                  <div id="video-scrubber-pin" class="absolute top-1/2 -translate-y-1/2 -ml-2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,45,149,0.8)] scale-100 sm:scale-0 sm:group-hover/scrub:scale-100 transition-transform pointer-events-none z-10"></div>
+                  <div id="video-scrubber-pin" class="absolute top-1/2 -translate-y-1/2 -ml-2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,45,149,0.7)] scale-100 sm:scale-0 sm:group-hover/scrub:scale-100 transition-transform pointer-events-none z-10"></div>
                   <div id="video-time-tooltip" class="absolute -top-7 px-2 py-0.5 rounded-md bg-black/90 text-[10px] font-mono font-semibold text-white border border-white/20 pointer-events-none opacity-0 transition-opacity -translate-x-1/2 z-20">00:00</div>
                 </div>
 
@@ -1840,7 +2299,7 @@
           </div>
 
           <!-- DETALLES DEL VIDEO: Título, Metadatos Reales, Acciones y Chips -->
-          <div class="w-full p-4 sm:p-5 rounded-2xl bg-[#120818]/60 border border-white/[0.08] backdrop-blur-sm flex flex-col gap-3">
+          <div class="w-full p-4 sm:p-5 rounded-2xl bg-[#120818] border border-white/[0.08] flex flex-col gap-3">
             <!-- Título & Metadatos Principales -->
             <div class="flex flex-col gap-1.5">
               <h1 id="video-player-title" class="font-display text-lg sm:text-xl md:text-2xl font-medium text-white tracking-tight leading-snug">Cargando video...</h1>
@@ -1871,7 +2330,7 @@
             </div>
 
             <!-- Fila de Chips de Etiquetas con Scroll Horizontal Suave -->
-            <div class="relative w-full overflow-hidden pt-2">
+            <div class="relative w-full overflow-hidden pt-1">
               <div id="video-popular-tags" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
                 <!-- Chips generados dinámicamente -->
               </div>
@@ -1879,9 +2338,9 @@
           </div>
         </div>
 
-        <!-- COLUMNA DERECHA STICKY: VIDEOS RELACIONADOS (30% en lg:col-span-4) -->
-        <aside id="video-sidebar-column" class="lg:col-span-4 flex flex-col gap-3 lg:sticky lg:top-20 max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar">
-          <div class="flex items-center justify-between pb-1 border-b border-white/[0.06]">
+        <!-- COLUMNA DERECHA: VIDEOS RELACIONADOS (Flujo natural sin scroll anidado, Z-Index seguro 10) -->
+        <aside id="video-sidebar-column" class="lg:col-span-4 flex flex-col gap-3 z-10 pt-1">
+          <div class="flex items-center justify-between pb-1.5 border-b border-white/[0.06]">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-white/70 flex items-center gap-1.5">
               <span class="w-1.5 h-1.5 rounded-full bg-[#ff2d95]"></span>
               <span>Relacionados</span>
@@ -1889,10 +2348,16 @@
             <span id="video-sidebar-count" class="text-[11px] text-white/40 font-mono"></span>
           </div>
 
-          <!-- Lista Compacta de Tarjetas Relacionadas -->
-          <div id="video-sidebar-list" class="flex flex-col gap-2.5">
-            <!-- Items renderizados dinámicamente -->
+          <!-- Lista Compacta de Tarjetas Relacionadas (Fila de ~76-80px, sin scroll anidado) -->
+          <div id="video-sidebar-list" class="flex flex-col gap-2 content-visibility-auto">
+            <!-- Items renderizados dinámicamente: 8 iniciales -->
           </div>
+
+          <!-- Botón discreto "Ver más" (+8 hasta 24 máximo) -->
+          <button id="video-sidebar-load-more" onclick="loadMoreRelatedVideos()" class="w-full py-2.5 px-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-[#ff2d95]/40 text-xs font-semibold text-white/80 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2 mt-1 shadow-sm">
+            <i class="fa-solid fa-chevron-down text-[10px] text-[#ff2d95]"></i>
+            <span>Ver más relacionados</span>
+          </button>
         </aside>
 
       </div>
@@ -1910,8 +2375,8 @@
 
     </main>
 
-    <!-- Modal Atajos de Teclado (?) -->
-    <div id="video-shortcuts-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4" onclick="closeShortcutsModal(event)">
+    <!-- Modal Atajos de Teclado (?) (Z-Index 200) -->
+    <div id="video-shortcuts-modal" class="hidden fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-4" onclick="closeShortcutsModal(event)">
       <div class="bg-[#120818] border border-white/15 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4" onclick="event.stopPropagation()">
         <div class="flex items-center justify-between border-b border-white/10 pb-3">
           <h4 class="font-display text-lg text-white font-medium flex items-center gap-2">
@@ -3547,11 +4012,7 @@
       cats.forEach(cat => {
         const btn = document.createElement('button');
         const isActive = (state.category === cat.id) || (state.category === 'all' && cat.id === 'all');
-        btn.className = `cat-chip whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-          isActive
-            ? 'active font-extrabold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.35)] border border-pink-400/50'
-            : 'text-white/70 bg-white/[0.04] border border-white/10 hover:border-pink-500/50 hover:text-white hover:bg-white/[0.08]'
-        }`;
+        btn.className = `category-chip ${isActive ? 'is-active' : ''}`;
         btn.textContent = cat.label;
         btn.onclick = () => setCategory(cat.id, btn);
         container.appendChild(btn);
@@ -3926,7 +4387,12 @@
         startHeroAutoPlay();
       }
 
-      window.addEventListener('popstate', handleRouterPopState);
+      // Inicialización de verificación de edad y enrutador VelvetRouter
+      if (!window.VelvetStore?.isAgeVerified()) {
+        const ageGate = document.getElementById('velvet-age-gate');
+        if (ageGate) ageGate.classList.remove('hidden');
+      }
+      window.VelvetRouter?.init();
       
     document.addEventListener('fullscreenchange', () => {
       const fsIcon = document.getElementById('video-fullscreen-icon');
@@ -4010,13 +4476,135 @@
       }
     }
 
-    function getStealthImageUrl(url, referer) {
+    
+    // =======================================================================
+    // VELVET HUB HIGH-PERFORMANCE SMART IMAGE ENGINE (FASE B & C)
+    // =======================================================================
+    const DOMINANT_HUES = ['#150824', '#180a2b', '#1c0c32', '#120922', '#1e0b2e', '#130d2a', '#170928'];
+    function getCardDominantColor(id) {
+      if (!id) return '#140824';
+      let hash = 0;
+      const str = String(id);
+      for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      return DOMINANT_HUES[Math.abs(hash) % DOMINANT_HUES.length];
+    }
+
+    const RESPONSIVE_CARD_SIZES = '(max-width: 640px) 190px, (max-width: 1024px) 260px, 360px';
+
+    function getResponsiveSrcSet(url, referer) {
+      if (!url || typeof url !== 'string' || url.startsWith('data:')) return '';
+      const base = getStealthImageUrl(url, referer);
+      const clean = base.replace(/&w=\d+/g, '').replace(/&q=\d+/g, '').replace(/&fmt=\w+/g, '');
+      return `${clean}&w=240&q=70&fmt=auto 240w, ${clean}&w=360&q=70&fmt=auto 360w, ${clean}&w=480&q=75&fmt=auto 480w`;
+    }
+
+    // Lazy loader con cola de concurrencia y cancelación con AbortController
+    const SmartImageLoader = (function() {
+      const isSlowConn = (typeof navigator !== 'undefined' && navigator.connection &&
+        (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
+      const MAX_CONCURRENT = isSlowConn ? 3 : 6;
+      let active = 0;
+      const queue = [];
+      const controllers = new Map();
+
+      function processQueue() {
+        if (active >= MAX_CONCURRENT || queue.length === 0) return;
+        const task = queue.shift();
+        if (!task || !task.el || !task.el.isConnected) {
+          processQueue();
+          return;
+        }
+
+        active++;
+        const controller = new AbortController();
+        controllers.set(task.el, controller);
+
+        const img = task.el;
+        const src = task.src;
+        const srcSet = task.srcSet;
+
+        const temp = new Image();
+        let done = false;
+
+        const finish = (ok) => {
+          if (done) return;
+          done = true;
+          controllers.delete(img);
+          active--;
+
+          if (ok) {
+            img.src = src;
+            if (srcSet) img.srcset = srcSet;
+            img.classList.remove('opacity-0');
+            img.classList.add('opacity-100');
+            const sk = img.previousElementSibling;
+            if (sk && (sk.classList.contains('skeleton-shimmer') || sk.classList.contains('velvet-skeleton'))) {
+              sk.style.opacity = '0';
+              setTimeout(() => { try { sk.remove(); } catch(e){} }, 200);
+            }
+          } else {
+            handleCardImageError(img, task.type || 'comic');
+          }
+          processQueue();
+        };
+
+        controller.signal.addEventListener('abort', () => {
+          temp.src = '';
+          finish(false);
+        });
+
+        temp.onload = () => finish(true);
+        temp.onerror = () => finish(false);
+        if (srcSet) temp.srcset = srcSet;
+        temp.src = src;
+      }
+
+      const observer = (typeof IntersectionObserver !== 'undefined') ? new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const img = entry.target;
+          if (entry.isIntersecting) {
+            const src = img.dataset.src;
+            const srcSet = img.dataset.srcset;
+            if (src) {
+              queue.push({ el: img, src, srcSet, type: img.dataset.mediaType });
+              processQueue();
+              observer.unobserve(img);
+            }
+          } else {
+            if (controllers.has(img)) {
+              controllers.get(img).abort();
+            }
+          }
+        });
+      }, { rootMargin: '350px 0px' }) : null;
+
+      return {
+        register: (img) => {
+          if (!observer) {
+            img.src = img.dataset.src || img.src;
+            return;
+          }
+          observer.observe(img);
+        }
+      };
+    })();
+
+    function getStealthImageUrl(url, referer, width = 0, quality = 70) {
       if (!url || typeof url !== 'string') return '';
       if (url.startsWith('data:') || url.startsWith('blob:')) return url;
-      if (url.startsWith('/api/media?t=')) return url;
-      if (url.startsWith('/api/') && !url.includes('url=') && !url.includes('t=')) return url;
-      const token = encodeMediaToken(url, referer);
-      return `/api/media?t=${token}`;
+      let finalUrl = '';
+      if (url.startsWith('/api/media?t=')) {
+        finalUrl = url;
+      } else if (url.startsWith('/api/') && !url.includes('url=') && !url.includes('t=')) {
+        finalUrl = url;
+      } else {
+        const token = encodeMediaToken(url, referer);
+        finalUrl = `/api/media?t=${token}`;
+      }
+      if (width > 0 && !finalUrl.includes('&w=') && !finalUrl.includes('?w=')) {
+        finalUrl += `&w=${width}&q=${quality}&fmt=auto`;
+      }
+      return finalUrl;
     }
 
     function getStealthStreamUrl(streamUrl, referer) {
@@ -4034,6 +4622,138 @@
     }
 
     // Gestión de LocalStorage por cuenta
+    
+    // =======================================================================
+    // VELVET HUB - ROUTER BRIDGE & VIEW LIFECYCLE MANAGEMENT
+    // =======================================================================
+    window.VelvetConfirmAge = function(confirmed) {
+      if (confirmed) {
+        window.VelvetStore?.setAgeVerified(true);
+        const gate = document.getElementById('velvet-age-gate');
+        if (gate) gate.classList.add('hidden');
+      }
+    };
+
+    window.submitVaultKeyRedeem = async function() {
+      const input = document.getElementById('vault-redeem-key-input');
+      if (!input || !input.value.trim()) {
+        showToast('Por favor introduce tu Llave de Acceso VIP', 'warning');
+        return;
+      }
+      const keyVal = input.value.trim().toUpperCase();
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: keyVal, username: state.currentUser?.username || 'Usuario VIP' })
+        });
+        const data = await res.json();
+        if (res.ok && data.user) {
+          window.VelvetStore?.setCurrentUser(data.user, data.token, data.refresh_token, data.device_token);
+          state.currentUser = data.user;
+          showToast('¡Llave VIP activada exitosamente!', 'success');
+          window.VelvetVault?.renderAccount();
+        } else {
+          showToast(data.error || 'Llave inválida o ya canjeada', 'error');
+        }
+      } catch (e) {
+        showToast('Error de conexión al canjear llave', 'error');
+      }
+    };
+
+    window.addEventListener('velvet:route-leave', function(e) {
+      const videoView = document.getElementById('video-view');
+      if (videoView && !videoView.classList.contains('hidden')) {
+        closeVideoPlayer(false);
+      }
+      const readerModal = document.getElementById('reader-modal');
+      if (readerModal && !readerModal.classList.contains('hidden')) {
+        closeReader(false);
+      }
+    });
+
+    window.addEventListener('velvet:route-render', function(e) {
+      const route = e.detail;
+      if (!route) return;
+
+      const mainContent = document.getElementById('main-content');
+      const videoView = document.getElementById('video-view');
+      const readerModal = document.getElementById('reader-modal');
+      const vaultView = document.getElementById('view-vault');
+      const filterBar = document.getElementById('filter-bar');
+      const mobNav = document.getElementById('mobile-navbar');
+      const gHeader = document.getElementById('global-header');
+
+      // 1. Ruta Bóveda, Historial o Cuenta
+      if (route.name === 'vault') {
+        if (mainContent) mainContent.classList.add('hidden');
+        if (videoView) videoView.classList.add('hidden');
+        if (readerModal) readerModal.classList.add('hidden');
+        if (filterBar) filterBar.classList.add('hidden');
+        if (gHeader) gHeader.classList.remove('hidden');
+        if (mobNav) mobNav.classList.remove('hidden');
+        if (vaultView) vaultView.classList.remove('hidden');
+        window.VelvetVault?.mount(route.tab || 'favorites');
+        return;
+      }
+
+      // 2. Ruta Inicio o Catálogos (/videos, /comics, /cosplay)
+      if (route.name === 'home' || route.name === 'catalog') {
+        if (vaultView) vaultView.classList.add('hidden');
+        if (videoView) videoView.classList.add('hidden');
+        if (readerModal) readerModal.classList.add('hidden');
+        if (mainContent) mainContent.classList.remove('hidden');
+        if (filterBar) filterBar.classList.remove('hidden');
+        if (gHeader) gHeader.classList.remove('hidden');
+        if (mobNav) mobNav.classList.remove('hidden');
+
+        const targetMode = route.mode || 'comics';
+        if (targetMode !== state.mode) {
+          setPortalMode(targetMode, false);
+        }
+        if (route.category && route.category !== state.category) {
+          state.category = route.category;
+          fetchLiveFeed(true);
+        } else if (route.query && route.query !== state.query) {
+          state.query = route.query;
+          fetchLiveFeed(true);
+        }
+        return;
+      }
+
+      // 3. Ruta de Video (/v/:slug)
+      if (route.name === 'video') {
+        if (vaultView) vaultView.classList.add('hidden');
+        if (readerModal) readerModal.classList.add('hidden');
+        let source = route.source || '', id = route.sourceId || '', itemId = null;
+        if (route.id && /^\d+$/.test(route.id)) {
+          itemId = route.id;
+        } else if (route.rawToken) {
+          const dec = decodeStealthId(route.rawToken);
+          if (dec && dec.isNumeric) itemId = dec.id;
+          else if (dec) { source = dec.source; id = dec.sourceId; }
+        }
+        openVideoPlayer(source, id, '', '', '', false, itemId);
+        return;
+      }
+
+      // 4. Ruta de Cómic o Galería (/c/:slug, /g/:slug, /c/:slug/leer)
+      if (route.name === 'comic' || route.name === 'gallery' || route.name === 'reader') {
+        if (vaultView) vaultView.classList.add('hidden');
+        if (videoView) videoView.classList.add('hidden');
+        let source = route.source || '', id = route.sourceId || '', itemId = null;
+        if (route.id && /^\d+$/.test(route.id)) {
+          itemId = route.id;
+        } else if (route.rawToken) {
+          const dec = decodeStealthId(route.rawToken);
+          if (dec && dec.isNumeric) itemId = dec.id;
+          else if (dec) { source = dec.source; id = dec.sourceId; }
+        }
+        openReader(source, id, false, itemId);
+        return;
+      }
+    });
+
     function loadStorage() {
       try {
         // Limpieza proactiva de claves vcache_* huérfanas en localStorage para proteger la cuota de favoritos
@@ -4738,41 +5458,33 @@
     }
 
     function renderSkeletons() {
-
       const grid = document.getElementById('comics-grid');
-
+      if (!grid) return;
       grid.innerHTML = '';
-
-      const skelCount = (typeof getAdaptivePageSize === 'function') ? getAdaptivePageSize() : (window.innerWidth < 768 ? 8 : 12);
-
-      for (let i = 0; i < skelCount; i++) {
-
-        const skel = document.createElement('div');
-
-        skel.className = 'flex flex-col bg-glass/60 border border-neon/15 rounded-2xl overflow-hidden';
-
-        skel.innerHTML = `
-
-          <div class="aspect-[3/4] w-full shimmer"></div>
-
-          <div class="p-3 space-y-2">
-
-            <div class="h-3 bg-neon/15 rounded shimmer w-3/4"></div>
-
-            <div class="h-2.5 bg-neon/10 rounded shimmer w-1/2"></div>
-
-          </div>
-
-        `;
-
-        grid.appendChild(skel);
-
+      const isVideo = (state.mode === 'videos');
+      if (isVideo) {
+        grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6';
+      } else {
+        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6';
       }
-
+      const skelCount = (typeof getAdaptivePageSize === 'function') ? getAdaptivePageSize() : (window.innerWidth < 768 ? 8 : 12);
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < skelCount; i++) {
+        const skel = document.createElement('div');
+        skel.className = 'flex flex-col bg-[#0f071c] border border-white/[0.08] rounded-2xl overflow-hidden';
+        skel.innerHTML = `
+          <div class="${isVideo ? 'aspect-video' : 'aspect-[3/4]'} w-full velvet-skeleton relative"></div>
+          <div class="p-3 space-y-2">
+            <div class="h-3 bg-white/10 rounded velvet-skeleton w-3/4"></div>
+            <div class="h-2.5 bg-white/5 rounded velvet-skeleton w-1/2"></div>
+          </div>
+        `;
+        frag.appendChild(skel);
+      }
+      grid.appendChild(frag);
       grid.classList.remove('hidden');
-
-      document.getElementById('empty-state').classList.add('hidden');
-
+      const emptyState = document.getElementById('empty-state');
+      if (emptyState) emptyState.classList.add('hidden');
     }
 
     // =======================================================================
@@ -4783,6 +5495,7 @@
 
     function renderGalleryGrid(items, append = false) {
       const grid = document.getElementById('comics-grid');
+      if (!grid) return;
       if (!append) {
         grid.innerHTML = '';
         grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6';
@@ -4792,44 +5505,51 @@
         Array.from(grid.querySelectorAll('[data-card-id]')).map(el => el.getAttribute('data-card-id'))
       );
 
+      const frag = document.createDocumentFragment();
+
       items.forEach((it, idx) => {
         const cardId = String(it.id || `${it.source}_${it.source_id}`);
         if (existingCards.has(cardId)) return;
         existingCards.add(cardId);
 
         const isLocked = isItemLockedForUser(it, idx);
-        const card = document.createElement('div');
+        const card = document.createElement('a');
+        const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(it) : '#';
+        card.href = itemUrl;
         card.setAttribute('data-card-id', cardId);
+        card.setAttribute('aria-label', it.title || 'Galería');
         card.style.setProperty('--card-i', String(Math.min(idx, 16)));
         card.classList.add('velvet-card-enter');
         if (isLocked) {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
-          card.onclick = () => openProUpgradeModal(it);
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
-          card.className = 'group velvet-card-enter flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
-          card.onclick = () => openReader(it.source, it.source_id, true, it.id);
+          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
         }
 
+        const isAboveFold = (idx < 4);
         const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
+          ? getStealthImageUrl(it.cover_url, it.url, 360, 70)
           : COMIC_FALLBACK_SVG;
-        const photoCount = it.page_count || (it.pages ? it.pages.length : 50);
+        const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
+        const photoCount = it.page_count || (it.pages ? it.pages.length : null);
         const modelName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || 'Cosplay VIP';
         const isFav = isFavorite(it.source, it.source_id, it.id);
+        const domColor = getCardDominantColor(cardId);
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-[#130924] select-none">
-            <div class="skeleton-shimmer absolute inset-0"></div>
+          <div class="relative aspect-[3/4] w-full overflow-hidden select-none" style="background-color: ${domColor};">
+            <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              src="${coverSrc}"
-              data-original-src="${coverSrc}"
+              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
-              loading="${idx < 4 ? 'eager' : 'lazy'}"
-              fetchpriority="${idx < 4 ? 'high' : 'low'}"
+              loading="${isAboveFold ? 'eager' : 'lazy'}"
+              fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -4844,14 +5564,16 @@
             ` : ''}
 
             <!-- Badge Superior Izquierda: Cantidad de fotos -->
-            <span class="absolute top-2 left-2 bg-black/85 border border-hot/40 text-hot px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider shadow flex items-center gap-1">
-              <i class="fa-solid fa-camera text-[8px]"></i> ${photoCount} FOTOS
-            </span>
+            ${photoCount ? `
+              <span class="absolute top-2 left-2 bg-[#090414]/90 border border-[#ff2d95]/40 text-[#ff4da8] px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                <i class="fa-solid fa-camera text-[8px]"></i> ${photoCount} FOTOS
+              </span>
+            ` : ''}
 
-            <!-- Indicador Bloqueado VIP (visible desde antes) -->
+            <!-- Indicador Bloqueado VIP -->
             ${isLocked ? `
-              <span class="absolute top-2 right-10 px-2 py-0.5 rounded-lg bg-black/90 border border-amber-500/80 text-[9px] font-black uppercase text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.5)] flex items-center gap-1 z-20">
-                <i class="fa-solid fa-crown text-amber-400 text-[8px]"></i> VIP PREMIUM
+              <span class="absolute top-2 right-10 px-2 py-0.5 rounded-lg bg-[#090414]/90 border border-amber-500/80 text-[9px] font-black uppercase text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.5)] flex items-center gap-1 z-20">
+                <i class="fa-solid fa-crown text-amber-400 text-[8px]"></i> VIP
               </span>
             ` : ''}
 
@@ -4859,54 +5581,61 @@
             <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               <button
                 onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="card-fav-btn w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                class="card-fav-btn w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
                 data-fav-source="${it.source || ''}"
                 data-fav-source-id="${it.source_id || ''}"
                 data-fav-id="${it.id || ''}"
                 title="Favorito"
               >
-                <i class="${isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70'} fa-heart"></i>
+                <i class="${isFav ? 'fa-solid text-[#ff2d95]' : 'fa-regular text-lav/70'} fa-heart"></i>
               </button>
             </div>
 
             <!-- Badge Inferior Izquierda: Nombre de la modelo -->
             <div class="absolute bottom-2 left-2 right-2">
-              <span class="inline-block px-2 py-0.5 rounded-md bg-obsidian/90 text-lav border border-neon/30 text-[9px] font-bold uppercase truncate max-w-full">
+              <span class="inline-block px-2 py-0.5 rounded-md bg-[#090414]/90 text-lav border border-white/10 text-[9px] font-bold uppercase truncate max-w-full">
                 ${escapeHtml(modelName)}
               </span>
             </div>
           </div>
 
           <div class="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
-            <h4 class="text-xs font-bold text-ink group-hover:text-hot transition-colors line-clamp-2 leading-snug">
+            <h4 class="text-xs font-bold text-ink group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-snug">
               ${escapeHtml(it.title)}
             </h4>
-            <div class="mt-2 pt-2 border-t border-neon/15 flex items-center justify-between text-[11px]">
+            <div class="mt-2 pt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
               ${isLocked ? `
                 <span class="text-[10px] font-bold text-amber-400 flex items-center gap-1">
                   <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Exclusivo VIP
                 </span>
-                <span class="text-amber-300 font-black bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center gap-1 text-[10px] shadow-sm">
-                  <i class="fa-solid fa-crown text-[9px] text-amber-400"></i> VIP ($5.99)
+                <span class="text-amber-300 font-black bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center gap-1 text-[10px]">
+                  <i class="fa-solid fa-crown text-[9px] text-amber-400"></i> VIP
                 </span>
               ` : `
-                <span class="text-emerald-400 font-bold flex items-center gap-1">
-                  <i class="fa-solid fa-circle text-[6px] animate-pulse"></i> Completo
+                <span class="text-emerald-400 font-bold flex items-center gap-1 text-[10px]">
+                  <i class="fa-solid fa-circle text-[5px]"></i> Completo
                 </span>
-                <span class="text-hot font-extrabold group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                <span class="text-[#ff4da8] font-extrabold group-hover:translate-x-1 transition-transform flex items-center gap-1 text-[10px]">
                   Ver Galería &rarr;
                 </span>
               `}
             </div>
           </div>
         `;
-        grid.appendChild(card);
+
+        frag.appendChild(card);
+        if (!isAboveFold) {
+          const img = card.querySelector('img.card-cover-img');
+          if (img) SmartImageLoader.register(img);
+        }
       });
+      grid.appendChild(frag);
       grid.classList.remove('hidden');
     }
 
     function renderVideoGrid(items, append = false) {
       const grid = document.getElementById('comics-grid');
+      if (!grid) return;
       if (!append) {
         grid.innerHTML = '';
         grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6';
@@ -4916,109 +5645,112 @@
         Array.from(grid.querySelectorAll('[data-card-id]')).map(el => el.getAttribute('data-card-id'))
       );
 
+      const frag = document.createDocumentFragment();
+
       items.forEach((it, idx) => {
         const cardId = String(it.id || `${it.source}_${it.source_id}`);
         if (existingCards.has(cardId)) return;
         existingCards.add(cardId);
 
         const isLocked = isItemLockedForUser(it, idx);
-        const card = document.createElement('div');
+        const card = document.createElement('a');
+        const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(it) : '#';
+        card.href = itemUrl;
         card.setAttribute('data-card-id', cardId);
+        card.setAttribute('aria-label', it.title || 'Video');
         card.style.setProperty('--card-i', String(Math.min(idx, 16)));
         card.classList.add('velvet-card-enter');
 
         if (isLocked) {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
-          card.onclick = () => openProUpgradeModal(it);
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#0f0720]/80 hover:bg-[#180c32] border border-white/10 hover:border-pink-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_30px_rgba(236,72,153,0.25)] transition-all duration-300 cursor-pointer relative';
-          card.onclick = () => {
-            if (it.id) setCachedItem(String(it.id), it);
-            if (it.source && it.source_id) setCachedItem(`${it.source}_${it.source_id}`, it);
-            openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, true, it.id);
-          };
+          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-[#ff2d95]/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
+          if (it.id) setCachedItem(String(it.id), it);
+          if (it.source && it.source_id) setCachedItem(`${it.source}_${it.source_id}`, it);
         }
 
+        const isAboveFold = (idx < 4);
         const isFav = isFavorite(it.source, it.source_id, it.id);
         const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
+          ? getStealthImageUrl(it.cover_url, it.url, 360, 70)
           : VIDEO_FALLBACK_SVG;
-        const duration = (it.extra && it.extra.duration) || '1080p HD';
-        const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || (it.source ? it.source.toUpperCase() : 'PMV Edit');
+        const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
+        const duration = (it.extra && it.extra.duration) || 'HD';
+        const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || (it.source ? it.source.toUpperCase() : 'Velvet');
+        const viewsCount = (it.extra && it.extra.views) ? `${it.extra.views} vistas` : null;
+        const domColor = getCardDominantColor(cardId);
 
         card.innerHTML = `
-          <div class="relative aspect-video w-full overflow-hidden bg-black select-none">
-            <div class="skeleton-shimmer absolute inset-0"></div>
+          <div class="relative aspect-video w-full overflow-hidden select-none" style="background-color: ${domColor};">
+            <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              src="${coverSrc}"
-              data-original-src="${coverSrc}"
+              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
-              loading="${idx < 4 ? 'eager' : 'lazy'}"
-              fetchpriority="${idx < 4 ? 'high' : 'low'}"
+              loading="${isAboveFold ? 'eager' : 'lazy'}"
+              fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, 'video')"
             />
-            <div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors pointer-events-none"></div>
+            <div class="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors pointer-events-none"></div>
 
             <!-- Play Icon on Hover -->
             <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
-              <div class="w-12 h-12 rounded-full bg-pink-600/90 text-white flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                <i class="fa-solid fa-play ml-0.5 text-sm"></i>
+              <div class="w-11 h-11 rounded-full bg-[#ff2d95]/90 text-white flex items-center justify-center shadow-lg transform scale-80 group-hover:scale-100 transition-transform duration-300">
+                <i class="fa-solid fa-play ml-0.5 text-xs"></i>
               </div>
             </div>
 
             <!-- Quality Badge Top-Left -->
-            <span class="absolute top-2 left-2 bg-black/80 backdrop-blur-md text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow">
-              1080p HD
+            <span class="absolute top-2 left-2 bg-[#090414]/90 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
+              1080p
             </span>
 
             <!-- Duration Badge Bottom-Right -->
-            <span class="absolute bottom-2 right-2 bg-black/90 backdrop-blur-md text-white px-2 py-0.5 rounded-md text-[10px] font-black tabular-nums shadow border border-white/10">
-              <i class="fa-solid fa-clock text-[8px] mr-1 text-pink-400"></i>${duration}
+            <span class="absolute bottom-2 right-2 bg-[#090414]/90 text-white px-2 py-0.5 rounded-md text-[10px] font-black tabular-nums border border-white/10">
+              <i class="fa-solid fa-clock text-[8px] mr-1 text-[#ff4da8]"></i>${duration}
             </span>
 
             <!-- Favorite Heart Button Top-Right -->
             <div class="absolute top-2 right-2 z-10">
               <button
                 onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="card-fav-btn w-7 h-7 rounded-lg bg-black/80 backdrop-blur-md border border-white/20 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                class="card-fav-btn w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
                 data-fav-source="${it.source || ''}"
                 data-fav-source-id="${it.source_id || ''}"
                 data-fav-id="${it.id || ''}"
                 title="Favorito"
               >
-                <i class="${isFav ? 'fa-solid text-pink-500' : 'fa-regular text-white/70'} fa-heart"></i>
+                <i class="${isFav ? 'fa-solid text-[#ff2d95]' : 'fa-regular text-white/70'} fa-heart"></i>
               </button>
             </div>
           </div>
 
-          <!-- Info debajo de la miniatura (Estilo YouTube / Streaming) -->
+          <!-- Info debajo de la miniatura -->
           <div class="p-3 flex-1 flex flex-col justify-between">
             <div>
-              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-pink-400 transition-colors line-clamp-2 leading-snug" title="${escapeHtml(it.title)}">
+              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-[#ff4da8] transition-colors line-clamp-2 leading-snug" title="${escapeHtml(it.title)}">
                 ${escapeHtml(it.title)}
               </h4>
               <div class="flex items-center gap-2 text-[11px] text-purple-300/70 pt-1.5">
                 <span class="font-semibold text-pink-300/80 truncate">${escapeHtml(performerName)}</span>
-                <span>&bull;</span>
-                <span>${it.extra && it.extra.views ? it.extra.views + ' vistas' : 'PMV Edit'}</span>
+                ${viewsCount ? `<span>&bull;</span><span>${viewsCount}</span>` : ''}
               </div>
-            </div>
-            <div class="mt-2.5 pt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
-              <span class="text-emerald-400 font-bold flex items-center gap-1.5 text-[10px]">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Streaming 1080p
-              </span>
-              <span class="text-pink-400 font-extrabold group-hover:translate-x-1 transition-transform flex items-center gap-1 text-[10px]">
-                Ver Video &rarr;
-              </span>
             </div>
           </div>
         `;
-        grid.appendChild(card);
+
+        frag.appendChild(card);
+        if (!isAboveFold) {
+          const img = card.querySelector('img.card-cover-img');
+          if (img) SmartImageLoader.register(img);
+        }
       });
+      grid.appendChild(frag);
       grid.classList.remove('hidden');
     }
 
@@ -5053,6 +5785,22 @@
     let videoIsHoveringControls = false;
     let videoWatchdogTimer = null;
     let videoPreviousVolume = 1;
+    
+    // Lazy-loading dinámico de HLS.js (solo se descarga bajo demanda al abrir un video)
+    function ensureHlsLoaded() {
+      if (window.Hls) return Promise.resolve(window.Hls);
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+        s.onload = () => resolve(window.Hls);
+        s.onerror = (err) => {
+          console.warn('[HLS] Error cargando librería HLS.js:', err);
+          reject(err);
+        };
+        document.head.appendChild(s);
+      });
+    }
+
     let hlsInstance = null;
     let videoFailoverAttempts = 0;
     const MAX_FAILOVER_ATTEMPTS = 3;
@@ -5141,24 +5889,61 @@
       }, 180);
     }
 
-    // --- Ambilight Neon 4-Zone Sampling Engine (6-8 fps, 0% CPU Idle) ---
+    // --- Zero-CPU Canvas Ambilight & Software Rendering Optimization Engine ---
     let ambilightCanvas = null;
     let ambilightCtx = null;
-    let ambilightInterval = null;
-    let ambilightRvfcHandle = null;
-    let ambilightLastTime = 0;
-    let ambilightMode = localStorage.getItem('velvet_ambilight_mode') || 'vivid'; // 'vivid' | 'soft' | 'off'
-    let ambilightTainted = false;
+    let ambilightRvfcId = null;
+    let ambilightTimerId = null;
+    let ambilightLastTick = 0;
+    let ambilightMode = localStorage.getItem('velvet_ambilight_mode') || 'off'; // default safe
+    let isSoftwareGpuDetected = false;
 
-    function initAmbilightEngine() {
-      if (ambilightCanvas) return;
-      ambilightCanvas = document.createElement('canvas');
-      ambilightCanvas.width = 16;
-      ambilightCanvas.height = 9;
-      ambilightCanvas.style.display = 'none';
-      document.body.appendChild(ambilightCanvas);
+    // Detect 100% Software Rendering (SwiftShader / SwANGLE / Microsoft Basic Render Driver / llvmpipe)
+    function isSoftwareRenderingActive() {
       try {
-        ambilightCtx = ambilightCanvas.getContext('2d', { willReadFrequently: true });
+        const testCanvas = document.createElement('canvas');
+        const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+        if (!gl) return true;
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) return false;
+        const renderer = (gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '').toLowerCase();
+        const vendor = (gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || '').toLowerCase();
+        const isSw = renderer.includes('swiftshader') ||
+                     renderer.includes('basic render') ||
+                     renderer.includes('swangle') ||
+                     renderer.includes('llvmpipe') ||
+                     renderer.includes('software') ||
+                     renderer.includes('microsoft basic') ||
+                     vendor.includes('microsoft');
+        return isSw;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function initSoftwareRenderingState() {
+      isSoftwareGpuDetected = isSoftwareRenderingActive();
+      if (isSoftwareGpuDetected) {
+        console.log('%c⚡ [VELVET OPTIMIZER] Renderizado 100% por Software (CPU) detectado. Ambilight y efectos pesados desactivados automáticamente para garantizar 60 fps nativos.', 'color: #38bdf8; font-weight: bold;');
+        document.documentElement.classList.add('velvet-software-mode');
+        // Force off if in software mode unless user explicitly insisted otherwise in this turn
+        if (!localStorage.getItem('velvet_ambilight_user_override')) {
+          ambilightMode = 'off';
+        }
+      } else {
+        // If GPU hardware acceleration is available and user hasn't set mode, use soft
+        if (!localStorage.getItem('velvet_ambilight_mode')) {
+          ambilightMode = 'soft';
+        }
+      }
+    }
+
+    function initAmbilightCanvas() {
+      if (ambilightCtx) return;
+      ambilightCanvas = document.getElementById('video-ambilight-canvas');
+      if (!ambilightCanvas) return;
+      try {
+        ambilightCtx = ambilightCanvas.getContext('2d', { alpha: false, desynchronized: true });
       } catch (e) {
         ambilightCtx = ambilightCanvas.getContext('2d');
       }
@@ -5166,9 +5951,9 @@
 
     function updateAmbilightGlow() {
       const player = document.getElementById('html5-video-player');
-      const glow = document.getElementById('video-ambient-glow');
-      if (!player || !glow || ambilightMode === 'off') {
-        if (glow) glow.style.opacity = '0';
+      const canvas = ambilightCanvas || document.getElementById('video-ambilight-canvas');
+      if (!player || !canvas || ambilightMode === 'off' || isSoftwareGpuDetected) {
+        if (canvas) canvas.style.opacity = '0';
         return;
       }
 
@@ -5176,110 +5961,142 @@
         return;
       }
 
-      if (ambilightTainted) {
-        glow.style.opacity = ambilightMode === 'soft' ? '0.30' : '0.48';
-        glow.style.background = 'radial-gradient(circle at 50% 50%, rgba(255,45,149,0.35) 0%, rgba(139,61,255,0.25) 50%, transparent 80%)';
-        return;
-      }
-
       try {
-        if (!ambilightCtx) initAmbilightEngine();
-        ambilightCtx.drawImage(player, 0, 0, 16, 9);
-        const imgData = ambilightCtx.getImageData(0, 0, 16, 9).data;
+        if (!ambilightCtx) initAmbilightCanvas();
+        if (!ambilightCtx) return;
 
-        function sampleZone(startX, endX, startY, endY) {
-          let r = 0, g = 0, b = 0, count = 0;
-          for (let y = startY; y < endY; y++) {
-            for (let x = startX; x < endX; x++) {
-              const idx = (y * 16 + x) * 4;
-              r += imgData[idx];
-              g += imgData[idx + 1];
-              b += imgData[idx + 2];
-              count++;
-            }
-          }
-          if (count === 0) return 'rgba(255,45,149,0.4)';
-          r /= count; g /= count; b /= count;
-          // Saturation Boost (1.35x)
-          const avg = (r + g + b) / 3;
-          r = Math.min(255, Math.max(0, avg + (r - avg) * 1.35));
-          g = Math.min(255, Math.max(0, avg + (g - avg) * 1.35));
-          b = Math.min(255, Math.max(0, avg + (b - avg) * 1.35));
-          return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+        // Downsample directly to 32x18 with CSS bilinear interpolation (Zero-CPU blur convolution)
+        ambilightCtx.drawImage(player, 0, 0, 32, 18);
+        const targetOpacity = ambilightMode === 'soft' ? '0.40' : '0.65';
+        if (canvas.style.opacity !== targetOpacity) {
+          canvas.style.opacity = targetOpacity;
         }
-
-        const topColor = sampleZone(2, 14, 0, 3);
-        const bottomColor = sampleZone(2, 14, 6, 9);
-        const leftColor = sampleZone(0, 3, 2, 7);
-        const rightColor = sampleZone(13, 16, 2, 7);
-
-        const op = ambilightMode === 'soft' ? '0.35' : '0.55';
-        glow.style.opacity = op;
-        glow.style.background = `radial-gradient(ellipse at 50% 0%, ${topColor} 0%, transparent 60%),
-                                 radial-gradient(ellipse at 50% 100%, ${bottomColor} 0%, transparent 60%),
-                                 radial-gradient(ellipse at 0% 50%, ${leftColor} 0%, transparent 60%),
-                                 radial-gradient(ellipse at 100% 50%, ${rightColor} 0%, transparent 60%)`;
       } catch (err) {
-        ambilightTainted = true;
-        glow.style.opacity = ambilightMode === 'soft' ? '0.30' : '0.48';
-        glow.style.background = 'radial-gradient(circle at 50% 50%, rgba(255,45,149,0.35) 0%, rgba(139,61,255,0.25) 50%, transparent 80%)';
+        // If cross-origin video without CORS, gracefully mute canvas opacity
+        if (canvas) canvas.style.opacity = '0';
       }
     }
 
     function scheduleAmbilightLoop() {
+      cancelAmbilightLoop();
+      if (ambilightMode === 'off' || isSoftwareGpuDetected) return;
       const player = document.getElementById('html5-video-player');
-      if (!player) return;
+      if (!player || player.paused || player.ended) return;
+
       if ('requestVideoFrameCallback' in player) {
-        ambilightRvfcHandle = player.requestVideoFrameCallback((now) => {
-          if (now - ambilightLastTime >= 135) { // ~7 fps
-            ambilightLastTime = now;
+        ambilightRvfcId = player.requestVideoFrameCallback((now) => {
+          if (now - ambilightLastTick >= 220) { // ~4.5 fps
+            ambilightLastTick = now;
             updateAmbilightGlow();
           }
-          if (!player.paused && !player.ended) {
+          if (!player.paused && !player.ended && ambilightMode !== 'off') {
             scheduleAmbilightLoop();
           }
         });
       } else {
-        if (!ambilightInterval) {
-          ambilightInterval = setInterval(updateAmbilightGlow, 140);
-        }
+        ambilightTimerId = setInterval(() => {
+          if (!player.paused && !player.ended && ambilightMode !== 'off') {
+            updateAmbilightGlow();
+          }
+        }, 220);
+      }
+    }
+
+    function cancelAmbilightLoop() {
+      const player = document.getElementById('html5-video-player');
+      if (player && ambilightRvfcId !== null && typeof player.cancelVideoFrameCallback === 'function') {
+        try { player.cancelVideoFrameCallback(ambilightRvfcId); } catch(e) {}
+        ambilightRvfcId = null;
+      }
+      if (ambilightTimerId !== null) {
+        clearInterval(ambilightTimerId);
+        ambilightTimerId = null;
       }
     }
 
     function stopAmbilightLoop() {
-      if (ambilightInterval) {
-        clearInterval(ambilightInterval);
-        ambilightInterval = null;
-      }
+      cancelAmbilightLoop();
+      const canvas = ambilightCanvas || document.getElementById('video-ambilight-canvas');
+      if (canvas) canvas.style.opacity = '0';
     }
 
     function cycleAmbilightMode() {
+      localStorage.setItem('velvet_ambilight_user_override', 'true');
       const modes = ['vivid', 'soft', 'off'];
       const curIdx = modes.indexOf(ambilightMode);
       ambilightMode = modes[(curIdx + 1) % modes.length];
       localStorage.setItem('velvet_ambilight_mode', ambilightMode);
       updateAmbilightUI();
-      updateAmbilightGlow();
+      if (ambilightMode === 'off') {
+        stopAmbilightLoop();
+      } else {
+        scheduleAmbilightLoop();
+      }
       showVideoHud('fa-lightbulb', `Luces: ${ambilightMode === 'off' ? 'Apagadas' : (ambilightMode === 'soft' ? 'Suaves' : 'Vívidas')}`);
     }
 
     function updateAmbilightUI() {
       const label = document.getElementById('cinema-light-label');
       const icon = document.getElementById('cinema-light-icon');
-      const glow = document.getElementById('video-ambient-glow');
+      const canvas = ambilightCanvas || document.getElementById('video-ambilight-canvas');
       if (!label || !icon) return;
+
       if (ambilightMode === 'off') {
         label.textContent = 'Luces: Off';
         icon.className = 'fa-regular fa-lightbulb text-white/40';
-        if (glow) glow.style.opacity = '0';
+        if (canvas) canvas.style.opacity = '0';
       } else if (ambilightMode === 'soft') {
         label.textContent = 'Luces: Suave';
         icon.className = 'fa-solid fa-lightbulb text-amber-300/60';
-        if (glow) glow.style.opacity = '0.35';
+        if (canvas) canvas.style.opacity = '0.40';
       } else {
         label.textContent = 'Luces: Vívido';
         icon.className = 'fa-solid fa-lightbulb text-amber-300';
-        if (glow) glow.style.opacity = '0.55';
+        if (canvas) canvas.style.opacity = '0.65';
+      }
+    }
+
+    // --- Dynamic Dropped Frame Rate Watchdog (Auto-degrades if dropped frames > 5%) ---
+    let frameQualityWatchdogInterval = null;
+    let lastTotalFrames = 0;
+    let lastDroppedFrames = 0;
+
+    function startFrameRateWatchdog() {
+      if (frameQualityWatchdogInterval) return;
+      const player = document.getElementById('html5-video-player');
+      if (!player || typeof player.getVideoPlaybackQuality !== 'function') return;
+
+      lastTotalFrames = 0;
+      lastDroppedFrames = 0;
+
+      frameQualityWatchdogInterval = setInterval(() => {
+        if (!player || player.paused || player.ended || !state.currentVideo) return;
+        const q = player.getVideoPlaybackQuality();
+        if (!q || q.totalVideoFrames < 60) return;
+
+        const deltaTotal = q.totalVideoFrames - lastTotalFrames;
+        const deltaDropped = q.droppedVideoFrames - lastDroppedFrames;
+        lastTotalFrames = q.totalVideoFrames;
+        lastDroppedFrames = q.droppedVideoFrames;
+
+        if (deltaTotal > 30) {
+          const dropRate = deltaDropped / deltaTotal;
+          if (dropRate > 0.05 && ambilightMode !== 'off') {
+            console.warn(`[VELVET WATCHDOG] Dropped frames rate (${(dropRate * 100).toFixed(1)}%) > 5%. Degrading Ambilight to OFF for smooth native playback.`);
+            ambilightMode = 'off';
+            localStorage.setItem('velvet_ambilight_mode', 'off');
+            updateAmbilightUI();
+            stopAmbilightLoop();
+            showVideoHud('fa-gauge-high', 'Modo Fluido Automático Activado');
+          }
+        }
+      }, 4000);
+    }
+
+    function stopFrameRateWatchdog() {
+      if (frameQualityWatchdogInterval) {
+        clearInterval(frameQualityWatchdogInterval);
+        frameQualityWatchdogInterval = null;
       }
     }
 
@@ -5368,6 +6185,8 @@
       };
 
       player.onended = () => {
+        stopFrameRateWatchdog();
+
         stopAmbilightLoop();
         stopFaviconPulse();
         const dur = (Number.isFinite(player.duration) && player.duration > 0) ? player.duration : 0;
@@ -5448,6 +6267,8 @@
       };
 
       player.onpause = () => {
+        stopFrameRateWatchdog();
+
         if (playIcon) playIcon.className = 'fa-solid fa-play';
         const centerPlay = document.getElementById('video-center-play-btn');
         if (centerPlay) centerPlay.classList.remove('hidden');
@@ -5470,6 +6291,8 @@
       };
 
       player.onplaying = () => {
+        startFrameRateWatchdog();
+
         if (videoWatchdogTimer) {
           clearTimeout(videoWatchdogTimer);
           videoWatchdogTimer = null;
@@ -6249,6 +7072,7 @@
     }
 
     async function openVideoPlayer(source, sourceId, initialTitle = '', initialThumb = '', initialUrl = '', pushRoute = true, itemId = null) {
+      initSoftwareRenderingState();
       if (typeof canUserAccessItem === 'function' && !canUserAccessItem({ id: itemId, source, sourceId, media_type: 'video' })) {
         openProUpgradeModal({ id: itemId, source, sourceId, title: initialTitle, media_type: 'video' });
         return;
@@ -6524,8 +7348,18 @@
         }
       };
 
-      if (isHls && window.Hls && Hls.isSupported() && !player.canPlayType('application/vnd.apple.mpegurl')) {
-        hlsInstance = new Hls({
+      if (isHls && !player.canPlayType('application/vnd.apple.mpegurl')) {
+        ensureHlsLoaded().then((Hls) => {
+          if (!Hls || !Hls.isSupported()) {
+            player.src = streamUrl;
+            player.play().catch(() => {});
+            return;
+          }
+          if (hlsInstance) {
+            try { hlsInstance.destroy(); } catch(e) {}
+            hlsInstance = null;
+          }
+          hlsInstance = new Hls({
           capLevelToPlayerSize: true,
           autoStartLoad: true,
           enableWorker: true,
@@ -6553,8 +7387,8 @@
             handleVideoPlaybackFailover();
           }
         });
-
-      } else {
+      });
+    } else {
         player.pause();
         player.removeAttribute('src');
         player.preload = 'auto';
@@ -6625,6 +7459,8 @@
     }
 
     function closeVideoPlayer(pushRoute = true) {
+      stopFrameRateWatchdog();
+
       if (!cinemaLightsOn) toggleCinemaLights();
       stopAmbilightLoop();
       stopFaviconPulse();
@@ -6824,11 +7660,104 @@
       clearTimeout(prefetchHoverTimer);
     }
 
-    async function renderVideoRecommendations() {
+    let _relatedVideosList = [];
+    let _relatedVideosCount = 8;
+
+    function renderRelatedItemsSlice() {
+      const sidebarContainer = document.getElementById('video-sidebar-list');
+      const loadMoreBtn = document.getElementById('video-sidebar-load-more');
+      const countLabel = document.getElementById('video-sidebar-count');
+      if (!sidebarContainer) return;
+
+      const itemsToShow = _relatedVideosList.slice(0, _relatedVideosCount);
+      if (countLabel) {
+        countLabel.textContent = `${itemsToShow.length} de ${_relatedVideosList.length}`;
+      }
+
+      sidebarContainer.innerHTML = '';
+      if (_relatedVideosList.length === 0) {
+        sidebarContainer.innerHTML = '<p class="text-xs text-white/40 py-4 text-center">Explora más videos en el catálogo principal.</p>';
+        if (loadMoreBtn) loadMoreBtn.classList.add('hidden');
+        return;
+      }
+
+      itemsToShow.forEach((r, idx) => {
+        const isLocked = isItemLockedForUser(r, idx);
+        const duration = (r.extra && r.extra.duration) || 'HD';
+        const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
+
+        const itemEl = document.createElement('div');
+        // Clean compact ~76-80px row height, no nested scrollbar, elegant hover
+        itemEl.className = 'sidebar-video-item flex items-center gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.06] hover:border-[#ff2d95]/40 transition-all cursor-pointer group select-none';
+        itemEl.onmouseenter = () => prefetchVideoOnHover(r);
+        itemEl.onmouseleave = () => cancelVideoPrefetch();
+        itemEl.onclick = () => {
+          if (isLocked) {
+            openProUpgradeModal(r);
+          } else {
+            openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
+          }
+        };
+
+        // Source badge clean
+        const badgeText = getReliableBadge(r) || 'Velvet';
+
+        itemEl.innerHTML = `
+          <div class="relative w-32 sm:w-36 aspect-video rounded-lg overflow-hidden bg-black shrink-0">
+            <img
+              src="${coverSrc}"
+              alt="${escapeHtml(r.title)}"
+              loading="lazy"
+              decoding="async"
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              onerror="handleCardImageError(this, 'video')"
+            />
+            <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 text-[10px] font-mono text-white/90">
+              ${duration}
+            </span>
+          </div>
+          <div class="flex-1 flex flex-col justify-center min-w-0 pr-1 gap-1">
+            <h4 class="text-xs font-medium text-white/90 group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-snug" title="${escapeHtml(r.title)}">
+              ${escapeHtml(r.title)}
+            </h4>
+            <div class="flex items-center gap-2 text-[11px] text-white/50">
+              <span class="px-1.5 py-0.2 rounded bg-white/[0.04] text-white/70">${badgeText}</span>
+              <span>&bull;</span>
+              <span class="text-white/40">1080p</span>
+            </div>
+          </div>
+        `;
+        sidebarContainer.appendChild(itemEl);
+      });
+
+      if (loadMoreBtn) {
+        if (_relatedVideosCount >= _relatedVideosList.length || _relatedVideosCount >= 24) {
+          loadMoreBtn.classList.add('hidden');
+        } else {
+          loadMoreBtn.classList.remove('hidden');
+        }
+      }
+    }
+
+    function loadMoreRelatedVideos() {
+      _relatedVideosCount = Math.min(_relatedVideosCount + 8, 24);
+      renderRelatedItemsSlice();
+    }
+
+    let _recsIdleTimer = null;
+    function renderVideoRecommendations() {
+      if (_recsIdleTimer) clearTimeout(_recsIdleTimer);
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(() => _execRenderVideoRecommendations(), { timeout: 1200 });
+      } else {
+        _recsIdleTimer = setTimeout(_execRenderVideoRecommendations, 120);
+      }
+    }
+
+    async function _execRenderVideoRecommendations() {
       const sidebarContainer = document.getElementById('video-sidebar-list');
       const gridContainer = document.getElementById('video-recommendations-grid');
       const tagsContainer = document.getElementById('video-popular-tags');
-      const countLabel = document.getElementById('video-sidebar-count');
 
       if (!sidebarContainer && !gridContainer) return;
 
@@ -6836,17 +7765,9 @@
       let recs = (state.catalogCache || []).filter(it => it.media_type === 'video' && it.source_id !== currentId);
 
       if (recs.length === 0) {
-        if (sidebarContainer) {
-          sidebarContainer.innerHTML = `
-            <div class="flex items-center justify-center py-8 gap-2 text-white/50 text-xs">
-              <div class="w-4 h-4 rounded-full border-2 border-[#ff2d95]/40 border-t-[#ff2d95] animate-spin"></div>
-              <span>Buscando sugerencias...</span>
-            </div>
-          `;
-        }
         try {
           const recSeed = (parseInt(String(currentId).replace(/\D/g, ''), 10) % 8) + 1 || 1;
-          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=20&seed=${recSeed}&live=true`, { credentials: 'omit' });
+          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=24&seed=${recSeed}&live=true`, { credentials: 'omit' });
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.items && data.items.length > 0) {
@@ -6859,64 +7780,11 @@
         }
       }
 
-      if (countLabel) countLabel.textContent = recs.length > 0 ? `${recs.length} títulos` : '';
+      _relatedVideosList = recs;
+      _relatedVideosCount = 8;
+      renderRelatedItemsSlice();
 
-      // 1. Renderizar Sidebar de Escritorio (Lista Compacta con Thumbnail 16:9 de ~140px)
-      if (sidebarContainer) {
-        sidebarContainer.innerHTML = '';
-        if (recs.length === 0) {
-          sidebarContainer.innerHTML = '<p class="text-xs text-white/40 py-4 text-center">Explora más videos en el catálogo principal.</p>';
-        } else {
-          recs.slice(0, 15).forEach((r, idx) => {
-            const isLocked = isItemLockedForUser(r, idx);
-            const duration = (r.extra && r.extra.duration) || 'HD';
-            const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
-
-            const itemEl = document.createElement('div');
-            itemEl.className = 'sidebar-video-item flex items-center gap-3 p-1.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.06] cursor-pointer group select-none';
-            itemEl.onmouseenter = () => prefetchVideoOnHover(r);
-            itemEl.onmouseleave = () => cancelVideoPrefetch();
-            itemEl.onclick = () => {
-              if (isLocked) {
-                openProUpgradeModal(r);
-              } else {
-                openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
-              }
-            };
-
-            itemEl.innerHTML = `
-              <div class="relative w-36 sm:w-40 aspect-video rounded-lg overflow-hidden bg-black shrink-0">
-                <img
-                  src="${coverSrc}"
-                  alt="${escapeHtml(r.title)}"
-                  loading="lazy"
-                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  onerror="handleCardImageError(this, 'video')"
-                />
-                <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 text-[10px] font-mono text-white/90">
-                  ${duration}
-                </span>
-                <span class="absolute top-1 left-1 px-1 py-0.5 rounded bg-[#ff2d95]/80 text-[9px] font-semibold text-white">
-                  1080p
-                </span>
-              </div>
-              <div class="flex-1 flex flex-col justify-center min-w-0 pr-1">
-                <h4 class="text-xs font-medium text-white/90 group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-snug" title="${escapeHtml(r.title)}">
-                  ${escapeHtml(r.title)}
-                </h4>
-                <div class="flex items-center gap-2 text-[11px] text-white/50 pt-1">
-                  <span>${getReliableBadge(r) || 'Velvet'}</span>
-                  <span>&bull;</span>
-                  <span>HD</span>
-                </div>
-              </div>
-            `;
-            sidebarContainer.appendChild(itemEl);
-          });
-        }
-      }
-
-      // 2. Renderizar Grid Inferior (Visible en Modo Cine o Pantallas Móviles)
+      // Render Bottom Grid (Cinema Mode)
       if (gridContainer) {
         gridContainer.innerHTML = '';
         recs.slice(0, 12).forEach((r, idx) => {
@@ -6924,17 +7792,19 @@
           const duration = (r.extra && r.extra.duration) || 'HD';
           const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
 
-          const card = document.createElement('div');
+          const card = document.createElement('a');
+          const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(r) : '#';
+          card.href = itemUrl;
+          card.setAttribute('aria-label', r.title || 'Video');
           card.className = 'group flex flex-col rounded-xl overflow-hidden bg-white/[0.03] border border-white/[0.08] hover:border-[#ff2d95]/40 transition-all cursor-pointer relative';
           card.onmouseenter = () => prefetchVideoOnHover(r);
           card.onmouseleave = () => cancelVideoPrefetch();
-          card.onclick = () => {
-            if (isLocked) {
+          if (isLocked) {
+            card.onclick = (e) => {
+              e.preventDefault();
               openProUpgradeModal(r);
-            } else {
-              openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
-            }
-          };
+            };
+          }
 
           card.innerHTML = `
             <div class="aspect-video w-full overflow-hidden bg-black relative">
@@ -6942,14 +7812,12 @@
                 src="${coverSrc}"
                 alt="${escapeHtml(r.title)}"
                 loading="lazy"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                decoding="async"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                 onerror="handleCardImageError(this, 'video')"
               />
               <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 text-[10px] font-mono text-white/90">
                 ${duration}
-              </span>
-              <span class="absolute top-1 left-1 px-1 py-0.5 rounded bg-[#ff2d95]/80 text-[9px] font-semibold text-white">
-                1080p
               </span>
             </div>
             <div class="p-2 flex flex-col gap-0.5">
@@ -6962,7 +7830,7 @@
         });
       }
 
-      // 3. Renderizar Chips de Tags Elegantes
+      // Render Tags
       if (tagsContainer) {
         tagsContainer.innerHTML = '';
         const popTags = ['1080p', '4k', 'Milf', 'Amateur', 'Blowjob', 'Threesome', 'Blonde', 'POV', 'Anal', 'Latina', 'Cosplay', 'SinCensura'];
@@ -6982,12 +7850,6 @@
         });
       }
     }
-
-// =======================================================================
-
-    // ROUTING POPSTATE & SHORTCUTS GLOBALES
-
-    // =======================================================================
 
     function handleRouterPopState() {
 
@@ -7266,6 +8128,7 @@
 
     function renderGrid(items, append = false) {
       const grid = document.getElementById('comics-grid');
+      if (!grid) return;
       if (!append) {
         grid.innerHTML = '';
         grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6';
@@ -7275,6 +8138,8 @@
         Array.from(grid.querySelectorAll('[data-card-id]')).map(el => el.getAttribute('data-card-id'))
       );
 
+      const frag = document.createDocumentFragment();
+
       items.forEach((it, idx) => {
         const cardId = String(it.id || `${it.source}_${it.source_id}`);
         if (existingCards.has(cardId)) return;
@@ -7282,45 +8147,44 @@
 
         const fmt = getFormatInfo(it);
         const isLocked = isItemLockedForUser(it, idx);
-        const card = document.createElement('div');
+        const card = document.createElement('a');
+        const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(it) : '#';
+        card.href = itemUrl;
         card.setAttribute('data-card-id', cardId);
+        card.setAttribute('aria-label', it.title || 'Cómic');
         card.style.setProperty('--card-i', String(Math.min(idx, 16)));
         card.classList.add('velvet-card-enter');
 
         if (isLocked) {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_30px_rgba(245,158,11,0.35)] transition-all duration-300 cursor-pointer relative';
-          card.onclick = () => openProUpgradeModal(it);
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
-          card.className = 'group velvet-card-enter flex flex-col bg-glass border border-neon/20 rounded-2xl overflow-hidden hover:border-hot hover:shadow-hot-glow transition-all duration-300 cursor-pointer relative';
-          card.onclick = () => openReader(it.source, it.source_id, true, it.id);
+          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
         }
 
+        const isAboveFold = (idx < 4);
         const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
+          ? getStealthImageUrl(it.cover_url, it.url, 360, 70)
           : COMIC_FALLBACK_SVG;
+        const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const isFav = isFavorite(it.source, it.source_id, it.id);
         const isWatch = isWatchlisted(it.source, it.source_id, it.id);
-
-        const cleanTags = (it.tags || []).filter(t => t.length > 2 && !t.toLowerCase().includes('comic')).slice(0, 2);
-        const tagsHtml = cleanTags.length > 0
-          ? cleanTags.map(t => `<span class="text-[9px] px-1.5 py-0.2 rounded bg-pitch/70 text-lav/80 border border-neon/20">#${escapeHtml(t)}</span>`).join(' ')
-          : `<span class="text-[9px] px-1.5 py-0.2 rounded bg-pitch/70 text-lav/80 border border-neon/20">#SinCensura</span>`;
-
         const cleanCardTitle = parseComicTitle(it.title).title || it.title;
+        const domColor = getCardDominantColor(cardId);
 
         card.innerHTML = `
-          <div class="relative aspect-[3/4] w-full overflow-hidden bg-[#130924] select-none">
-            <div class="skeleton-shimmer absolute inset-0"></div>
+          <div class="relative aspect-[3/4] w-full overflow-hidden select-none" style="background-color: ${domColor};">
+            <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              src="${coverSrc}"
-              data-original-src="${coverSrc}"
+              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
-              loading="${idx < 4 ? 'eager' : 'lazy'}"
-              fetchpriority="${idx < 4 ? 'high' : 'low'}"
+              loading="${isAboveFold ? 'eager' : 'lazy'}"
+              fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) { s.style.opacity='0'; setTimeout(()=>s.remove(),350); }"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -7335,14 +8199,14 @@
             ` : ''}
 
             <!-- Badge Superior Izquierda -->
-            <span class="absolute top-2 left-2 ${fmt.color} border px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-black/90 shadow">
+            <span class="absolute top-2 left-2 ${fmt.color} border px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-[#090414]/90">
               ${fmt.label}
             </span>
 
-            <!-- Indicador Bloqueado VIP (visible desde antes) -->
+            <!-- Indicador Bloqueado VIP -->
             ${isLocked ? `
-              <span class="absolute top-2 right-10 px-2 py-0.5 rounded-lg bg-black/90 border border-amber-500/80 text-[9px] font-black uppercase text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.5)] flex items-center gap-1 z-20">
-                <i class="fa-solid fa-crown text-amber-400 text-[8px]"></i> VIP PREMIUM
+              <span class="absolute top-2 right-10 px-2 py-0.5 rounded-lg bg-[#090414]/90 border border-amber-500/80 text-[9px] font-black uppercase text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.5)] flex items-center gap-1 z-20">
+                <i class="fa-solid fa-crown text-amber-400 text-[8px]"></i> VIP
               </span>
             ` : ''}
 
@@ -7350,68 +8214,54 @@
             <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               <button
                 onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="card-fav-btn w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
+                class="card-fav-btn w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
                 data-fav-source="${it.source || ''}"
                 data-fav-source-id="${it.source_id || ''}"
                 data-fav-id="${it.id || ''}"
                 title="Favorito"
               >
-                <i class="${isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70'} fa-heart"></i>
+                <i class="${isFav ? 'fa-solid text-[#ff2d95]' : 'fa-regular text-lav/70'} fa-heart"></i>
               </button>
               <button
                 onclick="toggleWatchlist(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
-                class="w-7 h-7 rounded-lg bg-black/90 border border-neon/30 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform"
+                class="w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform text-lav/70 hover:text-white"
                 title="Lista de seguimiento"
               >
-                <i class="${isWatch ? 'fa-solid text-gold' : 'fa-regular text-lav/70'} fa-bookmark"></i>
+                <i class="${isWatch ? 'fa-solid text-amber-400' : 'fa-regular text-lav/70'} fa-bookmark"></i>
               </button>
             </div>
 
-            <!-- Degradado Inferior con Páginas y Rating -->
-            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent p-2 pt-6 flex items-center justify-between">
-              <span class="text-[10px] font-black text-gold flex items-center gap-1">
-                <i class="fa-solid fa-star text-[9px]"></i> 9.9
-              </span>
-              ${it.page_count ? `
-                <span class="bg-black/80 text-[10px] font-bold text-ink px-1.5 py-0.5 rounded border border-neon/20">
-                  <i class="fa-regular fa-images mr-1 text-hot"></i>${it.page_count}
+            <!-- Barra Inferior Discreta con Páginas (Sin calificaciones inventadas) -->
+            ${it.page_count ? `
+              <div class="absolute bottom-2 left-2">
+                <span class="bg-[#090414]/90 text-[10px] font-bold text-ink px-1.5 py-0.5 rounded border border-white/10 flex items-center gap-1">
+                  <i class="fa-regular fa-images text-[9px] text-[#ff4da8]"></i>${it.page_count} pág
                 </span>
-              ` : `
-                <span class="bg-black/80 text-[10px] font-bold text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-800">
-                  HD
-                </span>
-              `}
-            </div>
+              </div>
+            ` : ''}
           </div>
 
           <!-- Pie de Tarjeta -->
           <div class="p-3 flex-1 flex flex-col justify-between space-y-2">
             <div>
-              <h4 class="text-xs font-bold text-ink line-clamp-2 group-hover:text-hot transition-colors" title="${escapeHtml(it.title)}">
+              <h4 class="text-xs font-bold text-ink line-clamp-2 group-hover:text-[#ff4da8] transition-colors" title="${escapeHtml(it.title)}">
                 ${escapeHtml(cleanCardTitle)}
               </h4>
-              <div class="flex flex-wrap gap-1 mt-1.5">
-                ${tagsHtml}
-              </div>
             </div>
-            <div class="flex items-center justify-between text-[11px] text-lav/70 border-t border-neon/15 pt-2">
-              <span class="text-[10px] font-bold ${isLocked ? 'text-amber-400' : 'text-emerald-400'} flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-amber-400' : 'bg-emerald-400'}"></span> ${isLocked ? 'Exclusivo VIP' : 'Completo'}
-              </span>
-              ${isLocked ? `
-                <span class="text-amber-300 font-black bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center gap-1 text-[10px] shadow-sm">
-                  <i class="fa-solid fa-crown text-[9px] text-amber-400"></i> VIP ($5.99)
-                </span>
-              ` : `
-                <span class="text-hot font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                  Leer <i class="fa-solid fa-arrow-right text-[10px]"></i>
-                </span>
-              `}
+            <div class="pt-1.5 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
+              <span class="text-lav/60 text-[10px]">${escapeHtml(it.source ? it.source.toUpperCase() : 'VELVET')}</span>
+              <span class="text-[#ff4da8] font-bold text-[10px] group-hover:translate-x-0.5 transition-transform">Leer &rarr;</span>
             </div>
           </div>
         `;
-        grid.appendChild(card);
+
+        frag.appendChild(card);
+        if (!isAboveFold) {
+          const img = card.querySelector('img.card-cover-img');
+          if (img) SmartImageLoader.register(img);
+        }
       });
+      grid.appendChild(frag);
       grid.classList.remove('hidden');
     }
 
@@ -7554,7 +8404,7 @@
           readBtn.innerHTML = '<i class="fa-solid fa-lock text-xs text-amber-300"></i> Desbloquear VIP ($5.99)';
           readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-amber-500 via-pink-600 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
         } else {
-          readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
+          readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer'; readBtn.href = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : '#';
           if (isVid) {
             readBtn.innerHTML = '<i class="fa-solid fa-play text-xs"></i> Ver Video en HD';
             readBtn.onclick = () => {
@@ -7635,7 +8485,7 @@
 
     }
 
-    function openHeroComic() {
+    function openHeroComic(event) { if (event && (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0)) return; if (event) event.preventDefault();
       const it = state.heroItems[state.heroIndex];
       if (!it) return;
       if (isItemLockedForUser(it, state.heroIndex)) {
@@ -7736,35 +8586,34 @@
         }
 
         const isLocked = isItemLockedForUser(h);
-        const card = document.createElement('div');
+        const card = document.createElement('a');
+        const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(h) : '#';
+        card.href = itemUrl;
+        card.setAttribute('aria-label', h.title || 'Continuar viendo');
         card.className = `group relative ${isVid ? 'w-64 sm:w-72' : 'w-56 sm:w-64'} shrink-0 bg-[#0e061e]/90 border border-white/10 hover:border-pink-500 rounded-2xl overflow-hidden cursor-pointer shadow-lg p-2.5 flex items-center gap-3 transition-all hover:scale-[1.02]`;
-        card.onclick = () => {
-          if (isLocked) {
+        if (isLocked) {
+          card.onclick = (e) => {
+            e.preventDefault();
             openProUpgradeModal(h);
-            return;
-          }
-          if (isVid) {
-            openVideoPlayer(h.source, h.source_id, h.title, h.cover_url, h.url, true, h.id);
-          } else {
-            openReader(h.source, h.source_id, true, h.id);
-          }
-        };
+          };
+        }
 
         const coverSrc = h.cover_url
           ? getStealthImageUrl(h.cover_url, h.url)
           : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
+        const domColor = getCardDominantColor(h.id || (h.source + '_' + h.source_id));
         card.innerHTML = `
-          <div class="${isVid ? 'w-24 h-14 aspect-video' : 'w-12 h-16 aspect-[3/4]'} rounded-xl overflow-hidden bg-black shrink-0 relative select-none border border-white/10">
-            <div class="skeleton-shimmer absolute inset-0 bg-[#120722]"></div>
-            <img src="${coverSrc}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s&&s.classList.contains('skeleton-shimmer')) s.remove();" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+          <div class="${isVid ? 'w-24 h-14 aspect-video' : 'w-12 h-16 aspect-[3/4]'} rounded-xl overflow-hidden shrink-0 relative select-none border border-white/10" style="background-color: ${domColor};">
+            <div class="velvet-skeleton absolute inset-0"></div>
+            <img src="${coverSrc}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s) s.remove();" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
             <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-pink-400 text-sm drop-shadow"></i>
+              <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-[#ff4da8] text-sm drop-shadow"></i>
             </div>
           </div>
           <div class="flex-1 min-w-0 pr-3">
             <h5 class="text-xs font-bold text-white truncate group-hover:text-pink-300 transition-colors">${escapeHtml(h.title)}</h5>
-            <span class="text-[10px] text-pink-400 font-bold block mt-0.5 truncate">${progressLabel}</span>
+            <span class="text-[10px] text-[#ff4da8] font-bold block mt-0.5 truncate">${progressLabel}</span>
             <div class="w-full bg-black/60 rounded-full h-1.5 mt-1.5 overflow-hidden border border-white/10">
               <div class="bg-gradient-to-r from-pink-500 to-purple-600 h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
             </div>
@@ -11108,11 +11957,7 @@
       const prevBtn = document.createElement('button');
       prevBtn.type = 'button';
       prevBtn.disabled = currentPage <= 1;
-      prevBtn.className = `px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all cursor-pointer ${
-        currentPage <= 1
-          ? 'opacity-30 border-purple-500/10 text-lav/40 pointer-events-none'
-          : 'border-purple-500/25 bg-purple-950/40 text-purple-200 hover:border-pink-500 hover:text-white active:scale-95'
-      }`;
+      prevBtn.className = 'pagination-btn';
       prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left text-[10px]"></i> <span class="hidden sm:inline">Ant</span>';
       prevBtn.onclick = () => jumpToPage(currentPage - 1);
       container.appendChild(prevBtn);
@@ -11150,11 +11995,7 @@
       const nextBtn = document.createElement('button');
       nextBtn.type = 'button';
       nextBtn.disabled = currentPage >= totalPages;
-      nextBtn.className = `px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all cursor-pointer ${
-        currentPage >= totalPages
-          ? 'opacity-30 border-purple-500/10 text-lav/40 pointer-events-none'
-          : 'border-purple-500/25 bg-purple-950/40 text-purple-200 hover:border-pink-500 hover:text-white active:scale-95'
-      }`;
+      nextBtn.className = 'pagination-btn';
       nextBtn.innerHTML = '<span class="hidden sm:inline">Sig</span> <i class="fa-solid fa-chevron-right text-[10px]"></i>';
       nextBtn.onclick = () => jumpToPage(currentPage + 1);
       container.appendChild(nextBtn);
@@ -11164,11 +12005,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       const isActive = pageNum === currentPage;
-      btn.className = `min-w-[36px] h-9 px-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-        isActive
-          ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white border border-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.4)] scale-105 pointer-events-none'
-          : 'border border-purple-500/25 bg-purple-950/40 text-purple-200 hover:border-pink-400 hover:text-white active:scale-95'
-      }`;
+      btn.className = `page-num-btn ${isActive ? 'is-active' : ''}`;
       btn.textContent = pageNum.toLocaleString();
       btn.onclick = () => jumpToPage(pageNum);
       return btn;
@@ -11348,6 +12185,32 @@
     });
 
   </script>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL PERSISTENTE DE VERIFICACIÓN DE EDAD (+18) -->
+  <!-- ===================================================================== -->
+  <div id="velvet-age-gate" class="hidden fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 select-none">
+    <div class="bg-[#0e071c] border border-pink-500/30 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-[0_0_50px_rgba(255,45,149,0.25)] flex flex-col items-center">
+      <div class="w-14 h-14 rounded-2xl bg-black/70 border border-pink-500/40 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(255,45,149,0.3)]">
+        <img src="/velvet_logo.png" alt="Velvet Hub" class="w-10 h-10 object-contain drop-shadow-[0_0_6px_rgba(255,45,149,0.8)]">
+      </div>
+      <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/40 mb-3">+18 Solo Adultos</span>
+      <h3 class="font-display text-2xl font-bold text-white mb-2">Verificación de Edad</h3>
+      <p class="text-xs text-lav/80 leading-relaxed mb-6">
+        Este portal contiene material explícito para adultos sin censura. Al continuar, certificas bajo juramento que tienes al menos 18 años o la mayoría de edad en tu país.
+      </p>
+      <div class="w-full space-y-2.5">
+        <button type="button" onclick="window.VelvetConfirmAge(true)" class="w-full py-3 rounded-2xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(255,45,149,0.4)] transition-all cursor-pointer">
+          Soy mayor de 18 años &bull; Ingresar
+        </button>
+        <a href="https://www.google.com" rel="noopener noreferrer" class="block w-full py-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-lav/60 hover:text-white text-xs font-semibold transition-all">
+          Salir del portal
+        </a>
+      </div>
+      <p class="text-[10px] text-lav/40 mt-5">18 U.S.C. 2257 Record-Keeping Requirements Compliance</p>
+    </div>
+  </div>
 
 </body>
 

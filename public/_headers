@@ -1,31 +1,12 @@
 # Cloudflare Pages Static Assets & High-Performance Headers
 
-# Global Security, Timing & Speed
+# Global Security, Timing & Optimization
 /*
   X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
   Timing-Allow-Origin: *
   Access-Control-Allow-Origin: *
-
-# Next.js static builds
-/_next/static/*
-  Cache-Control: public, max-age=31536000, immutable
-
-# Favicon and App Logo (30 days immutable)
-/velvet_logo.png
-  Cache-Control: public, max-age=2592000, immutable
-
-# Manifest (1 day cache + stale-while-revalidate)
-/manifest.json
-  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
-
-# Service Worker (always fresh revalidation, root scope allowed)
-/sw.js
-  Cache-Control: public, max-age=0, must-revalidate
-  Service-Worker-Allowed: /
-
-# JavaScript Modules (/js/*)
-/js/*
-  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
 
 # Rutas Privadas del Usuario (No indexar en buscadores, sin almacenamiento en proxy)
 /boveda/*
@@ -40,7 +21,34 @@
   X-Robots-Tag: noindex, nofollow, noarchive
   Cache-Control: private, no-store, must-revalidate
 
-# HTML Files (revalidate immediately for zero-delay deploys)
+# Immutable Static CSS & JS Assets
+/js/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+# Next.js static builds
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# App Logo and Favicons (Immutable Edge Cache)
+/velvet_logo.png
+  Cache-Control: public, max-age=31536000, immutable
+
+/favicon.ico
+  Cache-Control: public, max-age=31536000, immutable
+
+# Web App Manifest
+/manifest.json
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+# Service Worker (Always revalidate immediately for fresh code)
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+  Service-Worker-Allowed: /
+
+# SPA HTML Shell (zero-delay instant deploys)
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
 

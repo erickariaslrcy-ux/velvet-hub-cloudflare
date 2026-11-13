@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <title>404 — Página no encontrada &bull; Velvet Hub</title>
+  <link rel="icon" type="image/png" href="/velvet_logo.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#040209">
+  <meta name="color-scheme" content="dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root {
+      --bg-pitch: #040209;
+      --bg-card: #0e071c;
+      --border-subtle: rgba(168, 85, 247, 0.25);
+      --hot-pink: #ff2d95;
+      --neon-violet: #8b3dff;
+      --text-lav: #c4b5fd;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-pitch);
+      color: #ffffff;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .card-404 {
+      max-width: 540px;
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 1.5rem;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 0 40px rgba(139, 61, 255, 0.2);
+    }
+    .logo-badge {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 1.5rem;
+      border-radius: 1rem;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 45, 149, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 25px rgba(255, 45, 149, 0.4);
+    }
+    .logo-badge img {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+    }
+    h1 {
+      font-family: 'DM Serif Display', Georgia, serif;
+      font-size: 2.2rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      color: #ffffff;
+    }
+    .code-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      background: rgba(255, 45, 149, 0.15);
+      border: 1px solid rgba(255, 45, 149, 0.4);
+      color: var(--hot-pink);
+      margin-bottom: 1rem;
+    }
+    p {
+      color: rgba(196, 181, 253, 0.8);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin-bottom: 2rem;
+    }
+    .btn-home {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      background: linear-gradient(135deg, var(--hot-pink), var(--neon-violet));
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 0.9rem;
+      padding: 0.85rem 1.75rem;
+      border-radius: 9999px;
+      box-shadow: 0 0 25px rgba(255, 45, 149, 0.45);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-home:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 35px rgba(255, 45, 149, 0.65);
+    }
+    .nav-shortcuts {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid rgba(168, 85, 247, 0.15);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+    }
+    .nav-shortcuts a {
+      color: var(--text-lav);
+      text-decoration: none;
+      padding: 0.4rem 0.8rem;
+      border-radius: 0.5rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.2s;
+    }
+    .nav-shortcuts a:hover {
+      background: rgba(255, 45, 149, 0.15);
+      border-color: rgba(255, 45, 149, 0.4);
+      color: #ffffff;
+    }
+    footer {
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: rgba(196, 181, 253, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <main class="card-404">
+    <div class="logo-badge">
+      <img src="/velvet_logo.png" alt="Velvet Hub Logo">
+    </div>
+    <div class="code-badge">Error 404</div>
+    <h1>Contenido no encontrado</h1>
+    <p>La página que intentas abrir no existe, ha expirado o el enlace es incorrecto. Puedes explorar nuestro catálogo completo o volver a la página principal.</p>
+    <div>
+      <a href="/" class="btn-home">
+        <i class="fa-solid fa-house"></i>
+        <span>Volver a Velvet Hub</span>
+      </a>
+    </div>
+    <div class="nav-shortcuts">
+      <a href="/videos"><i class="fa-solid fa-film"></i> Videos</a>
+      <a href="/comics"><i class="fa-solid fa-book-open"></i> Cómics</a>
+      <a href="/cosplay"><i class="fa-solid fa-camera"></i> Modelos</a>
+      <a href="/boveda/favoritos"><i class="fa-solid fa-heart"></i> Mi Bóveda</a>
+    </div>
+  </main>
+  <footer>
+    <p>Velvet Hub &bull; 18 U.S.C. 2257 Record-Keeping Requirements Compliance</p>
+  </footer>
+</body>
+</html>

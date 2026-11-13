@@ -234,9 +234,69 @@ export async function onRequest(context) {
       targetMediaUrl.includes(".m3u8") ||
       url.pathname.includes("/video/");
 
-    // Cloudflare Edge Cache para imágenes (7 días de retención mundial acelerada)
+    // Parámetros de variantes y compresión de imagen (Fase B)
+    const rawW = parseInt(url.searchParams.get("w") || "0", 10);
+    const ALLOWED_WIDTHS = [120, 240, 360, 480, 720, 1080];
+    let targetWidth = 0;
+    if (rawW > 0) {
+      targetWidth = ALLOWED_WIDTHS.reduce((prev, curr) =>
+        Math.abs(curr - rawW) < Math.abs(prev - rawW) ? curr : prev
+      );
+    }
+
+    const rawQ = parseInt(url.searchParams.get("q") || "70", 10);
+    const targetQuality = Math.min(90, Math.max(50, rawQ));
+
+    // Formato por negociación de cabecera Accept
+    const acceptHeader = (context.request.headers.get("Accept") || "").toLowerCase();
+    const rawFmt = (url.searchParams.get("fmt") || "").toLowerCase();
+    let targetFormat = "auto";
+    if (["webp", "avif", "jpeg", "jpg", "png"].includes(rawFmt)) {
+      targetFormat = rawFmt === "jpg" ? "jpeg" : rawFmt;
+    } else {
+      if (acceptHeader.includes("image/avif")) targetFormat = "avif";
+      else if (acceptHeader.includes("image/webp")) targetFormat = "webp";
+    }
+
+    // ETag determinista y revalidación 304 instantánea
+    const etagSeed = `${targetMediaUrl}_w${targetWidth}_q${targetQuality}_f${targetFormat}`;
+    let etagHash = 0;
+    for (let i = 0; i < etagSeed.length; i++) {
+      etagHash = (etagHash << 5) - etagHash + etagSeed.charCodeAt(i);
+      etagHash |= 0;
+    }
+    const etag = `W/"${Math.abs(etagHash).toString(36)}"`;
+
+    const ifNoneMatch = context.request.headers.get("if-none-match");
+    if (!isVideo && ifNoneMatch && ifNoneMatch === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          "ETag": etag,
+          "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
+          "Vary": "Accept",
+          "Access-Control-Allow-Origin": "*",
+          "Server": "Velvet-Cloud",
+          "X-Media-Cache": "HIT-REVALIDATED"
+        }
+      });
+    }
+
+    // Cache Key normalizado en Cloudflare Edge para evitar fragmentación
+    const normUrl = new URL(url.origin + url.pathname);
+    if (tParam) normUrl.searchParams.set("t", tParam);
+    else if (urlParam) normUrl.searchParams.set("url", urlParam);
+    if (targetWidth) normUrl.searchParams.set("w", String(targetWidth));
+    if (targetQuality) normUrl.searchParams.set("q", String(targetQuality));
+    normUrl.searchParams.set("fmt", targetFormat);
+
     const cache = caches.default;
-    const cacheKey = new Request(url.toString(), { method: "GET" });
+    const cacheKey = new Request(normUrl.toString(), {
+      method: "GET",
+      headers: {
+        "Accept": context.request.headers.get("Accept") || "*/*"
+      }
+    });
 
     if (!isVideo && method === "GET") {
       try {
@@ -247,6 +307,8 @@ export async function onRequest(context) {
           ch.set("X-Powered-By", "Velvet-Media-Engine/3.0");
           ch.set("Server", "Velvet-Cloud");
           ch.set("Access-Control-Allow-Origin", "*");
+          ch.set("ETag", etag);
+          ch.set("Vary", "Accept");
           return new Response(cached.body, { status: cached.status, headers: ch });
         }
       } catch (e) {}
@@ -299,11 +361,27 @@ export async function onRequest(context) {
     }
 
     try {
+      let imageTransform = null;
+      if (!isVideo && targetWidth > 0) {
+        imageTransform = {
+          width: targetWidth,
+          quality: targetQuality,
+          format: targetFormat === "auto" ? undefined : targetFormat,
+          fit: "cover"
+        };
+      }
+
       const upstream = await fetch(targetMediaUrl, {
         method,
         headers: upstreamReqHeaders,
         redirect: "follow",
-        cf: isVideo ? undefined : { cacheEverything: true, cacheTtl: 2592000 },
+        cf: isVideo
+          ? undefined
+          : {
+              cacheEverything: true,
+              cacheTtl: 31536000,
+              ...(imageTransform ? { image: imageTransform } : {})
+            },
       });
 
       const respHeaders = new Headers();
@@ -316,7 +394,9 @@ export async function onRequest(context) {
         respHeaders.set("Accept-Ranges", "bytes");
         respHeaders.set("Cache-Control", "public, max-age=7200");
       } else {
-        respHeaders.set("Cache-Control", "public, max-age=2592000, s-maxage=2592000, stale-while-revalidate=604800, immutable");
+        respHeaders.set("Cache-Control", "public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=604800, immutable");
+        respHeaders.set("ETag", etag);
+        respHeaders.set("Vary", "Accept");
       }
 
       if (upstream.headers.has("Content-Length")) {
