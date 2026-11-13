@@ -417,6 +417,66 @@ export async function onRequest(context) {
       }
     } catch (e) {}
 
+    const targetPmvId = (rawSource === "pmvhaven" ? rawSourceId : rawId);
+    if (rawSource === "pmvhaven" || (targetPmvId && /^[a-f0-9]{24}$/i.test(targetPmvId))) {
+      try {
+        const pmvRes = await fetch(`https://pmvhaven.com/api/videos/${targetPmvId}`, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://pmvhaven.com/",
+            "Accept": "application/json"
+          }
+        });
+        if (pmvRes.ok) {
+          const pmvData = await pmvRes.json();
+          const v = pmvData.video || pmvData.data || pmvData;
+          if (v && v.title) {
+            const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+            const rawVideo = v.videoUrl || "";
+            const detailPayload = {
+              id: v._id,
+              source: "pmvhaven",
+              source_id: v._id,
+              title: v.title,
+              cover_url: rawCover ? `/api/media?t=${encodeMediaToken(rawCover, "https://pmvhaven.com/")}` : "",
+              media_type: "video",
+              tags: v.tags || [],
+              artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+              url: `https://pmvhaven.com/video?v=${v._id}`,
+              page_count: 0,
+              pages: [],
+              chapters: [],
+              video_sources: rawVideo ? [
+                {
+                  quality: "1080p HD",
+                  url: `/api/media?t=${encodeMediaToken(rawVideo, "https://pmvhaven.com/")}`,
+                  format: "mp4"
+                }
+              ] : [],
+              extra: {
+                duration: v.duration || "",
+                durationSeconds: v.durationSeconds || 0,
+                views: v.views || 0,
+                likes: v.likes || 0
+              }
+            };
+            const jsonStr = JSON.stringify(detailPayload);
+            setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, jsonStr);
+            return new Response(jsonStr, {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Cache-Control": "public, max-age=3600, s-maxage=86400",
+                ...getCorsHeaders(origin)
+              }
+            });
+          }
+        }
+      } catch (pmvErr) {
+        console.error("PMVHaven detail fetch error:", pmvErr);
+      }
+    }
+
     let queryParam = "";
     if (rawId) {
       queryParam = `id=eq.${encodeURIComponent(rawId)}`;
@@ -893,6 +953,91 @@ export async function onRequest(context) {
       { anchor: 375000, maxOffset: 300 },  // buondua asian models
     ];
 
+    if (mediaType === "video") {
+      let pmvSort = "recent";
+      if (sort === "random") pmvSort = "random";
+      else if (sort === "views") pmvSort = "views";
+      else if (sort === "rating") pmvSort = "rating";
+
+      let pmvApiUrl = `https://pmvhaven.com/api/videos?page=${page}&limit=${pageSize}&sort=${pmvSort}`;
+      if (category && category !== "all") {
+        pmvApiUrl += `&tag=${encodeURIComponent(category)}`;
+      } else if (q) {
+        pmvApiUrl += `&tag=${encodeURIComponent(q)}`;
+      }
+
+      try {
+        const pmvRes = await fetch(pmvApiUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Referer": "https://pmvhaven.com/",
+            "Accept": "application/json, text/plain, */*"
+          }
+        });
+
+        if (pmvRes.ok) {
+          const pmvData = await pmvRes.json();
+          const vList = pmvData.videos || [];
+          const items = vList.map(v => {
+            const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+            const rawVideo = v.videoUrl || "";
+            return {
+              id: v._id,
+              source: "pmvhaven",
+              source_id: v._id,
+              title: v.title || "Video HD",
+              cover_url: rawCover ? `/api/media?t=${encodeMediaToken(rawCover, "https://pmvhaven.com/")}` : "",
+              media_type: "video",
+              tags: v.tags || [],
+              artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+              url: `https://pmvhaven.com/video?v=${v._id}`,
+              page_count: 0,
+              video_sources: rawVideo ? [
+                {
+                  quality: "1080p HD",
+                  url: `/api/media?t=${encodeMediaToken(rawVideo, "https://pmvhaven.com/")}`,
+                  format: "mp4"
+                }
+              ] : [],
+              extra: {
+                duration: v.duration || "",
+                durationSeconds: v.durationSeconds || 0,
+                views: v.views || 0,
+                likes: v.likes || 0
+              },
+              has_cover: !!rawCover
+            };
+          });
+
+          const totalVideos = pmvData.pagination?.total || 70704;
+          const totalPages = pmvData.pagination?.totalPages || Math.ceil(totalVideos / pageSize);
+
+          const responsePayload = {
+            items,
+            total: totalVideos,
+            page: parseInt(pmvData.pagination?.page || page, 10),
+            page_size: pageSize,
+            total_pages: totalPages,
+            live: true
+          };
+
+          const jsonStr = JSON.stringify(responsePayload);
+          setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+
+          return new Response(jsonStr, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "public, max-age=1800, s-maxage=86400, stale-while-revalidate=86400",
+              ...getCorsHeaders(origin)
+            }
+          });
+        }
+      } catch (pmvErr) {
+        console.error("PMVHaven API error:", pmvErr);
+      }
+    }
+
     let clusters = COMIC_CLUSTERS;
     let maxId = 374460;
     let estimatedTotal = 37485;
@@ -1091,10 +1236,39 @@ export async function onRequest(context) {
     const maxOffset = mediaType === "video" ? 3000 : (mediaType === "gallery" ? 3000 : 5000);
     const randomOffset = Math.floor(Math.random() * Math.max(1, maxOffset - count));
 
-    let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
     if (mediaType === "video") {
-      queryParam += "&source=eq.pmvhaven&order=id.desc";
-    } else if (mediaType === "gallery") {
+      try {
+        const pmvRes = await fetch(`https://pmvhaven.com/api/videos?sort=random&limit=${count}`, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Referer": "https://pmvhaven.com/" }
+        });
+        if (pmvRes.ok) {
+          const pmvData = await pmvRes.json();
+          const items = (pmvData.videos || []).map(v => {
+            const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+            return {
+              id: v._id,
+              source: "pmvhaven",
+              source_id: v._id,
+              title: v.title,
+              cover_url: rawCover ? `/api/media?t=${encodeMediaToken(rawCover, "https://pmvhaven.com/")}` : "",
+              media_type: "video",
+              tags: v.tags || [],
+              artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+              url: `https://pmvhaven.com/video?v=${v._id}`,
+              page_count: 0,
+              video_sources: v.videoUrl ? [{ quality: "1080p HD", url: `/api/media?t=${encodeMediaToken(v.videoUrl, "https://pmvhaven.com/")}`, format: "mp4" }] : []
+            };
+          });
+          return new Response(JSON.stringify(items), {
+            status: 200,
+            headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+          });
+        }
+      } catch (e) {}
+    }
+
+    let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
+    if (mediaType === "gallery") {
       queryParam += "&media_type=eq.gallery&id=gte.370000&source=neq.leakgallery&order=id.desc";
     } else {
       queryParam += "&media_type=eq.comic&page_count=gt.0&order=id.desc";

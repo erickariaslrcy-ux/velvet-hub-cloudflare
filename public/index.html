@@ -1009,40 +1009,40 @@
 
       <!-- Selector de Modo / Las Dos Caras: Cómics vs Videos -->
 
-      <div class="hidden sm:flex items-center p-1 rounded-2xl bg-glass border border-neon/30 shadow-neon shrink-0">
+      <div class="hidden sm:flex items-center p-1 rounded-2xl bg-black/60 border border-purple-500/30 backdrop-blur-md shadow-inner shrink-0">
 
         <button
           id="mode-btn-comics"
           onclick="setPortalMode('comics', true)"
-          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow cursor-pointer"
         >
           <i class="fa-solid fa-book-open text-xs"></i>
-          <span>Cómics & Mangas</span>
+          <span>Cómics</span>
         </button>
 
         <button
           id="mode-btn-videos"
           onclick="setPortalMode('videos', true)"
-          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-ink"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-white cursor-pointer"
         >
           <i class="fa-solid fa-film text-xs text-hot"></i>
-          <span>Videos XXX</span>
+          <span>Videos</span>
         </button>
 
         <button
           id="mode-btn-galleries"
           onclick="setPortalMode('galleries', true)"
-          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-ink"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-lav/70 hover:text-white cursor-pointer"
         >
           <i class="fa-solid fa-camera-retro text-xs text-neon"></i>
-          <span>Cosplay & Modelos</span>
+          <span>Modelos</span>
         </button>
 
       </div>
 
       <!-- Barra de Búsqueda de Cómics y Videos Calientes -->
 
-      <div class="flex-1 min-w-0 max-w-xl mx-1 sm:mx-4">
+      <div class="flex-1 min-w-[140px] sm:min-w-[200px] max-w-lg mx-1 sm:mx-3">
 
         <form id="search-form" onsubmit="handleSearch(event)" class="relative w-full">
 
@@ -1054,7 +1054,7 @@
 
             placeholder="Buscar cómics o videos..."
 
-            class="w-full bg-glass/90 border border-neon/30 rounded-2xl pl-8 sm:pl-10 pr-7 sm:pr-9 py-2 sm:py-2.5 text-xs sm:text-sm text-ink placeholder-lav/50 focus:outline-none focus:border-hot focus:ring-2 focus:ring-hot/30 transition-all shadow-inner"
+            class="w-full bg-[#120726]/90 border border-neon/30 rounded-2xl pl-8 sm:pl-10 pr-7 sm:pr-9 py-2 sm:py-2.5 text-xs sm:text-sm text-ink placeholder-lav/50 focus:outline-none focus:border-hot focus:ring-2 focus:ring-hot/30 transition-all shadow-inner"
 
           />
 
@@ -1072,7 +1072,7 @@
 
       <!-- Acciones de Cabecera -->
 
-      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
 
         <!-- Toggle Modo Oscuro OLED -->
 
@@ -1084,13 +1084,13 @@
 
           title="Modo Oscuro Puro OLED (#000000)"
 
-          class="hidden sm:flex h-9 px-3 rounded-xl bg-glass border border-neon/25 hover:border-hot text-lav hover:text-ink text-xs font-semibold items-center gap-1.5 transition-all shadow-sm active:scale-95"
+          class="hidden sm:flex h-9 w-9 xl:w-auto xl:px-2.5 rounded-xl bg-purple-950/40 border border-purple-500/25 hover:border-hot text-lav hover:text-ink text-xs font-semibold items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
 
         >
 
           <i class="fa-solid fa-moon text-neon"></i>
 
-          <span class="hidden md:inline">OLED</span>
+          <span class="hidden xl:inline">OLED</span>
 
         </button>
 
@@ -1102,13 +1102,13 @@
 
           title="Abrir cómic aleatorio sin censura"
 
-          class="hidden sm:flex h-9 px-3 rounded-xl bg-glass border border-neon/25 hover:border-hot text-lav hover:text-ink text-xs font-semibold items-center gap-1.5 transition-all shadow-sm active:scale-95"
+          class="hidden sm:flex h-9 w-9 xl:w-auto xl:px-2.5 rounded-xl bg-purple-950/40 border border-purple-500/25 hover:border-hot text-lav hover:text-ink text-xs font-semibold items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
 
         >
 
-          <i class="fa-solid fa-dice-d20 text-hot"></i>
+          <i class="fa-solid fa-dice text-hot"></i>
 
-          <span class="hidden lg:inline">Sorpréndeme</span>
+          <span class="hidden xl:inline">Al Azar</span>
 
         </button>
 
@@ -1220,59 +1220,47 @@
 
   <!-- ===================================================================== -->
 
-  <div id="filter-bar" class="w-full max-w-full overflow-hidden bg-velvet/95 border-b border-neon/15 py-2 sm:py-2.5 px-2.5 sm:px-6 lg:px-8 sticky top-16 z-30 backdrop-blur-md">
+  <div id="filter-bar" class="w-full max-w-full overflow-hidden bg-[#0c061d]/95 border-b border-purple-500/15 py-2 px-2.5 sm:px-6 lg:px-8 sticky top-16 z-30 backdrop-blur-xl shadow-lg">
 
-    <div class="max-w-7xl mx-auto flex flex-col gap-1.5 sm:gap-2 w-full">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-2.5 sm:gap-4 w-full">
 
-      <!-- Fila 1: Filtros Dinámicos según Modo (Cómics vs Videos) -->
+      <!-- Switch de Modo Móvil Compacto (solo teléfonos) -->
 
-      <div class="flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
+      <div class="flex sm:hidden items-center p-0.5 rounded-xl bg-black/60 border border-purple-500/30 shrink-0">
 
-        <!-- Switch de Modo Móvil Compacto -->
-
-        <div class="flex sm:hidden items-center p-0.5 rounded-xl bg-glass border border-neon/30 shrink-0 mr-1">
-
-          <button id="mob-toggle-comics" onclick="setPortalMode('comics', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-hot to-neon text-white shadow-hot-glow">Cómics</button>
-          <button id="mob-toggle-videos" onclick="setPortalMode('videos', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</button>
-          <button id="mob-toggle-galleries" onclick="setPortalMode('galleries', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Cosplay</button>
-
-        </div>
-
-        <div class="flex items-center gap-1.5 shrink-0" id="category-chips">
-
-          <!-- Chips renderizados dinámicamente por JS según Cómics o Videos -->
-
-        </div>
-
-        <!-- Indicador de Catálogo y Ordenamiento -->
-
-        <div class="hidden md:flex items-center gap-3 shrink-0">
-
-          <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-
-            <span id="results-count">Cargando catálogo premium...</span>
-
-          </div>
-
-          <!-- Selector de Orden y Modo de Catálogo -->
-          <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-glass border border-neon/25 text-lav text-xs font-semibold rounded-xl px-2.5 py-1 focus:outline-none focus:border-hot cursor-pointer">
-            <option value="random">🎲 Modo Aleatorio (Mezclado)</option>
-            <option value="recent">📌 Modo Estático (Recientes)</option>
-            <option value="rating">⭐ Mejor Valorados</option>
-            <option value="pages">📚 Más Páginas</option>
-          </select>
-
-        </div>
+        <button id="mob-toggle-comics" onclick="setPortalMode('comics', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm">Cómics</button>
+        <button id="mob-toggle-videos" onclick="setPortalMode('videos', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</button>
+        <button id="mob-toggle-galleries" onclick="setPortalMode('galleries', true)" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Modelos</button>
 
       </div>
 
-      <!-- Fila 2: Etiquetas de Tendencia Rápida Dinámicas -->
+      <!-- Chips de Categoría Limpios con Scroll Suave -->
 
-      <div class="flex items-center gap-2 text-[11px] text-lav/60 overflow-x-auto no-scrollbar pt-0.5" id="trending-chips">
+      <div class="flex-1 overflow-x-auto no-scrollbar flex items-center gap-1.5 py-0.5" id="category-chips">
 
-        <!-- Renderizado dinámicamente -->
+        <!-- Chips renderizados dinámicamente por JS según Cómics, Videos o Modelos -->
+
+      </div>
+
+      <!-- Indicador de Catálogo y Ordenamiento -->
+
+      <div class="hidden md:flex items-center gap-2.5 shrink-0">
+
+        <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-2.5 py-1 rounded-xl">
+
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+
+          <span id="results-count">Catálogo Listo</span>
+
+        </div>
+
+        <!-- Selector de Orden y Modo de Catálogo -->
+        <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-purple-950/40 border border-purple-500/25 text-purple-200 hover:text-white text-xs font-semibold rounded-xl px-2.5 py-1 focus:outline-none focus:border-pink-500 cursor-pointer">
+          <option value="recent">📌 Fijo (Recientes)</option>
+          <option value="random">🎲 Aleatorio (Mezclado)</option>
+          <option value="rating">⭐ Mejor Valorados</option>
+          <option value="pages">📚 Más Páginas</option>
+        </select>
 
       </div>
 
@@ -1354,6 +1342,13 @@
 
             </span>
 
+          </div>
+
+          <!-- Autor / Artista Estilizado del Hero -->
+          <div id="hero-author-container" class="hidden text-xs text-purple-300/80 font-bold tracking-wide flex items-center justify-center md:justify-start gap-1.5 pt-0.5">
+            <i class="fa-solid fa-feather-pointed text-pink-400 text-xs"></i>
+            <span>Por</span>
+            <span id="hero-author" class="text-pink-300 font-extrabold hover:underline"></span>
           </div>
 
           <h1 id="hero-title" class="font-display text-2xl sm:text-3xl md:text-4xl text-ink font-bold leading-tight">
@@ -2685,7 +2680,7 @@
 
   <div id="vault-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 select-none">
 
-    <div class="bg-[#0b0416] border border-purple-500/30 rounded-3xl max-w-2xl w-full p-5 sm:p-7 max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative">
+    <div class="bg-[#0c051a] border border-purple-500/30 rounded-3xl max-w-2xl w-full p-5 sm:p-7 h-[80vh] min-h-[460px] max-h-[750px] flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative">
 
       <!-- Cabecera de Mi Bóveda -->
 
@@ -2743,7 +2738,7 @@
 
       <!-- Contenido Tab 1: Favoritos en la Nube -->
 
-      <div id="vpanel-pro-favorites" class="flex-1 overflow-y-auto space-y-3 py-1 custom-scrollbar">
+      <div id="vpanel-pro-favorites" class="flex-1 min-h-0 overflow-y-auto space-y-3 py-1 custom-scrollbar">
 
         <div id="vault-favs-pro-list" class="space-y-2">
 
@@ -2755,7 +2750,7 @@
 
       <!-- Contenido Tab 2: Historial en la Nube -->
 
-      <div id="vpanel-pro-history" class="hidden flex-1 overflow-y-auto space-y-3 py-1 custom-scrollbar">
+      <div id="vpanel-pro-history" class="hidden flex-1 min-h-0 overflow-y-auto space-y-3 py-1 custom-scrollbar">
 
         <div class="flex items-center justify-between pb-2 border-b border-purple-500/15">
 
@@ -3869,9 +3864,58 @@
 
       'western': { label: 'CÓMIC XXX CLÁSICO', color: 'bg-rose-500/25 text-rose-400 border-rose-500/40' },
 
-      'default': { label: '100% SIN CENSURA HD', color: 'bg-hot/20 text-hot border-hot/30' }
+      'default': { label: 'CÓMIC EXCLUSIVO HD', color: 'bg-hot/20 text-hot border-hot/30' }
 
     };
+
+    // Parser y Embellecedor de Títulos: Extrae autor y elimina ruido de escaneo ([Spanish], [joselillo], etc.)
+    function parseComicTitle(rawTitle) {
+      if (!rawTitle) return { title: '', author: '' };
+      let str = String(rawTitle).trim();
+      let author = '';
+
+      // 1. Extraer artista/círculo del corchete inicial: [Author] Title
+      const leadingAuthorMatch = str.match(/^\[([^[\]]+)\]\s*(.*)$/);
+      if (leadingAuthorMatch) {
+        const candidate = leadingAuthorMatch[1].trim();
+        const candidateLower = candidate.toLowerCase();
+        const NON_AUTHOR_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'completo', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'manhwa', 'color', 'full color'];
+        if (!NON_AUTHOR_TAGS.some(t => candidateLower === t || candidateLower.startsWith(t + ' '))) {
+          author = candidate;
+          str = leadingAuthorMatch[2].trim();
+        }
+      }
+
+      // 2. Extraer autor de corchetes finales o eliminar tags de scanlation
+      const trailingBracketMatch = str.match(/^(.*?)\s*\[([^[\]]+)\]$/);
+      if (trailingBracketMatch) {
+        const candidate = trailingBracketMatch[2].trim();
+        const candidateLower = candidate.toLowerCase();
+        const SCAN_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'color', 'joselillo', 'rip', 'mtl'];
+        if (SCAN_TAGS.some(t => candidateLower.includes(t))) {
+          str = trailingBracketMatch[1].trim();
+        } else if (!author && candidate.length <= 30) {
+          author = candidate;
+          str = trailingBracketMatch[1].trim();
+        }
+      }
+
+      // 3. Limpiar tags de uploader / scanlation restantes en cualquier parte del título
+      str = str.replace(/\[(?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|mtl|webtoon|cómics|scan|hentai)[^\]]*\]/gi, '');
+      str = str.replace(/\((?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|mtl|webtoon|cómics|scan|hentai)[^)]*\)/gi, '');
+
+      str = str.replace(/\s+/g, ' ').trim();
+      str = str.replace(/^[-\s:|]+|[-\s:|]+$/g, '').trim();
+
+      if (author) {
+        author = author.replace(/\[.*?\]|\(.*?\)/g, '').trim();
+        author = author.replace(/^(by|por)\s+/i, '').trim();
+      }
+
+      if (!str) str = rawTitle;
+
+      return { title: str, author };
+    }
 
     
     function getReliableBadge(item) {
@@ -7432,6 +7476,8 @@
           ? cleanTags.map(t => `<span class="text-[9px] px-1.5 py-0.2 rounded bg-pitch/70 text-lav/80 border border-neon/20">#${escapeHtml(t)}</span>`).join(' ')
           : `<span class="text-[9px] px-1.5 py-0.2 rounded bg-pitch/70 text-lav/80 border border-neon/20">#SinCensura</span>`;
 
+        const cleanCardTitle = parseComicTitle(it.title).title || it.title;
+
         card.innerHTML = `
           <div class="relative aspect-[3/4] w-full overflow-hidden bg-[#130924] select-none">
             <div class="skeleton-shimmer absolute inset-0"></div>
@@ -7512,7 +7558,7 @@
           <div class="p-3 flex-1 flex flex-col justify-between space-y-2">
             <div>
               <h4 class="text-xs font-bold text-ink line-clamp-2 group-hover:text-hot transition-colors" title="${escapeHtml(it.title)}">
-                ${escapeHtml(it.title)}
+                ${escapeHtml(cleanCardTitle)}
               </h4>
               <div class="flex flex-wrap gap-1 mt-1.5">
                 ${tagsHtml}
@@ -7612,7 +7658,20 @@
 
       document.getElementById('hero-backdrop').style.backgroundImage = `url('${coverSrc}')`;
 
-      document.getElementById('hero-title').textContent = item.title;
+      const parsedTitle = parseComicTitle(item.title);
+      document.getElementById('hero-title').textContent = parsedTitle.title;
+
+      const authorContainer = document.getElementById('hero-author-container');
+      const authorEl = document.getElementById('hero-author');
+      const authorName = parsedTitle.author || (item.artists && item.artists[0] ? item.artists[0] : '');
+      if (authorContainer && authorEl) {
+        if (authorName && !isVid) {
+          authorEl.textContent = authorName;
+          authorContainer.classList.remove('hidden');
+        } else {
+          authorContainer.classList.add('hidden');
+        }
+      }
 
       document.getElementById('hero-format-badge').textContent = fmt.label;
 
@@ -7954,6 +8013,11 @@
       endCard.classList.add('hidden');
 
       chSelect.classList.add('hidden');
+
+      const pillText = document.getElementById('reader-pill-text');
+      if (pillText) pillText.textContent = 'Pág. 1 / 1 • 0%';
+      const thumbbar = document.getElementById('reader-thumbbar');
+      if (thumbbar) thumbbar.classList.add('hidden');
 
       try {
 
@@ -8364,6 +8428,11 @@
       pages.forEach((p, idx) => { p.index = idx + 1; });
 
       if (!pages || pages.length === 0) {
+        const thumbbar = document.getElementById('reader-thumbbar');
+        if (thumbbar) thumbbar.classList.add('hidden');
+        const pillText = document.getElementById('reader-pill-text');
+        if (pillText) pillText.textContent = 'Pág. 1 / 1 • 0%';
+
         vContainer.innerHTML = `
           <div class="py-16 px-4 text-center flex flex-col items-center justify-center max-w-md mx-auto z-10">
             <div class="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center mb-4 text-pink-400 text-2xl shadow-lg">
@@ -8389,6 +8458,9 @@
         if (endCardDesc) endCardDesc.textContent = 'Continúa descubriendo más historias disponibles en nuestro catálogo.';
         return;
       }
+
+      const thumbbar = document.getElementById('reader-thumbbar');
+      if (thumbbar) thumbbar.classList.remove('hidden');
 
       state.slideIndex = 0;
       updateReaderProgress(1, pages.length);
