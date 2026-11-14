@@ -40,7 +40,16 @@
       if (!item) return '/';
       const type = item.media_type || (item.video_sources && item.video_sources.length > 0 ? 'video' : 'comic');
       const slug = slugify(item.title);
-      const idPart = item.id ? String(item.id) : (item.source && item.source_id ? window.encodeStealthId?.(item.source, item.source_id) || `${item.source}_${item.source_id}` : 'item');
+
+      // Si tiene id explícito (numérico o hex ObjectId), usarlo prioritariamente
+      let idPart = '';
+      if (item.id) {
+        idPart = String(item.id);
+      } else if (item.source && item.source_id) {
+        idPart = `${item.source}--${encodeURIComponent(item.source_id)}`;
+      } else {
+        idPart = 'item';
+      }
 
       if (type === 'video') {
         return `/v/${idPart}-${slug}`;
@@ -52,6 +61,30 @@
         }
         return `/c/${idPart}-${slug}`;
       }
+    },
+
+    parseItemToken(token) {
+      if (!token) return { id: null, source: null, sourceId: null };
+
+      // 1. Formato source--sourceId(-slug)
+      if (token.includes('--')) {
+        const parts = token.split('--');
+        const source = parts[0];
+        const rest = parts.slice(1).join('--');
+        const dashIdx = rest.indexOf('-');
+        const sourceId = dashIdx !== -1 ? rest.slice(0, dashIdx) : rest;
+        return { id: null, source: decodeURIComponent(source), sourceId: decodeURIComponent(sourceId) };
+      }
+
+      // 2. Formato Stealth vh_
+      if (token.startsWith('vh_')) {
+        return { id: null, rawStealth: token, source: null, sourceId: null };
+      }
+
+      // 3. ID estándar (numérico, hex ObjectId 24-char, o alfanumérico) antes del primer guión del slug
+      const firstDash = token.indexOf('-');
+      const id = firstDash !== -1 ? token.slice(0, firstDash) : token;
+      return { id, source: null, sourceId: null };
     },
 
     // =======================================================================
@@ -117,31 +150,61 @@
       const vMatch = path.match(/^\/v\/([^\/]+)$/) || path.match(/^\/video\/([^\/]+)(?:\/(.+))?$/);
       if (vMatch) {
         const rawToken = vMatch[1];
-        const id = rawToken.split('-')[0];
-        return { name: 'video', rawToken, id, source: vMatch[2] ? decodeURIComponent(vMatch[1]) : null, sourceId: vMatch[2] ? decodeURIComponent(vMatch[2]) : null, canonical: path };
+        const parsed = this.parseItemToken(rawToken);
+        return {
+          name: 'video',
+          rawToken,
+          id: parsed.id,
+          source: vMatch[2] ? decodeURIComponent(vMatch[1]) : parsed.source,
+          sourceId: vMatch[2] ? decodeURIComponent(vMatch[2]) : parsed.sourceId,
+          canonical: path
+        };
       }
 
       // 6. Cómic: /c/:slug o /c/:slug/leer o legada /comic/:id
       const cReadMatch = path.match(/^\/c\/([^\/]+)\/leer$/);
       if (cReadMatch) {
         const rawToken = cReadMatch[1];
-        const id = rawToken.split('-')[0];
-        const page = Number(q.get('p')) || 1;
-        return { name: 'reader', mediaType: 'comic', rawToken, id, page, canonical: path };
+        const parsed = this.parseItemToken(rawToken);
+        const page = Math.max(1, parseInt(q.get('p'), 10) || 1);
+        return {
+          name: 'reader',
+          mediaType: 'comic',
+          rawToken,
+          id: parsed.id,
+          source: parsed.source,
+          sourceId: parsed.sourceId,
+          page,
+          canonical: path
+        };
       }
       const cMatch = path.match(/^\/c\/([^\/]+)$/) || path.match(/^\/comic\/([^\/]+)(?:\/(.+))?$/);
       if (cMatch) {
         const rawToken = cMatch[1];
-        const id = rawToken.split('-')[0];
-        return { name: 'comic', rawToken, id, source: cMatch[2] ? decodeURIComponent(cMatch[1]) : null, sourceId: cMatch[2] ? decodeURIComponent(cMatch[2]) : null, canonical: path };
+        const parsed = this.parseItemToken(rawToken);
+        return {
+          name: 'comic',
+          rawToken,
+          id: parsed.id,
+          source: cMatch[2] ? decodeURIComponent(cMatch[1]) : parsed.source,
+          sourceId: cMatch[2] ? decodeURIComponent(cMatch[2]) : parsed.sourceId,
+          canonical: path
+        };
       }
 
       // 7. Galería: /g/:slug o legada /gallery/:id o /galeria/:id
       const gMatch = path.match(/^\/g\/([^\/]+)$/) || path.match(/^\/(?:gallery|galeria)\/([^\/]+)(?:\/(.+))?$/);
       if (gMatch) {
         const rawToken = gMatch[1];
-        const id = rawToken.split('-')[0];
-        return { name: 'gallery', rawToken, id, source: gMatch[2] ? decodeURIComponent(gMatch[1]) : null, sourceId: gMatch[2] ? decodeURIComponent(gMatch[2]) : null, canonical: path };
+        const parsed = this.parseItemToken(rawToken);
+        return {
+          name: 'gallery',
+          rawToken,
+          id: parsed.id,
+          source: gMatch[2] ? decodeURIComponent(gMatch[1]) : parsed.source,
+          sourceId: gMatch[2] ? decodeURIComponent(gMatch[2]) : parsed.sourceId,
+          canonical: path
+        };
       }
 
       // 404 Desconocido
@@ -299,7 +362,7 @@
 
         // Si es un item (video, cómic o galería), precargar el endpoint de detalle
         if (parsed.id && (parsed.name === 'video' || parsed.name === 'comic' || parsed.name === 'gallery')) {
-          const fetchUrl = /^\d+$/.test(parsed.id) ? `/api/items/id/${parsed.id}` : null;
+          const fetchUrl = `/api/items/id/${parsed.id}`;
           if (fetchUrl) {
             const linkTag = document.createElement('link');
             linkTag.rel = 'prefetch';
@@ -308,6 +371,14 @@
             linkTag.crossOrigin = 'anonymous';
             document.head.appendChild(linkTag);
           }
+        } else if (parsed.source && parsed.sourceId) {
+          const fetchUrl = `/api/items/${parsed.source}/${encodeURIComponent(parsed.sourceId)}`;
+          const linkTag = document.createElement('link');
+          linkTag.rel = 'prefetch';
+          linkTag.as = 'fetch';
+          linkTag.href = fetchUrl;
+          linkTag.crossOrigin = 'anonymous';
+          document.head.appendChild(linkTag);
         }
       };
 

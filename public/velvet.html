@@ -4422,11 +4422,27 @@
 
     function decodeStealthId(token) {
       if (!token) return null;
+      const cleanToken = token.split('-')[0] || token;
+
       if (token.startsWith('v-') || token.startsWith('c-') || token.startsWith('g-')) {
         return { isNumeric: true, id: token.slice(2) };
       }
       if (/^\d+$/.test(token)) {
         return { isNumeric: true, id: token };
+      }
+      if (/^\d+$/.test(cleanToken)) {
+        return { isNumeric: true, id: cleanToken };
+      }
+      if (token.includes('--')) {
+        const parts = token.split('--');
+        const source = parts[0];
+        const rest = parts.slice(1).join('--');
+        const dashIdx = rest.indexOf('-');
+        const sourceId = dashIdx !== -1 ? rest.slice(0, dashIdx) : rest;
+        return { source: decodeURIComponent(source), sourceId: decodeURIComponent(sourceId) };
+      }
+      if (/^[a-f0-9]{24}$/i.test(cleanToken)) {
+        return { isNumeric: false, isId: true, id: cleanToken };
       }
       if (token.startsWith('vh_')) {
         try {
@@ -4725,15 +4741,25 @@
       if (route.name === 'video') {
         if (vaultView) vaultView.classList.add('hidden');
         if (readerModal) readerModal.classList.add('hidden');
-        let source = route.source || '', id = route.sourceId || '', itemId = null;
-        if (route.id && /^\d+$/.test(route.id)) {
-          itemId = route.id;
-        } else if (route.rawToken) {
+        let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
+        if (route.rawToken) {
           const dec = decodeStealthId(route.rawToken);
-          if (dec && dec.isNumeric) itemId = dec.id;
-          else if (dec) { source = dec.source; id = dec.sourceId; }
+          if (dec && (dec.isNumeric || dec.isId)) itemId = dec.id;
+          else if (dec && dec.source && dec.sourceId) { source = dec.source; id = dec.sourceId; }
         }
-        openVideoPlayer(source, id, '', '', '', false, itemId);
+        if (itemId && /^[a-f0-9]{24}$/i.test(itemId) && !source) {
+          source = 'pmvhaven';
+          id = itemId;
+        }
+        const cacheMatch = (itemId ? getCachedItem(String(itemId)) : null) ||
+                           (source && id ? getCachedItem(`${source}_${id}`) : null) ||
+                           (state.catalogCache || []).find(x => (itemId && (x.id === itemId || String(x.id) === String(itemId))) || (source && id && x.source === source && x.source_id === id));
+        if (cacheMatch) {
+          source = cacheMatch.source || source;
+          id = cacheMatch.source_id || id;
+          itemId = cacheMatch.id || itemId;
+        }
+        openVideoPlayer(source, id, cacheMatch?.title || '', cacheMatch?.cover_url || '', cacheMatch?.url || '', false, itemId);
         return;
       }
 
@@ -4741,13 +4767,19 @@
       if (route.name === 'comic' || route.name === 'gallery' || route.name === 'reader') {
         if (vaultView) vaultView.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
-        let source = route.source || '', id = route.sourceId || '', itemId = null;
-        if (route.id && /^\d+$/.test(route.id)) {
-          itemId = route.id;
-        } else if (route.rawToken) {
+        let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
+        if (route.rawToken) {
           const dec = decodeStealthId(route.rawToken);
-          if (dec && dec.isNumeric) itemId = dec.id;
-          else if (dec) { source = dec.source; id = dec.sourceId; }
+          if (dec && (dec.isNumeric || dec.isId)) itemId = dec.id;
+          else if (dec && dec.source && dec.sourceId) { source = dec.source; id = dec.sourceId; }
+        }
+        const cacheMatch = (itemId ? getCachedItem(String(itemId)) : null) ||
+                           (source && id ? getCachedItem(`${source}_${id}`) : null) ||
+                           (state.catalogCache || []).find(x => (itemId && (x.id === itemId || String(x.id) === String(itemId))) || (source && id && x.source === source && x.source_id === id));
+        if (cacheMatch) {
+          source = cacheMatch.source || source;
+          id = cacheMatch.source_id || id;
+          itemId = cacheMatch.id || itemId;
         }
         openReader(source, id, false, itemId);
         return;
@@ -7143,7 +7175,7 @@
       const vCacheKey = String(itemId || `${source}_${sourceId}`);
       let cachedVid = getCachedItem(vCacheKey) || (itemId ? getCachedItem(String(itemId)) : null);
       if (!cachedVid && state.catalogCache) {
-        cachedVid = state.catalogCache.find(x => (itemId && x.id === itemId) || (x.source === source && x.source_id === sourceId));
+        cachedVid = state.catalogCache.find(x => (itemId && (x.id === itemId || String(x.id) === String(itemId))) || (source && sourceId && x.source === source && x.source_id === sourceId));
       }
 
       // Reproducción instantánea a 0ms si el video ya está en caché con fuentes
@@ -7157,8 +7189,8 @@
         recordVideoHistory(cachedVid);
         if (pushRoute) {
           const effId = cachedVid.id || itemId;
-          const stealthId = encodeStealthId(source, sourceId, effId);
-          history.pushState({ type: 'video', source, sourceId, stealthId, itemId: effId, fromApp: true }, cachedVid.title, `/video/${stealthId}`);
+          const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedVid) : `/v/${effId}`;
+          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cachedVid.title, canonicalUrl);
           document.title = `${cachedVid.title} — VELVET HUB`;
         }
         setupVideoQualityButtons(cachedVid.video_sources);
@@ -7172,6 +7204,9 @@
         let resp = await fetch(detailUrl);
         if (!resp.ok && source && sourceId && source !== 'id') {
           resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`);
+        }
+        if (!resp.ok && itemId && /^[a-f0-9]{24}$/i.test(itemId)) {
+          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`);
         }
         if (!resp.ok) throw new Error('No se pudo obtener el detalle del video');
         const item = await resp.json();
@@ -7195,8 +7230,8 @@
 
         if (pushRoute) {
           const effId = item.id || itemId;
-          const stealthId = encodeStealthId(source, sourceId, effId);
-          history.pushState({ type: 'video', source, sourceId, stealthId, itemId: effId, fromApp: true }, item.title, `/video/${stealthId}`);
+          const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/v/${effId}`;
+          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, item.title, canonicalUrl);
           document.title = `${item.title} — VELVET HUB`;
         }
 
@@ -8743,10 +8778,8 @@
               (cachedItem.media_type === 'gallery' || cachedItem.media_type === 'cosplay') ||
               ['buondua', '4khd', 'xasiat'].includes(cachedItem.source || source);
             if (isGallery) state.mode = 'galleries';
-            const prefix = isGallery ? 'g' : 'c';
-            const routePrefix = isGallery ? 'gallery' : 'comic';
-            const stealthId = effId ? `${prefix}-${effId}` : encodeStealthId(source, sourceId);
-            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, stealthId, itemId: effId, fromApp: true }, cachedItem.title, `/${routePrefix}/${stealthId}`);
+            const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedItem) : `/${isGallery ? 'g' : 'c'}/${effId}`;
+            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, cachedItem.title, canonicalUrl);
             document.title = `${cachedItem.title} — VELVET HUB`;
           }
           renderReaderPages(cachedItem.pages, cachedItem.url);
@@ -8754,10 +8787,16 @@
           return;
         }
 
-        const detailUrl = (itemId || /^\d+$/.test(sourceId))
+        const detailUrl = (itemId || (source === 'id' && sourceId) || (/^\d+$/.test(sourceId) && !source))
           ? `/api/items/id/${itemId || sourceId}`
-          : `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`;
-        const resp = await fetch(detailUrl);
+          : (source && sourceId ? `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}` : `/api/items/id/${itemId || sourceId}`);
+        let resp = await fetch(detailUrl);
+        if (!resp.ok && source && sourceId && source !== 'id') {
+          resp = await fetch(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`);
+        }
+        if (!resp.ok && (itemId || sourceId)) {
+          resp = await fetch(`/api/items/id/${itemId || sourceId}`);
+        }
 
         if (!resp.ok) {
           let errMsg = 'No se pudo cargar el contenido';
@@ -8822,10 +8861,8 @@
             (item.media_type === 'gallery' || item.media_type === 'cosplay') ||
             ['buondua', '4khd', 'xasiat'].includes(item.source || source);
           if (isGallery) state.mode = 'galleries';
-          const prefix = isGallery ? 'g' : 'c';
-          const routePrefix = isGallery ? 'gallery' : 'comic';
-          const stealthId = effId ? `${prefix}-${effId}` : encodeStealthId(source, sourceId);
-          history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, stealthId, itemId: effId, fromApp: true }, item.title, `/${routePrefix}/${stealthId}`);
+          const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/${isGallery ? 'g' : 'c'}/${effId}`;
+          history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, item.title, canonicalUrl);
           document.title = `${item.title} — VELVET HUB`;
         }
 
@@ -11058,7 +11095,7 @@
 
     function handleOpenVaultItem(source, sourceId, mediaType, title, thumb, url, itemId = null) {
       closeVaultModal();
-      const effId = itemId || (/^\d+$/.test(sourceId) ? sourceId : null);
+      const effId = itemId || sourceId || null;
       if (mediaType === 'video') {
         openVideoPlayer(source, sourceId, title, thumb, url, true, effId);
       } else {
@@ -11068,7 +11105,7 @@
 
     async function handleRemoveVaultFavorite(source, sourceId, itemId = null) {
       state.favorites = state.favorites.filter(f => {
-        if (itemId && f.id && Number(f.id) === Number(itemId)) return false;
+        if (itemId && f.id && String(f.id) === String(itemId)) return false;
         return !(f.source === source && f.source_id === sourceId);
       });
       renderVaultFavoritesPro();
