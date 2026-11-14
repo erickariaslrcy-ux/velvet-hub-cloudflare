@@ -95,15 +95,6 @@ const KNOWN_SCRAPER_BOTS = [
 
 const PUBLIC_PATHS = [
   "/",
-  "/v",
-  "/c",
-  "/g",
-  "/videos",
-  "/comics",
-  "/cosplay",
-  "/boveda",
-  "/cuenta",
-  "/acceso",
   "/video",
   "/comic",
   "/gallery",
@@ -113,7 +104,6 @@ const PUBLIC_PATHS = [
   "/login",
   "/registro",
   "/favoritos",
-  "/historial",
   "/api/items",
   "/api/image",
   "/api/img",

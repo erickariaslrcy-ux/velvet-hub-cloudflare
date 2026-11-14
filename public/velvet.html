@@ -25,12 +25,14 @@
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://fonts.gstatic.com">
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
   <link rel="dns-prefetch" href="https://qnmcejlxoufheisgkuyo.supabase.co">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://qnmcejlxoufheisgkuyo.supabase.co" crossorigin>
 
   <!-- Google Fonts: Outfit + DM Serif Display + Inter (Non-blocking Swap) -->
@@ -46,15 +48,84 @@
   <noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   </noscript>
-  <!-- High-Performance Static Stylesheets (Zero-Runtime, Eliminates 398KB Tailwind CDN & 4.4s JIT Eval) -->
-  <link rel="stylesheet" href="/tailwind.min.css">
-  <link rel="stylesheet" href="/velvet.css">
-  <link rel="icon" type="image/png" href="/velvet_logo.png">
-
-  <!-- Modular Architecture: Store, Router & Vault -->
+  <link rel="preload" as="script" href="https://cdn.tailwindcss.com">
+  <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Modular Architecture: Store, Router & Vault -->
   <script defer src="/js/store.js"></script>
   <script defer src="/js/router.js"></script>
   <script defer src="/js/vault.js"></script>
+
+  <script>
+
+    tailwind.config = {
+
+      darkMode: 'class',
+
+      theme: {
+
+        extend: {
+
+          colors: {
+
+            pitch: '#000000',
+
+            obsidian: '#040209',
+
+            velvet: '#090518',
+
+            glass: '#0f0927',
+
+            glasscard: '#130b32',
+
+            violet: '#8b5cf6',
+
+            neon: '#a855f7',
+
+            hot: '#ec4899',
+
+            crimson: '#f43f5e',
+
+            magenta: '#d946ef',
+
+            gold: '#f59e0b',
+
+            ink: '#f8fafc',
+
+            lav: '#c4b5fd',
+
+            darkborder: '#271754'
+
+          },
+
+          fontFamily: {
+
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'Outfit', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+
+            display: ['"Playfair Display"', '"DM Serif Display"', 'Georgia', 'serif']
+
+          },
+
+          boxShadow: {
+
+            'neon': '0 0 25px rgba(168, 85, 247, 0.25)',
+
+            'neon-strong': '0 0 35px rgba(217, 70, 239, 0.45)',
+
+            'hot-glow': '0 0 30px rgba(236, 72, 153, 0.4)',
+
+            'gold': '0 0 20px rgba(245, 158, 11, 0.35)',
+
+            'thumb': '0 -10px 30px rgba(0, 0, 0, 0.95)'
+
+          }
+
+        }
+
+      }
+
+    }
+
+  </script>
 
   <style>
     /* =======================================================================
@@ -4351,31 +4422,15 @@
 
     function decodeStealthId(token) {
       if (!token) return null;
-      const cleanToken = token.split('-')[0] || token;
-
       if (token.startsWith('v-') || token.startsWith('c-') || token.startsWith('g-')) {
         return { isNumeric: true, id: token.slice(2) };
       }
       if (/^\d+$/.test(token)) {
         return { isNumeric: true, id: token };
       }
-      if (/^\d+$/.test(cleanToken)) {
-        return { isNumeric: true, id: cleanToken };
-      }
-      if (token.includes('--')) {
-        const parts = token.split('--');
-        const source = parts[0];
-        const rest = parts.slice(1).join('--');
-        const dashIdx = rest.indexOf('-');
-        const sourceId = dashIdx !== -1 ? rest.slice(0, dashIdx) : rest;
-        return { source: decodeURIComponent(source), sourceId: decodeURIComponent(sourceId) };
-      }
-      if (/^[a-f0-9]{24}$/i.test(cleanToken)) {
-        return { isNumeric: false, isId: true, id: cleanToken };
-      }
       if (token.startsWith('vh_')) {
         try {
-          const rawB64 = token.slice(3).split('-')[0];
+          const rawB64 = token.slice(3);
           const padding = (4 - (rawB64.length % 4)) % 4;
           const base64 = rawB64.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padding);
           const unmasked = decodeURIComponent(escape(atob(base64)));
@@ -4387,18 +4442,14 @@
         } catch (e) {}
       }
       try {
-        const rawB64 = token.split('-')[0];
-        const padding = (4 - (rawB64.length % 4)) % 4;
-        const base64 = rawB64.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padding);
+        const padding = (4 - (token.length % 4)) % 4;
+        const base64 = token.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padding);
         const decoded = decodeURIComponent(escape(atob(base64)));
         if (decoded && decoded.includes('::')) {
           const parts = decoded.split('::');
           return { source: parts[0], sourceId: parts.slice(1).join('::') };
         }
       } catch (e) {}
-      if (/^[a-zA-Z0-9_]{6,64}$/.test(cleanToken)) {
-        return { isNumeric: false, isId: true, id: cleanToken };
-      }
       return null;
     }
 
@@ -4657,26 +4708,14 @@
         if (mobNav) mobNav.classList.remove('hidden');
 
         const targetMode = route.mode || 'comics';
-        const targetPage = route.page || 1;
-        let needFetch = false;
-
         if (targetMode !== state.mode) {
           setPortalMode(targetMode, false);
-          needFetch = true;
         }
         if (route.category && route.category !== state.category) {
           state.category = route.category;
-          needFetch = true;
-        }
-        if (route.query !== undefined && route.query !== state.query) {
+          fetchLiveFeed(true);
+        } else if (route.query && route.query !== state.query) {
           state.query = route.query;
-          needFetch = true;
-        }
-        if (targetPage !== state.page) {
-          state.page = targetPage;
-          needFetch = true;
-        }
-        if (needFetch) {
           fetchLiveFeed(true);
         }
         return;
@@ -4686,21 +4725,15 @@
       if (route.name === 'video') {
         if (vaultView) vaultView.classList.add('hidden');
         if (readerModal) readerModal.classList.add('hidden');
-        let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
-        if (route.rawToken) {
+        let source = route.source || '', id = route.sourceId || '', itemId = null;
+        if (route.id && /^\d+$/.test(route.id)) {
+          itemId = route.id;
+        } else if (route.rawToken) {
           const dec = decodeStealthId(route.rawToken);
-          if (dec && (dec.isNumeric || dec.isId)) itemId = dec.id;
-          else if (dec && dec.source && dec.sourceId) { source = dec.source; id = dec.sourceId; }
+          if (dec && dec.isNumeric) itemId = dec.id;
+          else if (dec) { source = dec.source; id = dec.sourceId; }
         }
-        const cacheMatch = (itemId ? getCachedItem(String(itemId)) : null) ||
-                           (source && id ? getCachedItem(`${source}_${id}`) : null) ||
-                           (state.catalogCache || []).find(x => (itemId && (x.id === itemId || String(x.id) === String(itemId))) || (source && id && x.source === source && x.source_id === id));
-        if (cacheMatch) {
-          source = cacheMatch.source || source;
-          id = cacheMatch.source_id || id;
-          itemId = cacheMatch.id || itemId;
-        }
-        openVideoPlayer(source, id, cacheMatch?.title || '', cacheMatch?.cover_url || '', cacheMatch?.url || '', false, itemId);
+        openVideoPlayer(source, id, '', '', '', false, itemId);
         return;
       }
 
@@ -4708,19 +4741,13 @@
       if (route.name === 'comic' || route.name === 'gallery' || route.name === 'reader') {
         if (vaultView) vaultView.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
-        let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
-        if (route.rawToken) {
+        let source = route.source || '', id = route.sourceId || '', itemId = null;
+        if (route.id && /^\d+$/.test(route.id)) {
+          itemId = route.id;
+        } else if (route.rawToken) {
           const dec = decodeStealthId(route.rawToken);
-          if (dec && (dec.isNumeric || dec.isId)) itemId = dec.id;
-          else if (dec && dec.source && dec.sourceId) { source = dec.source; id = dec.sourceId; }
-        }
-        const cacheMatch = (itemId ? getCachedItem(String(itemId)) : null) ||
-                           (source && id ? getCachedItem(`${source}_${id}`) : null) ||
-                           (state.catalogCache || []).find(x => (itemId && (x.id === itemId || String(x.id) === String(itemId))) || (source && id && x.source === source && x.source_id === id));
-        if (cacheMatch) {
-          source = cacheMatch.source || source;
-          id = cacheMatch.source_id || id;
-          itemId = cacheMatch.id || itemId;
+          if (dec && dec.isNumeric) itemId = dec.id;
+          else if (dec) { source = dec.source; id = dec.sourceId; }
         }
         openReader(source, id, false, itemId);
         return;
@@ -5498,14 +5525,6 @@
           card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
           card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
-          card.onclick = (e) => {
-            if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-              e.preventDefault();
-              setCachedItem(String(it.id || `${it.source}_${it.source_id}`), it);
-              if (it.id) setCachedItem(String(it.id), it);
-              openReader(it.source, it.source_id, true, it.id);
-            }
-          };
         }
 
         const isAboveFold = (idx < 4);
@@ -5649,14 +5668,6 @@
           card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-[#ff2d95]/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
           if (it.id) setCachedItem(String(it.id), it);
           if (it.source && it.source_id) setCachedItem(`${it.source}_${it.source_id}`, it);
-          card.onclick = (e) => {
-            if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-              e.preventDefault();
-              setCachedItem(String(it.id || `${it.source}_${it.source_id}`), it);
-              if (it.id) setCachedItem(String(it.id), it);
-              openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, true, it.id);
-            }
-          };
         }
 
         const isAboveFold = (idx < 4);
@@ -7145,9 +7156,9 @@
         updateVideoFavIcon();
         recordVideoHistory(cachedVid);
         if (pushRoute) {
-          const effId = cachedVid.id || itemId || (source && sourceId ? `${source}--${sourceId}` : null);
-          const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedVid) : `/v/${effId}`;
-          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cachedVid.title, canonicalUrl);
+          const effId = cachedVid.id || itemId;
+          const stealthId = encodeStealthId(source, sourceId, effId);
+          history.pushState({ type: 'video', source, sourceId, stealthId, itemId: effId, fromApp: true }, cachedVid.title, `/video/${stealthId}`);
           document.title = `${cachedVid.title} — VELVET HUB`;
         }
         setupVideoQualityButtons(cachedVid.video_sources);
@@ -7183,9 +7194,9 @@
         }
 
         if (pushRoute) {
-          const effId = item.id || itemId || (source && sourceId ? `${source}--${sourceId}` : null);
-          const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/v/${effId}`;
-          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, item.title, canonicalUrl);
+          const effId = item.id || itemId;
+          const stealthId = encodeStealthId(source, sourceId, effId);
+          history.pushState({ type: 'video', source, sourceId, stealthId, itemId: effId, fromApp: true }, item.title, `/video/${stealthId}`);
           document.title = `${item.title} — VELVET HUB`;
         }
 
@@ -7216,7 +7227,6 @@
         console.error('Error al abrir video:', err);
         loader.classList.add('hidden');
         showVideoUnavailableState(state.currentVideo || { source, sourceId }, 'Error al conectar con la fuente de video.');
-        renderVideoRecommendations();
       }
     }
 
@@ -7511,20 +7521,17 @@
 
       if (pushRoute) {
         let returnUrl = '/';
-        const pageQuery = state.page > 1 ? `?page=${state.page}` : '';
         if (state.mode === 'videos') {
-          returnUrl = `/videos${pageQuery}`;
+          returnUrl = '/?tab=videos';
         } else if (state.mode === 'galleries') {
-          returnUrl = `/cosplay${pageQuery}`;
-        } else {
-          returnUrl = `/comics${pageQuery}`;
+          returnUrl = '/?tab=galleries';
         }
-        history.replaceState({ mode: state.mode, page: state.page, fromApp: true }, 'VELVET HUB', returnUrl);
+        history.replaceState({ mode: state.mode, fromApp: true }, 'VELVET HUB', returnUrl);
 
         document.title = state.mode === 'galleries'
           ? 'Velvet Hub — Galerías & Cosplays 4K Ultra HD'
           : (state.mode === 'videos'
-              ? 'Velvet Hub — Videos +18 Sin Censura'
+              ? 'Velvet Hub — Videos Porno Sin Censura'
               : 'Velvet Hub — Cómics +18 & Mangas Sin Censura');
       }
     }
@@ -7677,25 +7684,18 @@
       itemsToShow.forEach((r, idx) => {
         const isLocked = isItemLockedForUser(r, idx);
         const duration = (r.extra && r.extra.duration) || 'HD';
-        const coverSrc = r.cover_url || VIDEO_FALLBACK_SVG;
+        const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
 
-        const itemEl = document.createElement('a');
-        const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(r) : '#';
-        itemEl.href = itemUrl;
-        itemEl.setAttribute('aria-label', r.title || 'Video relacionado');
+        const itemEl = document.createElement('div');
+        // Clean compact ~76-80px row height, no nested scrollbar, elegant hover
         itemEl.className = 'sidebar-video-item flex items-center gap-3 p-2 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.06] hover:border-[#ff2d95]/40 transition-all cursor-pointer group select-none';
         itemEl.onmouseenter = () => prefetchVideoOnHover(r);
         itemEl.onmouseleave = () => cancelVideoPrefetch();
-        itemEl.onclick = (e) => {
-          if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-            e.preventDefault();
-            if (isLocked) {
-              openProUpgradeModal(r);
-            } else {
-              setCachedItem(String(r.id || `${r.source}_${r.source_id}`), r);
-              if (r.id) setCachedItem(String(r.id), r);
-              openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
-            }
+        itemEl.onclick = () => {
+          if (isLocked) {
+            openProUpgradeModal(r);
+          } else {
+            openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
           }
         };
 
@@ -7757,59 +7757,26 @@
     async function _execRenderVideoRecommendations() {
       const sidebarContainer = document.getElementById('video-sidebar-list');
       const gridContainer = document.getElementById('video-recommendations-grid');
-      const bottomSec = document.getElementById('video-bottom-related-section');
       const tagsContainer = document.getElementById('video-popular-tags');
 
       if (!sidebarContainer && !gridContainer) return;
 
-      const curr = state.currentVideo || {};
-      const currentId = String(curr.source_id || curr.id || '');
+      const currentId = state.currentVideo ? state.currentVideo.source_id : '';
+      let recs = (state.catalogCache || []).filter(it => it.media_type === 'video' && it.source_id !== currentId);
 
-      // 1. Tomar candidatos del catálogo local excluyendo el actual
-      let recs = (state.catalogCache || []).filter(it => it.media_type === 'video' && String(it.source_id || it.id) !== currentId);
-
-      // 2. Si hay menos de 8 candidatos (ej: en páginas profundas como 967, o carga directa por URL):
-      if (recs.length < 8) {
+      if (recs.length === 0) {
         try {
-          let searchTag = '';
-          if (curr.tags && Array.isArray(curr.tags) && curr.tags.length > 0) {
-            searchTag = curr.tags[0];
-          }
-          let fetchedRecs = [];
-          if (searchTag && searchTag.length > 2) {
-            try {
-              const resp = await fetch(`/api/items?media_type=video&page=1&page_size=24&q=${encodeURIComponent(searchTag)}`, { credentials: 'omit' });
-              if (resp.ok) {
-                const data = await resp.json();
-                if (data && data.items && data.items.length > 0) {
-                  fetchedRecs = data.items.filter(it => it.media_type === 'video' && String(it.source_id || it.id) !== currentId);
-                }
-              }
-            } catch (te) {}
-          }
-          if (fetchedRecs.length < 8) {
-            try {
-              const seedNum = (currentId ? (parseInt(currentId.replace(/\D/g, '').slice(-4), 10) || 7) : 3) % 20 + 1;
-              const respSeed = await fetch(`/api/items?media_type=video&page=${seedNum}&page_size=24&live=true`, { credentials: 'omit' });
-              if (respSeed.ok) {
-                const sData = await respSeed.json();
-                if (sData && sData.items && sData.items.length > 0) {
-                  const sItems = sData.items.filter(it => it.media_type === 'video' && String(it.source_id || it.id) !== currentId);
-                  fetchedRecs = fetchedRecs.concat(sItems);
-                }
-              }
-            } catch (se) {}
-          }
-          const seenIds = new Set(recs.map(x => String(x.source_id || x.id)));
-          fetchedRecs.forEach(it => {
-            const itKey = String(it.source_id || it.id);
-            if (!seenIds.has(itKey)) {
-              seenIds.add(itKey);
-              recs.push(it);
+          const recSeed = (parseInt(String(currentId).replace(/\D/g, ''), 10) % 8) + 1 || 1;
+          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=24&seed=${recSeed}&live=true`, { credentials: 'omit' });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.items && data.items.length > 0) {
+              state.catalogCache = data.items;
+              recs = data.items.filter(it => it.media_type === 'video' && it.source_id !== currentId);
             }
-          });
+          }
         } catch (e) {
-          console.warn('[RECOMENDACIONES] Fallback error:', e);
+          console.warn('[RECOMENDACIONES] Error cargando items:', e);
         }
       }
 
@@ -7817,13 +7784,13 @@
       _relatedVideosCount = 8;
       renderRelatedItemsSlice();
 
-      // Render Bottom Grid (Visible en móvil y en modo cine)
+      // Render Bottom Grid (Cinema Mode)
       if (gridContainer) {
         gridContainer.innerHTML = '';
         recs.slice(0, 12).forEach((r, idx) => {
           const isLocked = isItemLockedForUser(r, idx);
           const duration = (r.extra && r.extra.duration) || 'HD';
-          const coverSrc = r.cover_url || VIDEO_FALLBACK_SVG;
+          const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
 
           const card = document.createElement('a');
           const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(r) : '#';
@@ -7836,15 +7803,6 @@
             card.onclick = (e) => {
               e.preventDefault();
               openProUpgradeModal(r);
-            };
-          } else {
-            card.onclick = (e) => {
-              if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-                e.preventDefault();
-                setCachedItem(String(r.id || `${r.source}_${r.source_id}`), r);
-                if (r.id) setCachedItem(String(r.id), r);
-                openVideoPlayer(r.source, r.source_id, r.title, r.cover_url, r.url, true, r.id);
-              }
             };
           }
 
@@ -7870,17 +7828,12 @@
           `;
           gridContainer.appendChild(card);
         });
-
-        // En pantallas móviles (< 1024px), MOSTRAR la sección inferior de recomendados para una navegación espaciosa y táctil
-        if (bottomSec && window.innerWidth < 1024) {
-          bottomSec.classList.remove('hidden');
-        }
       }
 
       // Render Tags
       if (tagsContainer) {
         tagsContainer.innerHTML = '';
-        const popTags = (curr.tags && curr.tags.length > 0) ? curr.tags.slice(0, 8) : ['1080p', '4k', 'Milf', 'Amateur', 'Blowjob', 'Threesome', 'Blonde', 'POV'];
+        const popTags = ['1080p', '4k', 'Milf', 'Amateur', 'Blowjob', 'Threesome', 'Blonde', 'POV', 'Anal', 'Latina', 'Cosplay', 'SinCensura'];
         popTags.forEach(t => {
           const btn = document.createElement('button');
           btn.className = 'px-3 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-[#ff2d95]/40 text-xs font-medium text-white/80 hover:text-white transition-all cursor-pointer shrink-0';
@@ -8207,14 +8160,6 @@
           card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
           card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
-          card.onclick = (e) => {
-            if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-              e.preventDefault();
-              setCachedItem(String(it.id || `${it.source}_${it.source_id}`), it);
-              if (it.id) setCachedItem(String(it.id), it);
-              openReader(it.source, it.source_id, true, it.id);
-            }
-          };
         }
 
         const isAboveFold = (idx < 4);
@@ -8651,19 +8596,6 @@
             e.preventDefault();
             openProUpgradeModal(h);
           };
-        } else {
-          card.onclick = (e) => {
-            if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-              e.preventDefault();
-              setCachedItem(String(h.id || `${h.source}_${h.source_id}`), h);
-              if (h.id) setCachedItem(String(h.id), h);
-              if (isVid) {
-                openVideoPlayer(h.source, h.source_id, h.title, h.cover_url, h.url, true, h.id);
-              } else {
-                openReader(h.source, h.source_id, true, h.id);
-              }
-            }
-          };
         }
 
         const coverSrc = h.cover_url
@@ -8806,13 +8738,15 @@
           setupChapterNavigation(cachedItem);
           addToHistory(cachedItem);
           if (pushRoute) {
-            const effId = cachedItem.id || itemId || (source && sourceId ? `${source}--${sourceId}` : null);
+            const effId = cachedItem.id || itemId;
             const isGallery = (state.mode === 'galleries') ||
               (cachedItem.media_type === 'gallery' || cachedItem.media_type === 'cosplay') ||
               ['buondua', '4khd', 'xasiat'].includes(cachedItem.source || source);
             if (isGallery) state.mode = 'galleries';
-            const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedItem) : `/${isGallery ? 'g' : 'c'}/${effId}`;
-            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, cachedItem.title, canonicalUrl);
+            const prefix = isGallery ? 'g' : 'c';
+            const routePrefix = isGallery ? 'gallery' : 'comic';
+            const stealthId = effId ? `${prefix}-${effId}` : encodeStealthId(source, sourceId);
+            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, stealthId, itemId: effId, fromApp: true }, cachedItem.title, `/${routePrefix}/${stealthId}`);
             document.title = `${cachedItem.title} — VELVET HUB`;
           }
           renderReaderPages(cachedItem.pages, cachedItem.url);
@@ -8820,14 +8754,10 @@
           return;
         }
 
-        const isHexId = /^[a-f0-9]{24}$/i.test(sourceId);
-        let detailUrl = (itemId || /^\d+$/.test(sourceId) || isHexId || (source === 'id' && sourceId))
+        const detailUrl = (itemId || /^\d+$/.test(sourceId))
           ? `/api/items/id/${itemId || sourceId}`
           : `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`;
-        let resp = await fetch(detailUrl);
-        if (!resp.ok && source && sourceId && source !== 'id') {
-          resp = await fetch(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`);
-        }
+        const resp = await fetch(detailUrl);
 
         if (!resp.ok) {
           let errMsg = 'No se pudo cargar el contenido';
@@ -8887,13 +8817,15 @@
         addToHistory(item);
 
         if (pushRoute) {
-          const effId = item.id || itemId || (source && sourceId ? `${source}--${sourceId}` : null);
+          const effId = item.id || itemId;
           const isGallery = (state.mode === 'galleries') ||
             (item.media_type === 'gallery' || item.media_type === 'cosplay') ||
             ['buondua', '4khd', 'xasiat'].includes(item.source || source);
           if (isGallery) state.mode = 'galleries';
-          const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/${isGallery ? 'g' : 'c'}/${effId}`;
-          history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, item.title, canonicalUrl);
+          const prefix = isGallery ? 'g' : 'c';
+          const routePrefix = isGallery ? 'gallery' : 'comic';
+          const stealthId = effId ? `${prefix}-${effId}` : encodeStealthId(source, sourceId);
+          history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, stealthId, itemId: effId, fromApp: true }, item.title, `/${routePrefix}/${stealthId}`);
           document.title = `${item.title} — VELVET HUB`;
         }
 
@@ -10071,20 +10003,17 @@
 
       if (pushRoute) {
         let returnUrl = '/';
-        const pageQuery = state.page > 1 ? `?page=${state.page}` : '';
         if (state.mode === 'videos') {
-          returnUrl = `/videos${pageQuery}`;
+          returnUrl = '/?tab=videos';
         } else if (state.mode === 'galleries') {
-          returnUrl = `/cosplay${pageQuery}`;
-        } else {
-          returnUrl = `/comics${pageQuery}`;
+          returnUrl = '/?tab=galleries';
         }
-        history.replaceState({ mode: state.mode, page: state.page, fromApp: true }, 'VELVET HUB', returnUrl);
+        history.replaceState({ mode: state.mode, fromApp: true }, 'VELVET HUB', returnUrl);
 
         document.title = state.mode === 'galleries'
           ? 'Velvet Hub — Galerías & Cosplays 4K Ultra HD'
           : (state.mode === 'videos'
-              ? 'Velvet Hub — Videos +18 Sin Censura'
+              ? 'Velvet Hub — Videos Porno Sin Censura'
               : 'Velvet Hub — Cómics +18 & Mangas Sin Censura');
       }
     }
@@ -12099,23 +12028,6 @@
       if (targetPage === state.page) return;
 
       state.page = targetPage;
-      const baseMode = state.mode === 'videos' ? '/videos' : (state.mode === 'galleries' ? '/cosplay' : '/comics');
-      const params = new URLSearchParams(window.location.search);
-      if (targetPage > 1) {
-        params.set('page', targetPage);
-      } else {
-        params.delete('page');
-      }
-      if (state.category && state.category !== 'all') {
-        params.set('cat', state.category);
-      }
-      if (state.query) {
-        params.set('q', state.query);
-      }
-      const qs = params.toString();
-      const newUrl = `${baseMode}${qs ? '?' + qs : ''}`;
-      window.history.pushState({ mode: state.mode, page: targetPage, fromApp: true }, '', newUrl);
-
       const grid = document.getElementById('comics-grid');
       if (grid) {
         const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
