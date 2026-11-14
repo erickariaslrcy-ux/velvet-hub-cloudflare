@@ -4,6 +4,46 @@ const nextConfig = {
   async rewrites() {
     return [
       {
+        source: "/v/:path*",
+        destination: "/",
+      },
+      {
+        source: "/c/:path*",
+        destination: "/",
+      },
+      {
+        source: "/g/:path*",
+        destination: "/",
+      },
+      {
+        source: "/videos",
+        destination: "/",
+      },
+      {
+        source: "/comics",
+        destination: "/",
+      },
+      {
+        source: "/cosplay",
+        destination: "/",
+      },
+      {
+        source: "/boveda",
+        destination: "/",
+      },
+      {
+        source: "/boveda/:path*",
+        destination: "/",
+      },
+      {
+        source: "/cuenta",
+        destination: "/",
+      },
+      {
+        source: "/acceso",
+        destination: "/",
+      },
+      {
         source: "/video/:path*",
         destination: "/",
       },
