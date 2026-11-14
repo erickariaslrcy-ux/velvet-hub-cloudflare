@@ -7775,28 +7775,39 @@
           if (curr.tags && Array.isArray(curr.tags) && curr.tags.length > 0) {
             searchTag = curr.tags[0];
           }
-          let fetchUrl = '';
+          let fetchedRecs = [];
           if (searchTag && searchTag.length > 2) {
-            fetchUrl = `/api/items?media_type=video&page=1&page_size=24&q=${encodeURIComponent(searchTag)}`;
-          } else {
-            const seedNum = (currentId ? (parseInt(currentId.replace(/\D/g, '').slice(-4), 10) || 7) : 3) % 20 + 1;
-            fetchUrl = `/api/items?media_type=video&page=${seedNum}&page_size=24&live=true`;
-          }
-          const resp = await fetch(fetchUrl, { credentials: 'omit' });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.items && data.items.length > 0) {
-              const fetchedRecs = data.items.filter(it => it.media_type === 'video' && String(it.source_id || it.id) !== currentId);
-              const seenIds = new Set(recs.map(x => String(x.source_id || x.id)));
-              fetchedRecs.forEach(it => {
-                const itKey = String(it.source_id || it.id);
-                if (!seenIds.has(itKey)) {
-                  seenIds.add(itKey);
-                  recs.push(it);
+            try {
+              const resp = await fetch(`/api/items?media_type=video&page=1&page_size=24&q=${encodeURIComponent(searchTag)}`, { credentials: 'omit' });
+              if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.items && data.items.length > 0) {
+                  fetchedRecs = data.items.filter(it => it.media_type === 'video' && String(it.source_id || it.id) !== currentId);
                 }
-              });
-            }
+              }
+            } catch (te) {}
           }
+          if (fetchedRecs.length < 8) {
+            try {
+              const seedNum = (currentId ? (parseInt(currentId.replace(/\D/g, '').slice(-4), 10) || 7) : 3) % 20 + 1;
+              const respSeed = await fetch(`/api/items?media_type=video&page=${seedNum}&page_size=24&live=true`, { credentials: 'omit' });
+              if (respSeed.ok) {
+                const sData = await respSeed.json();
+                if (sData && sData.items && sData.items.length > 0) {
+                  const sItems = sData.items.filter(it => it.media_type === 'video' && String(it.source_id || it.id) !== currentId);
+                  fetchedRecs = fetchedRecs.concat(sItems);
+                }
+              }
+            } catch (se) {}
+          }
+          const seenIds = new Set(recs.map(x => String(x.source_id || x.id)));
+          fetchedRecs.forEach(it => {
+            const itKey = String(it.source_id || it.id);
+            if (!seenIds.has(itKey)) {
+              seenIds.add(itKey);
+              recs.push(it);
+            }
+          });
         } catch (e) {
           console.warn('[RECOMENDACIONES] Fallback error:', e);
         }
@@ -8809,10 +8820,14 @@
           return;
         }
 
-        const detailUrl = (itemId || /^\d+$/.test(sourceId))
+        const isHexId = /^[a-f0-9]{24}$/i.test(sourceId);
+        let detailUrl = (itemId || /^\d+$/.test(sourceId) || isHexId || (source === 'id' && sourceId))
           ? `/api/items/id/${itemId || sourceId}`
           : `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`;
-        const resp = await fetch(detailUrl);
+        let resp = await fetch(detailUrl);
+        if (!resp.ok && source && sourceId && source !== 'id') {
+          resp = await fetch(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`);
+        }
 
         if (!resp.ok) {
           let errMsg = 'No se pudo cargar el contenido';
