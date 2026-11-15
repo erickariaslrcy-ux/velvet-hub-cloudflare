@@ -459,6 +459,28 @@ export async function onRequest(context) {
   }
 
   // =========================================================================
+  // 0. VERSIÓN Y OBSERVABILIDAD DEL SISTEMA (/api/version)
+  // =========================================================================
+  if (url.pathname === "/api/version" && (method === "GET" || method === "HEAD")) {
+    const versionPayload = {
+      version: "3.1.0",
+      cache_version: "v11-velvet-turbo",
+      commit: "fix/auditoria-completa",
+      env: env.ENVIRONMENT || "production",
+      engine: "Cloudflare-Pages-Functions",
+      build_time: "2026-11-15T12:00:00Z"
+    };
+    return new Response(method === "HEAD" ? null : JSON.stringify(versionPayload), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "public, max-age=60, s-maxage=300",
+        ...getCorsHeaders(origin)
+      }
+    });
+  }
+
+  // =========================================================================
   // 1. REPRODUCCIÓN Y STREAMING DE MEDIOS STEALTH (/api/media, /api/image, etc.)
   // =========================================================================
   const isMediaRoute =

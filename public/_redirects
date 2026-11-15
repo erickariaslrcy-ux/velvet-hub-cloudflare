@@ -3,6 +3,8 @@
 # =======================================================================
 
 # 1. Alias y redirecciones legadas (301 permanente)
+/velvet              /index.html        301
+/velvet.html         /index.html        301
 /favoritos           /boveda/favoritos  301
 /historial           /boveda/historial  301
 /galeria/*           /g/:splat          301

@@ -1,30 +1,17 @@
 {
-  "name": "scraper-web",
-  "version": "1.0.0",
+  "name": "morbohub-velvet",
+  "version": "3.1.0",
   "private": true,
+  "description": "Velvet Hub / Morbohub - Cloudflare Pages Native Streaming & Comics Platform",
+  "type": "module",
   "scripts": {
-    "build": "next build",
-    "dev": "next dev",
-    "start": "next start",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
-  },
-  "dependencies": {
-    "@opennextjs/cloudflare": "^1.20.16",
-    "@supabase/ssr": "0.12.7",
-    "@supabase/supabase-js": "2.118.0",
-    "next": "^15.5.29",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "server-only": "^0.0.1"
+    "dev": "wrangler pages dev public",
+    "preview": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public",
+    "test": "node test/test_pagination.mjs && node test/test_security.mjs",
+    "check": "node test/test_pagination.mjs && node test/test_security.mjs"
   },
   "devDependencies": {
-    "@types/node": "22.15.3",
-    "@types/react": "19.1.2",
-    "@types/react-dom": "19.1.2",
-    "typescript": "5.8.3",
     "wrangler": "^4.160.0"
   }
 }
