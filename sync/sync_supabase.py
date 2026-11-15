@@ -19,6 +19,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
+import re
 import sqlite3
 import sys
 import time
@@ -27,6 +29,17 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 
 BATCH = 200
+
+
+def sanitize_log_message(msg: str) -> str:
+    """Elimina tokens JWT, claves y secretos de cualquier mensaje antes de imprimirlo."""
+    if not msg:
+        return ""
+    # Ocultar posibles JWTs
+    sanitized = re.sub(r"eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+", "[REDACTED_JWT]", str(msg))
+    # Ocultar claves Bearer
+    sanitized = re.sub(r"Bearer\s+[^\s]+", "Bearer [REDACTED]", sanitized, flags=re.IGNORECASE)
+    return sanitized
 
 
 def load_env() -> None:
@@ -54,29 +67,44 @@ class Supabase:
 
     def upsert(self, rows: List[Dict[str, Any]]) -> int:
         """Inserta o actualiza por (source, source_id). Agrupa por columnas para no
-        borrar páginas ya guardadas cuando un listado trae el ítem sin páginas."""
+        borrar páginas ya guardadas cuando un listado trae el ítem sin páginas.
+        Incorpora reintentos con backoff exponencial y registro seguro sin secretos."""
         groups: Dict[tuple, List[Dict[str, Any]]] = {}
         for r in rows:
             groups.setdefault(tuple(sorted(r.keys())), []).append(r)
         done = 0
+        max_attempts = 5
         for cols, group in groups.items():
             for i in range(0, len(group), BATCH):
                 chunk = group[i : i + BATCH]
-                for attempt in range(3):
-                    resp = self.s.post(
-                        f"{self.rest}/items",
-                        params={"on_conflict": "source,source_id", "columns": ",".join(cols)},
-                        headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
-                        data=json.dumps(chunk, ensure_ascii=False).encode("utf-8"),
-                        timeout=60,
-                    )
-                    if resp.ok:
-                        done += len(chunk)
+                for attempt in range(max_attempts):
+                    try:
+                        resp = self.s.post(
+                            f"{self.rest}/items",
+                            params={"on_conflict": "source,source_id", "columns": ",".join(cols)},
+                            headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+                            data=json.dumps(chunk, ensure_ascii=False).encode("utf-8"),
+                            timeout=60,
+                        )
+                        if resp.ok:
+                            done += len(chunk)
+                            break
+                        if resp.status_code == 429 or resp.status_code >= 500:
+                            # Error transitorio o rate-limiting: reintentar con backoff exponencial
+                            backoff = (2 ** attempt) + random.uniform(0.5, 1.5)
+                            time.sleep(backoff)
+                            continue
+                        # Error de cliente definitivo (4xx excepto 429)
+                        clean_err = sanitize_log_message(resp.text[:300])
+                        print(f"  ! Error {resp.status_code} en lote {i//BATCH + 1}: {clean_err}")
                         break
-                    if attempt == 2 or resp.status_code < 500:
-                        print(f"  ! Error {resp.status_code}: {resp.text[:300]}")
-                        break
-                    time.sleep(2 * (attempt + 1))
+                    except requests.exceptions.RequestException as e:
+                        if attempt == max_attempts - 1:
+                            clean_err = sanitize_log_message(str(e))
+                            print(f"  ! Error de red tras {max_attempts} reintentos: {clean_err}")
+                            break
+                        backoff = (2 ** attempt) + random.uniform(0.5, 1.5)
+                        time.sleep(backoff)
         return done
 
     def missing_pages(self, limit: int, source: Optional[str]) -> List[Dict[str, Any]]:
@@ -90,9 +118,24 @@ class Supabase:
         }
         if source and source != "all":
             params["source"] = f"eq.{source}"
-        resp = self.s.get(f"{self.rest}/items", params=params, timeout=60)
-        resp.raise_for_status()
-        return resp.json()
+
+        max_attempts = 4
+        for attempt in range(max_attempts):
+            try:
+                resp = self.s.get(f"{self.rest}/items", params=params, timeout=60)
+                if resp.ok:
+                    return resp.json()
+                if resp.status_code == 429 or resp.status_code >= 500:
+                    time.sleep((2 ** attempt) + random.uniform(0.5, 1.0))
+                    continue
+                resp.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                if attempt == max_attempts - 1:
+                    clean_err = sanitize_log_message(str(e))
+                    print(f"  ! Error consultando páginas faltantes: {clean_err}")
+                    return []
+                time.sleep((2 ** attempt) + random.uniform(0.5, 1.0))
+        return []
 
 
 def item_row(item: Any) -> Dict[str, Any]:
