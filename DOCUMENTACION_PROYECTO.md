@@ -127,17 +127,30 @@ PAGINAS SCRAPEADAS LISTAS/
 ├── ABRIR_ONLINE.bat                           # Lanzador Windows: túnel HTTPS público para móviles
 ├── AUDITORIA.md                               # Informe técnico inicial: diagnóstico de renderizado CPU y video
 ├── RESULTADOS.md                              # Informe técnico de etapa 2: solución Ambilight zero-CPU y CSS
-├── REPORTE_MEJORAS.md                         # Reporte exhaustivo de la auditoría y reparaciones (Fases 0 a 7)
+├── REPORTE_MEJORAS.md                         # Reporte exhaustivo de la auditoría y reparaciones (Fases 0 a 7 y correcciones)
 ├── PASOS_MANUALES.md                          # Guía paso a paso de acciones externas y rotación de secretos
+├── LO_QUE_SOLO_YO_PUEDO_HACER.md              # Checklist de una sola página con las acciones que exigen tu cuenta
 ├── CHECKLIST_PRUEBAS.md                       # Protocolo de pruebas manuales para Android y PC
 ├── DOCUMENTACION_PROYECTO.md                  # Este documento (documentación técnica global exhaustiva)
 ├── scraper_hub.db                             # Base de datos SQLite maestra local (~534 MB con ~100k registros)
 ├── Dockerfile                                 # Contenedor Docker para ejecución del hub de scraping
 ├── docker-compose.yml                         # Orquestación de contenedores locales
 │
+├── tools/                                     # SCRIPTS DE AUTOMATIZACIÓN POWERSHELL / BASH
+│   ├── 00_preflight.ps1 / .sh                 # Verificación previa: git, node, npm, rama, escaneo de secretos y npm test
+│   ├── 01_verificar_anon.ps1                  # Prueba en vivo de solo lectura para permisos del rol anon en Supabase
+│   ├── 02_sql_en_orden.md                     # Guía de ejecución ordenada de scripts SQL en Supabase
+│   ├── 03_preview.ps1                         # Publicación segura de rama y guía de Preview en Cloudflare
+│   ├── 04_probar_preview.ps1                  # Prueba automatizada end-to-end contra URL de Preview
+│   ├── 05_rotacion_guiada.md                  # Guía pantalla por pantalla para rotación de claves en Supabase, Patreon y CF
+│   └── 06_limpiar_historial.ps1               # Purga de secretos en clon espejo temporal con git-filter-repo
+│
 ├── sql/                                       # SCRIPTS SQL PARA AUDITORÍA Y MIGRACIONES EN SUPABASE
-│   ├── 01_rls_policies.sql                    # Activación y políticas RLS para items, profiles, keys, favorites
-│   ├── 02_minor_protection_audit.sql          # Auditoría estricta de CSAM y trigger inmutable de protección
+│   ├── EJECUTAR_TODO_EN_ORDEN.sql             # SCRIPT MAESTRO: migración, RLS, índices, funciones y pruebas en 1 clic
+│   ├── 01_rls_policies.sql                    # Activación y políticas RLS (anon limitado a 14 columnas públicas)
+│   ├── 02_minor_protection_audit.sql          # Auditoría estricta de términos de solo lectura (SELECT)
+│   ├── 02_minor_protection_trigger.sql        # Trigger defensivo items_before_write (sin alterar registros existentes)
+│   ├── 02b_minor_protection_backfill.sql      # Saneamiento con tabla de respaldo y UPDATE transaccional
 │   ├── 03_data_integrity_audit.sql            # Auditoría no destructiva de integridad (SELECT only)
 │   ├── 04_indexes.sql                         # Índices concurrentes de alto rendimiento (CONCURRENTLY)
 │   └── 05_thumbnails_lqip.sql                 # Migración O(1) no bloqueante para columnas thumb_color y thumb_lqip

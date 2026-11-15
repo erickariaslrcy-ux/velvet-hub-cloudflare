@@ -674,6 +674,62 @@ Con total honestidad técnica y rigor de ingeniería, se especifican a continuac
   - El comportamiento de la PWA al suspenderse en segundo plano (Memory Pressure) por el sistema operativo Android.
   - *Acción recomendada:* Seguir puntualmente el [CHECKLIST_PRUEBAS.md](file:///c:/Users/Eril/OneDrive/Desktop/PAGINAS%20SCRAPEADAS%20LISTAS/CHECKLIST_PRUEBAS.md) conectando un smartphone Android vía depuración USB (`chrome://inspect`).
 
+---
+
+## 11. AUTOMATIZACIÓN DE MÍNIMO ESFUERZO (HERRAMIENTAS `tools/` Y GUÍAS DE OPERACIÓN)
+
+Para reducir al mínimo indispensable la intervención manual del usuario, se construyó una suite completa de utilidades automatizadas en la carpeta `tools/`, junto con el script de base de datos maestro y la guía de una página:
+
+### 11.1 Resumen de Herramientas Creadas en `tools/`
+
+1. **`tools/00_preflight.ps1` (y su equivalente `00_preflight.sh`):**
+   - Comprueba la disponibilidad de `git`, `node` y `npm`.
+   - Verifica que la rama activa es `fix/auditoria-completa`.
+   - Escanea las URLs remotas de `.git/config` en busca de tokens hardcodeados (proveyendo el comando exacto de corrección).
+   - Realiza un escaneo heurístico de secretos en el árbol rastreado sin imprimir ningún valor.
+   - Ejecuta la suite de 6 pruebas (`npm test`) y emite el veredicto `APROBADO`.
+
+2. **`tools/01_verificar_anon.ps1`:**
+   - Solicita de forma interactiva y con entrada oculta (`SecureString`) la URL de Supabase y la clave `anon`.
+   - Realiza 3 pruebas HTTP directas contra PostgREST:
+     1. Lectura del catálogo público permitido (debe responder 200 OK con datos).
+     2. Solicitud de columnas prohibidas (`pages`, `video_sources`, `status`) para certificar que son bloqueadas por permisos de columna.
+     3. Búsqueda de registros con `status = 'blocked'` para certificar que la política de filas RLS los hace invisibles.
+   - NUNCA almacena ni escribe las claves en disco.
+
+3. **`sql/EJECUTAR_TODO_EN_ORDEN.sql` y `tools/02_sql_en_orden.md`:**
+   - Concatena en un **único archivo seguro** las migraciones de columnas (`05`), las políticas RLS y función RPC (`01`), los índices de alto rendimiento (`04`) y las funciones de protección (`02`), listo para pegar y pulsar **Run** en el Editor SQL de Supabase.
+   - Explica el uso de la directiva `CONCURRENTLY` (omitiéndola en el script maestro para permitir ejecución continua en bloque, pero documentando cómo ejecutar `04_indexes.sql` en producción).
+   - Mantiene aislados `02_minor_protection_trigger.sql` y `02b_minor_protection_backfill.sql` para no alterar registros sin revisión previa.
+
+4. **`tools/03_preview.ps1` y `tools/04_probar_preview.ps1`:**
+   - `03_preview.ps1`: Sube de manera segura la rama `fix/auditoria-completa` a origin (push normal, sin `--force`) y detalla la ruta exacta en Cloudflare Dashboard para localizar la URL de Preview.
+   - `04_probar_preview.ps1`: Toma la URL de Preview y ejecuta pruebas end-to-end:
+     - `/api/version` (código 200 y metadatos).
+     - Cabeceras de seguridad HTTP (CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy).
+     - Catálogo en páginas 1, 2, 3 y 10 para cómics, videos y galerías, comprobando que no existen duplicados entre páginas y que `total_pages` es coherente.
+     - Rechazo de tokens alterados en `/api/media` (debe retornar 403 Forbidden).
+
+5. **`tools/05_rotacion_guiada.md`:**
+   - Documento descriptivo pantalla por pantalla, con campos exactos, botones y tiempos estimados para rotar credenciales en Supabase, Patreon y Cloudflare Pages.
+   - Proporciona el comando de una línea en Node.js para generar un `MEDIA_SECRET` seguro de 256 bits.
+
+6. **`tools/06_limpiar_historial.ps1`:**
+   - Trabaja exclusivamente sobre un clon espejo temporal (`git clone --mirror`) en `$env:TEMP`, dejando el repositorio de trabajo 100% intacto.
+   - Utiliza `git-filter-repo` para purgar del árbol histórico los archivos `.env` viejos y ramas obsoletas.
+   - Se detiene antes del push forzado y requiere confirmación manual del usuario.
+
+7. **`LO_QUE_SOLO_YO_PUEDO_HACER.md`:**
+   - Hoja de ruta concisa de una sola página con los 4 pasos indispensables (más 1 opcional) que requieren credenciales personales externas.
+
+### 11.2 Prevención Rigurosa de Falsos Positivos en Protección a Menores
+- **Análisis de Límites:** Se verificó que el uso de delimitadores estrictos de palabra (`\m...\M`) previene falsos positivos en:
+  - Palabras compuestas comunes: `kidnap`, `skid`, `orchid`, `kidd`.
+  - Roles y ámbitos legítimos para adultos: `teacher`, `school`, `college`, `university`.
+  - Nombres propios: Al evaluar `niñ[ao]s?` sobre el texto crudo con tilde `ñ`, se evita que nombres propios anglosajones o japoneses como *"Nina Hartley"* o *"Nino Nakano"* coincidan con el filtro de menores.
+- **Validación Automatizada con ASSERT:** Se incorporaron en `sql/02_minor_protection_audit.sql`, `sql/02_minor_protection_trigger.sql` y `sql/EJECUTAR_TODO_EN_ORDEN.sql` aserciones explícitas que certifican que estos términos no son bloqueados.
+
+
 
 
 
