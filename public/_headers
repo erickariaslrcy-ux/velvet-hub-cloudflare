@@ -1,6 +1,12 @@
 # Cloudflare Pages Static Assets & High-Performance Headers
 
 # Global Security, Timing & Strict Content Policies
+# JUSTIFICACIÓN TÉCNICA DE DIRECTIVAS CSP:
+# - script-src 'unsafe-inline': Necesario para los bloques de script de la SPA en public/index.html (gestión de estado, router, lector).
+# - script-src 'unsafe-eval': Exclusivamente requerido por Tailwind Play CDN (cdn.tailwindcss.com) para compilar clases JIT en el navegador con Function().
+# - worker-src / child-src 'self' blob:: Requerido por HLS.js para workers demuxer inline creados con URL.createObjectURL(new Blob([...])).
+# - style-src 'unsafe-inline': Requerido para transformaciones GPU dinámicas (translate3d) y estilos inyectados por Tailwind y Lucide.
+# - connect-src 'self' blob: https://*.supabase.co https://pmvhaven.com: API Supabase, streaming HLS y analítica Cloudflare.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY

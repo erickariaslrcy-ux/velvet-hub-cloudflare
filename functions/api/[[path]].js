@@ -203,16 +203,16 @@ function isSafeUpstreamUrl(urlStr) {
       "cdnde.com",
       "pixibb.com",
       "doujins.com",
-      "blogspot.com",
       "alotporn.com",
       "porntubeai.com",
       "supabase.co",
       "supabase.in",
-      "pages.dev",
-      "cloudflare.com",
-      "r2.dev"
+      "morbohub.pages.dev",
+      "cloudflare.com"
     ];
 
+    // Validación estricta por límite de punto: host idéntico o subdominio legítimo con punto separador
+    // Previene evasiones como evil-ovh.net o ovh.net.evil.com
     return ALLOWED_CDN_SUFFIXES.some(suffix =>
       hostname === suffix || hostname.endsWith("." + suffix)
     );
@@ -835,7 +835,7 @@ export async function onRequest(context) {
 
     try {
       const spRes = await fetch(`${SUPABASE_URL}/rest/v1/items?${queryParam}&limit=1`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
       });
 
       if (!spRes.ok) {
@@ -1423,7 +1423,7 @@ export async function onRequest(context) {
     const baseOffset = seedParam > 0 ? (Math.abs(seedParam * 137) % 500) : 0;
     const offset = baseOffset + (safePage - 1) * pageSize;
 
-    const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources,artists";
+    const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists";
     let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}&status=neq.blocked&cover_url=not.is.null&cover_url=neq.`;
 
     if (mediaType === "video") {

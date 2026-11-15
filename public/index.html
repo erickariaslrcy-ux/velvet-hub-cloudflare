@@ -1242,7 +1242,7 @@
 
           <i class="fa-solid fa-magnifying-glass absolute left-3 sm:left-3.5 top-2.5 sm:top-3 text-white/40 text-xs sm:text-sm"></i>
 
-          <button type="button" id="clear-search-btn" onclick="clearSearch()" class="hidden absolute right-3 top-2.5 sm:top-3 text-white/50 hover:text-white text-xs sm:text-sm">
+          <button type="button" id="clear-search-btn" data-action="clear-search" onclick="clearSearch()" class="hidden absolute right-3 top-2.5 sm:top-3 text-white/50 hover:text-white text-xs sm:text-sm">
 
             <i class="fa-solid fa-xmark"></i>
 
@@ -1259,6 +1259,10 @@
         <!-- Botón Aleatorio -->
 
         <button
+
+          id="random-btn"
+
+          data-action="fetch-random"
 
           onclick="fetchRandom()"
 
@@ -1280,9 +1284,11 @@
 
           <button
 
-            onclick="handleUserButtonClick()"
-
             id="user-profile-btn"
+
+            data-action="user-button"
+
+            onclick="handleUserButtonClick()"
 
             class="flex items-center justify-center gap-1.5 h-9 px-2.5 sm:px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-xs font-bold text-white transition-all cursor-pointer"
 
@@ -12329,6 +12335,46 @@
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
         const nav = document.getElementById('mobile-navbar');
         if (nav) nav.style.display = '';
+      }
+    });
+
+    // =========================================================================
+    // ENRUTAMIENTO DE EVENTOS DECLARATIVO (DELEGACIÓN CSP-FRIENDLY)
+    // =========================================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      const searchForm = document.getElementById('search-form');
+      if (searchForm) {
+        searchForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          if (typeof handleSearch === 'function') handleSearch(e);
+        });
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const act = el.getAttribute('data-action');
+      if (act === 'fetch-random') {
+        if (typeof fetchRandom === 'function') fetchRandom();
+      } else if (act === 'clear-search') {
+        if (typeof clearSearch === 'function') clearSearch();
+      } else if (act === 'user-button') {
+        if (typeof handleUserButtonClick === 'function') handleUserButtonClick();
+      } else if (act === 'logout') {
+        if (typeof handleLogout === 'function') handleLogout();
+      } else if (act === 'hero-prev') {
+        if (typeof prevHeroSlide === 'function') prevHeroSlide();
+      } else if (act === 'hero-next') {
+        if (typeof nextHeroSlide === 'function') nextHeroSlide();
+      } else if (act === 'hero-read') {
+        if (typeof openHeroComic === 'function') openHeroComic(e);
+      } else if (act === 'hero-fav') {
+        if (typeof toggleHeroFavorite === 'function') toggleHeroFavorite();
+      } else if (act === 'reset-home') {
+        if (typeof resetHome === 'function') resetHome();
+      } else if (act === 'scroll-top') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     });
 

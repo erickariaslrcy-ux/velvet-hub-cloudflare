@@ -144,19 +144,29 @@ const dangerousUrls = [
   "http://internal.service.local/",
   "https://attacker-domain.xyz/phishing.jpg",
   "file:///etc/passwd",
-  "gopher://localhost:11211/"
+  "gopher://localhost:11211/",
+  // Pruebas específicas de evasión por sufijo de dominio y límite de punto
+  "https://evil-ovh.net/exploit.jpg",
+  "https://ovh.net.evil.com/exploit.jpg",
+  "https://attackerpmvhaven.com/malware.mp4",
+  "https://pmvhaven.com.attacker.com/malware.mp4",
+  // Alojamiento abierto de terceros (Blogger / páginas arbitrarias)
+  "https://myblog.blogspot.com/image.jpg",
+  "https://blogspot.com/evil.jpg",
+  "https://malicious-phishing.pages.dev/exploit.jpg"
 ];
 
 for (const badUrl of dangerousUrls) {
   assert.equal(
     testContext.isSafeUpstreamUrl(badUrl),
     false,
-    `SSRF permitida indebidamente para: ${badUrl}`
+    `SSRF o evasión de límite de punto permitida indebidamente para: ${badUrl}`
   );
 }
 
 const legitimateUrls = [
   "https://pmvhaven.com/videos/hls/1080p.mp4",
+  "https://pmvhavencloud.s3.eu-west-par.io.cloud.ovh.net/video.mp4",
   "https://comics18.org/data/covers/comic1.jpg",
   "https://comics18.net/data/covers/comic1.jpg",
   "https://melapelacomics.com/pages/01.webp",
@@ -165,7 +175,8 @@ const legitimateUrls = [
   "https://cdn.leakgallery.com/media/test.jpg",
   "https://manhwaweb.com/uploads/1.jpg",
   "https://static-ap.cdnanp.com/img.jpg",
-  "https://v3.cdnde.com/video.mp4"
+  "https://v3.cdnde.com/video.mp4",
+  "https://morbohub.pages.dev/velvet_logo.png"
 ];
 
 for (const goodUrl of legitimateUrls) {
@@ -208,6 +219,7 @@ console.log("\n[6] Verificando existencia y contenido de scripts SQL...");
 assert.ok(fs.existsSync(path.join("sql", "01_rls_policies.sql")), "sql/01_rls_policies.sql debe existir");
 assert.ok(fs.existsSync(path.join("sql", "02_minor_protection_audit.sql")), "sql/02_minor_protection_audit.sql debe existir");
 assert.ok(fs.existsSync(path.join("sql", "02_minor_protection_trigger.sql")), "sql/02_minor_protection_trigger.sql debe existir");
+assert.ok(fs.existsSync(path.join("sql", "02b_minor_protection_backfill.sql")), "sql/02b_minor_protection_backfill.sql debe existir");
 
 const rlsContent = fs.readFileSync(path.join("sql", "01_rls_policies.sql"), "utf-8");
 assert.ok(rlsContent.includes("alter table public.profiles enable row level security;"));
@@ -215,6 +227,10 @@ assert.ok(rlsContent.includes("alter table public.items enable row level securit
 assert.ok(rlsContent.includes("alter table public.favorites enable row level security;"));
 assert.ok(rlsContent.includes("revoke select on public.items from anon;"), "Debe revocar select global a anon en items");
 assert.ok(rlsContent.includes("status <> 'blocked'"));
+assert.ok(rlsContent.includes("has_column_privilege('anon', 'public.items', 'pages'"), "Debe auditar que pages no sea accesible por anon");
+assert.ok(rlsContent.includes("has_column_privilege('anon', 'public.items', 'video_sources'"), "Debe auditar que video_sources no sea accesible por anon");
+assert.ok(rlsContent.includes("has_column_privilege('anon', 'public.items', 'status'"), "Debe auditar que status no sea accesible por anon");
+assert.ok(rlsContent.includes("has_column_privilege('anon', 'public.items', 'real_people'"), "Debe auditar que real_people no sea accesible por anon");
 assert.ok(rlsContent.includes("set local role anon;"), "Debe incluir pruebas de verificación como anon");
 
 const minorAudit = fs.readFileSync(path.join("sql", "02_minor_protection_audit.sql"), "utf-8");
@@ -223,8 +239,14 @@ assert.ok(!minorAudit.includes("create trigger"), "02_minor_protection_audit.sql
 
 const minorTrigger = fs.readFileSync(path.join("sql", "02_minor_protection_trigger.sql"), "utf-8");
 assert.ok(minorTrigger.includes("create trigger items_before_write"), "02_minor_protection_trigger.sql debe contener el trigger");
-assert.ok(minorTrigger.includes("new.status := 'blocked'"));
+assert.ok(!minorTrigger.includes("update public.items"), "02_minor_protection_trigger.sql NO debe actualizar filas existentes por sí solo");
 
-console.log("✓ Scripts SQL de RLS, auditoría de solo lectura y trigger de protección verificados.");
+const minorBackfill = fs.readFileSync(path.join("sql", "02b_minor_protection_backfill.sql"), "utf-8");
+assert.ok(minorBackfill.includes("items_backup_"), "02b_minor_protection_backfill.sql debe crear tabla de respaldo");
+assert.ok(minorBackfill.includes("begin;"), "Debe ejecutarse en transacción begin");
+assert.ok(minorBackfill.includes("commit;"), "Debe cerrarse con commit");
+assert.ok(minorBackfill.includes("update public.items"), "Debe aplicar el update defensivo dentro de la transacción");
+
+console.log("✓ Scripts SQL de RLS estricto, auditoría, trigger y backfill con respaldo verificados.");
 
 console.log("\n=== TODAS LAS PRUEBAS DE LA FASE 2 PASARON CON ÉXITO ===");

@@ -5,11 +5,12 @@ import path from "node:path";
 console.log("=== INICIANDO PRUEBAS UNITARIAS DE BASE DE DATOS E INTEGRIDAD (FASE 4) ===");
 
 // 1. Verificación de existencia de los 6 scripts SQL (incluyendo separación de trigger)
-console.log("\n[1] Verificando presencia de los 6 scripts SQL requeridos...");
+console.log("\n[1] Verificando presencia de los 7 scripts SQL requeridos...");
 const sqlFiles = [
   "01_rls_policies.sql",
   "02_minor_protection_audit.sql",
   "02_minor_protection_trigger.sql",
+  "02b_minor_protection_backfill.sql",
   "03_data_integrity_audit.sql",
   "04_indexes.sql",
   "05_thumbnails_lqip.sql"

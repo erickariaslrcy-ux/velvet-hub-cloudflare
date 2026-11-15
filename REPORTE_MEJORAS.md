@@ -579,26 +579,37 @@ Tras la revisión exhaustiva del reporte inicial, se implementaron con éxito la
   - **Prueba End-to-End de Media:** Resolución y desreferenciación real de `/api/media?t=...` verificada contra el proxy.
 
 ### 9.4 Aislamiento Estricto en `sql/01_rls_policies.sql` (Rol anon y Vista catalog)
-- **Restricción a anon:** Se revocó el `SELECT` global a `anon` en `public.items` y se otorgó permiso a nivel de columna únicamente para los metadatos públicos (`id, source, source_id, title, cover_url, thumb_color, thumb_lqip, media_type, language, tags, artists, page_count, pages, video_sources, chapters, status, real_people, search_text, scraped_at, created_at`). La columna original `url` queda estrictamente inaccesible para `anon`.
-- **Vista catalog:** Se confirmó que `public.catalog` NO depende de `auth.uid()`, haciéndola 100% funcional para visitantes no autenticados (`anon`). Se enriqueció la vista incluyendo `cover_url`, `thumb_color` y `thumb_lqip`.
-- **Pruebas SQL Integradas:** Se añadió un bloque de ejecución automática con `SET LOCAL ROLE anon;` que valida el aislamiento directo en Supabase SQL Editor.
+- **Restricción Minuciosa a anon:** Se revocó el `SELECT` sobre `public.items` para `anon` y se concedió permiso únicamente para las columnas indispensables del catálogo público (`id, source, source_id, title, cover_url, thumb_color, thumb_lqip, media_type, language, tags, artists, page_count, scraped_at, created_at`). Las columnas sensibles (`pages`, `video_sources`, `chapters`, `search_text`, `status`, `real_people` y `url`) quedaron **100% revocadas para anon**.
+- **Acceso a Detalle en Servidor:** El backend Pages Functions obtiene los campos detallados (`pages`, `video_sources`, `chapters`) en el servidor utilizando `SUPABASE_ADMIN_KEY` (`service_role`), sin exponer jamás la clave privada al cliente. Adicionalmente, se incluyó la función RPC `public.get_item_detail(bigint)` con `SECURITY DEFINER` y revocación de ejecución para `anon`.
+- **Política de Filas RLS:** Se reforzó la política `items_public_select` en `public.items` para excluir permanentemente filas donde `status = 'blocked'` o `real_people = true` tanto para `anon` como para `authenticated`.
+- **Pruebas SQL Integradas:** El bloque de pruebas automáticas con `DO $$` comprueba mediante `has_column_privilege` que `anon` NO posee privilegios sobre `pages`, `video_sources`, `chapters`, `search_text`, `status`, `real_people` ni `url`.
 
-### 9.5 Corrección Leetspeak y Separación de Scripts en `sql/02`
-- **Corrección de Mapeo:** En `translate()`, `'013457@$!'` mapeaba erróneamente a `'oieastaas'` (posición 7 `$` iba a `a` y posición 8 `!` iba a `s`). Se corrigió a `'oieastasi'` (`$` mapea a `s`, `!` mapea a `i`).
-- **Separación de Archivos:**
-  - `sql/02_minor_protection_audit.sql`: 100% de solo lectura (`SELECT`). Incluye pruebas unitarias (`assert public.normalize_leetspeak('$h0ta') = 'shota'`, `assert public.normalize_leetspeak('l0l!ta') = 'lolita'`) y consulta de auditoría.
-  - `sql/02_minor_protection_trigger.sql`: Archivo independiente que crea el trigger `items_before_write` y aplica la actualización preventiva histórica.
+### 9.5 Corrección Leetspeak y Separación en Tres Scripts SQL
+- **Corrección de Mapeo:** En `translate()`, `'013457@$!'` mapeaba a `'oieastaas'`. Se corrigió a `'oieastasi'` (`$` mapea a `s`, `!` mapea a `i`).
+- **Separación de Tres Archivos:**
+  - `sql/02_minor_protection_audit.sql`: **100% de solo lectura (`SELECT`)**. Contiene `normalize_leetspeak`, `minor_content_match`, pruebas unitarias con `ASSERT` y consulta de inspección.
+  - `sql/02_minor_protection_trigger.sql`: Instala exclusivamente el trigger `items_before_write` para prevenir escrituras futuras. **NO modifica filas existentes.**
+  - `sql/02b_minor_protection_backfill.sql`: Script independiente que primero muestra un conteo de filas afectadas, crea una tabla de respaldo fechada (`items_backup_20261115`) con los registros a bloquear y aplica el `UPDATE` defensivo dentro de una transacción atómica (`BEGIN; ... COMMIT;`).
 
-### 9.6 Ampliación de la Lista Blanca de Dominios CDN Anti-SSRF
-- **Auditoría:** Se analizaron todos los raspadores y datasets de muestra del repositorio mediante `test/test_extract_domains.mjs`.
-- **Dominios Integrados:** Se incorporaron los 23 dominios legítimos utilizados por las fuentes de catálogo (`ovh.net`, `redporn.porn`, `comics18.net`, `vercomicporno.com`, `vercomicsporno.xxx`, `3hentai.xyz`, `pornhd.pet`, `imagedeliveries.com`, `xascdn.li`, `cartooncomixhd.com`, `comicsparaadultos.com`, `comicspornoxxx.com`, `fotonovelasxxx.com`, `hentaipaw.com`, `leermanhwas.com`, `manhwaweb.com`, `img1mw.xyz`, `img2mw.xyz`, `mhcomics.com`, `reycomix.com`, `leakgallery.com`, `pornocomic.org`, `cdnanp.com`, `cdnde.com`, `pixibb.com`, `doujins.com`, `blogspot.com`, `alotporn.com`, `porntubeai.com`).
-- **Regla:** Se mantuvo intacta la política de no modificar ni ampliar suplantación de cabeceras Referer/User-Agent.
+### 9.6 Depuración de la Lista Blanca del Proxy y Validación de Límite de Punto
+- **Eliminación de Alojamiento Abierto:** Se eliminó `blogspot.com` y se restringieron comodines abiertos de alojamiento de terceros (`pages.dev` se acotó estrictamente a `morbohub.pages.dev`).
+- **Validación por Límite de Punto:** Se confirmó que la comprobación compara `hostname === suffix || hostname.endsWith("." + suffix)`.
+- **Casos de Prueba Añadidos:** Se incorporaron en `test/test_security.mjs` pruebas de evasión que verifican el bloqueo estricto de:
+  - `evil-ovh.net` (rechazado, falso).
+  - `ovh.net.evil.com` (rechazado, falso).
+  - `attackerpmvhaven.com` (rechazado, falso).
+  - `pmvhaven.com.attacker.com` (rechazado, falso).
+  - `myblog.blogspot.com` (rechazado, falso).
+  - `sub.pmvhaven.com` (permitido, verdadero).
 
-### 9.7 Ajuste Fino de Content Security Policy (CSP) en `public/_headers`
-- **HLS.js y Workers:** Se añadieron las directivas `worker-src 'self' blob:;` y `child-src 'self' blob:;` para permitir la trans-muxación de fragmentos de video en workers inline de HLS.js.
-- **Bibliotecas y Scripts:** Se añadió `https://cdn.jsdelivr.net` a `script-src` para la carga dinámica de HLS.js.
-- **Conectividad:** Se añadió `blob:` a `connect-src`.
-- **Resultado:** Cero violaciones de CSP en consola para el reproductor de video, lector de cómics, Tailwind CDN, fuentes de Google, iconos de Lucide y Supabase Auth.
+### 9.7 Justificación de Content Security Policy (CSP) y Desacoplamiento de Eventos
+- **Justificación de Directivas:**
+  - `script-src 'unsafe-inline'`: Requerido por los bloques de script de la SPA en `public/index.html` (máquina de estados, router y visor).
+  - `script-src 'unsafe-eval'`: Requerido exclusivamente por el compilador JIT en tiempo de ejecución de Tailwind Play CDN (`cdn.tailwindcss.com`), el cual genera estilos dinámicamente con `Function()`.
+  - `worker-src / child-src 'self' blob:;`: Requerido por HLS.js para inicializar workers inline de demuxing/trans-muxing.
+  - `style-src 'unsafe-inline'`: Requerido para transformaciones GPU dinámicas (`translate3d`, opacidades) en el lector y reproductor.
+- **Desacoplamiento Declarativo:** Se implementó delegación de eventos (`DOMContentLoaded` y `click` sobre `[data-action]`) en `public/index.html` para reducir la dependencia de atributos `onclick` inline.
+- **Transparencia Técnica:** No se afirma ausencia absoluta de violaciones de CSP en consola de producción puesto que la suite automatizada corre en Node.js; se detalla a continuación qué requiere comprobación en navegador real.
 
 ### 9.8 Análisis y Optimización de Rendimiento en PostgREST (`count=exact`)
 - **Diagnóstico:** `Prefer: count=exact` ejecuta un `count(*)` completo. En tablas con más de 100,000 filas sin los índices de `sql/04`, puede demorar entre 150ms y 500ms.
@@ -615,7 +626,7 @@ Tras la revisión exhaustiva del reporte inicial, se implementaron con éxito la
   4. Cargar variables en Production, merge de rama y deploy.
   5. Purgar caché global de Cloudflare.
   6. Rotar claves en Supabase (`JWT Secret`) y actualizar variables en Cloudflare inmediatamente.
-  7. Auditar y activar trigger de protección a menores.
+  7. Auditar y activar trigger de protección a menores (`sql/02` y `02b`).
   8. Limpiar historial de git con `git-filter-repo`.
 
 ---
@@ -626,13 +637,42 @@ Tras la revisión exhaustiva del reporte inicial, se implementaron con éxito la
 npm test
 ```
 - `test_pagination.mjs`: 5/5 PASADAS.
-- `test_security.mjs`: 6/6 PASADAS (Web Crypto, Anti-SSRF, CORS, Sanitización, SQL).
-- `test_database.mjs`: 5/5 PASADAS (6 scripts SQL verificados, SELECT-only audit, índices concurrentes, LQIP O(1)).
+- `test_security.mjs`: 6/6 PASADAS (Web Crypto, Anti-SSRF con límites de punto, CORS, Sanitización, SQL con 7 archivos).
+- `test_database.mjs`: 5/5 PASADAS (7 scripts SQL verificados, SELECT-only audit, índices concurrentes, LQIP O(1)).
 - `test_performance.mjs`: 17/17 PASADAS (Viewport `100dvh`, Safe areas, SmartImageLoader).
 - `test_quality_suite.mjs`: 21/21 PASADAS (Accesibilidad ARIA, atajos teclado lector y video, ordenamiento determinista).
 - `test_integration_pages.mjs`: PASADA EXITOSAMENTE (Pruebas reales de páginas 1, 2, 3, 10, 17 para comic, video y gallery con 0 duplicados y proxy de medios).
 
 **Total: 6 suites automatizadas con 100% de éxito.**
+
+---
+
+## 10. QUÉ NO VALIDAN ESTAS PRUEBAS (LÍMITES DE LA SUITE AUTOMATIZADA)
+
+Con total honestidad técnica y rigor de ingeniería, se especifican a continuación los alcances y límites de las pruebas automatizadas que se ejecutan localmente en Node.js, señalando qué aspectos dependen de verificación manual en entornos vivos:
+
+### 10.1 Supabase Real / Base de Datos de Producción
+- **Qué simula la suite:** Un servidor HTTP mock en Node.js que reproduce la interfaz REST de Supabase PostgREST (cabeceras `Content-Range`, parámetros `limit`, `offset`, formato de errores).
+- **Qué NO valida:** No conecta con la instancia PostgreSQL real en la nube (`qnmcejlxoufheisgkuyo.supabase.co`). La latencia real de red transcontinental, el comportamiento del pooler de conexiones (PgBouncer/Supavisor) bajo carga de miles de usuarios concurrentes y los planes de ejecución reales de PostgreSQL (`EXPLAIN ANALYZE`) solo pueden certificarse sobre la base de datos viva tras aplicar los índices de `04_indexes.sql`.
+
+### 10.2 Políticas RLS en Motor PostgreSQL Real
+- **Qué simula la suite:** Verifica la presencia de directivas de seguridad en los archivos SQL generados y las cabeceras/filtros que el backend inyecta.
+- **Qué NO valida:** Las pruebas locales en Node.js no ejecutan un motor PostgreSQL ni evalúan directamente las políticas RLS en runtime de base de datos. La prueba real de denegación de columnas (`pages`, `video_sources`, `url`) para el rol `anon` debe certificarse ejecutando el bloque de pruebas `DO $$` de `sql/01_rls_policies.sql` directamente en el **SQL Editor de Supabase**.
+
+### 10.3 Navegador Real y Consola de CSP
+- **Qué simula la suite:** Análisis sintáctico del HTML, extracción de directivas en `public/_headers`, simulación de eventos en Node.js y comprobación de monotonicidad de scroll.
+- **Qué NO valida:** No corre dentro de un motor de renderizado Chromium, Gecko ni WebKit. Por tanto:
+  - **Violaciones de CSP en consola:** Aunque la política de `public/_headers` fue ajustada para incluir los orígenes requeridos (`cdn.jsdelivr.net`, `blob:`, `worker-src`), la confirmación definitiva de "cero advertencias rojas en DevTools" requiere abrir `https://<preview>.morbohub.pages.dev` en Google Chrome y revisar la pestaña *Console*.
+  - **Compilación JIT de Tailwind:** Tailwind Play CDN evalúa clases dinámicas en el navegador mediante `eval`/`Function()`; si alguna clase compleja genera una llamada no contemplada, solo el navegador lo reportará.
+
+### 10.4 Dispositivo Físico Android Real
+- **Qué simula la suite:** Validación estática de reglas CSS (`100dvh`, `@supports (height: 100dvh)`, `safe-area-inset-*`) y simulación algorítmica de pre-carga y cancelación en `SmartImageLoader`.
+- **Qué NO valida:** No emula el comportamiento de hardware móvil físico:
+  - El redimensionamiento dinámico de la barra de direcciones de Chrome en Android cuando el usuario desliza hacia abajo.
+  - La respuesta táctil a 120Hz en pantallas OLED.
+  - La limitación de memoria RAM/GPU en dispositivos Android de gama baja al abrir cómics pesados de más de 80 páginas.
+  - El comportamiento de la PWA al suspenderse en segundo plano (Memory Pressure) por el sistema operativo Android.
+  - *Acción recomendada:* Seguir puntualmente el [CHECKLIST_PRUEBAS.md](file:///c:/Users/Eril/OneDrive/Desktop/PAGINAS%20SCRAPEADAS%20LISTAS/CHECKLIST_PRUEBAS.md) conectando un smartphone Android vía depuración USB (`chrome://inspect`).
 
 
 

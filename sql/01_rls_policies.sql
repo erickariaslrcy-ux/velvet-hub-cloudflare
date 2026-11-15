@@ -56,13 +56,12 @@ drop policy if exists "items solo admin" on public.items;
 drop policy if exists "items_public_select" on public.items;
 drop policy if exists "items_admin_all" on public.items;
 
--- Lectura pública con filtrado estricto RLS
+-- Lectura pública con filtrado estricto RLS (excluye permanentemente blocked y real_people)
 create policy "items_public_select" on public.items
   for select to anon, authenticated
   using (
     status <> 'blocked' 
     and real_people = false
-    and (cover_url <> '' or jsonb_array_length(pages) > 0 or jsonb_array_length(video_sources) > 0)
   );
 
 -- Control total para administradores autenticados
@@ -71,16 +70,55 @@ create policy "items_admin_all" on public.items
   using (public.is_admin())
   with check (public.is_admin());
 
--- Permisos PostgREST: anon solo puede leer metadatos públicos (SIN la URL original de origen)
+-- Permisos PostgREST: anon solo puede leer metadatos de listado público
+-- (pages, video_sources, chapters, search_text, status, real_people y url quedan estrictamente revocadas)
 revoke select on public.items from anon;
 grant select (
   id, source, source_id, title, cover_url, thumb_color, thumb_lqip,
-  media_type, language, tags, artists, page_count, pages, video_sources,
-  chapters, status, real_people, search_text, scraped_at, created_at
+  media_type, language, tags, artists, page_count, scraped_at, created_at
 ) on public.items to anon;
 
 grant select on public.items to authenticated;
 grant all on public.items to service_role;
+
+-- Función RPC con SECURITY DEFINER para lectura segura de detalle por parte del backend
+create or replace function public.get_item_detail(p_id bigint)
+returns table (
+  id bigint,
+  source text,
+  source_id text,
+  title text,
+  cover_url text,
+  thumb_color text,
+  thumb_lqip text,
+  media_type text,
+  language text,
+  tags text[],
+  artists text[],
+  page_count integer,
+  pages jsonb,
+  video_sources jsonb,
+  chapters jsonb,
+  scraped_at timestamptz,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    i.id, i.source, i.source_id, i.title, i.cover_url,
+    i.thumb_color, i.thumb_lqip, i.media_type, i.language,
+    i.tags, i.artists, i.page_count, i.pages, i.video_sources,
+    i.chapters, i.scraped_at, i.created_at
+  from public.items i
+  where i.id = p_id
+    and i.status <> 'blocked'
+    and i.real_people = false;
+$$;
+
+grant execute on function public.get_item_detail(bigint) to authenticated, service_role;
+revoke execute on function public.get_item_detail(bigint) from anon;
 
 -- ------------------------------------------------------------------------------
 -- 4. TABLA: favorites
@@ -206,33 +244,60 @@ revoke insert, update, delete on public.catalog from anon, authenticated, public
 
 -- ------------------------------------------------------------------------------
 -- 8. PRUEBAS DE VERIFICACIÓN AUTOMÁTICAS (ROLE anon Y RLS)
--- Comprueba que anon únicamente accede al catálogo público y metadatos permitidos.
+-- Comprueba que anon únicamente accede al catálogo público y metadatos permitidos,
+-- y que NO puede leer columnas sensibles ni registros bloqueados.
 -- ------------------------------------------------------------------------------
 do $$
 begin
-  -- Cambiar contexto local al rol anónimo para pruebas de seguridad
+  -- 1. Verificación de permisos de columna para anon (debe tener solo metadatos de listado)
+  assert has_column_privilege('anon', 'public.items', 'id', 'SELECT'), 'anon debe poder leer id';
+  assert has_column_privilege('anon', 'public.items', 'title', 'SELECT'), 'anon debe poder leer title';
+  assert has_column_privilege('anon', 'public.items', 'cover_url', 'SELECT'), 'anon debe poder leer cover_url';
+  assert has_column_privilege('anon', 'public.items', 'media_type', 'SELECT'), 'anon debe poder leer media_type';
+  assert has_column_privilege('anon', 'public.items', 'page_count', 'SELECT'), 'anon debe poder leer page_count';
+
+  -- 2. Verificación de columnas estrictamente revocadas para anon (deben fallar)
+  assert not has_column_privilege('anon', 'public.items', 'pages', 'SELECT'),
+    'FALLO DE AISLAMIENTO: anon tiene permiso SELECT sobre columna pages';
+  assert not has_column_privilege('anon', 'public.items', 'video_sources', 'SELECT'),
+    'FALLO DE AISLAMIENTO: anon tiene permiso SELECT sobre columna video_sources';
+  assert not has_column_privilege('anon', 'public.items', 'chapters', 'SELECT'),
+    'FALLO DE AISLAMIENTO: anon tiene permiso SELECT sobre columna chapters';
+  assert not has_column_privilege('anon', 'public.items', 'search_text', 'SELECT'),
+    'FALLO DE AISLAMIENTO: anon tiene permiso SELECT sobre columna search_text';
+  assert not has_column_privilege('anon', 'public.items', 'status', 'SELECT'),
+    'FALLO DE AISLAMIENTO: anon tiene permiso SELECT sobre columna status';
+  assert not has_column_privilege('anon', 'public.items', 'real_people', 'SELECT'),
+    'FALLO DE AISLAMIENTO: anon tiene permiso SELECT sobre columna real_people';
+  assert not has_column_privilege('anon', 'public.items', 'url', 'SELECT'),
+    'FALLO DE AISLAMIENTO: anon tiene permiso SELECT sobre columna url';
+
+  -- 3. Verificación en contexto anon
   set local role anon;
 
-  -- 1. anon puede consultar items permitidos (columnas autorizadas, status != blocked, real_people = false)
+  -- 3.1 anon puede consultar items permitidos
   perform id, title, cover_url, media_type, page_count from public.items limit 1;
 
-  -- 2. anon puede consultar la vista de seguridad catalog (sin dependencia de auth.uid)
+  -- 3.2 anon puede consultar la vista de seguridad catalog
   perform id, title, cover_url, media_type, source_label from public.catalog limit 1;
 
   -- Restaurar rol de sesión para el resto del script
   reset role;
 
   raise notice '=======================================================';
-  raise notice 'RLS OK: El rol anon solo puede leer metadatos públicos.';
-  raise notice 'url de origen, status blocked y perfiles están protegidos.';
+  raise notice 'RLS OK: anon NO puede leer pages, video_sources, chapters,';
+  raise notice 'search_text, status, real_people ni url. Filas protegidas.';
   raise notice '=======================================================';
 end;
 $$;
 
 -- PRUEBAS ADICIONALES DE AISLAMIENTO PARA EJECUTAR MANUALMENTE EN EL EDITOR SQL:
 -- SET ROLE anon;
+-- SELECT pages FROM public.items LIMIT 1;        -- DEBE FALLAR: ERROR: permission denied for column pages
+-- SELECT video_sources FROM public.items LIMIT 1;-- DEBE FALLAR: ERROR: permission denied for column video_sources
 -- SELECT url FROM public.items LIMIT 1;          -- DEBE FALLAR: ERROR: permission denied for column url
 -- SELECT * FROM public.profiles LIMIT 1;         -- DEBE FALLAR: ERROR: permission denied for table profiles
 -- SELECT * FROM public.favorites LIMIT 1;        -- DEBE FALLAR: ERROR: permission denied for table favorites
 -- SELECT * FROM public.invite_keys LIMIT 1;      -- DEBE FALLAR: ERROR: permission denied for table invite_keys
+-- RESET ROLE;
 -- RESET ROLE;

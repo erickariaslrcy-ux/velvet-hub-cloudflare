@@ -105,14 +105,6 @@ create trigger items_before_write
   before insert or update on public.items
   for each row execute function public.items_before_write();
 
--- ------------------------------------------------------------------------------
--- 4. BLOQUEO PREVENTIVO INMEDIATO DE ELEMENTOS HISTÓRICOS IDENTIFICADOS
--- Actualiza los elementos existentes que hayan coincidido en la auditoría.
--- ------------------------------------------------------------------------------
-update public.items
-set status = 'blocked'
-where status <> 'blocked'
-  and (
-    public.minor_content_match(coalesce(search_text, ''))
-    or public.minor_content_match(coalesce(title, ''))
-  );
+-- NOTA: Este script ÚNICAMENTE instala el trigger defensivo para operaciones futuras (INSERT / UPDATE).
+-- NO modifica registros históricos existentes. Para auditar y aplicar el saneamiento histórico con respaldo,
+-- ejecute posteriormente el script 02b_minor_protection_backfill.sql.
