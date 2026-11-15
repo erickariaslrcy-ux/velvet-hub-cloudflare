@@ -1014,18 +1014,21 @@ export async function onRequest(context) {
   // =========================================================================
   // 3. CATÁLOGO PRINCIPAL Y BÚSQUEDA (/api/items)
   // =========================================================================
-  if (url.pathname === "/api/items" && method === "GET") {
+  if (url.pathname === "/api/items" && (method === "GET" || method === "HEAD")) {
     const mediaType = url.searchParams.get("media_type") || "comic";
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("page_size") || "24", 10)));
     const q = (url.searchParams.get("q") || "").trim();
     const category = (url.searchParams.get("category") || "").trim().toLowerCase();
+    const tag = (url.searchParams.get("tag") || "").trim().toLowerCase();
+    const seedParam = parseInt(url.searchParams.get("seed") || "0", 10);
+    const sort = (url.searchParams.get("sort") || "recent").trim().toLowerCase();
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
-    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${url.searchParams.get("seed") || "0"}:${url.searchParams.get("sort") || "recent"}`;
+    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam}:${sort}`;
     const l1Catalog = getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
     if (l1Catalog) {
-      return new Response(l1Catalog, {
+      return new Response(method === "HEAD" ? null : l1Catalog, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
@@ -1048,41 +1051,11 @@ export async function onRequest(context) {
         const edgeHeaders = new Headers(cached.headers);
         edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
         edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-        return new Response(bodyText, { status: 200, headers: edgeHeaders });
+        return new Response(method === "HEAD" ? null : bodyText, { status: 200, headers: edgeHeaders });
       }
     } catch (e) {}
 
-    const seedParam = parseInt(url.searchParams.get("seed") || "0", 10);
-    const sort = url.searchParams.get("sort") || "recent";
 
-    // Grupos y anclas de alta densidad y diversidad de fuentes para modo dinámico / aleatorio
-    const COMIC_CLUSTERS = [
-      { anchor: 374460, maxOffset: 1200 }, // melapelocondibujos / estrenos
-      { anchor: 350000, maxOffset: 1500 }, // comics18_org / 3hentai
-      { anchor: 325000, maxOffset: 1500 }, // melapelacomics / 3hentai
-      { anchor: 238000, maxOffset: 1000 }, // melapelocondibujos clásicos
-      { anchor: 84070,  maxOffset: 1000 }, // Sexkomix2 / vercomicporno
-      { anchor: 50000,  maxOffset: 1500 }, // 3hentai doujinshi
-      { anchor: 10000,  maxOffset: 1000 }, // comics18_org retro
-    ];
-
-    const VIDEO_CLUSTERS = [
-      { anchor: 304215, maxOffset: 800 },  // pmvhaven HD estrenos
-      { anchor: 250000, maxOffset: 800 },  // redporn / brazzers
-      { anchor: 200000, maxOffset: 800 },  // pornone
-      { anchor: 150000, maxOffset: 800 },  // redporn family hookups
-      { anchor: 100000, maxOffset: 800 },  // pornhd
-      { anchor: 4510,   maxOffset: 200 },  // pmvhaven classics
-      { anchor: 2000,   maxOffset: 150 },  // damplips
-    ];
-
-    const GALLERY_CLUSTERS = [
-      { anchor: 398651, maxOffset: 400 },  // mitaku cosplay
-      { anchor: 390000, maxOffset: 400 },  // mitaku / buondua
-      { anchor: 385000, maxOffset: 400 },  // 4khd
-      { anchor: 380000, maxOffset: 400 },  // 4khd / xasiat
-      { anchor: 375000, maxOffset: 300 },  // buondua asian models
-    ];
 
     if (mediaType === "video") {
       let pmvSort = "recent";
@@ -1169,51 +1142,20 @@ export async function onRequest(context) {
       }
     }
 
-    let clusters = COMIC_CLUSTERS;
-    let maxId = 374460;
     let estimatedTotal = 37485;
-
     if (mediaType === "video") {
-      clusters = VIDEO_CLUSTERS;
-      maxId = 304215;
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
-      clusters = GALLERY_CLUSTERS;
-      maxId = 398651;
       estimatedTotal = 18260;
     }
 
-    const maxPageEstimate = Math.max(1, Math.ceil(estimatedTotal / pageSize));
-    const safePage = Math.min(Math.max(1, page), maxPageEstimate);
-    let offset = (safePage - 1) * pageSize;
-    let anchorId = maxId;
-    let isAscending = false;
-
-    if (seedParam > 0 && !q && (sort === "recent" || sort === "random")) {
-      // MODO DINÁMICO / ALEATORIO:
-      // Rota determinísticamente entre diferentes fuentes y épocas según seed y página
-      const clusterIdx = Math.abs(seedParam + (safePage - 1)) % clusters.length;
-      const cluster = clusters[clusterIdx];
-      anchorId = cluster.anchor;
-      const maxWindowPages = Math.max(1, Math.floor(cluster.maxOffset / pageSize));
-      const windowPage = Math.abs((seedParam * 13) + Math.floor((safePage - 1) / clusters.length)) % maxWindowPages;
-      offset = windowPage * pageSize;
-    } else if (!q && (!category || category === "all")) {
-      // MODO ESTÁNDAR: DUAL-DIRECTION B-TREE INDEX ENGINE
-      // Páginas 1 .. mitad: escaneo directo descendente (order=id.desc)
-      // Páginas mitad+1 .. final: escaneo ascendente desde la base (order=id.asc) y reverse al responder.
-      // Esto elimina los timeouts de PostgreSQL al consultar páginas profundas (ej: pág. 1000..1562 en <200ms)
-      if (safePage > Math.floor(maxPageEstimate / 2)) {
-        isAscending = true;
-        offset = Math.max(0, (maxPageEstimate - safePage) * pageSize);
-      }
-    }
+    const safePage = Math.max(1, page);
+    // Paginación estable: con o sin semilla, avanza de manera 100% secuencial y continua
+    const baseOffset = seedParam > 0 ? (Math.abs(seedParam * 137) % 500) : 0;
+    const offset = baseOffset + (safePage - 1) * pageSize;
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources,artists";
-    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
-    if (!isAscending) {
-      postgrestUrl += `&id=lte.${anchorId}`;
-    }
+    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}&status=neq.blocked&cover_url=not.is.null&cover_url=neq.`;
 
     if (mediaType === "video") {
       postgrestUrl += "&media_type=eq.video";
@@ -1224,7 +1166,11 @@ export async function onRequest(context) {
         postgrestUrl += "&source=neq.leakgallery";
       }
     } else {
-      postgrestUrl += "&media_type=eq.comic&page_count=gt.0";
+      postgrestUrl += "&media_type=eq.comic&page_count=gt.0&real_people=eq.false";
+    }
+
+    if (tag) {
+      postgrestUrl += `&tags=cs.{${encodeURIComponent(tag)}}`;
     }
 
     if (q) {
@@ -1235,10 +1181,6 @@ export async function onRequest(context) {
         const orClauses = words.map(w => `search_text.ilike.*${encodeURIComponent(w)}*`).join(",");
         postgrestUrl += `&or=(${orClauses})`;
       }
-      if (mediaType !== "video") {
-        postgrestUrl += "&page_count=gt.0";
-      }
-      estimatedTotal = 800;
     } else if (category && category !== "all") {
       let catTerm = category;
       if (mediaType === "gallery" || mediaType === "cosplay") {
@@ -1268,51 +1210,40 @@ export async function onRequest(context) {
         else if (category === "western") catTerm = "comic";
       }
       postgrestUrl += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
-      if (mediaType !== "video") {
-        postgrestUrl += "&page_count=gt.0";
-      }
-      estimatedTotal = 1500;
-    } else {
-      // Orden por defecto ultra-rápido indexado por B-tree (id desc o id asc según la mitad)
-      postgrestUrl += isAscending ? "&order=id.asc" : "&order=id.desc";
     }
+
+    // Orden por defecto indexado por clave primaria
+    postgrestUrl += "&order=id.desc";
 
     try {
       let spRes = await fetch(postgrestUrl, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "count=exact"
+        }
       });
 
       if (!spRes.ok) {
-        // Fallback seguro anti-timeout manteniendo el sentido de navegación
-        const fbOffset = isAscending ? 0 : Math.min(offset, 1000);
-        const safeFallbackUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${fbOffset}&${mediaType === "video" ? "source=eq.pmvhaven" : (mediaType === "gallery" || mediaType === "cosplay" ? "media_type=eq.gallery" : "media_type=eq.comic")}&order=${isAscending ? "id.asc" : "id.desc"}`;
-        const fbRes = await fetch(safeFallbackUrl, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        const errText = await spRes.text();
+        return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: errText }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
-        if (fbRes.ok) {
-          spRes = fbRes;
-        } else {
-          const errText = await spRes.text();
-          return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: errText }), {
-            status: 500,
-            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
-          });
+      }
+
+      // Obtener el conteo real exacto mediante cabecera Content-Range
+      const contentRange = spRes.headers.get("content-range");
+      let totalCount = estimatedTotal;
+      if (contentRange && contentRange.includes("/")) {
+        const parsedTotal = parseInt(contentRange.split("/")[1], 10);
+        if (!isNaN(parsedTotal) && parsedTotal >= 0) {
+          totalCount = parsedTotal;
         }
       }
 
       let rawItems = await spRes.json();
-      if (isAscending && Array.isArray(rawItems)) {
-        rawItems.reverse();
-      }
-      // Filtro defensivo estricto: descartar permanentemente ítems con 0 páginas en cómics o galerías
-      const validRawItems = (rawItems || []).filter(it => {
-        if (!it) return false;
-        if (it.media_type === "comic" || it.media_type === "gallery") {
-          return it.page_count && it.page_count > 0;
-        }
-        return true;
-      });
-      const items = validRawItems.map(it => ({
+      const items = (rawItems || []).map(it => ({
         id: it.id,
         source: it.source || "velvet",
         source_id: it.source_id ? String(it.source_id) : String(it.id),
@@ -1330,19 +1261,21 @@ export async function onRequest(context) {
         has_cover: !!it.cover_url
       }));
 
+      const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
       const responsePayload = {
         items,
-        total: estimatedTotal,
+        total: totalCount,
         page: safePage,
         page_size: pageSize,
-        total_pages: Math.ceil(estimatedTotal / pageSize),
+        total_pages: totalPages,
         live: false
       };
 
       const jsonStr = JSON.stringify(responsePayload);
       setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
 
-      const resp = new Response(jsonStr, {
+      const resp = new Response(method === "HEAD" ? null : jsonStr, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",

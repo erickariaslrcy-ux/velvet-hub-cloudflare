@@ -5035,8 +5035,9 @@
     }
 
     // CARGA EN TIEMPO REAL DIRECTO DE LOS SERVIDORES
-
     let _isLoadingMore = false;
+    let _isLoadingFeed = false;
+    let _catalogAbortController = null;
     let _feedObserver = null;
 
     function updateInfiniteScrollUI(currentPage, totalPages, loadedCount, totalCount) {
@@ -5113,6 +5114,12 @@
 
       _isLoadingMore = true;
 
+      if (_catalogAbortController) {
+        try { _catalogAbortController.abort(); } catch (e) {}
+      }
+      _catalogAbortController = new AbortController();
+      const signal = _catalogAbortController.signal;
+
       // Actualizar indicadores visuales de carga inmediata
       const orbText = document.getElementById('velvet-orb-text');
       const orbIcon = document.getElementById('velvet-orb-icon');
@@ -5129,7 +5136,7 @@
       const grid = document.getElementById('comics-grid');
 
       try {
-        const cacheKey = `${state.mode}:${state.category}:${nextPage}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
+        const cacheKey = `${state.mode}:${state.category}:${state.tag || ''}:${nextPage}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
         let data = null;
 
         if (CLIENT_CACHE.has(cacheKey)) {
@@ -5155,9 +5162,10 @@
             if (state.feedSeed) params.append('seed', String(state.feedSeed));
             if (state.category && state.category !== 'all') params.append('category', state.category);
           }
+          if (state.tag) params.append('tag', state.tag);
           if (state.query) params.append('q', state.query);
 
-          const resp = await fetch(`/api/items?${params.toString()}`, { credentials: 'omit' });
+          const resp = await fetch(`/api/items?${params.toString()}`, { signal, credentials: 'omit' });
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           data = await resp.json();
           CLIENT_CACHE.set(cacheKey, { ts: Date.now(), data });
@@ -5185,8 +5193,6 @@
             grid.style.opacity = '1';
             grid.style.transform = 'none';
           }
-
-
         } else {
           const endEl = document.getElementById('infinite-end-reached');
           if (endEl) endEl.classList.remove('hidden');
@@ -5194,6 +5200,7 @@
           if (btnCont) btnCont.classList.add('hidden');
         }
       } catch (err) {
+        if (err.name === 'AbortError') return;
         console.error('[PAGE TRANSITION ERROR]:', err);
         showToast('Reintentando sincronización de catálogo...', 'info');
       } finally {
@@ -5353,19 +5360,27 @@
     }
 
     // CARGA EN TIEMPO REAL DIRECTO CON CACHE LOCAL INSTANTÁNEO (0ms)
-
     async function fetchLiveFeed(skipCache = false) {
+      if (_isLoadingFeed) return;
+      _isLoadingFeed = true;
+
+      if (_catalogAbortController) {
+        try { _catalogAbortController.abort(); } catch (e) {}
+      }
+      _catalogAbortController = new AbortController();
+      const signal = _catalogAbortController.signal;
+
       if (typeof getAdaptivePageSize === 'function') {
         state.pageSize = getAdaptivePageSize();
       }
 
-      const cacheKey = `${state.mode}:${state.category}:${state.page}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
+      const cacheKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
 
       // 1. Si existe en Cache del Cliente en memoria, renderizar inmediatamente (0ms)
       if (!skipCache && CLIENT_CACHE.has(cacheKey)) {
+        _isLoadingFeed = false;
         const cached = CLIENT_CACHE.get(cacheKey);
         renderFeedData(cached.data);
-
         return;
       }
 
@@ -5376,9 +5391,9 @@
           if (stored) {
             const parsed = JSON.parse(stored);
             if (parsed && parsed.data && parsed.data.items && parsed.data.items.length > 0) {
+              _isLoadingFeed = false;
               CLIENT_CACHE.set(cacheKey, parsed);
               renderFeedData(parsed.data);
-
               return;
             }
           }
@@ -5388,25 +5403,17 @@
       renderSkeletons();
 
       const grid = document.getElementById('comics-grid');
-
       const empty = document.getElementById('empty-state');
-
       const resCount = document.getElementById('results-count');
 
       resCount.textContent = 'Actualizando catálogo...';
 
       try {
-
         const params = new URLSearchParams({
-
           page: state.page,
-
           page_size: state.pageSize,
-
           sort: state.sort,
-
           live: 'true'
-
         });
 
         if (state.mode === 'videos') {
@@ -5429,16 +5436,14 @@
           }
         }
 
+        if (state.tag) params.append('tag', state.tag);
         if (state.query) params.append('q', state.query);
 
-        const resp = await fetch(`/api/items?${params.toString()}`, { credentials: 'omit' });
+        const resp = await fetch(`/api/items?${params.toString()}`, { signal, credentials: 'omit' });
 
         if (!resp.ok) {
-
           const errDetail = await resp.text();
-
           throw new Error(`Servidor respondio con codigo ${resp.status}: ${errDetail}`);
-
         }
 
         const data = await resp.json();
@@ -5454,16 +5459,12 @@
           sessionStorage.setItem('vcache_' + cacheKey, cachedJson);
         } catch (e) {}
 
-
-
         renderFeedData(data);
-
       } catch (err) {
-
+        if (err.name === 'AbortError') return;
         console.error('[ERROR FETCH LIVE FEED]:', err);
 
         grid.classList.add('hidden');
-
         empty.classList.remove('hidden');
 
         const emptyTitle = empty.querySelector('h3');
@@ -5484,9 +5485,9 @@
         }
 
         showToast('Error cargando contenido: ' + (err.message || 'Servidores ocupados'), 'error');
-
+      } finally {
+        _isLoadingFeed = false;
       }
-
     }
 
     function renderSkeletons() {

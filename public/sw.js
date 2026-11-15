@@ -1,5 +1,5 @@
-// Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v10)
-const CACHE_VERSION = 'v10-velvet-turbo';
+// Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v11)
+const CACHE_VERSION = 'v11-velvet-turbo';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -63,8 +63,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // 1. Exclusiones críticas: streaming de video, range requests, auth, admin, APIs privadas
+  // 1. Exclusiones críticas: streaming de video, range requests, auth, admin, APIs privadas y catálogo paginado
   if (
+    url.pathname.startsWith('/api/items') ||
     url.pathname.startsWith('/api/video/stream') ||
     url.pathname.startsWith('/api/auth') ||
     url.pathname.startsWith('/api/admin') ||
@@ -171,8 +172,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 5. Catálogo de Datos (/api/items, /api/tags): Stale-While-Revalidate
-  const isCatalogApi = url.pathname.startsWith('/api/items') || url.pathname.startsWith('/api/tags');
+  // 5. Catálogo de Etiquetas (/api/tags): Stale-While-Revalidate (catálogo /api/items pasa directo a red/borde)
+  const isCatalogApi = url.pathname.startsWith('/api/tags');
   if (isCatalogApi) {
     event.respondWith(
       caches.open(API_CACHE).then(async (cache) => {
