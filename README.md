@@ -76,8 +76,16 @@ Configura las siguientes variables en el panel de **Cloudflare Pages** (Settings
    ```
 3. Ejecuta la suite de verificación automatizada:
    ```powershell
+   npm test
+   # o alternativamente:
    npm run check
    ```
+   Esta suite ejecuta en secuencia:
+   - `test/test_pagination.mjs`: Monotonicidad de offsets, cálculo de páginas y exclusión en SW.
+   - `test/test_security.mjs`: Ausencia de secretos, tokens HMAC-SHA256, Anti-SSRF y cabeceras CORS.
+   - `test/test_database.mjs`: Integridad de scripts SQL (RLS, índices concurrentes, LQIP) y sync seguro.
+   - `test/test_performance.mjs`: Viewport dinámico `100dvh`, áreas seguras y lazy loader adaptativo.
+   - `test/test_quality_suite.mjs`: Atajos de teclado en visor y reproductor, atributos ARIA y ordenamiento estable.
 4. Inicia el servidor de desarrollo local de Cloudflare Pages:
    ```powershell
    npm run dev

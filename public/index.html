@@ -2264,23 +2264,23 @@
                 <div class="flex items-center justify-between text-white text-xs sm:text-sm">
                   <!-- Izquierda -->
                   <div class="flex items-center gap-1.5 sm:gap-2.5">
-                    <button id="video-btn-play" onclick="toggleVideoPlay(event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white hover:text-[#ff2d95] transition-colors cursor-pointer" title="Reproducir / Pausar (Espacio)">
+                    <button id="video-btn-play" onclick="toggleVideoPlay(event)" aria-label="Reproducir o pausar video" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white hover:text-[#ff2d95] transition-colors cursor-pointer" title="Reproducir / Pausar (Espacio)">
                       <i class="fa-solid fa-play" id="video-play-icon"></i>
                     </button>
 
-                    <button onclick="skipVideo(-10, event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer text-xs" title="Retroceder 10s (J)">
+                    <button onclick="skipVideo(-10, event)" aria-label="Retroceder 10 segundos" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer text-xs" title="Retroceder 10s (J)">
                       <i class="fa-solid fa-rotate-left"></i>
                     </button>
-                    <button onclick="skipVideo(10, event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer text-xs" title="Adelantar 10s (L)">
+                    <button onclick="skipVideo(10, event)" aria-label="Adelantar 10 segundos" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer text-xs" title="Adelantar 10s (L)">
                       <i class="fa-solid fa-rotate-right"></i>
                     </button>
 
                     <!-- Volumen & Slider -->
                     <div class="flex items-center gap-1 group/vol" onclick="event.stopPropagation()">
-                      <button id="video-btn-vol" onclick="toggleVideoMute(event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer" title="Silenciar (M)">
+                      <button id="video-btn-vol" onclick="toggleVideoMute(event)" aria-label="Silenciar o activar sonido" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer" title="Silenciar (M)">
                         <i id="video-vol-icon" class="fa-solid fa-volume-high text-xs"></i>
                       </button>
-                      <input id="video-vol-slider" type="range" min="0" max="1" step="0.05" value="1" oninput="setVideoVolume(this.value, event)" onclick="event.stopPropagation()" class="hidden sm:block w-14 sm:w-18 h-1 accent-[#ff2d95] bg-white/20 rounded-lg cursor-pointer transition-all opacity-70 hover:opacity-100" title="Ajustar volumen">
+                      <input id="video-vol-slider" type="range" min="0" max="1" step="0.05" value="1" oninput="setVideoVolume(this.value, event)" onclick="event.stopPropagation()" aria-label="Control deslizante de volumen" class="hidden sm:block w-14 sm:w-18 h-1 accent-[#ff2d95] bg-white/20 rounded-lg cursor-pointer transition-all opacity-70 hover:opacity-100" title="Ajustar volumen">
                     </div>
 
                     <!-- Contador de Tiempo -->
@@ -2292,27 +2292,27 @@
                   <!-- Derecha -->
                   <div class="flex items-center gap-1 sm:gap-1.5">
                     <!-- Calidad -->
-                    <button id="video-btn-quality" onclick="toggleQualityMenu(event)" class="px-2 py-1 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-[11px] font-semibold text-white/90 border border-white/10 transition-all flex items-center gap-1 cursor-pointer" title="Calidad">
+                    <button id="video-btn-quality" onclick="toggleQualityMenu(event)" aria-label="Seleccionar calidad de reproducción" class="px-2 py-1 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-[11px] font-semibold text-white/90 border border-white/10 transition-all flex items-center gap-1 cursor-pointer" title="Calidad">
                       <span id="video-quality-label">1080p</span>
                     </button>
 
                     <!-- Velocidad -->
-                    <button id="video-btn-speed" onclick="toggleSpeedMenu(event)" class="px-2 py-1 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-[11px] font-semibold text-white/90 border border-white/10 transition-all flex items-center gap-1 cursor-pointer" title="Velocidad">
+                    <button id="video-btn-speed" onclick="toggleSpeedMenu(event)" aria-label="Seleccionar velocidad de reproducción" class="px-2 py-1 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] text-[11px] font-semibold text-white/90 border border-white/10 transition-all flex items-center gap-1 cursor-pointer" title="Velocidad">
                       <span id="video-speed-label">1x</span>
                     </button>
 
                     <!-- PiP -->
-                    <button onclick="toggleVideoPiP(event)" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo PiP (P)">
+                    <button onclick="toggleVideoPiP(event)" aria-label="Modo pantalla flotante Picture-in-Picture" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo PiP (P)">
                       <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                     </button>
 
                     <!-- Modo Teatro -->
-                    <button id="video-btn-theater" onclick="toggleTheaterMode(event)" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo Cine (T)">
+                    <button id="video-btn-theater" onclick="toggleTheaterMode(event)" aria-label="Alternar modo cine y teatro" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo Cine (T)">
                       <i class="fa-solid fa-film text-xs"></i>
                     </button>
 
                     <!-- Pantalla Completa -->
-                    <button id="video-btn-fullscreen" onclick="toggleVideoFullscreen(event)" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Pantalla completa (F)">
+                    <button id="video-btn-fullscreen" onclick="toggleVideoFullscreen(event)" aria-label="Alternar pantalla completa" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Pantalla completa (F)">
                       <i id="video-fullscreen-icon" class="fa-solid fa-expand text-xs"></i>
                     </button>
                   </div>
@@ -2443,7 +2443,7 @@
 
       <div class="flex items-center gap-3 overflow-hidden min-w-0">
 
-        <button onclick="closeReader()" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-ink flex items-center justify-center transition-colors border border-neon/30 shrink-0">
+        <button onclick="closeReader()" aria-label="Cerrar lector y volver al catálogo" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-ink flex items-center justify-center transition-colors border border-neon/30 shrink-0">
 
           <i class="fa-solid fa-arrow-left"></i>
 
@@ -2459,7 +2459,7 @@
 
             <span id="reader-meta"></span>
 
-            <select id="reader-chapter-select" onchange="changeReaderChapter(this.value)" class="hidden bg-pitch text-lav border border-neon/30 rounded-lg px-2 py-0.5 text-[10px] font-semibold focus:outline-none focus:border-hot">
+            <select id="reader-chapter-select" onchange="changeReaderChapter(this.value)" aria-label="Seleccionar capítulo" class="hidden bg-pitch text-lav border border-neon/30 rounded-lg px-2 py-0.5 text-[10px] font-semibold focus:outline-none focus:border-hot">
 
             </select>
 
@@ -2473,13 +2473,13 @@
 
       <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
-        <button id="reader-fav-btn" onclick="toggleCurrentItemFavorite()" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Guardar">
+        <button id="reader-fav-btn" onclick="toggleCurrentItemFavorite()" aria-label="Guardar en favoritos" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Guardar">
 
           <i class="fa-regular fa-heart" id="reader-fav-icon"></i>
 
         </button>
 
-        <button onclick="toggleReaderMode()" id="reader-mode-btn" class="px-3 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav hover:text-ink text-xs font-semibold flex items-center gap-1.5 border border-neon/30">
+        <button onclick="toggleReaderMode()" id="reader-mode-btn" aria-label="Alternar modo de lectura Cascada o Diapositiva" class="px-3 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav hover:text-ink text-xs font-semibold flex items-center gap-1.5 border border-neon/30">
 
           <i class="fa-solid fa-scroll text-hot" id="reader-mode-icon"></i>
 
@@ -2487,7 +2487,7 @@
 
         </button>
         <!-- Auto-scroll directo en la barra superior -->
-        <button id="reader-top-autoscroll-btn" onclick="toggleAutoScroll()" class="px-2.5 sm:px-3 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav hover:text-white text-xs font-bold flex items-center gap-1.5 border border-neon/30 transition-all cursor-pointer" title="Bajar solo automáticamente (Auto-Scroll)">
+        <button id="reader-top-autoscroll-btn" onclick="toggleAutoScroll()" aria-label="Alternar desplazamiento automático de página" class="px-2.5 sm:px-3 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav hover:text-white text-xs font-bold flex items-center gap-1.5 border border-neon/30 transition-all cursor-pointer" title="Bajar solo automáticamente (Auto-Scroll)">
           <i class="fa-solid fa-play text-hot" id="top-autoscroll-icon"></i>
           <span class="hidden md:inline" id="top-autoscroll-text">Auto-Scroll</span>
         </button>
@@ -2495,24 +2495,24 @@
 
         <!-- Controles de Zoom para PC y Móviles -->
         <div class="flex items-center gap-1 bg-glass border border-neon/30 rounded-xl px-1.5 py-1">
-          <button onclick="changeReaderZoom(-0.25)" class="w-7 h-7 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors" title="Reducir Zoom (-)">
+          <button onclick="changeReaderZoom(-0.25)" aria-label="Reducir zoom" class="w-7 h-7 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors" title="Reducir Zoom (-)">
             <i class="fa-solid fa-minus"></i>
           </button>
-          <button onclick="resetReaderZoom()" id="reader-zoom-btn" class="px-2 h-7 rounded-lg text-[11px] font-black tabular-nums text-hot hover:text-white transition-colors" title="Restablecer Zoom (100%)">
+          <button onclick="resetReaderZoom()" id="reader-zoom-btn" aria-label="Restablecer zoom al 100%" class="px-2 h-7 rounded-lg text-[11px] font-black tabular-nums text-hot hover:text-white transition-colors" title="Restablecer Zoom (100%)">
             100%
           </button>
-          <button onclick="changeReaderZoom(0.25)" class="w-7 h-7 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors" title="Aumentar Zoom (+)">
+          <button onclick="changeReaderZoom(0.25)" aria-label="Aumentar zoom" class="w-7 h-7 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors" title="Aumentar Zoom (+)">
             <i class="fa-solid fa-plus"></i>
           </button>
         </div>
 
-        <button onclick="toggleFullScreen()" class="w-9 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Pantalla Completa">
+        <button onclick="toggleFullScreen()" aria-label="Alternar pantalla completa" class="w-9 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Pantalla Completa">
 
           <i class="fa-solid fa-expand text-xs"></i>
 
         </button>
 
-        <button onclick="closeReader()" class="w-9 h-9 rounded-xl bg-glass hover:bg-rose-950 text-lav hover:text-rose-300 flex items-center justify-center transition-colors border border-neon/30">
+        <button onclick="closeReader()" aria-label="Cerrar lector" class="w-9 h-9 rounded-xl bg-glass hover:bg-rose-950 text-lav hover:text-rose-300 flex items-center justify-center transition-colors border border-neon/30">
 
           <i class="fa-solid fa-xmark text-sm"></i>
 
@@ -8156,34 +8156,89 @@
       }
 
       // Si el lector de cómics está visible
-
       if (readerModal && !readerModal.classList.contains('hidden')) {
-
-        if (e.key === 'Escape') closeReader();
-        else if (e.key === 'ArrowLeft') {
-          if (state.readerMode === 'slide') prevSlide();
-        } else if (e.key === 'ArrowRight') {
-          if (state.readerMode === 'slide') nextSlide();
-        } else if (e.key === ' ' || e.key.toLowerCase() === 'a') {
+        const rBody = document.getElementById('reader-body');
+        if (e.key === 'Escape') {
+          closeReader();
+          return;
+        }
+        if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'j') {
+          e.preventDefault();
+          if (state.readerMode === 'slide') {
+            prevSlide();
+          } else if (rBody) {
+            rBody.scrollBy({ top: -window.innerHeight * 0.75, behavior: 'smooth' });
+          }
+          return;
+        }
+        if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          if (state.readerMode === 'slide') {
+            nextSlide();
+          } else if (rBody) {
+            rBody.scrollBy({ top: window.innerHeight * 0.75, behavior: 'smooth' });
+          }
+          return;
+        }
+        if (e.key === 'PageDown') {
+          e.preventDefault();
+          if (state.readerMode === 'slide') {
+            nextSlide();
+          } else if (rBody) {
+            rBody.scrollBy({ top: window.innerHeight * 0.85, behavior: 'smooth' });
+          }
+          return;
+        }
+        if (e.key === 'PageUp') {
+          e.preventDefault();
+          if (state.readerMode === 'slide') {
+            prevSlide();
+          } else if (rBody) {
+            rBody.scrollBy({ top: -window.innerHeight * 0.85, behavior: 'smooth' });
+          }
+          return;
+        }
+        if (e.key === ' ') {
+          e.preventDefault();
+          if (state.readerMode === 'slide') {
+            nextSlide();
+          } else {
+            toggleAutoScroll();
+          }
+          return;
+        }
+        if (e.key.toLowerCase() === 'a') {
           e.preventDefault();
           toggleAutoScroll();
-        } else if (e.key === '+' || e.key === '=') {
+          return;
+        }
+        if (e.key === '+' || e.key === '=') {
           e.preventDefault();
           changeReaderZoom(0.25);
-        } else if (e.key === '-' || e.key === '_') {
+          return;
+        }
+        if (e.key === '-' || e.key === '_') {
           e.preventDefault();
           changeReaderZoom(-0.25);
-        } else if (e.key === '0') {
+          return;
+        }
+        if (e.key === '0') {
           e.preventDefault();
           resetReaderZoom();
-        } else if (e.key.toLowerCase() === 'f') {
+          return;
+        }
+        if (e.key.toLowerCase() === 'f') {
+          e.preventDefault();
           toggleFullScreen();
-        } else if (e.key.toLowerCase() === 'o') {
+          return;
+        }
+        if (e.key.toLowerCase() === 'o') {
+          e.preventDefault();
           toggleOledMode();
+          return;
         }
 
         return;
-
       }
 
       if (e.key === 'Escape') {
