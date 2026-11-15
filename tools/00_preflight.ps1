@@ -77,7 +77,7 @@ $secretPatterns = @(
     @{ Name = "Database Password String"; Pattern = 'postgres(?:ql)?:\/\/[^:]+:([^@\s]{8,})@' }
 )
 
-$excludedPaths = @("\.git\", "node_modules\", "_archivo\", "_BACKUP_", "\.env", "dist\", "\.wrangler\")
+$excludedPaths = @("\.git\", "node_modules\", "_archivo\", "_BACKUP_", "\.env", "dist\", "\.wrangler\", "\tools\")
 $filesToScan = Get-ChildItem -Recurse -File | Where-Object {
     $path = $_.FullName
     $skip = $false

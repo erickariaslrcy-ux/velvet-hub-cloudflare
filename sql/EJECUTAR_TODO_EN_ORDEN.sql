@@ -172,6 +172,14 @@ BEGIN
     OR raw_norm ~* '\m(kid|kids)\M'
     OR leet_norm ~* '\m(kid|kids)\M'
     OR raw_text ~* '\m(niñ[ao]s?|niñit[ao]s?|nenit[ao]s?)\M'
+    -- Regla fina: variantes sin tilde (nina, nino) solo se bloquean si coexisten con contexto de riesgo
+    OR (
+      raw_norm ~* '\m(nina|ninas|nino|ninos)\M'
+      AND (
+        raw_norm ~* '\m(colegiala|colegialas|escolar|escolares|estudiante|estudiantes|escuela|escuelas|primaria|pequena|pequeno|pequenas|pequenos|uniforme|uniformes|underage|menor|menores|young|teen|little|child|virgen|primeriza)\M'
+        OR leet_norm ~* '\m(colegiala|escolar|estudiante|primaria|pequena|pequeno|uniforme|menor)\M'
+      )
+    )
     OR raw_norm ~* '\m(infantil|infantiles|menor|menores|menorcitas?|menorcitos?|preadolescente|preadolescentes|prepuber|prepuberes|prepubescent|primaria|kindergarten|guarderia|colegialas? menor(es)?|criatura|criaturas|escolares? menor(es)?)\M'
     OR leet_norm ~* '\m(infantil|menor|menores|menorcitas?|preadolescente|prepuber|primaria|kindergarten|guarderia)\M'
     OR raw_norm ~* '\m(rori|rorikon|syota|syotacon|kodomo|chugakusei|shogakusei|danshi koukousei|enjo[- ]?kosai|enkou)\M'
@@ -205,6 +213,9 @@ BEGIN
   ASSERT public.normalize_leetspeak('l0l!ta') = 'lolita', 'Error en leetspeak l0l!ta';
   ASSERT public.minor_content_match('Hot Adult Teacher in High School') = false, 'Falso positivo en teacher/school';
   ASSERT public.minor_content_match('Nina Hartley Classic Performance') = false, 'Falso positivo en Nina Hartley';
+  ASSERT public.minor_content_match('Nino Nakano Cosplay Manga') = false, 'Falso positivo en Nino Nakano';
+  ASSERT public.minor_content_match('nina colegiala en uniforme') = true, 'Error al detectar nina con contexto';
+  ASSERT public.minor_content_match('niña bonita') = true, 'Error al detectar niña con tilde';
   ASSERT public.minor_content_match('Kidnapped Spy Agent Action') = false, 'Falso positivo en kidnap';
 
   RAISE NOTICE '=======================================================';

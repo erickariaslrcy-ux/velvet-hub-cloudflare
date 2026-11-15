@@ -2122,7 +2122,7 @@
     <header id="video-top-header" class="sticky top-0 z-[100] w-full bg-[#0a0610] border-b border-white/[0.08] transition-colors">
       <div class="max-w-[1760px] mx-auto px-3 sm:px-6 py-2.5 flex items-center justify-between gap-3">
         <!-- Volver -->
-        <button onclick="closeVideoPlayer()" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] hover:border-[#ff2d95]/40 text-xs font-semibold text-white/90 hover:text-white transition-all cursor-pointer group active:scale-95" title="Volver al catálogo">
+        <button data-action="video-close" onclick="closeVideoPlayer()" class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] hover:border-[#ff2d95]/40 text-xs font-semibold text-white/90 hover:text-white transition-all cursor-pointer group active:scale-95" title="Volver al catálogo">
           <i class="fa-solid fa-arrow-left text-[#ff2d95] text-xs transition-transform group-hover:-translate-x-0.5"></i>
           <span>Volver</span>
         </button>
@@ -2136,24 +2136,24 @@
         <!-- Acciones Rápidas Superior -->
         <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <!-- Interruptor de Luces / Ambilight -->
-          <button id="video-cinema-lights-btn" onclick="cycleAmbilightMode()" class="h-8 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer" title="Luces ambientales (Apagado / Suave / Vívido)">
+          <button id="video-cinema-lights-btn" data-action="video-ambilight-cycle" onclick="cycleAmbilightMode()" class="h-8 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer" title="Luces ambientales (Apagado / Suave / Vívido)">
             <i class="fa-solid fa-lightbulb text-amber-300/90" id="cinema-light-icon"></i>
             <span class="hidden sm:inline" id="cinema-light-label">Luces</span>
           </button>
 
           <!-- Atajos de Teclado (?) -->
-          <button onclick="openShortcutsModal()" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white flex items-center justify-center border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer text-xs font-mono font-bold" title="Atajos de teclado (?)">
+          <button data-action="shortcuts-open" onclick="openShortcutsModal()" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-white flex items-center justify-center border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer text-xs font-mono font-bold" title="Atajos de teclado (?)">
             ?
           </button>
 
           <!-- Compartir -->
-          <button id="video-share-btn" onclick="copyCurrentVideoUrl()" class="h-8 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer" title="Copiar enlace directo">
+          <button id="video-share-btn" data-action="video-share" onclick="copyCurrentVideoUrl()" class="h-8 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white text-xs font-medium flex items-center gap-1.5 border border-white/[0.1] hover:border-purple-500/30 transition-all cursor-pointer" title="Copiar enlace directo">
             <i class="fa-solid fa-share-nodes text-xs text-[#8b3dff]"></i>
             <span class="hidden sm:inline">Compartir</span>
           </button>
 
           <!-- Favorito / Bóveda -->
-          <button id="video-player-fav-btn" onclick="toggleCurrentVideoFavorite()" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-[#ff2d95] flex items-center justify-center border border-white/[0.1] hover:border-[#ff2d95]/40 transition-all cursor-pointer" title="Guardar en Mi Bóveda">
+          <button id="video-player-fav-btn" data-action="video-fav-toggle" onclick="toggleCurrentVideoFavorite()" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-[#ff2d95] flex items-center justify-center border border-white/[0.1] hover:border-[#ff2d95]/40 transition-all cursor-pointer" title="Guardar en Mi Bóveda">
             <i class="fa-regular fa-heart text-xs" id="video-player-fav-icon"></i>
           </button>
         </div>
@@ -2212,7 +2212,7 @@
 
               <!-- Botón Central de Play Grande (Pausado) -->
               <div id="video-center-play-btn" class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
-                <button type="button" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/85 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_30px_rgba(255,45,149,0.35)] hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
+                <button type="button" data-action="video-play-toggle" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/85 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_30px_rgba(255,45,149,0.35)] hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
                   <i class="fa-solid fa-play ml-1 drop-shadow"></i>
                 </button>
               </div>
@@ -2283,7 +2283,7 @@
 
                     <!-- Volumen & Slider -->
                     <div class="flex items-center gap-1 group/vol" onclick="event.stopPropagation()">
-                      <button id="video-btn-vol" onclick="toggleVideoMute(event)" aria-label="Silenciar o activar sonido" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer" title="Silenciar (M)">
+                      <button id="video-btn-vol" data-action="video-mute-toggle" onclick="toggleVideoMute(event)" aria-label="Silenciar o activar sonido" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors cursor-pointer" title="Silenciar (M)">
                         <i id="video-vol-icon" class="fa-solid fa-volume-high text-xs"></i>
                       </button>
                       <input id="video-vol-slider" type="range" min="0" max="1" step="0.05" value="1" oninput="setVideoVolume(this.value, event)" onclick="event.stopPropagation()" aria-label="Control deslizante de volumen" class="hidden sm:block w-14 sm:w-18 h-1 accent-[#ff2d95] bg-white/20 rounded-lg cursor-pointer transition-all opacity-70 hover:opacity-100" title="Ajustar volumen">
@@ -2308,17 +2308,17 @@
                     </button>
 
                     <!-- PiP -->
-                    <button onclick="toggleVideoPiP(event)" aria-label="Modo pantalla flotante Picture-in-Picture" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo PiP (P)">
+                    <button data-action="video-pip-toggle" onclick="toggleVideoPiP(event)" aria-label="Modo pantalla flotante Picture-in-Picture" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo PiP (P)">
                       <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                     </button>
 
                     <!-- Modo Teatro -->
-                    <button id="video-btn-theater" onclick="toggleTheaterMode(event)" aria-label="Alternar modo cine y teatro" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo Cine (T)">
+                    <button id="video-btn-theater" data-action="video-theater-toggle" onclick="toggleTheaterMode(event)" aria-label="Alternar modo cine y teatro" class="hidden sm:flex w-8 h-8 rounded-lg hover:bg-white/10 items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Modo Cine (T)">
                       <i class="fa-solid fa-film text-xs"></i>
                     </button>
 
                     <!-- Pantalla Completa -->
-                    <button id="video-btn-fullscreen" onclick="toggleVideoFullscreen(event)" aria-label="Alternar pantalla completa" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Pantalla completa (F)">
+                    <button id="video-btn-fullscreen" data-action="video-fullscreen-toggle" onclick="toggleVideoFullscreen(event)" aria-label="Alternar pantalla completa" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer" title="Pantalla completa (F)">
                       <i id="video-fullscreen-icon" class="fa-solid fa-expand text-xs"></i>
                     </button>
                   </div>
@@ -2449,7 +2449,7 @@
 
       <div class="flex items-center gap-3 overflow-hidden min-w-0">
 
-        <button onclick="closeReader()" aria-label="Cerrar lector y volver al catálogo" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-ink flex items-center justify-center transition-colors border border-neon/30 shrink-0">
+        <button data-action="reader-close" onclick="closeReader()" aria-label="Cerrar lector y volver al catálogo" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-ink flex items-center justify-center transition-colors border border-neon/30 shrink-0">
 
           <i class="fa-solid fa-arrow-left"></i>
 
@@ -2479,13 +2479,13 @@
 
       <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
-        <button id="reader-fav-btn" onclick="toggleCurrentItemFavorite()" aria-label="Guardar en favoritos" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Guardar">
+        <button id="reader-fav-btn" data-action="reader-fav-toggle" onclick="toggleCurrentItemFavorite()" aria-label="Guardar en favoritos" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Guardar">
 
           <i class="fa-regular fa-heart" id="reader-fav-icon"></i>
 
         </button>
 
-        <button onclick="toggleReaderMode()" id="reader-mode-btn" aria-label="Alternar modo de lectura Cascada o Diapositiva" class="px-3 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav hover:text-ink text-xs font-semibold flex items-center gap-1.5 border border-neon/30">
+        <button data-action="reader-mode-toggle" onclick="toggleReaderMode()" id="reader-mode-btn" aria-label="Alternar modo de lectura Cascada o Diapositiva" class="px-3 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav hover:text-ink text-xs font-semibold flex items-center gap-1.5 border border-neon/30">
 
           <i class="fa-solid fa-scroll text-hot" id="reader-mode-icon"></i>
 
@@ -2493,7 +2493,7 @@
 
         </button>
         <!-- Auto-scroll directo en la barra superior -->
-        <button id="reader-top-autoscroll-btn" onclick="toggleAutoScroll()" aria-label="Alternar desplazamiento automático de página" class="px-2.5 sm:px-3 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav hover:text-white text-xs font-bold flex items-center gap-1.5 border border-neon/30 transition-all cursor-pointer" title="Bajar solo automáticamente (Auto-Scroll)">
+        <button id="reader-top-autoscroll-btn" data-action="reader-autoscroll-toggle" onclick="toggleAutoScroll()" aria-label="Alternar desplazamiento automático de página" class="px-2.5 sm:px-3 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav hover:text-white text-xs font-bold flex items-center gap-1.5 border border-neon/30 transition-all cursor-pointer" title="Bajar solo automáticamente (Auto-Scroll)">
           <i class="fa-solid fa-play text-hot" id="top-autoscroll-icon"></i>
           <span class="hidden md:inline" id="top-autoscroll-text">Auto-Scroll</span>
         </button>
@@ -2504,7 +2504,7 @@
           <button onclick="changeReaderZoom(-0.25)" aria-label="Reducir zoom" class="w-7 h-7 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors" title="Reducir Zoom (-)">
             <i class="fa-solid fa-minus"></i>
           </button>
-          <button onclick="resetReaderZoom()" id="reader-zoom-btn" aria-label="Restablecer zoom al 100%" class="px-2 h-7 rounded-lg text-[11px] font-black tabular-nums text-hot hover:text-white transition-colors" title="Restablecer Zoom (100%)">
+          <button data-action="reader-zoom-reset" onclick="resetReaderZoom()" id="reader-zoom-btn" aria-label="Restablecer zoom al 100%" class="px-2 h-7 rounded-lg text-[11px] font-black tabular-nums text-hot hover:text-white transition-colors" title="Restablecer Zoom (100%)">
             100%
           </button>
           <button onclick="changeReaderZoom(0.25)" aria-label="Aumentar zoom" class="w-7 h-7 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors" title="Aumentar Zoom (+)">
@@ -2512,7 +2512,7 @@
           </button>
         </div>
 
-        <button onclick="toggleFullScreen()" aria-label="Alternar pantalla completa" class="w-9 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Pantalla Completa">
+        <button data-action="fullscreen-toggle" onclick="toggleFullScreen()" aria-label="Alternar pantalla completa" class="w-9 h-9 rounded-xl bg-glass hover:bg-neon/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Pantalla Completa">
 
           <i class="fa-solid fa-expand text-xs"></i>
 
@@ -2808,7 +2808,7 @@
 
       <!-- Botón Cerrar -->
 
-      <button onclick="closeAuthModal()" class="absolute top-5 right-5 w-8 h-8 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white flex items-center justify-center border border-purple-500/20 transition-colors cursor-pointer">
+      <button data-action="auth-close" onclick="closeAuthModal()" class="absolute top-5 right-5 w-8 h-8 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white flex items-center justify-center border border-purple-500/20 transition-colors cursor-pointer">
 
         <i class="fa-solid fa-xmark text-sm"></i>
 
@@ -2862,13 +2862,13 @@
 
       <div class="grid grid-cols-2 p-1 bg-purple-950/40 rounded-2xl border border-purple-500/20 my-5 gap-1">
 
-        <button id="auth-tab-login-btn" onclick="switchAuthTab('login')" class="py-2 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-hot-glow cursor-pointer">
+        <button id="auth-tab-login-btn" data-action="auth-tab-login" onclick="switchAuthTab('login')" class="py-2 rounded-xl text-xs font-black transition-all bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-hot-glow cursor-pointer">
 
           Iniciar Sesión
 
         </button>
 
-        <button id="auth-tab-register-btn" onclick="switchAuthTab('register')" class="py-2 rounded-xl text-xs font-bold text-purple-300/70 hover:text-white transition-all cursor-pointer">
+        <button id="auth-tab-register-btn" data-action="auth-tab-register" onclick="switchAuthTab('register')" class="py-2 rounded-xl text-xs font-bold text-purple-300/70 hover:text-white transition-all cursor-pointer">
 
           Registro con Llave VIP
 
@@ -12355,6 +12355,8 @@
       const el = e.target.closest('[data-action]');
       if (!el) return;
       const act = el.getAttribute('data-action');
+
+      // 1. Navegación, Búsqueda y Home
       if (act === 'fetch-random') {
         if (typeof fetchRandom === 'function') fetchRandom();
       } else if (act === 'clear-search') {
@@ -12363,7 +12365,14 @@
         if (typeof handleUserButtonClick === 'function') handleUserButtonClick();
       } else if (act === 'logout') {
         if (typeof handleLogout === 'function') handleLogout();
-      } else if (act === 'hero-prev') {
+      } else if (act === 'reset-home') {
+        if (typeof resetHome === 'function') resetHome();
+      } else if (act === 'scroll-top') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // 2. Hero Carousel
+      else if (act === 'hero-prev') {
         if (typeof prevHeroSlide === 'function') prevHeroSlide();
       } else if (act === 'hero-next') {
         if (typeof nextHeroSlide === 'function') nextHeroSlide();
@@ -12371,10 +12380,57 @@
         if (typeof openHeroComic === 'function') openHeroComic(e);
       } else if (act === 'hero-fav') {
         if (typeof toggleHeroFavorite === 'function') toggleHeroFavorite();
-      } else if (act === 'reset-home') {
-        if (typeof resetHome === 'function') resetHome();
-      } else if (act === 'scroll-top') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // 3. Lector de Cómics / Reader
+      else if (act === 'reader-close') {
+        if (typeof closeReader === 'function') closeReader();
+      } else if (act === 'reader-fav-toggle') {
+        if (typeof toggleCurrentItemFavorite === 'function') toggleCurrentItemFavorite();
+      } else if (act === 'reader-mode-toggle') {
+        if (typeof toggleReaderMode === 'function') toggleReaderMode();
+      } else if (act === 'reader-autoscroll-toggle') {
+        if (typeof toggleAutoScroll === 'function') toggleAutoScroll();
+      } else if (act === 'reader-zoom-reset') {
+        if (typeof resetReaderZoom === 'function') resetReaderZoom();
+      } else if (act === 'fullscreen-toggle') {
+        if (typeof toggleFullScreen === 'function') toggleFullScreen();
+      }
+
+      // 4. Reproductor de Video
+      else if (act === 'video-close') {
+        if (typeof closeVideoPlayer === 'function') closeVideoPlayer();
+      } else if (act === 'video-play-toggle') {
+        if (typeof toggleVideoPlay === 'function') toggleVideoPlay();
+      } else if (act === 'video-mute-toggle') {
+        if (typeof toggleVideoMute === 'function') toggleVideoMute(e);
+      } else if (act === 'video-pip-toggle') {
+        if (typeof toggleVideoPiP === 'function') toggleVideoPiP(e);
+      } else if (act === 'video-theater-toggle') {
+        if (typeof toggleTheaterMode === 'function') toggleTheaterMode(e);
+      } else if (act === 'video-fullscreen-toggle') {
+        if (typeof toggleVideoFullscreen === 'function') toggleVideoFullscreen(e);
+      } else if (act === 'video-ambilight-cycle') {
+        if (typeof cycleAmbilightMode === 'function') cycleAmbilightMode();
+      } else if (act === 'video-share') {
+        if (typeof copyCurrentVideoUrl === 'function') copyCurrentVideoUrl();
+      } else if (act === 'video-fav-toggle') {
+        if (typeof toggleCurrentVideoFavorite === 'function') toggleCurrentVideoFavorite();
+      }
+
+      // 5. Modales y Verificación de Edad
+      else if (act === 'age-confirm') {
+        if (typeof window.VelvetConfirmAge === 'function') window.VelvetConfirmAge(true);
+      } else if (act === 'auth-tab-login') {
+        if (typeof switchAuthTab === 'function') switchAuthTab('login');
+      } else if (act === 'auth-tab-register') {
+        if (typeof switchAuthTab === 'function') switchAuthTab('register');
+      } else if (act === 'auth-close') {
+        if (typeof closeAuthModal === 'function') closeAuthModal();
+      } else if (act === 'shortcuts-open') {
+        if (typeof openShortcutsModal === 'function') openShortcutsModal();
+      } else if (act === 'shortcuts-close') {
+        if (typeof closeShortcutsModal === 'function') closeShortcutsModal();
       }
     });
 
@@ -12395,7 +12451,7 @@
         Este portal contiene material explícito para adultos sin censura. Al continuar, certificas bajo juramento que tienes al menos 18 años o la mayoría de edad en tu país.
       </p>
       <div class="w-full space-y-2.5">
-        <button type="button" onclick="window.VelvetConfirmAge(true)" class="w-full py-3 rounded-2xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(255,45,149,0.4)] transition-all cursor-pointer">
+        <button type="button" data-action="age-confirm" onclick="window.VelvetConfirmAge(true)" class="w-full py-3 rounded-2xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(255,45,149,0.4)] transition-all cursor-pointer">
           Soy mayor de 18 años &bull; Ingresar
         </button>
         <a href="https://www.google.com" rel="noopener noreferrer" class="block w-full py-2.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-lav/60 hover:text-white text-xs font-semibold transition-all">

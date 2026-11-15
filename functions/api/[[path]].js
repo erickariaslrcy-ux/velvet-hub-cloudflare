@@ -401,6 +401,29 @@ export async function onRequest(context) {
   const MEDIA_SECRET = env.MEDIA_SECRET || "";
   _activeMediaSecret = MEDIA_SECRET;
 
+  // Verificación defensiva de arranque de variables de entorno (CERO valores expuestos)
+  const REQUIRED_ENV_KEYS = [
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "MEDIA_SECRET"
+  ];
+  const OPTIONAL_ENV_KEYS = [
+    "ENVIRONMENT",
+    "POSTGREST_COUNT_MODE",
+    "ENABLE_PMVHAVEN_LIVE",
+    "PATREON_CLIENT_ID",
+    "PATREON_CLIENT_SECRET",
+    "PATREON_CAMPAIGN_ID"
+  ];
+  const missingRequired = REQUIRED_ENV_KEYS.filter(k => !env[k] && !env[`NEXT_PUBLIC_${k}`]);
+  const missingOptional = OPTIONAL_ENV_KEYS.filter(k => !env[k]);
+  const configuredKeys = [...REQUIRED_ENV_KEYS, ...OPTIONAL_ENV_KEYS].filter(k => !!(env[k] || env[`NEXT_PUBLIC_${k}`]));
+
+  if (missingRequired.length > 0) {
+    console.warn(`[Velvet-Startup] Variables de entorno críticas ausentes: ${missingRequired.join(", ")}`);
+  }
+
   // Helper local con inyección de secreto para firmar tokens sin exponer nada al cliente
   const encodeToken = async (targetUrl, referer = "") => await encodeMediaToken(targetUrl, referer, MEDIA_SECRET);
 
@@ -428,7 +451,13 @@ export async function onRequest(context) {
       commit: "fix/auditoria-completa",
       env: env.ENVIRONMENT || "production",
       engine: "Cloudflare-Pages-Functions",
-      build_time: "2026-11-15T12:00:00Z"
+      build_time: "2026-11-15T12:00:00Z",
+      env_check: {
+        all_required_set: missingRequired.length === 0,
+        missing_required: missingRequired,
+        missing_optional: missingOptional,
+        configured_count: configuredKeys.length
+      }
     };
     return new Response(method === "HEAD" ? null : JSON.stringify(versionPayload), {
       status: 200,

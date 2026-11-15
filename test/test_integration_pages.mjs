@@ -106,9 +106,22 @@ async function runIntegrationSuite() {
   const mockEnv = {
     SUPABASE_URL: `http://127.0.0.1:${serverPort}`,
     SUPABASE_ANON_KEY: "mock_anon_key_for_test",
+    SUPABASE_SERVICE_ROLE_KEY: "mock_service_role_key_for_test",
     MEDIA_SECRET: MEDIA_SECRET,
     ENABLE_PMVHAVEN_LIVE: "false"
   };
+
+  // Test 0: Verificación de /api/version y auditoría de variables de entorno de arranque
+  const verReq = new Request("https://morbohub.pages.dev/api/version", {
+    headers: { "origin": "https://morbohub.pages.dev" }
+  });
+  const verRes = await onRequest({ request: verReq, env: mockEnv, params: {}, waitUntil: () => {} });
+  assert.equal(verRes.status, 200, "/api/version debe responder 200 OK");
+  const verData = await verRes.json();
+  assert.equal(verData.commit, "fix/auditoria-completa", "Commit debe ser fix/auditoria-completa");
+  assert.ok(verData.env_check, "Debe incluir el objeto env_check en /api/version");
+  assert.equal(verData.env_check.all_required_set, true, "Todas las requeridas deben estar configuradas");
+  assert.equal(verData.env_check.missing_required.length, 0, "No debe haber variables requeridas faltantes");
 
   const mediaTypes = ["comic", "video", "gallery"];
   const pageSize = 12;

@@ -54,20 +54,31 @@ begin
     or raw_norm ~* '\m(kid|kids)\M'
     or leet_norm ~* '\m(kid|kids)\M'
 
-    -- 3. Español: Términos con 'ñ' evaluados sobre el texto crudo para NO bloquear nombres propios sin ñ (ej. Nina, Nino)
+    -- 3. Español: Términos con 'ñ' evaluados sobre el texto crudo para bloqueo incondicional
     or raw_text ~* '\m(niñ[ao]s?|niñit[ao]s?|nenit[ao]s?)\M'
 
-    -- 4. Español: términos descriptivos de minoría de edad y contexto escolar infantil
+    -- 4. REGLA CONTEXTUAL FINA: Variantes sin tilde (nina, nino, ninas, ninos).
+    -- No se bloquean aisladas (evita falsos positivos en Nina Hartley o Nino Nakano).
+    -- Se bloquean SÓLO si coexisten con términos de riesgo escolar o minoría:
+    or (
+      raw_norm ~* '\m(nina|ninas|nino|ninos)\M'
+      and (
+        raw_norm ~* '\m(colegiala|colegialas|escolar|escolares|estudiante|estudiantes|escuela|escuelas|primaria|pequena|pequeno|pequenas|pequenos|uniforme|uniformes|underage|menor|menores|young|teen|little|child|virgen|primeriza)\M'
+        or leet_norm ~* '\m(colegiala|escolar|estudiante|primaria|pequena|pequeno|uniforme|menor)\M'
+      )
+    )
+
+    -- 5. Español: términos descriptivos de minoría de edad y contexto escolar infantil
     or raw_norm ~* '\m(infantil|infantiles|menor|menores|menorcitas?|menorcitos?|preadolescente|preadolescentes|prepuber|prepuberes|prepubescent|primaria|kindergarten|guarderia|colegialas? menor(es)?|criatura|criaturas|escolares? menor(es)?)\M'
     or leet_norm ~* '\m(infantil|menor|menores|menorcitas?|preadolescente|prepuber|primaria|kindergarten|guarderia)\M'
 
-    -- 5. Japonés romaji: términos específicos de doujinshi y anime
+    -- 6. Japonés romaji: términos específicos de doujinshi y anime
     or raw_norm ~* '\m(rori|rorikon|syota|syotacon|kodomo|chugakusei|shogakusei|danshi koukousei|enjo[- ]?kosai|enkou)\M'
 
-    -- 6. Francés, Alemán y Ruso
+    -- 7. Francés, Alemán y Ruso
     or raw_norm ~* '\m(fillette|fillettes|mineure?s?|minderjahrig(e)?|schulerin|rebenok|maloletka|shkolnitsa)\M'
 
-    -- 7. Patrones numéricos de edades menores de 18 años (1 a 17 años)
+    -- 8. Patrones numéricos de edades menores de 18 años (1 a 17 años)
     or raw_norm ~* '\m([0-9]|1[0-7]) ?(anos|ano|year|years|yo|y/o|ans|jahre)\M'
     or leet_norm ~* '\m([0-9]|1[0-7]) ?(anos|ano|year|years|yo|y/o)\M'
     or raw_norm ~* '\m(under|menor de|sub|moins de) 1[0-8]\M'
