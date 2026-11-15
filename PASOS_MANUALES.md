@@ -1,178 +1,192 @@
 # GUÍA DE PASOS MANUALES OBLIGATORIOS (POST-AUDITORÍA)
 **Proyecto:** Velvet Hub / Morbohub  
 **Fecha de Auditoría:** 15 de Noviembre de 2026  
-**Objetivo:** Instrucciones paso a paso de acciones externas, rotación de credenciales, configuración en la nube y ejecución en base de datos que deben ser aplicadas manualmente por el administrador del sistema.
+**Objetivo:** Secuencia ordenada estricta y sin tiempo de inactividad (Zero-Downtime) para aplicar configuraciones externas, migraciones de base de datos, despliegues y rotación de credenciales.
+
+> [!IMPORTANT]
+> Para no interrumpir el servicio ni dejar el sitio caído para los usuarios activos, sigue los pasos en el **orden numérico exacto** descrito a continuación.
 
 ---
 
-## ÍNDICE DE PASOS
+## SECUENCIA DE EJECUCIÓN ZERO-DOWNTIME
 
-1. [PASO 1: Rotación de Secretos y Llaves en Supabase](#paso-1-rotación-de-secretos-y-llaves-en-supabase)
-2. [PASO 2: Rotación de Credenciales en Patreon Developer Portal](#paso-2-rotación-de-credenciales-en-patreon-developer-portal)
-3. [PASO 3: Configuración de Variables de Entorno en Cloudflare Pages](#paso-3-configuración-de-variables-de-entorno-en-cloudflare-pages)
-4. [PASO 4: Limpieza de Secretos en el Historial de Git](#paso-4-limpieza-de-secretos-en-el-historial-de-git)
-5. [PASO 5: Ejecución de Scripts SQL en Supabase](#paso-5-ejecución-de-scripts-sql-en-supabase)
-6. [PASO 6: Verificación de Ajustes de Build en Cloudflare Pages](#paso-6-verificación-de-ajustes-de-build-en-cloudflare-pages)
-7. [PASO 7: Despliegue y Purga de Caché de Borde](#paso-7-despliegue-y-purga-de-caché-de-borde)
-
----
-
-## PASO 1: Rotación de Secretos y Llaves en Supabase
-
-> [!CAUTION]
-> Debido a que las claves de Supabase (`anon` y `service_role`) estuvieron expuestas en el código fuente histórico antes de esta auditoría, **DEBEN ser invalidadas y regeneradas inmediatamente**.
-
-1. Inicia sesión en tu cuenta de **[Supabase](https://supabase.com/dashboard)**.
-2. Selecciona tu proyecto (`morbohub` / `velvet`).
-3. Ve a **Project Settings** (icono de engranaje en la barra lateral) > **API**.
-4. En la sección **JWT Settings**:
-   - Localiza la opción **JWT Secret**.
-   - Haz clic en **Generate new secret** o ingresa una cadena aleatoria segura de 64 caracteres.
-   - Haz clic en **Apply changes**.
-   *(Esto invalidará automáticamente todas las claves `anon` y `service_role` previamente emitidas y cerrará las sesiones activas comprometidas).*
-5. Copia los nuevos valores generados:
-   - **Project URL** (ejemplo: `https://xxxxxxxxxxxxxxxxxxxx.supabase.co`)
-   - **`anon` `public` key**
-   - **`service_role` `secret` key** (guárdala en un gestor seguro como 1Password o Bitwarden; nunca la compartas).
+```mermaid
+flowchart TD
+    S1["1. Revocar Personal Access Token de GitHub"] --> S2["2. Aplicar SQL 03, 04, 05 y 01 en Supabase (con prueba anon)"]
+    S2 --> S3["3. Subir rama fix/auditoria-completa y verificar en Preview"]
+    S3 --> S4["4. Configurar variables en Cloudflare Production, Merge y Deploy"]
+    S4 --> S5["5. Purgar Caché Global en Cloudflare Edge"]
+    S5 --> S6["6. Rotar Claves (Supabase JWT/Service Role y MEDIA_SECRET)"]
+    S6 --> S7["7. Auditar y Activar Trigger de Protección a Menores (SQL 02)"]
+    S7 --> S8["8. Limpieza de Secretos en el Historial de Git (git-filter-repo)"]
+```
 
 ---
 
-## PASO 2: Rotación de Credenciales en Patreon Developer Portal
-
-Si utilizas la integración de Patreon para membresías VIP:
-
-1. Ingresa a **[Patreon Developer Portal](https://www.patreon.com/portal/registration/register-clients)**.
-2. Localiza tu cliente registrado para Morbohub / Velvet Hub.
-3. Haz clic en **Regenerate Client Secret**.
-4. Copia el nuevo `PATREON_CLIENT_SECRET`.
-5. Confirma que la **Redirect URI** esté apuntando a la URL canónica de producción:
-   `https://morbohub.pages.dev/api/auth/patreon/callback`
+### PASO 1: Revocar Token Personal de GitHub
+Debido a que un token personal de GitHub (`github_pat_*`) estuvo expuesto en los scripts de sincronización antes de la auditoría:
+1. Inicia sesión en **[GitHub](https://github.com/settings/tokens)**.
+2. Ve a **Settings** > **Developer settings** > **Personal access tokens** > **Fine-grained tokens** (o **Tokens (classic)**).
+3. Localiza el token comprometido y haz clic en **Revoke** / **Delete**.
+4. Si requieres acceso CLI automatizado para scrapers o backups, genera un nuevo token con permisos mínimos estrictos (solo lectura sobre el repositorio específico) y almacénalo exclusivamente en un gestor de secretos o variable de entorno de tu máquina local.
 
 ---
 
-## PASO 3: Configuración de Variables de Entorno en Cloudflare Pages
+### PASO 2: Aplicar Migraciones SQL en Supabase (03, 04, 05 y 01)
+Abre el **SQL Editor** en el panel de control de Supabase (`https://supabase.com/dashboard/project/_/sql`). Ejecuta estos scripts en el orden indicado:
 
-1. Inicia sesión en el **[Cloudflare Dashboard](https://dash.cloudflare.com/)**.
-2. Ve a **Workers & Pages** > Selecciona tu proyecto **`morbohub`**.
-3. Dirígete a **Settings** > **Environment variables**.
-4. En la sección **Production** (y también en Preview si pruebas ramas), haz clic en **Add variables** o **Edit variables** y configura exactamente la siguiente lista:
+#### A. `sql/03_data_integrity_audit.sql` (Auditoría de solo lectura)
+- **Ejecución:** Copia y corre el script.
+- **Propósito:** Audita el estado actual sin modificar datos: detecta discrepancias en `page_count`, portadas vacías y duplicados.
 
-| Nombre de la Variable | Valor a Configurar | Tipo / Cifrado |
-| :--- | :--- | :--- |
-| `SUPABASE_URL` | La URL de tu proyecto de Supabase (`https://xxxx.supabase.co`) | Plaintext |
-| `SUPABASE_ANON_KEY` | La nueva clave pública `anon` regenerada en el Paso 1 | Plaintext |
-| `SUPABASE_SERVICE_ROLE_KEY` | La nueva clave privada `service_role` regenerada en el Paso 1 | **Secret (Encrypt)** |
-| `MEDIA_SECRET` | Genera una cadena aleatoria criptográfica de mínimo 32 caracteres (ejemplo generado con `openssl rand -hex 32`) | **Secret (Encrypt)** |
-| `PATREON_CLIENT_ID` | Identificador de cliente obtenido en Patreon | Plaintext |
-| `PATREON_CLIENT_SECRET` | El nuevo secreto regenerado en el Paso 2 | **Secret (Encrypt)** |
-| `PATREON_CAMPAIGN_ID` | ID numérico de tu campaña de Patreon | Plaintext |
-| `MASTER_EMAIL` | Correo del administrador de la plataforma | Plaintext |
+#### B. `sql/04_indexes.sql` (Índices concurrentes de alto rendimiento)
+- **Ejecución:** Copia y corre el script.
+- **Propósito:** Crea índices parciales `CONCURRENTLY` sobre `(media_type, id DESC)`, tags GIN y búsqueda trigrama.
+- **Garantía:** `CONCURRENTLY` previene cualquier bloqueo de tablas en producción.
 
-5. Haz clic en **Save** para persistir las variables en el entorno de ejecución de Cloudflare Pages Functions.
+#### C. `sql/05_thumbnails_lqip.sql` (Miniaturas LQIP no bloqueantes)
+- **Ejecución:** Copia y corre el script.
+- **Propósito:** Añade las columnas `thumb_color` y `thumb_lqip` con `DEFAULT NULL` (operación instantánea O(1) sin downtime).
+
+#### D. `sql/01_rls_policies.sql` (Políticas de Row Level Security y permisos de anon)
+- **Ejecución:** Copia y corre el script.
+- **Propósito:** 
+  - Revoca el acceso a la columna `url` original para el rol `anon`.
+  - Habilita RLS en `items`, `profiles`, `favorites`, `invite_keys` y `source_aliases`.
+  - Configura la vista de seguridad `public.catalog` con `cover_url`, `thumb_color` y `thumb_lqip` (sin dependencias de `auth.uid()`).
+  - Ejecuta el bloque de pruebas automáticas:
+    ```sql
+    SET LOCAL ROLE anon;
+    PERFORM id, title, cover_url, media_type FROM public.items LIMIT 1;
+    PERFORM id, title, cover_url, media_type, source_label FROM public.catalog LIMIT 1;
+    RESET ROLE;
+    ```
+  - Confirma que la consola de Supabase muestre:  
+    `NOTICE: RLS OK: El rol anon solo puede leer metadatos públicos.`
 
 ---
 
-## PASO 4: Limpieza de Secretos en el Historial de Git
+### PASO 3: Subir Rama y Probar en Preview con Claves Actuales
+Antes de tocar el entorno de producción, verifica la rama en un entorno aislado de Preview en Cloudflare Pages:
 
-> [!WARNING]
-> Aunque los secretos ya fueron eliminados del árbol de trabajo actual, permanecen legibles en los commits antiguos del historial (`f7cac1f`, `eb4af5a`, `75d2262`, `340cc8e`). Antes de hacer público el repositorio o compartir acceso, purga el historial.
-
-Se recomienda utilizar **`git-filter-repo`** (herramienta oficial recomendada por Git):
-
-1. Realiza una copia de seguridad local completa de tu carpeta antes de continuar:
-   ```powershell
-   Copy-Item -Recurse VERSION_CLOUDFLARE VERSION_CLOUDFLARE_BACKUP
+1. Sube la rama de trabajo:
+   ```bash
+   git push origin fix/auditoria-completa
    ```
-2. Instala `git-filter-repo` (requiere Python 3):
-   ```powershell
-   pip install git-filter-repo
-   ```
-3. Crea un archivo `expressions.txt` con los patrones exactos de las claves antiguas que deseas reemplazar por `REDACTED`:
-   ```text
-   regex:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+==>REDACTED_TOKEN
-   ```
-4. Ejecuta el filtro en tu repositorio:
-   ```powershell
-   git filter-repo --replace-text expressions.txt --force
-   ```
-5. Si deseas purgar archivos históricos que ya no deben existir (como viejos archivos `.env` o bases de datos):
-   ```powershell
-   git filter-repo --invert-paths --path .env --path .env.local --force
-   ```
-6. Si tienes un remoto configurado en GitHub/GitLab:
-   ```powershell
-   git remote add origin <URL_DE_TU_REPOSITORIO>
-   git push origin fix/auditoria-completa --force
-   ```
+2. Cloudflare Pages generará una URL de Preview (ejemplo: `https://<hash>.morbohub.pages.dev`).
+3. Comprueba en la vista previa:
+   - Navegación al catálogo (`/`): la página 1 y la página 2 cargan el número completo de cómics sin duplicados ni cortes.
+   - Detalle de cómic: el visor carga imágenes a través de `/api/media?t=...` sin errores de token.
+   - Detalle de video: el reproductor HLS carga video sin violaciones CSP.
+   - Consola del navegador (F12): CERO advertencias de Content Security Policy (CSP).
 
 ---
 
-## PASO 5: Ejecución de Scripts SQL en Supabase
-
-Abre el **SQL Editor** en el panel de control de Supabase (`https://supabase.com/dashboard/project/_/sql`). Ejecuta los archivos de la carpeta `sql/` **en el orden estricto indicado a continuación**:
-
-### 1. `sql/01_rls_policies.sql` (Políticas de Seguridad a Nivel de Fila)
-- **Qué hace:** Activa `ROW LEVEL SECURITY` en `public.items`, `profiles`, `favorites`, `invite_keys` y `source_aliases`.
-- **Efecto:** Bloquea accesos no autorizados, protege las claves de invitación, asegura que los usuarios solo vean sus propios favoritos y restringe la visibilidad de contenidos bloqueados.
-- **Instrucción:** Pega el contenido completo del archivo en el SQL Editor y presiona **Run**.
-
-### 2. `sql/02_minor_protection_audit.sql` (Protección Estricta de Menores y Triggers)
-- **Qué hace:** Audita si existen registros con palabras clave de riesgo, normaliza términos prohibidos y crea un trigger `trg_prevent_illegal_terms` que rechaza automáticamente (`RAISE EXCEPTION`) cualquier inserción o actualización futura que contenga términos ilícitos.
-- **Instrucción:** Pega el contenido y presiona **Run**. Verifica en la pestaña de resultados que la tabla de auditoría reporte `0` registros de riesgo.
-
-### 3. `sql/03_data_integrity_audit.sql` (Auditoría de Integridad de Catálogo - Solo Lectura)
-- **Qué hace:** Es un script 100% de solo lectura (`SELECT`). Detecta cómics con 0 páginas, portadas caídas o vacías, duplicados y desajustes de conteo.
-- **Instrucción:** Pega el contenido y presiona **Run**. Revisa los resultados para identificar qué ítems requieren enriquecimiento o re-escaneo con los scrapers.
-
-### 4. `sql/04_indexes.sql` (Índices Concurrentes de Alto Rendimiento)
-- **Qué hace:** Crea índices parciales compuestos y GIN (`CONCURRENTLY IF NOT EXISTS`) para acelerar la paginación a menos de 15ms y las búsquedas trigram a menos de 50ms.
-- **Instrucción:** Pega el contenido y presiona **Run**.
-> **Nota:** La instrucción `CONCURRENTLY` garantiza que tus tablas no sufran ningún bloqueo de lectura ni escritura mientras se construyen los índices.
-
-### 5. `sql/05_thumbnails_lqip.sql` (Migración de Color Dominante y LQIP)
-- **Qué hace:** Añade de forma no bloqueante (`DEFAULT NULL`, operación O(1)) las columnas `thumb_color` y `thumb_lqip` en la tabla `public.items`.
-- **Instrucción:** Pega el contenido y presiona **Run**. Incluye la consulta de actualización por lotes en segundo plano para poblar progresivamente las miniaturas sin saturar la base de datos.
-
----
-
-## PASO 6: Verificación de Ajustes de Build en Cloudflare Pages
-
-En el dashboard de Cloudflare:
-
-1. Ve a **Workers & Pages** > **`morbohub`** > **Settings** > **Builds & deployments**.
-2. Verifica que los parámetros de compilación sean exactamente los siguientes:
+### PASO 4: Cargar Variables en Production, Merge y Deploy
+1. Inicia sesión en **[Cloudflare Dashboard](https://dash.cloudflare.com/)**.
+2. Ve a **Workers & Pages** > Proyecto **`morbohub`** > **Settings** > **Environment variables**.
+3. En la pestaña **Production**, configura las variables (utilizando aún las claves de Supabase actuales para permitir el cambio transparente de código antes de la rotación):
+   - `SUPABASE_URL`: `https://qnmcejlxoufheisgkuyo.supabase.co`
+   - `SUPABASE_ANON_KEY`: *(clave anon actual de Supabase)*
+   - `SUPABASE_SERVICE_ROLE_KEY`: *(clave service_role actual; configurar como Secret/Encrypt)*
+   - `MEDIA_SECRET`: Genera una cadena aleatoria de 64 caracteres hex:
+     ```bash
+     node -e "console.log(crypto.randomBytes(32).toString('hex'))"
+     ```
+     Configúrala como **Secret (Encrypt)**.
+   - `POSTGREST_COUNT_MODE`: `count=estimated` (o dejar vacío para default).
+4. Verifica los ajustes de Build en Cloudflare Pages:
    - **Framework preset:** `None`
-   - **Build command:** *(dejar completamente vacío)*
+   - **Build command:** *(vacío)*
    - **Build output directory:** `public`
-   - **Root directory:** `/` (o `VERSION_CLOUDFLARE` si desplegaste desde la raíz de un monorepo).
-3. En la sección **Functions** > **Compatibility flags**:
-   - Agrega la bandera: `nodejs_compat`
-   - Fecha de compatibilidad: `2024-09-23` (o la más reciente disponible).
-
----
-
-## PASO 7: Despliegue y Purga de Caché de Borde
-
-1. **Despliegue de la rama auditada:**
-   Si tienes integración continua con Git conectada a Cloudflare Pages, haz merge de la rama `fix/auditoria-completa` a tu rama de producción (`main` / `master`) o sube la rama para generar un despliegue de vista previa.
-   
-   Alternativamente, puedes desplegar directamente por CLI con Wrangler:
-   ```powershell
+   - **Compatibility flags:** `nodejs_compat`
+5. Realiza el merge de la rama `fix/auditoria-completa` a tu rama de producción (`main` o `master`) o despliega por CLI:
+   ```bash
    cd VERSION_CLOUDFLARE
    npx wrangler pages deploy public --project-name=morbohub
    ```
 
-2. **Purga Completa de Caché de Cloudflare Edge:**
-   - Ve a **Caching** > **Configuration** en el panel del dominio Cloudflare.
-   - Haz clic en **Purge Everything**.
-   - Confirma la acción.
-   *(Esto asegura que las respuestas viejas con caché de paginación o el Service Worker v10 sean inmediatamente sustituidos por el nuevo shell y Service Worker `v11-velvet-turbo`).*
+---
 
-3. **Verificación Inmediata en Navegador:**
-   - Abre `https://morbohub.pages.dev/api/version`.
-   - Debes recibir la respuesta JSON con `"version": "3.1.0"` y `"cache_version": "v11-velvet-turbo"`.
-   - En el pie de página de la web principal debe mostrarse discretamente:  
-     `v3.1.0 (v11-velvet-turbo) • Cloudflare Pages Native`.
+### PASO 5: Purgar Caché de Borde en Cloudflare
+Para asegurar que ningún navegador o proxy intermedio retenga respuestas antiguas o cachés desalineadas:
+
+1. En el Dashboard de Cloudflare, ve a **Caching** > **Configuration**.
+2. Haz clic en **Purge Everything** y confirma la acción.
+3. Abre en una ventana de incógnito:  
+   `https://morbohub.pages.dev/api/version`  
+   Verifica que devuelva:
+   ```json
+   {
+     "version": "3.1.0",
+     "cache_version": "v11-velvet-turbo",
+     "commit": "fix/auditoria-completa",
+     "engine": "Cloudflare-Pages-Functions"
+   }
+   ```
 
 ---
-*Fin de la guía de pasos manuales.*
+
+### PASO 6: Rotar Claves y Actualizar Variables Inmediatamente
+Ahora que la nueva versión del código está activa en producción y utiliza Web Crypto HMAC, rota las credenciales en Supabase para invalidar cualquier rastro antiguo:
+
+1. Ve a **[Supabase Dashboard](https://supabase.com/dashboard)** > Tu Proyecto > **Project Settings** > **API**.
+2. En la sección **JWT Settings**:
+   - Haz clic en **Generate new secret** (o ingresa un nuevo secreto de 64 caracteres).
+   - Haz clic en **Apply changes**.
+   *(Esto revoca de inmediato todas las claves JWT anteriores).*
+3. Copia la nueva **anon key** y la nueva **service_role key**.
+4. Regresa inmediatamente a **Cloudflare Pages** > **morbohub** > **Settings** > **Environment variables**:
+   - Actualiza `SUPABASE_ANON_KEY` con la nueva clave anon.
+   - Actualiza `SUPABASE_SERVICE_ROLE_KEY` con la nueva clave service_role.
+   - Haz clic en **Save**.
+5. Realiza un re-despliegue rápido en Cloudflare Pages (Deployments > Retry deployment o `npx wrangler pages deploy public`) para que las nuevas funciones tomen las variables actualizadas.
+
+---
+
+### PASO 7: Auditar y Activar Trigger de Protección a Menores
+1. Abre el **SQL Editor** en Supabase y ejecuta primero:
+   `sql/02_minor_protection_audit.sql`
+   - Este script es de **solo lectura**.
+   - Ejecuta las pruebas unitarias de leetspeak corrigiendo el mapeo (`$` -> `s`, `!` -> `i`, `0` -> `o`).
+   - Revisa la lista de ítems devuelta por la consulta de auditoría.
+2. Una vez confirmadas las coincidencias legítimas, ejecuta:
+   `sql/02_minor_protection_trigger.sql`
+   - Instala el trigger `items_before_write` en la tabla `public.items`.
+   - Bloquea preventivamente (`status = 'blocked'`) cualquier elemento histórico coincidente.
+   - A partir de este momento, cualquier intento de inserción o actualización de contenido prohibido será forzado a `status = 'blocked'`.
+
+---
+
+### PASO 8: Limpiar Historial de Git con git-filter-repo
+Para eliminar definitivamente los secretos de los commits antiguos (`f7cac1f`, `eb4af5a`, `75d2262`, `340cc8e`):
+
+1. Realiza una copia de seguridad local del repositorio:
+   ```powershell
+   Copy-Item -Recurse VERSION_CLOUDFLARE VERSION_CLOUDFLARE_BACKUP
+   ```
+2. Instala `git-filter-repo`:
+   ```powershell
+   pip install git-filter-repo
+   ```
+3. Crea un archivo `expressions.txt` con los patrones a sustituir:
+   ```text
+   regex:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+==>REDACTED_JWT_TOKEN
+   regex:github_pat_[A-Za-z0-9_]+==>REDACTED_GITHUB_TOKEN
+   ```
+4. Ejecuta el reemplazo en el repositorio:
+   ```powershell
+   git filter-repo --replace-text expressions.txt --force
+   ```
+5. Si deseas eliminar archivos sensibles del historial (ejemplo: `.env`, `.env.local`):
+   ```powershell
+   git filter-repo --invert-paths --path .env --path .env.local --force
+   ```
+6. Sube los cambios al remoto:
+   ```powershell
+   git remote add origin <URL_DEL_REPOSITORIO>
+   git push origin fix/auditoria-completa --force
+   ```
+
+---
+*Fin de la guía de pasos manuales post-auditoría.*

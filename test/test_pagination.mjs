@@ -44,8 +44,8 @@ assert.ok(
   "Debe incluir filtros de protección de menores, page_count > 0 y cómics en la consulta SQL"
 );
 assert.ok(
-  functionsCode.includes('"Prefer": "count=exact"'),
-  "Debe solicitar Prefer: count=exact a PostgREST para conteo real"
+  functionsCode.includes('"Prefer": preferCount') && functionsCode.includes('"count=exact"'),
+  "Debe soportar Prefer: count=exact y count configurable para catálogos masivos"
 );
 assert.ok(
   functionsCode.includes('spRes.headers.get("content-range")'),

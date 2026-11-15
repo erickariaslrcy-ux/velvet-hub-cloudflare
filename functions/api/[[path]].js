@@ -10,100 +10,39 @@
  */
 
 // =============================================================================
-// CRIPTOGRAFÍA SEGURA: HMAC-SHA256 NATIVO Y TOKENS SIN SECRETOS EN EL CLIENTE
+// CRIPTOGRAFÍA SEGURA: WEB CRYPTO API (HMAC-SHA256) CON COMPARACIÓN CONSTANTE
 // =============================================================================
 
-function sha256Bytes(ascii) {
-  let i, j;
-  const words = [];
-  const asciiBitLength = ascii.length * 8;
-  let hash = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-  ];
-  const k = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
-  ];
+const HMAC_KEY_CACHE = new Map();
 
-  words[asciiBitLength >> 5] |= 0x80 << (24 - (asciiBitLength % 32));
-  words[(((asciiBitLength + 64) >> 9) << 4) + 15] = asciiBitLength;
-
-  for (i = 0; i < ascii.length; i++) {
-    words[i >> 2] |= ascii.charCodeAt(i) << (24 - (i % 4) * 8);
-  }
-
-  const w = new Array(64);
-  for (i = 0; i < words.length; i += 16) {
-    let a = hash[0], b = hash[1], c = hash[2], d = hash[3];
-    let e = hash[4], f = hash[5], g = hash[6], h = hash[7];
-
-    for (j = 0; j < 64; j++) {
-      if (j < 16) {
-        w[j] = words[i + j] | 0;
-      } else {
-        const gamma0 = ((w[j - 15] >>> 7) | (w[j - 15] << 25)) ^ ((w[j - 15] >>> 18) | (w[j - 15] << 14)) ^ (w[j - 15] >>> 3);
-        const gamma1 = ((w[j - 2] >>> 17) | (w[j - 2] << 15)) ^ ((w[j - 2] >>> 19) | (w[j - 2] << 13)) ^ (w[j - 2] >>> 10);
-        w[j] = (((gamma1 + w[j - 7]) | 0) + ((gamma0 + w[j - 16]) | 0)) | 0;
-      }
-
-      const s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
-      const ch = (e & f) ^ (~e & g);
-      const temp1 = (((((h + s1) | 0) + ch) | 0) + ((k[j] + w[j]) | 0)) | 0;
-      const s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
-      const maj = (a & b) ^ (a & c) ^ (b & c);
-      const temp2 = (s0 + maj) | 0;
-
-      h = g; g = f; f = e; e = (d + temp1) | 0;
-      d = c; c = b; b = a; a = (temp1 + temp2) | 0;
+async function getHmacKey(secret) {
+  if (!secret) return null;
+  let key = HMAC_KEY_CACHE.get(secret);
+  if (!key) {
+    const enc = new TextEncoder();
+    key = await crypto.subtle.importKey(
+      "raw",
+      enc.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"]
+    );
+    if (HMAC_KEY_CACHE.size > 20) {
+      HMAC_KEY_CACHE.clear();
     }
-
-    hash[0] = (hash[0] + a) | 0;
-    hash[1] = (hash[1] + b) | 0;
-    hash[2] = (hash[2] + c) | 0;
-    hash[3] = (hash[3] + d) | 0;
-    hash[4] = (hash[4] + e) | 0;
-    hash[5] = (hash[5] + f) | 0;
-    hash[6] = (hash[6] + g) | 0;
-    hash[7] = (hash[7] + h) | 0;
+    HMAC_KEY_CACHE.set(secret, key);
   }
-
-  const out = [];
-  for (i = 0; i < 8; i++) {
-    for (j = 3; j >= 0; j--) {
-      out.push((hash[i] >> (j * 8)) & 255);
-    }
-  }
-  return out;
+  return key;
 }
 
-function hmacSha256Hex(keyStr, messageStr) {
-  let keyBytes = [];
-  for (let i = 0; i < keyStr.length; i++) keyBytes.push(keyStr.charCodeAt(i) & 255);
-  if (keyBytes.length > 64) {
-    keyBytes = sha256Bytes(keyStr);
+function timingSafeEqualHex(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
-  while (keyBytes.length < 64) keyBytes.push(0);
-
-  const oPad = [];
-  const iPad = [];
-  for (let i = 0; i < 64; i++) {
-    oPad.push(keyBytes[i] ^ 0x5c);
-    iPad.push(keyBytes[i] ^ 0x36);
-  }
-
-  const innerMsg = String.fromCharCode(...iPad) + messageStr;
-  const innerHash = sha256Bytes(innerMsg);
-  const outerMsg = String.fromCharCode(...oPad) + String.fromCharCode(...innerHash);
-  const outerHash = sha256Bytes(outerMsg);
-
-  return outerHash.map(b => b.toString(16).padStart(2, "0")).join("");
+  return diff === 0;
 }
 
 function toBase64Url(str) {
@@ -129,70 +68,62 @@ function fromBase64Url(str) {
 // Clave activa inyectada en runtime por onRequest
 let _activeMediaSecret = "";
 
-// Generación de token firmado con HMAC-SHA256 y expiración en segundos (14 días por defecto)
-function encodeMediaToken(targetUrl, referer = "", secret = "") {
+// Generación de token firmado con Web Crypto HMAC-SHA256 y expiración en segundos (14 días)
+async function encodeMediaToken(targetUrl, referer = "", secret = "") {
   const s = secret || _activeMediaSecret;
   if (!targetUrl || !s) return "";
   try {
-    const exp = Math.floor(Date.now() / 1000) + 1209600;
+    const exp = Math.floor(Date.now() / 1000) + 1209600; // 14 días
     const payloadStr = JSON.stringify({ u: targetUrl, r: referer || "", exp });
     const dataB64 = toBase64Url(payloadStr);
-    const signature = hmacSha256Hex(s, dataB64);
-    return `${dataB64}.${signature}`;
+    const key = await getHmacKey(s);
+    if (!key) return "";
+    const enc = new TextEncoder();
+    const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(dataB64));
+    const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    return `${dataB64}.${sigHex}`;
   } catch (e) {
     return "";
   }
 }
 
-// Verificación de token con HMAC-SHA256, expiración y compatibilidad temporal XOR
-function decodeMediaToken(token, secret = "") {
+// Verificación estricta de token con Web Crypto HMAC-SHA256, comparación en tiempo constante y expiración
+// Rechaza absolutamente cualquier token alterado, expirado o con rutas legadas XOR.
+async function decodeMediaToken(token, secret = "") {
   if (!token || !secret) return null;
   const dotIdx = token.indexOf(".");
-  if (dotIdx !== -1) {
-    const dataB64 = token.substring(0, dotIdx);
-    const sig = token.substring(dotIdx + 1);
-    const expectedSig = hmacSha256Hex(secret, dataB64);
-    if (expectedSig !== sig) return null;
-    try {
-      const payloadStr = fromBase64Url(dataB64);
-      const payload = JSON.parse(payloadStr);
-      if (payload && payload.u) {
-        if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
-          return null; // Token expirado
-        }
-        return payload;
-      }
-    } catch (e) {
-      return null;
-    }
-  }
+  if (dotIdx === -1) return null; // Rechazo inmediato sin HMAC (CERO compatibilidad XOR)
 
-  // Compatibilidad temporal con tokens XOR legados durante migración
+  const dataB64 = token.substring(0, dotIdx);
+  const sigHex = token.substring(dotIdx + 1);
+  if (!/^[0-9a-f]{64}$/i.test(sigHex)) return null;
+
   try {
-    let b64 = token.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "=";
-    const bin = atob(b64);
-    const keyBytes = new TextEncoder().encode(secret);
-    const xorBytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) {
-      xorBytes[i] = bin.charCodeAt(i) ^ keyBytes[i % keyBytes.length];
+    const key = await getHmacKey(secret);
+    if (!key) return null;
+    const enc = new TextEncoder();
+    const expectedSigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(dataB64));
+    const expectedSigHex = Array.from(new Uint8Array(expectedSigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    if (!timingSafeEqualHex(expectedSigHex.toLowerCase(), sigHex.toLowerCase())) {
+      return null; // Firma alterada o clave no coincidente
     }
-    const dec = new TextDecoder().decode(xorBytes);
-    const parsed = JSON.parse(dec);
-    if (parsed && parsed.u) return parsed;
-  } catch (e) {}
-
+    const payloadStr = fromBase64Url(dataB64);
+    const payload = JSON.parse(payloadStr);
+    if (payload && payload.u) {
+      if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+        return null; // Token expirado
+      }
+      return payload;
+    }
+  } catch (e) {
+    return null;
+  }
   return null;
 }
 
-function decodePayload(tParam, urlParam, refParam, secret = "") {
+async function decodePayload(tParam, secret = "") {
   if (tParam) {
-    const dec = decodeMediaToken(tParam, secret);
-    if (dec && dec.u) return dec;
-    return null;
-  }
-  if (urlParam && /^https?:\/\//i.test(urlParam)) {
-    return { u: urlParam, r: refParam || "" };
+    return await decodeMediaToken(tParam, secret);
   }
   return null;
 }
@@ -227,25 +158,54 @@ function isSafeUpstreamUrl(urlStr) {
     // Bloqueo de IPv6 (ej: [::1], fe80::, fd00::)
     if (hostname.startsWith("[") || hostname.includes(":")) return false;
 
-    // Lista blanca exhaustiva de dominios upstream permitidos
+    // Lista blanca exhaustiva de dominios upstream permitidos (derivada de datos reales y extractores)
     const ALLOWED_CDN_SUFFIXES = [
       "pmvhaven.com",
+      "ovh.net",
       "redporn.tv",
+      "redporn.porn",
       "comics18.org",
+      "comics18.net",
       "melapelacomics.com",
       "melapelocondibujos.com",
       "vercomicsporno.com",
+      "vercomicporno.com",
+      "vercomicsporno.xxx",
       "3hentai.net",
+      "3hentai.xyz",
       "sexkomix2.com",
       "porn-images-xxx.com",
       "pornone.com",
       "pornhd.com",
+      "pornhd.pet",
       "damplips.com",
       "mitaku.net",
       "buondua.com",
+      "imagedeliveries.com",
       "4khd.com",
+      "xascdn.li",
       "xasiat.com",
       "artgravia.com",
+      "cartooncomixhd.com",
+      "comicsparaadultos.com",
+      "comicspornoxxx.com",
+      "fotonovelasxxx.com",
+      "hentaipaw.com",
+      "leermanhwas.com",
+      "manhwaweb.com",
+      "img1mw.xyz",
+      "img2mw.xyz",
+      "mhcomics.com",
+      "reycomix.com",
+      "leakgallery.com",
+      "pornocomic.org",
+      "cdnanp.com",
+      "cdnde.com",
+      "pixibb.com",
+      "doujins.com",
+      "blogspot.com",
+      "alotporn.com",
+      "porntubeai.com",
       "supabase.co",
       "supabase.in",
       "pages.dev",
@@ -442,7 +402,7 @@ export async function onRequest(context) {
   _activeMediaSecret = MEDIA_SECRET;
 
   // Helper local con inyección de secreto para firmar tokens sin exponer nada al cliente
-  const encodeToken = (targetUrl, referer = "") => encodeMediaToken(targetUrl, referer, MEDIA_SECRET);
+  const encodeToken = async (targetUrl, referer = "") => await encodeMediaToken(targetUrl, referer, MEDIA_SECRET);
 
   // Clave de mínimo privilegio para catálogo público y operaciones autenticadas con RLS
   const SUPABASE_KEY = SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
@@ -500,10 +460,7 @@ export async function onRequest(context) {
     }
 
     const tParam = url.searchParams.get("t");
-    const urlParam = url.searchParams.get("url") || url.searchParams.get("i");
-    const refParam = url.searchParams.get("r") || url.searchParams.get("referer");
-
-    const payload = decodePayload(tParam, urlParam, refParam, MEDIA_SECRET);
+    const payload = await decodePayload(tParam, MEDIA_SECRET);
     if (!payload || !payload.u || !/^https?:\/\//i.test(payload.u)) {
       return new Response("Media token invalido o expirado", {
         status: 403,
@@ -581,7 +538,7 @@ export async function onRequest(context) {
     if (targetQuality) normUrl.searchParams.set("q", String(targetQuality));
     normUrl.searchParams.set("fmt", targetFormat);
 
-    const cache = caches.default;
+    const cache = typeof caches !== "undefined" ? caches.default : null;
     const cacheKey = new Request(normUrl.toString(), {
       method: "GET",
       headers: {
@@ -589,7 +546,7 @@ export async function onRequest(context) {
       }
     });
 
-    if (!isVideo && method === "GET") {
+    if (cache && !isVideo && method === "GET") {
       try {
         const cached = await cache.match(cacheKey);
         if (cached) {
@@ -705,18 +662,25 @@ export async function onRequest(context) {
           const lastSlash = targetMediaUrl.lastIndexOf("/");
           const baseUrl = lastSlash !== -1 ? targetMediaUrl.substring(0, lastSlash + 1) : targetMediaUrl + "/";
           const lines = manifestText.split("\n");
-          const rewritten = lines.map(line => {
+          const rewritten = await Promise.all(lines.map(async line => {
             const trimmed = line.trim();
             if (!trimmed) return line;
             if (trimmed.startsWith("#")) {
-              return line.replace(/URI=["']([^"']+)["']/g, (match, uri) => {
-                const abs = uri.startsWith("http") ? uri : new URL(uri, baseUrl).href;
-                return `URI="/api/media?t=${encodeMediaToken(abs, spoofedReferer)}"`;
-              });
+              if (trimmed.includes("URI=")) {
+                const match = trimmed.match(/URI=["']([^"']+)["']/);
+                if (match && match[1]) {
+                  const uri = match[1];
+                  const abs = uri.startsWith("http") ? uri : new URL(uri, baseUrl).href;
+                  const tok = await encodeMediaToken(abs, spoofedReferer, MEDIA_SECRET);
+                  return line.replace(match[0], `URI="/api/media?t=${tok}"`);
+                }
+              }
+              return line;
             }
             const abs = trimmed.startsWith("http") ? trimmed : new URL(trimmed, baseUrl).href;
-            return `/api/media?t=${encodeMediaToken(abs, spoofedReferer)}`;
-          });
+            const tok = await encodeMediaToken(abs, spoofedReferer, MEDIA_SECRET);
+            return `/api/media?t=${tok}`;
+          }));
           const rewrittenBody = rewritten.join("\n");
           const m3u8Headers = new Headers(respHeaders);
           m3u8Headers.set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
@@ -733,7 +697,7 @@ export async function onRequest(context) {
         headers: respHeaders,
       });
 
-      if (!isVideo && upstream.status === 200) {
+      if (cache && !isVideo && upstream.status === 200) {
         try {
           context.waitUntil(cache.put(cacheKey, clientResponse.clone()));
         } catch (e) {}
@@ -774,21 +738,23 @@ export async function onRequest(context) {
     }
 
     // Cache L2 de Borde Cloudflare para detalle de cómics y videos (aceleración instantánea en móvil)
-    const cache = caches.default;
+    const cache = typeof caches !== "undefined" ? caches.default : null;
     const cacheKey = new Request(url.toString(), { method: "GET" });
-    try {
-      const cached = await cache.match(cacheKey);
-      if (cached) {
-        const bodyText = await cached.text();
-        if (!bodyText.includes('"pages":[]') || bodyText.includes('"chapters":[')) {
-          setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, bodyText);
-          const edgeHeaders = new Headers(cached.headers);
-          edgeHeaders.set("X-Cloudflare-Detail-Cache", "HIT");
-          edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-          return new Response(bodyText, { status: 200, headers: edgeHeaders });
+    if (cache) {
+      try {
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+          const bodyText = await cached.text();
+          if (!bodyText.includes('"pages":[]') || bodyText.includes('"chapters":[')) {
+            setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, bodyText);
+            const edgeHeaders = new Headers(cached.headers);
+            edgeHeaders.set("X-Cloudflare-Detail-Cache", "HIT");
+            edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
+            return new Response(bodyText, { status: 200, headers: edgeHeaders });
+          }
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    }
 
     const targetPmvId = (rawSource === "pmvhaven" ? rawSourceId : rawId);
     if (rawSource === "pmvhaven" || (targetPmvId && /^[a-f0-9]{24}$/i.test(targetPmvId))) {
@@ -806,12 +772,14 @@ export async function onRequest(context) {
           if (v && v.title) {
             const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
             const rawVideo = v.videoUrl || "";
+            const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+            const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
             const detailPayload = {
               id: v._id,
               source: "pmvhaven",
               source_id: v._id,
               title: v.title,
-              cover_url: rawCover ? `/api/media?t=${encodeMediaToken(rawCover, "https://pmvhaven.com/")}` : "",
+              cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
               media_type: "video",
               tags: v.tags || [],
               artists: v.uploaderUsername ? [v.uploaderUsername] : [],
@@ -822,7 +790,7 @@ export async function onRequest(context) {
               video_sources: rawVideo ? [
                 {
                   quality: "1080p HD",
-                  url: `/api/media?t=${encodeMediaToken(rawVideo, "https://pmvhaven.com/")}`,
+                  url: videoToken ? `/api/media?t=${videoToken}` : "",
                   format: "mp4"
                 }
               ] : [],
@@ -1256,18 +1224,22 @@ export async function onRequest(context) {
         return bMp4 - aMp4;
       });
 
+      const maskedCoverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
+      const maskedPages = await Promise.all((it.pages || []).map(async (p, idx) => ({
+        index: p.index || idx + 1,
+        image_url: p.image_url ? `/api/media?t=${await encodeMediaToken(p.image_url, "", MEDIA_SECRET)}` : ""
+      })));
+      const maskedVideoSources = await Promise.all(sortedSources.map(async vs => ({
+        ...vs,
+        url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, it.url || vs.referer || "", MEDIA_SECRET)}` : ""
+      })));
+
       const masked = {
         ...it,
         url: "", // Ocultar URL original
-        cover_url: it.cover_url ? `/api/media?t=${encodeMediaToken(it.cover_url)}` : "",
-        pages: (it.pages || []).map((p, idx) => ({
-          index: p.index || idx + 1,
-          image_url: p.image_url ? `/api/media?t=${encodeMediaToken(p.image_url)}` : ""
-        })),
-        video_sources: sortedSources.map(vs => ({
-          ...vs,
-          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url, it.url || vs.referer || "")}` : ""
-        }))
+        cover_url: maskedCoverToken ? `/api/media?t=${maskedCoverToken}` : "",
+        pages: maskedPages,
+        video_sources: maskedVideoSources
       };
 
       const jsonStr = JSON.stringify(masked);
@@ -1287,7 +1259,7 @@ export async function onRequest(context) {
         }
       });
 
-      if (shouldCache && method === "GET") {
+      if (cache && shouldCache && method === "GET") {
         try {
           context.waitUntil(cache.put(cacheKey, resp.clone()));
         } catch (e) {}
@@ -1333,23 +1305,26 @@ export async function onRequest(context) {
     }
 
     // Cache L2 de Borde Cloudflare para catálogo público
-    const cache = caches.default;
+    const cache = typeof caches !== "undefined" ? caches.default : null;
     const cacheKey = new Request(url.toString(), { method: "GET" });
-    try {
-      const cached = await cache.match(cacheKey);
-      if (cached) {
-        const bodyText = await cached.text();
-        setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, bodyText);
-        const edgeHeaders = new Headers(cached.headers);
-        edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
-        edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
-        return new Response(method === "HEAD" ? null : bodyText, { status: 200, headers: edgeHeaders });
-      }
-    } catch (e) {}
+    if (cache) {
+      try {
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+          const bodyText = await cached.text();
+          setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, bodyText);
+          const edgeHeaders = new Headers(cached.headers);
+          edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
+          edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
+          return new Response(method === "HEAD" ? null : bodyText, { status: 200, headers: edgeHeaders });
+        }
+      } catch (e) {}
+    }
 
 
 
-    if (mediaType === "video") {
+    const preferLivePmv = env.ENABLE_PMVHAVEN_LIVE !== "false" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db";
+    if (mediaType === "video" && preferLivePmv) {
       let pmvSort = "recent";
       if (sort === "random") pmvSort = "random";
       else if (sort === "views") pmvSort = "views";
@@ -1374,15 +1349,17 @@ export async function onRequest(context) {
         if (pmvRes.ok) {
           const pmvData = await pmvRes.json();
           const vList = pmvData.videos || [];
-          const items = vList.map(v => {
+          const items = await Promise.all(vList.map(async v => {
             const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
             const rawVideo = v.videoUrl || "";
+            const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+            const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
             return {
               id: v._id,
               source: "pmvhaven",
               source_id: v._id,
               title: v.title || "Video HD",
-              cover_url: rawCover ? `/api/media?t=${encodeMediaToken(rawCover, "https://pmvhaven.com/")}` : "",
+              cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
               media_type: "video",
               tags: v.tags || [],
               artists: v.uploaderUsername ? [v.uploaderUsername] : [],
@@ -1391,7 +1368,7 @@ export async function onRequest(context) {
               video_sources: rawVideo ? [
                 {
                   quality: "1080p HD",
-                  url: `/api/media?t=${encodeMediaToken(rawVideo, "https://pmvhaven.com/")}`,
+                  url: videoToken ? `/api/media?t=${videoToken}` : "",
                   format: "mp4"
                 }
               ] : [],
@@ -1403,7 +1380,7 @@ export async function onRequest(context) {
               },
               has_cover: !!rawCover
             };
-          });
+          }));
 
           const totalVideos = pmvData.pagination?.total || 70704;
           const totalPages = pmvData.pagination?.totalPages || Math.ceil(totalVideos / pageSize);
@@ -1508,11 +1485,13 @@ export async function onRequest(context) {
     postgrestUrl += "&order=id.desc";
 
     try {
+      // Optimización PostgREST: count=exact para búsquedas/tags; count configurable (o estimated) para catálogos masivos
+      const preferCount = (q || tag) ? "count=exact" : (env.POSTGREST_COUNT_MODE || "count=exact");
       let spRes = await fetch(postgrestUrl, {
         headers: {
           "apikey": SUPABASE_KEY,
           "Authorization": `Bearer ${SUPABASE_KEY}`,
-          "Prefer": "count=exact"
+          "Prefer": preferCount
         }
       });
 
@@ -1528,29 +1507,36 @@ export async function onRequest(context) {
       const contentRange = spRes.headers.get("content-range");
       let totalCount = estimatedTotal;
       if (contentRange && contentRange.includes("/")) {
-        const parsedTotal = parseInt(contentRange.split("/")[1], 10);
-        if (!isNaN(parsedTotal) && parsedTotal >= 0) {
-          totalCount = parsedTotal;
+        const totalPart = contentRange.split("/")[1];
+        if (totalPart && totalPart !== "*") {
+          const parsedTotal = parseInt(totalPart, 10);
+          if (!isNaN(parsedTotal) && parsedTotal >= 0) {
+            totalCount = parsedTotal;
+          }
         }
       }
 
       let rawItems = await spRes.json();
-      const items = (rawItems || []).map(it => ({
-        id: it.id,
-        source: it.source || "velvet",
-        source_id: it.source_id ? String(it.source_id) : String(it.id),
-        title: it.title,
-        cover_url: it.cover_url ? `/api/media?t=${encodeMediaToken(it.cover_url)}` : "",
-        media_type: it.media_type,
-        tags: it.tags || [],
-        artists: it.artists || [],
-        url: "", // Ocultar URL original
-        page_count: it.page_count || 0,
-        video_sources: (it.video_sources || []).map(vs => ({
+      const items = await Promise.all((rawItems || []).map(async it => {
+        const coverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
+        const videoSources = await Promise.all((it.video_sources || []).map(async vs => ({
           ...vs,
-          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url)}` : ""
-        })),
-        has_cover: !!it.cover_url
+          url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
+        })));
+        return {
+          id: it.id,
+          source: it.source || "velvet",
+          source_id: it.source_id ? String(it.source_id) : String(it.id),
+          title: it.title,
+          cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+          media_type: it.media_type,
+          tags: it.tags || [],
+          artists: it.artists || [],
+          url: "", // Ocultar URL original
+          page_count: it.page_count || 0,
+          video_sources: videoSources,
+          has_cover: !!it.cover_url
+        };
       }));
 
       const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -1576,9 +1562,11 @@ export async function onRequest(context) {
         }
       });
 
-      try {
-        context.waitUntil(cache.put(cacheKey, resp.clone()));
-      } catch (e) {}
+      if (cache) {
+        try {
+          context.waitUntil(cache.put(cacheKey, resp.clone()));
+        } catch (e) {}
+      }
 
       return resp;
     } catch (err) {
@@ -1598,29 +1586,32 @@ export async function onRequest(context) {
     const maxOffset = mediaType === "video" ? 3000 : (mediaType === "gallery" ? 3000 : 5000);
     const randomOffset = Math.floor(Math.random() * Math.max(1, maxOffset - count));
 
-    if (mediaType === "video") {
+    const preferLivePmv = env.ENABLE_PMVHAVEN_LIVE !== "false" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db";
+    if (mediaType === "video" && preferLivePmv) {
       try {
         const pmvRes = await fetch(`https://pmvhaven.com/api/videos?sort=random&limit=${count}`, {
           headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Referer": "https://pmvhaven.com/" }
         });
         if (pmvRes.ok) {
           const pmvData = await pmvRes.json();
-          const items = (pmvData.videos || []).map(v => {
+          const items = await Promise.all((pmvData.videos || []).map(async v => {
             const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+            const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+            const videoToken = v.videoUrl ? await encodeMediaToken(v.videoUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
             return {
               id: v._id,
               source: "pmvhaven",
               source_id: v._id,
               title: v.title,
-              cover_url: rawCover ? `/api/media?t=${encodeMediaToken(rawCover, "https://pmvhaven.com/")}` : "",
+              cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
               media_type: "video",
               tags: v.tags || [],
               artists: v.uploaderUsername ? [v.uploaderUsername] : [],
               url: `https://pmvhaven.com/video?v=${v._id}`,
               page_count: 0,
-              video_sources: v.videoUrl ? [{ quality: "1080p HD", url: `/api/media?t=${encodeMediaToken(v.videoUrl, "https://pmvhaven.com/")}`, format: "mp4" }] : []
+              video_sources: videoToken ? [{ quality: "1080p HD", url: `/api/media?t=${videoToken}`, format: "mp4" }] : []
             };
-          });
+          }));
           return new Response(JSON.stringify(items), {
             status: 200,
             headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
@@ -1642,14 +1633,18 @@ export async function onRequest(context) {
       });
 
       const rawItems = await spRes.json();
-      const items = (rawItems || []).map(it => ({
-        ...it,
-        url: "",
-        cover_url: it.cover_url ? `/api/media?t=${encodeMediaToken(it.cover_url)}` : "",
-        video_sources: (it.video_sources || []).map(vs => ({
+      const items = await Promise.all((rawItems || []).map(async it => {
+        const coverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
+        const videoSources = await Promise.all((it.video_sources || []).map(async vs => ({
           ...vs,
-          url: vs.url ? `/api/media?t=${encodeMediaToken(vs.url)}` : ""
-        }))
+          url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
+        })));
+        return {
+          ...it,
+          url: "",
+          cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+          video_sources: videoSources
+        };
       }));
 
       return new Response(JSON.stringify(items), {

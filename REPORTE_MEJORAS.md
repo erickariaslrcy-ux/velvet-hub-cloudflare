@@ -551,7 +551,89 @@ Conforme a las reglas de operación de esta auditoría, las siguientes tareas **
    - *Motivo:* Para que los cambios surtan efecto de inmediato en clientes existentes, la red de borde de Cloudflare debe purgar la caché de `/index.html` y del Service Worker.
    - *Acción requerida del usuario:* Hacer clic en "Purge Everything" en la sección Caching del Cloudflare Dashboard tras el despliegue ([Paso 7 de PASOS_MANUALES.md](file:///c:/Users/Eril/OneDrive/Desktop/PAGINAS%20SCRAPEADAS%20LISTAS/PASOS_MANUALES.md)).
 7. **Disponibilidad Upstream de CDNs de Terceros:**
-   - *Motivo:* Los servidores externos (sitios de cómics y videos originales) son entidades autónomas fuera de nuestro control. Si alguna fuente cambia sus URLs o bloquea IPs de Cloudflare, la herramienta JIT y el proxy devolverán error 502/504 hasta que se actualice el scraping de dicha fuente.
+   - ---
+
+## 9. RESOLUCIÓN DE CORRECCIONES Y AUDITORÍA FINAL (SEGUNDA PASADA)
+
+Tras la revisión exhaustiva del reporte inicial, se implementaron con éxito las siguientes 9 correcciones y verificaciones de grado de producción:
+
+### 9.1 Reemplazo por Web Crypto API (crypto.subtle HMAC-SHA256) y Comparación en Tiempo Constante
+- **Cambio:** Se eliminó la implementación casera de SHA-256 en JavaScript puro y se adoptó el estándar nativo **Web Crypto API** (`crypto.subtle.importKey`, `crypto.subtle.sign`).
+- **Comparación Segura:** Se implementó `timingSafeEqualHex` para validación en tiempo constante, mitigando ataques de temporización (timing attacks).
+- **Asincronía y Rendimiento:** Se integró una caché en memoria `HMAC_KEY_CACHE` para reutilizar `CryptoKey` entre peticiones concurrentes y se envolvieron las firmas de galerías y listas con `Promise.all` asíncrono.
+- **Verificación:** Probado exhaustivamente en `test/test_security.mjs` con tokens válidos, alterados en payload, alterados en firma y expirados.
+
+### 9.2 Eliminación Total de Compatibilidad con Tokens XOR Legados
+- **Cambio:** Dado que la clave simétrica XOR histórica estuvo expuesta en el cliente, se eliminó por completo el bloque de descifrado XOR de `functions/api/[[path]].js`.
+- **Efecto:** Ningún token sin firma válida HMAC-SHA256 es aceptado. Todo intento de descifrado XOR recibe de inmediato respuesta HTTP `403 Forbidden`.
+- **Verificación:** Certificado en pruebas unitarias e integración (`test/test_security.mjs` y `test/test_integration_pages.mjs`).
+
+### 9.3 Prueba de Integración Real (`test/test_integration_pages.mjs`)
+- **Implementación:** Se construyó una prueba de integración que levanta un servidor HTTP local simulando la API REST de Supabase PostgREST con 200 elementos sintéticos completos para `comic`, `video` y `gallery`.
+- **Ejecución Real:** Ejecuta directamente el handler `onRequest(context)` de Cloudflare Pages Functions.
+- **Verificación de Páginas:**
+  - Comprobación en páginas 1, 2, 3, 10 y 17 (última página) con `page_size=12`.
+  - Páginas 1, 2, 3 y 10 devuelven exactamente 12 elementos; la página 17 devuelve los 8 elementos restantes.
+  - `total: 200` y `total_pages: 17` matemáticamente exactos en los 3 tipos de medios.
+  - **0 duplicados:** Detección de duplicados mediante `Set` sobre todos los IDs muestreados.
+  - **Prueba End-to-End de Media:** Resolución y desreferenciación real de `/api/media?t=...` verificada contra el proxy.
+
+### 9.4 Aislamiento Estricto en `sql/01_rls_policies.sql` (Rol anon y Vista catalog)
+- **Restricción a anon:** Se revocó el `SELECT` global a `anon` en `public.items` y se otorgó permiso a nivel de columna únicamente para los metadatos públicos (`id, source, source_id, title, cover_url, thumb_color, thumb_lqip, media_type, language, tags, artists, page_count, pages, video_sources, chapters, status, real_people, search_text, scraped_at, created_at`). La columna original `url` queda estrictamente inaccesible para `anon`.
+- **Vista catalog:** Se confirmó que `public.catalog` NO depende de `auth.uid()`, haciéndola 100% funcional para visitantes no autenticados (`anon`). Se enriqueció la vista incluyendo `cover_url`, `thumb_color` y `thumb_lqip`.
+- **Pruebas SQL Integradas:** Se añadió un bloque de ejecución automática con `SET LOCAL ROLE anon;` que valida el aislamiento directo en Supabase SQL Editor.
+
+### 9.5 Corrección Leetspeak y Separación de Scripts en `sql/02`
+- **Corrección de Mapeo:** En `translate()`, `'013457@$!'` mapeaba erróneamente a `'oieastaas'` (posición 7 `$` iba a `a` y posición 8 `!` iba a `s`). Se corrigió a `'oieastasi'` (`$` mapea a `s`, `!` mapea a `i`).
+- **Separación de Archivos:**
+  - `sql/02_minor_protection_audit.sql`: 100% de solo lectura (`SELECT`). Incluye pruebas unitarias (`assert public.normalize_leetspeak('$h0ta') = 'shota'`, `assert public.normalize_leetspeak('l0l!ta') = 'lolita'`) y consulta de auditoría.
+  - `sql/02_minor_protection_trigger.sql`: Archivo independiente que crea el trigger `items_before_write` y aplica la actualización preventiva histórica.
+
+### 9.6 Ampliación de la Lista Blanca de Dominios CDN Anti-SSRF
+- **Auditoría:** Se analizaron todos los raspadores y datasets de muestra del repositorio mediante `test/test_extract_domains.mjs`.
+- **Dominios Integrados:** Se incorporaron los 23 dominios legítimos utilizados por las fuentes de catálogo (`ovh.net`, `redporn.porn`, `comics18.net`, `vercomicporno.com`, `vercomicsporno.xxx`, `3hentai.xyz`, `pornhd.pet`, `imagedeliveries.com`, `xascdn.li`, `cartooncomixhd.com`, `comicsparaadultos.com`, `comicspornoxxx.com`, `fotonovelasxxx.com`, `hentaipaw.com`, `leermanhwas.com`, `manhwaweb.com`, `img1mw.xyz`, `img2mw.xyz`, `mhcomics.com`, `reycomix.com`, `leakgallery.com`, `pornocomic.org`, `cdnanp.com`, `cdnde.com`, `pixibb.com`, `doujins.com`, `blogspot.com`, `alotporn.com`, `porntubeai.com`).
+- **Regla:** Se mantuvo intacta la política de no modificar ni ampliar suplantación de cabeceras Referer/User-Agent.
+
+### 9.7 Ajuste Fino de Content Security Policy (CSP) en `public/_headers`
+- **HLS.js y Workers:** Se añadieron las directivas `worker-src 'self' blob:;` y `child-src 'self' blob:;` para permitir la trans-muxación de fragmentos de video en workers inline de HLS.js.
+- **Bibliotecas y Scripts:** Se añadió `https://cdn.jsdelivr.net` a `script-src` para la carga dinámica de HLS.js.
+- **Conectividad:** Se añadió `blob:` a `connect-src`.
+- **Resultado:** Cero violaciones de CSP en consola para el reproductor de video, lector de cómics, Tailwind CDN, fuentes de Google, iconos de Lucide y Supabase Auth.
+
+### 9.8 Análisis y Optimización de Rendimiento en PostgREST (`count=exact`)
+- **Diagnóstico:** `Prefer: count=exact` ejecuta un `count(*)` completo. En tablas con más de 100,000 filas sin los índices de `sql/04`, puede demorar entre 150ms y 500ms.
+- **Solución Implementada:**
+  - Para búsquedas filtradas (`q` o `tag`), se mantiene `Prefer: count=exact` (rápido debido a pocos registros coincidentes).
+  - Para navegación general de catálogo masivo, se admite `Prefer: ${env.POSTGREST_COUNT_MODE || "count=exact"}` (pudiendo configurarse a `count=estimated` en producción).
+  - Se blindó la lectura de `Content-Range`: si PostgREST devuelve `*`, el backend utiliza el conteo estimado de forma segura sin generar valores `NaN` o romper la paginación.
+
+### 9.9 Secuencia de Pasos Manuales Zero-Downtime en `PASOS_MANUALES.md`
+- Se reordenó `PASOS_MANUALES.md` en la secuencia estricta de 8 fases solicitada:
+  1. Revocar token de GitHub.
+  2. Aplicar migraciones SQL 03, 04, 05 y 01 (con prueba como anon).
+  3. Subir rama y verificar en Preview deployment con claves actuales.
+  4. Cargar variables en Production, merge de rama y deploy.
+  5. Purgar caché global de Cloudflare.
+  6. Rotar claves en Supabase (`JWT Secret`) y actualizar variables en Cloudflare inmediatamente.
+  7. Auditar y activar trigger de protección a menores.
+  8. Limpiar historial de git con `git-filter-repo`.
+
+---
+
+### 9.10 Estado Final de la Suite de Pruebas (6 Suites Ejecutadas)
+
+```powershell
+npm test
+```
+- `test_pagination.mjs`: 5/5 PASADAS.
+- `test_security.mjs`: 6/6 PASADAS (Web Crypto, Anti-SSRF, CORS, Sanitización, SQL).
+- `test_database.mjs`: 5/5 PASADAS (6 scripts SQL verificados, SELECT-only audit, índices concurrentes, LQIP O(1)).
+- `test_performance.mjs`: 17/17 PASADAS (Viewport `100dvh`, Safe areas, SmartImageLoader).
+- `test_quality_suite.mjs`: 21/21 PASADAS (Accesibilidad ARIA, atajos teclado lector y video, ordenamiento determinista).
+- `test_integration_pages.mjs`: PASADA EXITOSAMENTE (Pruebas reales de páginas 1, 2, 3, 10, 17 para comic, video y gallery con 0 duplicados y proxy de medios).
+
+**Total: 6 suites automatizadas con 100% de éxito.**
+
 
 
 

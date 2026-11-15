@@ -35,25 +35,29 @@ for (const file of filesToCheck) {
 }
 console.log("✓ CERO secretos hardcodeados en los archivos auditados.");
 
-// 2. Verificación de Criptografía HMAC-SHA256 y Tokens
-console.log("\n[2] Verificando firma y validación de tokens multimedia (HMAC-SHA256)...");
+// 2. Verificación de Web Crypto API (HMAC-SHA256) y eliminación de XOR
+console.log("\n[2] Verificando firma y validación de tokens Web Crypto (HMAC-SHA256)...");
 const functionsCode = fs.readFileSync(path.join("functions", "api", "[[path]].js"), "utf-8");
 
-assert.ok(functionsCode.includes("function hmacSha256Hex"), "Debe implementar hmacSha256Hex");
-assert.ok(functionsCode.includes("function isSafeUpstreamUrl"), "Debe implementar isSafeUpstreamUrl");
-assert.ok(functionsCode.includes("function sanitizeSearchQuery"), "Debe implementar sanitizeSearchQuery");
+assert.ok(functionsCode.includes("async function getHmacKey"), "Debe implementar getHmacKey con Web Crypto");
+assert.ok(functionsCode.includes("function timingSafeEqualHex"), "Debe implementar comparación en tiempo constante");
+assert.ok(functionsCode.includes("async function encodeMediaToken"), "Debe implementar encodeMediaToken");
+assert.ok(functionsCode.includes("async function decodeMediaToken"), "Debe implementar decodeMediaToken");
+assert.ok(!functionsCode.includes("xorBytes"), "No debe contener lógica de descifrado XOR");
 
-// Extraer y probar directamente las funciones de criptografía y validación
+// Extraer el bloque de funciones utilitarias y criptográficas
 const testModuleCode = functionsCode.substring(
   functionsCode.indexOf("// ============================================================================="),
-  functionsCode.indexOf("// Cabeceras CORS estándar") > -1 ? functionsCode.indexOf("// Cabeceras CORS estándar") : functionsCode.indexOf("export async function onRequest")
+  functionsCode.indexOf("export async function onRequest")
 );
 
-// Evaluar en sandbox seguro para pruebas unitarias
 const testContext = {};
 const fn = new Function("exports", testModuleCode + `
+  exports.getHmacKey = getHmacKey;
+  exports.timingSafeEqualHex = timingSafeEqualHex;
   exports.encodeMediaToken = encodeMediaToken;
   exports.decodeMediaToken = decodeMediaToken;
+  exports.decodePayload = decodePayload;
   exports.isSafeUpstreamUrl = isSafeUpstreamUrl;
   exports.sanitizeSearchQuery = sanitizeSearchQuery;
   exports.sanitizeSlug = sanitizeSlug;
@@ -64,47 +68,68 @@ const fn = new Function("exports", testModuleCode + `
 `);
 fn(testContext);
 
-const testSecret = "test_secret_key_super_secure_2026_salt";
+const testSecret = "test_media_secret_secure_key_2026_subtle_crypto";
 const testTargetUrl = "https://pmvhaven.com/video/sample1080p.mp4";
 const testReferer = "https://pmvhaven.com/";
 
-// Test 2.1: Firma y Verificación correcta
-const token = testContext.encodeMediaToken(testTargetUrl, testReferer, testSecret);
-assert.ok(token.includes("."), "El token HMAC debe contener separador punto");
-const decoded = testContext.decodeMediaToken(token, testSecret);
-assert.ok(decoded, "El token válido debe decodificarse exitosamente");
-assert.equal(decoded.u, testTargetUrl);
-assert.equal(decoded.r, testReferer);
-assert.ok(decoded.exp > Math.floor(Date.now() / 1000), "El token debe tener expiración futura");
+// Ejecución de pruebas asíncronas de Web Crypto
+async function runCryptoTests() {
+  // 2.1 Comparación en tiempo constante
+  assert.equal(testContext.timingSafeEqualHex("abcdef0123456789", "abcdef0123456789"), true);
+  assert.equal(testContext.timingSafeEqualHex("abcdef0123456789", "abcdef0123456780"), false);
+  assert.equal(testContext.timingSafeEqualHex("abcdef", "abcdef00"), false);
 
-// Test 2.2: Modificación maliciosa del payload (tampering)
-const [b64Data, sig] = token.split(".");
-const tamperedPayload = Buffer.from(JSON.stringify({ u: "https://evil.com/malware.exe", exp: decoded.exp })).toString("base64url");
-const tamperedToken = `${tamperedPayload}.${sig}`;
-assert.equal(
-  testContext.decodeMediaToken(tamperedToken, testSecret),
-  null,
-  "El token alterado debe ser rechazado inmediatamente por firma HMAC inválida"
-);
+  // 2.2 Generación y verificación de token válido
+  const token = await testContext.encodeMediaToken(testTargetUrl, testReferer, testSecret);
+  assert.ok(token.includes("."), "El token debe contener el separador punto entre payload y firma");
+  const parts = token.split(".");
+  assert.equal(parts.length, 2, "El token debe tener exactamente payload y firma");
+  assert.equal(parts[1].length, 64, "La firma HMAC-SHA256 debe tener 64 caracteres hexadecimales (256 bits)");
 
-// Test 2.3: Firma inválida
-const fakeToken = `${b64Data}.0000000000000000000000000000000000000000000000000000000000000000`;
-assert.equal(
-  testContext.decodeMediaToken(fakeToken, testSecret),
-  null,
-  "Un token con firma falsificada debe ser rechazado"
-);
+  const decoded = await testContext.decodeMediaToken(token, testSecret);
+  assert.ok(decoded, "El token válido debe verificarse exitosamente");
+  assert.equal(decoded.u, testTargetUrl);
+  assert.equal(decoded.r, testReferer);
+  assert.ok(decoded.exp > Math.floor(Date.now() / 1000), "El token debe tener expiración futura");
 
-// Test 2.4: Token expirado
-const expiredPayload = Buffer.from(JSON.stringify({ u: testTargetUrl, exp: Math.floor(Date.now() / 1000) - 3600 })).toString("base64url");
-const expiredToken = testContext.encodeMediaToken(testTargetUrl, "", testSecret);
-const expiredParts = expiredToken.split(".");
-// Crear token con firma correcta pero expiración pasada
-const expiredObj = JSON.stringify({ u: testTargetUrl, r: "", exp: 1000 });
-// encodeMediaToken con expiración ya pasada debe rechazarse
-console.log("✓ Sistema de tokens HMAC-SHA256 verificado con integridad criptográfica.");
+  // 2.3 Token alterado en payload (tampering)
+  const [b64Data, sig] = token.split(".");
+  const tamperedPayload = Buffer.from(JSON.stringify({ u: "https://evil.com/malware.exe", exp: decoded.exp })).toString("base64url");
+  const tamperedToken = `${tamperedPayload}.${sig}`;
+  const tamperedRes = await testContext.decodeMediaToken(tamperedToken, testSecret);
+  assert.equal(tamperedRes, null, "El token con payload alterado debe ser rechazado inmediatamente");
 
-// 3. Verificación de Protección Anti-SSRF
+  // 2.4 Token alterado en firma
+  const fakeSig = sig.substring(0, 63) + (sig[63] === "a" ? "b" : "a");
+  const fakeSigToken = `${b64Data}.${fakeSig}`;
+  const fakeSigRes = await testContext.decodeMediaToken(fakeSigToken, testSecret);
+  assert.equal(fakeSigRes, null, "El token con firma alterada debe ser rechazado");
+
+  // 2.5 Token expirado
+  const expiredPayloadStr = JSON.stringify({ u: testTargetUrl, r: testReferer, exp: Math.floor(Date.now() / 1000) - 100 });
+  const expiredB64 = Buffer.from(expiredPayloadStr).toString("base64url");
+  const key = await testContext.getHmacKey(testSecret);
+  const enc = new TextEncoder();
+  const expSigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(expiredB64));
+  const expSigHex = Array.from(new Uint8Array(expSigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const expiredToken = `${expiredB64}.${expSigHex}`;
+  const expiredRes = await testContext.decodeMediaToken(expiredToken, testSecret);
+  assert.equal(expiredRes, null, "El token expirado debe ser rechazado aunque la firma sea matemáticamente válida");
+
+  // 2.6 Rechazo total de tokens XOR legados
+  const legacyXorToken = Buffer.from("legacy_xor_encrypted_garbage_string").toString("base64url");
+  const xorRes = await testContext.decodeMediaToken(legacyXorToken, testSecret);
+  assert.equal(xorRes, null, "Cualquier token XOR sin firma HMAC debe ser rechazado sin excepción");
+
+  // 2.7 decodePayload rechaza parámetros url directos sin token
+  const payloadRes = await testContext.decodePayload(null, testSecret);
+  assert.equal(payloadRes, null, "Petición sin token firmado debe rechazarse");
+
+  console.log("✓ Web Crypto HMAC-SHA256 validado: tokens válidos, alterados, expirados y XOR probados exitosamente.");
+}
+await runCryptoTests();
+
+// 3. Verificación de Protección Anti-SSRF y Lista Blanca de Dominios
 console.log("\n[3] Verificando protección estricta Anti-SSRF...");
 const dangerousUrls = [
   "http://localhost:8080/admin",
@@ -133,8 +158,14 @@ for (const badUrl of dangerousUrls) {
 const legitimateUrls = [
   "https://pmvhaven.com/videos/hls/1080p.mp4",
   "https://comics18.org/data/covers/comic1.jpg",
+  "https://comics18.net/data/covers/comic1.jpg",
   "https://melapelacomics.com/pages/01.webp",
-  "https://qnmcejlxoufheisgkuyo.supabase.co/storage/v1/object/public/covers/1.jpg"
+  "https://qnmcejlxoufheisgkuyo.supabase.co/storage/v1/object/public/covers/1.jpg",
+  "https://pic.xascdn.li/image.jpg",
+  "https://cdn.leakgallery.com/media/test.jpg",
+  "https://manhwaweb.com/uploads/1.jpg",
+  "https://static-ap.cdnanp.com/img.jpg",
+  "https://v3.cdnde.com/video.mp4"
 ];
 
 for (const goodUrl of legitimateUrls) {
@@ -144,7 +175,7 @@ for (const goodUrl of legitimateUrls) {
     `URL legítima rechazada indebidamente: ${goodUrl}`
   );
 }
-console.log("✓ Protección Anti-SSRF validada (bloquea IPs privadas, metadata de nube y dominios no autorizados).");
+console.log("✓ Protección Anti-SSRF validada (bloquea IPs privadas, metadata de nube y cubre dominios de raspadores).");
 
 // 4. Verificación de Sanitización Anti-Inyección PostgREST
 console.log("\n[4] Verificando sanitización contra inyección en PostgREST...");
@@ -172,21 +203,28 @@ assert.equal(originHeaders["Access-Control-Allow-Credentials"], "true");
 assert.equal(originHeaders["Access-Control-Allow-Origin"], "https://morbohub.pages.dev");
 console.log("✓ Cabeceras CORS estrictas verificadas conforme al estándar W3C/Fetch.");
 
-// 6. Verificación de Archivos SQL de Seguridad Generados
+// 6. Verificación de Scripts SQL y Separación de Auditoría vs Trigger
 console.log("\n[6] Verificando existencia y contenido de scripts SQL...");
 assert.ok(fs.existsSync(path.join("sql", "01_rls_policies.sql")), "sql/01_rls_policies.sql debe existir");
 assert.ok(fs.existsSync(path.join("sql", "02_minor_protection_audit.sql")), "sql/02_minor_protection_audit.sql debe existir");
+assert.ok(fs.existsSync(path.join("sql", "02_minor_protection_trigger.sql")), "sql/02_minor_protection_trigger.sql debe existir");
 
 const rlsContent = fs.readFileSync(path.join("sql", "01_rls_policies.sql"), "utf-8");
 assert.ok(rlsContent.includes("alter table public.profiles enable row level security;"));
 assert.ok(rlsContent.includes("alter table public.items enable row level security;"));
 assert.ok(rlsContent.includes("alter table public.favorites enable row level security;"));
+assert.ok(rlsContent.includes("revoke select on public.items from anon;"), "Debe revocar select global a anon en items");
 assert.ok(rlsContent.includes("status <> 'blocked'"));
+assert.ok(rlsContent.includes("set local role anon;"), "Debe incluir pruebas de verificación como anon");
 
-const minorContent = fs.readFileSync(path.join("sql", "02_minor_protection_audit.sql"), "utf-8");
-assert.ok(minorContent.includes("public.normalize_leetspeak"));
-assert.ok(minorContent.includes("public.minor_content_match"));
-assert.ok(minorContent.includes("new.status := 'blocked'"));
-console.log("✓ Scripts SQL de RLS y protección a menores auditados y listos.");
+const minorAudit = fs.readFileSync(path.join("sql", "02_minor_protection_audit.sql"), "utf-8");
+assert.ok(minorAudit.includes("oieastasi"), "Debe tener el mapeo corregido de leetspeak ($ -> s, ! -> i)");
+assert.ok(!minorAudit.includes("create trigger"), "02_minor_protection_audit.sql debe ser estrictamente de solo lectura");
+
+const minorTrigger = fs.readFileSync(path.join("sql", "02_minor_protection_trigger.sql"), "utf-8");
+assert.ok(minorTrigger.includes("create trigger items_before_write"), "02_minor_protection_trigger.sql debe contener el trigger");
+assert.ok(minorTrigger.includes("new.status := 'blocked'"));
+
+console.log("✓ Scripts SQL de RLS, auditoría de solo lectura y trigger de protección verificados.");
 
 console.log("\n=== TODAS LAS PRUEBAS DE LA FASE 2 PASARON CON ÉXITO ===");

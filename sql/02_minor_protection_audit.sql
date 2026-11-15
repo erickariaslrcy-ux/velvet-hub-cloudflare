@@ -1,13 +1,17 @@
 -- ==============================================================================
 -- 02_MINOR_PROTECTION_AUDIT.SQL
--- AUDITORÍA Y FORTALECIMIENTO DE FILTRO DE PROTECCIÓN A MENORES (ZERO-TOLERANCE)
+-- AUDITORÍA DE PROTECCIÓN A MENORES (ESTRICTAMENTE SOLO LECTURA / ZERO-TOLERANCE)
 -- Proyecto: Velvet Hub / Morbohub
--- Estado: Listo para revisión manual y ejecución por el administrador.
+-- Estado: Listo para análisis de base de datos antes de activar triggers de bloqueo.
+-- CARACTERÍSTICA: 100% SOLO LECTURA (SELECT). NO MODIFICA REGISTROS NI INSTALA TRIGGERS.
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
 -- 1. FUNCIÓN DE NORMALIZACIÓN LEETSPEAK Y DEPURACIÓN DE CARACTERES
 -- Convierte sustituciones numéricas y símbolos en letras normales antes del chequeo.
+-- Mapeo corregido:
+--   '0' -> 'o', '1' -> 'i', '3' -> 'e', '4' -> 'a', '5' -> 's', '7' -> 't',
+--   '@' -> 'a', '$' -> 's', '!' -> 'i'
 -- ------------------------------------------------------------------------------
 create or replace function public.normalize_leetspeak(input_text text)
 returns text
@@ -16,7 +20,7 @@ as $$
   select translate(
     lower(extensions.unaccent(coalesce(input_text, ''))),
     '013457@$!',
-    'oieastaas'
+    'oieastasi'
   );
 $$;
 
@@ -43,7 +47,6 @@ begin
   leet_norm := public.normalize_leetspeak(txt);
 
   -- Regla multilingüe exhaustiva (Español, Inglés, Japonés romaji, Francés, Alemán, Ruso)
-  -- Incluye términos base, diminutivos, términos de entornos escolares/infantiles y edades <= 17.
   has_match := (
     -- Términos explícitos y jerga internacional
     raw_norm ~* '\m(loli|lolis|lolicon|lolita|lolitas|shota|shotas|shotacon|toddlercon|toddler|child|children|kid|kids|underage|under-age|preteen|pre-teen|infant|jailbait|pedo|pedophile|paedo|cub)\M'
@@ -71,50 +74,59 @@ end;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 3. TRIGGER INFALIBLE EN ESCRITURA (INSERT / UPDATE)
+-- 3. PRUEBAS UNITARIAS DE LEETSPEAK Y DETECCIÓN ANTI-EVASIÓN
 -- ------------------------------------------------------------------------------
-create or replace function public.items_before_write()
-returns trigger
-language plpgsql
-as $$
+do $$
 begin
-  new.search_text := lower(extensions.unaccent(
-    coalesce(new.title, '') || ' ' ||
-    array_to_string(coalesce(new.tags, '{}'), ' ') || ' ' ||
-    array_to_string(coalesce(new.artists, '{}'), ' ')
-  ));
+  -- Validación 1: $ mapea a 's' y 0 mapea a 'o'
+  assert public.normalize_leetspeak('$h0ta') = 'shota',
+    'Error en test leetspeak: $h0ta no produjo shota';
 
-  -- Si coincide con cualquier término prohibido, se fuerza 'blocked'
-  if public.minor_content_match(new.search_text) or public.minor_content_match(new.title) then
-    new.status := 'blocked';
-  end if;
+  -- Validación 2: ! mapea a 'i' y 0 mapea a 'o'
+  assert public.normalize_leetspeak('l0l!ta') = 'lolita',
+    'Error en test leetspeak: l0l!ta no produjo lolita';
 
-  -- REGLA DE SEGURIDAD ESTRICTA: Un elemento bloqueado NUNCA puede ser desbloqueado por update
-  if tg_op = 'UPDATE' and old.status = 'blocked' then
-    new.status := 'blocked';
-  end if;
+  -- Validación 3: 1 mapea a 'i'
+  assert public.normalize_leetspeak('k1d') = 'kid',
+    'Error en test leetspeak: k1d no produjo kid';
 
-  return new;
+  -- Validación 4: @ mapea a 'a'
+  assert public.normalize_leetspeak('under@ge') = 'underage',
+    'Error en test leetspeak: under@ge no produjo underage';
+
+  -- Validación 5: minor_content_match detecta variantes ofuscadas
+  assert public.minor_content_match('$h0ta') = true,
+    'Error en test minor_content_match: fallo al detectar $h0ta';
+
+  assert public.minor_content_match('l0l!ta') = true,
+    'Error en test minor_content_match: fallo al detectar l0l!ta';
+
+  assert public.minor_content_match('chica normal de 20 anos') = false,
+    'Error en test minor_content_match: falso positivo en adulto';
+
+  raise notice '=======================================================';
+  raise notice 'PRUEBAS UNITARIAS LEETSPEAK: 100%% PASADAS CON ÉXITO.';
+  raise notice '=======================================================';
 end;
 $$;
 
-drop trigger if exists items_before_write on public.items;
-create trigger items_before_write
-  before insert or update on public.items
-  for each row execute function public.items_before_write();
-
 -- ------------------------------------------------------------------------------
--- 4. CONSULTA DE AUDITORÍA (SOLO LECTURA PARA ANÁLISIS DE LA BASE ACTUAL)
--- Ejecutar esta consulta para identificar elementos no bloqueados que deben bloquearse:
+-- 4. CONSULTA DE AUDITORÍA (SOLO LECTURA)
+-- Ejecutar en Supabase para auditar si existen elementos no bloqueados que deben bloquearse:
 -- ------------------------------------------------------------------------------
--- SELECT id, source, source_id, title, status 
--- FROM public.items 
--- WHERE status <> 'blocked' 
---   AND (public.minor_content_match(search_text) OR public.minor_content_match(title));
-
--- ------------------------------------------------------------------------------
--- 5. SENTENCIA DE BLOQUEO PREVENTIVO INMEDIATO (OPCIONAL TRAS REVISIÓN)
--- UPDATE public.items 
--- SET status = 'blocked' 
--- WHERE status <> 'blocked' 
---   AND (public.minor_content_match(search_text) OR public.minor_content_match(title));
+select
+  id,
+  source,
+  source_id,
+  title,
+  media_type,
+  status,
+  created_at
+from public.items
+where status <> 'blocked'
+  and (
+    public.minor_content_match(coalesce(search_text, ''))
+    or public.minor_content_match(coalesce(title, ''))
+  )
+order by id desc
+limit 500;

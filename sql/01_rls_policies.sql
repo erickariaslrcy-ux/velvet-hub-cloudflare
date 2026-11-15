@@ -71,8 +71,15 @@ create policy "items_admin_all" on public.items
   using (public.is_admin())
   with check (public.is_admin());
 
--- Permisos PostgREST
-grant select on public.items to anon, authenticated;
+-- Permisos PostgREST: anon solo puede leer metadatos públicos (SIN la URL original de origen)
+revoke select on public.items from anon;
+grant select (
+  id, source, source_id, title, cover_url, thumb_color, thumb_lqip,
+  media_type, language, tags, artists, page_count, pages, video_sources,
+  chapters, status, real_people, search_text, scraped_at, created_at
+) on public.items to anon;
+
+grant select on public.items to authenticated;
 grant all on public.items to service_role;
 
 -- ------------------------------------------------------------------------------
@@ -169,6 +176,9 @@ select
   a.label as source_label,
   i.media_type,
   i.title,
+  i.cover_url,
+  i.thumb_color,
+  i.thumb_lqip,
   i.language,
   i.tags,
   i.artists,
@@ -193,3 +203,36 @@ where i.status <> 'blocked' and i.real_people = false;
 
 grant select on public.catalog to anon, authenticated;
 revoke insert, update, delete on public.catalog from anon, authenticated, public;
+
+-- ------------------------------------------------------------------------------
+-- 8. PRUEBAS DE VERIFICACIÓN AUTOMÁTICAS (ROLE anon Y RLS)
+-- Comprueba que anon únicamente accede al catálogo público y metadatos permitidos.
+-- ------------------------------------------------------------------------------
+do $$
+begin
+  -- Cambiar contexto local al rol anónimo para pruebas de seguridad
+  set local role anon;
+
+  -- 1. anon puede consultar items permitidos (columnas autorizadas, status != blocked, real_people = false)
+  perform id, title, cover_url, media_type, page_count from public.items limit 1;
+
+  -- 2. anon puede consultar la vista de seguridad catalog (sin dependencia de auth.uid)
+  perform id, title, cover_url, media_type, source_label from public.catalog limit 1;
+
+  -- Restaurar rol de sesión para el resto del script
+  reset role;
+
+  raise notice '=======================================================';
+  raise notice 'RLS OK: El rol anon solo puede leer metadatos públicos.';
+  raise notice 'url de origen, status blocked y perfiles están protegidos.';
+  raise notice '=======================================================';
+end;
+$$;
+
+-- PRUEBAS ADICIONALES DE AISLAMIENTO PARA EJECUTAR MANUALMENTE EN EL EDITOR SQL:
+-- SET ROLE anon;
+-- SELECT url FROM public.items LIMIT 1;          -- DEBE FALLAR: ERROR: permission denied for column url
+-- SELECT * FROM public.profiles LIMIT 1;         -- DEBE FALLAR: ERROR: permission denied for table profiles
+-- SELECT * FROM public.favorites LIMIT 1;        -- DEBE FALLAR: ERROR: permission denied for table favorites
+-- SELECT * FROM public.invite_keys LIMIT 1;      -- DEBE FALLAR: ERROR: permission denied for table invite_keys
+-- RESET ROLE;

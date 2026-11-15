@@ -57,7 +57,8 @@ El sistema opera bajo un modelo de arquitectura **"Stealth / Marca Blanca Impene
   - Intercepción inteligente de clics en enlaces `<a>` (clic izquierdo navega en la SPA; clic central o Ctrl+clic abre pestaña nativa).
   - Precarga predictiva (prefetch) de enlaces al mantener el cursor sobre la tarjeta durante más de 150ms.
 - **Motor Stealth Multimedia y Proxificado de Borde:**
-  - Cifrado simétrico de URLs con token XOR + Base64URL seguro para caracteres especiales.
+  - Cifrado y firma criptográfica de URLs con **Web Crypto API (HMAC-SHA256)** + Base64URL seguro, sin exponer secretos en el cliente.
+  - Validación en tiempo constante (`timingSafeEqual`) contra ataques de temporización y expiración automática de tokens.
   - Caché multinivel: L1 en RAM del V8 Isolate (<1ms) y L2 en Cloudflare Cache API en más de 300 centros de datos mundiales.
   - Redimensionamiento y optimización de imágenes al vuelo (`w`, `q`, `fmt`) y revalidación HTTP con `ETag` determinista (304 Not Modified).
 - **Service Worker PWA Offline:** Almacenamiento en caché de la carcasa HTML estática, fuentes de Google, CDN de iconos y assets visuales, garantizando carga instantánea (0ms) en visitas recurrentes.
@@ -494,12 +495,12 @@ El backend serverless de Cloudflare Pages reside en el archivo único catch-all:
 #### 1. Streaming y Medios Stealth (HMAC-SHA256 & Anti-SSRF)
 - **Rutas:** `GET /api/media`, `GET /api/image`, `GET /api/img`, `GET /api/video/stream`
 - **Parámetros Query:**
-  - `t`: Token criptográfico firmado con HMAC-SHA256 (`<firma_hex>.<payload_base64url>`).
+  - `t`: Token criptográfico firmado con Web Crypto HMAC-SHA256 (`<payload_base64url>.<firma_hex_64chars>`).
   - `w`: Ancho deseado de imagen (120, 240, 360, 480, 720, 1080).
   - `q`: Calidad de compresión (50 a 90).
   - `fmt`: Formato de salida negociado (`auto`, `webp`, `avif`, `jpeg`).
 - **Comportamiento Interno:**
-  - **Firma y Verificación Criptográfica:** El servidor reconstruye la firma HMAC-SHA256 del payload utilizando la variable de entorno secreta `MEDIA_SECRET`. Si la firma no coincide exactamente, la petición es rechazada con `HTTP 403 Forbidden: Invalid media token signature`.
+  - **Firma y Verificación Criptográfica (Web Crypto API):** El servidor verifica la firma HMAC-SHA256 del payload utilizando `crypto.subtle` y la variable de entorno secreta `MEDIA_SECRET`. La comparación se realiza en tiempo constante (`timingSafeEqual`) para evitar ataques de canal lateral por temporización. Cualquier alteración de payload o firma es rechazada con `HTTP 403 Forbidden`. Se eliminó por completo el soporte de descifrado XOR antiguo.
   - **Expiración de Tokens:** El payload decodificado contiene `{ u: upstreamUrl, r: referer, exp: expirationTimestamp }`. Si el timestamp `exp` ha caducado, se deniega con `HTTP 403 Forbidden: Media token expired`.
   - **Protección Estricta Anti-SSRF (`isSafeUpstreamUrl`):** Antes de iniciar la conexión con el servidor remoto, se valida que la URL sea HTTPS/HTTP y se bloquean accesos a:
     - Redes privadas IPv4 (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `0.0.0.0/8`).
