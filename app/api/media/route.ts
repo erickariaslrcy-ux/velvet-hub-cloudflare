@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
-const MEDIA_SECRET = "velvet_ultra_stealth_secret_key_2026";
+const MEDIA_SECRET = process.env.MEDIA_SECRET || "";
 
 function decodeMediaToken(token: string): { url: string; referer?: string } | null {
   try {

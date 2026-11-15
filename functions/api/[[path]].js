@@ -9,77 +9,314 @@
  * 5. Cero límites de 10GB ni errores 402/494 de Vercel (transferencia ilimitada en Cloudflare Pages).
  */
 
-const SUPABASE_URL = "https://qnmcejlxoufheisgkuyo.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFubWNlamx4b3VmaGVpc2drdXlvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTU1NzI0NiwiZXhwIjoyMTA3MTMzMjQ2fQ.lDom8ovim8HH-8oxcsSKCRQNN0UjMV_Po-VSo-zanDU";
-const MEDIA_SECRET = "velvet_ultra_stealth_secret_key_2026";
+// =============================================================================
+// CRIPTOGRAFÍA SEGURA: HMAC-SHA256 NATIVO Y TOKENS SIN SECRETOS EN EL CLIENTE
+// =============================================================================
 
-// Cifrado y descifrado XOR simétrico UTF-8 seguro (soporta caracteres asiáticos y emojis sin error btoa)
-function encodeMediaToken(targetUrl, referer = "") {
-  if (!targetUrl) return "";
+function sha256Bytes(ascii) {
+  let i, j;
+  const words = [];
+  const asciiBitLength = ascii.length * 8;
+  let hash = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  ];
+  const k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+
+  words[asciiBitLength >> 5] |= 0x80 << (24 - (asciiBitLength % 32));
+  words[(((asciiBitLength + 64) >> 9) << 4) + 15] = asciiBitLength;
+
+  for (i = 0; i < ascii.length; i++) {
+    words[i >> 2] |= ascii.charCodeAt(i) << (24 - (i % 4) * 8);
+  }
+
+  const w = new Array(64);
+  for (i = 0; i < words.length; i += 16) {
+    let a = hash[0], b = hash[1], c = hash[2], d = hash[3];
+    let e = hash[4], f = hash[5], g = hash[6], h = hash[7];
+
+    for (j = 0; j < 64; j++) {
+      if (j < 16) {
+        w[j] = words[i + j] | 0;
+      } else {
+        const gamma0 = ((w[j - 15] >>> 7) | (w[j - 15] << 25)) ^ ((w[j - 15] >>> 18) | (w[j - 15] << 14)) ^ (w[j - 15] >>> 3);
+        const gamma1 = ((w[j - 2] >>> 17) | (w[j - 2] << 15)) ^ ((w[j - 2] >>> 19) | (w[j - 2] << 13)) ^ (w[j - 2] >>> 10);
+        w[j] = (((gamma1 + w[j - 7]) | 0) + ((gamma0 + w[j - 16]) | 0)) | 0;
+      }
+
+      const s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (((((h + s1) | 0) + ch) | 0) + ((k[j] + w[j]) | 0)) | 0;
+      const s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (s0 + maj) | 0;
+
+      h = g; g = f; f = e; e = (d + temp1) | 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) | 0;
+    }
+
+    hash[0] = (hash[0] + a) | 0;
+    hash[1] = (hash[1] + b) | 0;
+    hash[2] = (hash[2] + c) | 0;
+    hash[3] = (hash[3] + d) | 0;
+    hash[4] = (hash[4] + e) | 0;
+    hash[5] = (hash[5] + f) | 0;
+    hash[6] = (hash[6] + g) | 0;
+    hash[7] = (hash[7] + h) | 0;
+  }
+
+  const out = [];
+  for (i = 0; i < 8; i++) {
+    for (j = 3; j >= 0; j--) {
+      out.push((hash[i] >> (j * 8)) & 255);
+    }
+  }
+  return out;
+}
+
+function hmacSha256Hex(keyStr, messageStr) {
+  let keyBytes = [];
+  for (let i = 0; i < keyStr.length; i++) keyBytes.push(keyStr.charCodeAt(i) & 255);
+  if (keyBytes.length > 64) {
+    keyBytes = sha256Bytes(keyStr);
+  }
+  while (keyBytes.length < 64) keyBytes.push(0);
+
+  const oPad = [];
+  const iPad = [];
+  for (let i = 0; i < 64; i++) {
+    oPad.push(keyBytes[i] ^ 0x5c);
+    iPad.push(keyBytes[i] ^ 0x36);
+  }
+
+  const innerMsg = String.fromCharCode(...iPad) + messageStr;
+  const innerHash = sha256Bytes(innerMsg);
+  const outerMsg = String.fromCharCode(...oPad) + String.fromCharCode(...innerHash);
+  const outerHash = sha256Bytes(outerMsg);
+
+  return outerHash.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function toBase64Url(str) {
+  const utf8Bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < utf8Bytes.length; i++) {
+    bin += String.fromCharCode(utf8Bytes[i]);
+  }
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(str) {
+  let b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  while (b64.length % 4) b64 += "=";
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+// Clave activa inyectada en runtime por onRequest
+let _activeMediaSecret = "";
+
+// Generación de token firmado con HMAC-SHA256 y expiración en segundos (14 días por defecto)
+function encodeMediaToken(targetUrl, referer = "", secret = "") {
+  const s = secret || _activeMediaSecret;
+  if (!targetUrl || !s) return "";
   try {
-    const raw = JSON.stringify({ u: targetUrl, r: referer || "" });
-    const utf8Bytes = new TextEncoder().encode(raw);
-    const keyBytes = new TextEncoder().encode(MEDIA_SECRET);
-    const xorBytes = new Uint8Array(utf8Bytes.length);
-    for (let i = 0; i < utf8Bytes.length; i++) {
-      xorBytes[i] = utf8Bytes[i] ^ keyBytes[i % keyBytes.length];
-    }
-    let bin = "";
-    for (let i = 0; i < xorBytes.length; i++) {
-      bin += String.fromCharCode(xorBytes[i]);
-    }
-    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const exp = Math.floor(Date.now() / 1000) + 1209600;
+    const payloadStr = JSON.stringify({ u: targetUrl, r: referer || "", exp });
+    const dataB64 = toBase64Url(payloadStr);
+    const signature = hmacSha256Hex(s, dataB64);
+    return `${dataB64}.${signature}`;
   } catch (e) {
     return "";
   }
 }
 
-function decodeMediaToken(token) {
-  if (!token) return null;
+// Verificación de token con HMAC-SHA256, expiración y compatibilidad temporal XOR
+function decodeMediaToken(token, secret = "") {
+  if (!token || !secret) return null;
+  const dotIdx = token.indexOf(".");
+  if (dotIdx !== -1) {
+    const dataB64 = token.substring(0, dotIdx);
+    const sig = token.substring(dotIdx + 1);
+    const expectedSig = hmacSha256Hex(secret, dataB64);
+    if (expectedSig !== sig) return null;
+    try {
+      const payloadStr = fromBase64Url(dataB64);
+      const payload = JSON.parse(payloadStr);
+      if (payload && payload.u) {
+        if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
+          return null; // Token expirado
+        }
+        return payload;
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Compatibilidad temporal con tokens XOR legados durante migración
   try {
     let b64 = token.replace(/-/g, "+").replace(/_/g, "/");
     while (b64.length % 4) b64 += "=";
     const bin = atob(b64);
-    const keyBytes = new TextEncoder().encode(MEDIA_SECRET);
+    const keyBytes = new TextEncoder().encode(secret);
     const xorBytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) {
       xorBytes[i] = bin.charCodeAt(i) ^ keyBytes[i % keyBytes.length];
     }
     const dec = new TextDecoder().decode(xorBytes);
-    return JSON.parse(dec);
-  } catch (e) {
-    return null;
-  }
-}
-
-function decodePayload(tParam, urlParam, refParam) {
-  if (urlParam) return { u: urlParam, r: refParam || "" };
-  if (!tParam) return null;
-
-  const secretDec = decodeMediaToken(tParam);
-  if (secretDec && secretDec.u) return secretDec;
-
-  try {
-    let b64 = tParam.replace(/-/g, "+").replace(/_/g, "/");
-    while (b64.length % 4) b64 += "=";
-    const jsonStr = decodeURIComponent(escape(atob(b64)));
-    const parsed = JSON.parse(jsonStr);
+    const parsed = JSON.parse(dec);
     if (parsed && parsed.u) return parsed;
   } catch (e) {}
 
   return null;
 }
 
-// Cabeceras CORS estándar
-function getCorsHeaders(origin = "*") {
-  return {
-    "Access-Control-Allow-Origin": origin || "*",
-    "Access-Control-Allow-Credentials": "true",
+function decodePayload(tParam, urlParam, refParam, secret = "") {
+  if (tParam) {
+    const dec = decodeMediaToken(tParam, secret);
+    if (dec && dec.u) return dec;
+    return null;
+  }
+  if (urlParam && /^https?:\/\//i.test(urlParam)) {
+    return { u: urlParam, r: refParam || "" };
+  }
+  return null;
+}
+
+// =============================================================================
+// PROTECCIÓN ANTI-SSRF (VALIDACIÓN ESTRICTA DE HOSTS Y PROTOCOLOS UPSTREAM)
+// =============================================================================
+function isSafeUpstreamUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Bloqueo de loopback, interfaces internas y metadatos de nube
+    if (
+      hostname === "localhost" ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".onion") ||
+      hostname === "0.0.0.0"
+    ) {
+      return false;
+    }
+
+    // Bloqueo de rangos IPv4 privados y Cloud Metadata
+    if (/^127\.\d+\.\d+\.\d+$/.test(hostname)) return false; // Loopback
+    if (/^10\.\d+\.\d+\.\d+$/.test(hostname)) return false;  // 10.0.0.0/8
+    if (/^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(hostname)) return false; // 172.16.0.0/12
+    if (/^192\.168\.\d+\.\d+$/.test(hostname)) return false; // 192.168.0.0/16
+    if (/^169\.254\.\d+\.\d+$/.test(hostname)) return false; // Link-local y AWS/Cloudflare Metadata (169.254.169.254)
+
+    // Bloqueo de IPv6 (ej: [::1], fe80::, fd00::)
+    if (hostname.startsWith("[") || hostname.includes(":")) return false;
+
+    // Lista blanca exhaustiva de dominios upstream permitidos
+    const ALLOWED_CDN_SUFFIXES = [
+      "pmvhaven.com",
+      "redporn.tv",
+      "comics18.org",
+      "melapelacomics.com",
+      "melapelocondibujos.com",
+      "vercomicsporno.com",
+      "3hentai.net",
+      "sexkomix2.com",
+      "porn-images-xxx.com",
+      "pornone.com",
+      "pornhd.com",
+      "damplips.com",
+      "mitaku.net",
+      "buondua.com",
+      "4khd.com",
+      "xasiat.com",
+      "artgravia.com",
+      "supabase.co",
+      "supabase.in",
+      "pages.dev",
+      "cloudflare.com",
+      "r2.dev"
+    ];
+
+    return ALLOWED_CDN_SUFFIXES.some(suffix =>
+      hostname === suffix || hostname.endsWith("." + suffix)
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
+// =============================================================================
+// VALIDACIÓN Y SANITIZACIÓN DEFENSIVA DE ENTRADAS
+// =============================================================================
+function sanitizeSearchQuery(input) {
+  if (!input || typeof input !== "string") return "";
+  return input
+    .replace(/[(),.*"&:;{}[\]\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
+function sanitizeSlug(input) {
+  if (!input || typeof input !== "string") return "";
+  return input.toLowerCase().replace(/[^a-z0-9_\-]/g, "").slice(0, 60);
+}
+
+const ALLOWED_SORTS = new Set(["recent", "random", "views", "rating", "popular"]);
+function validateSort(sortInput) {
+  const s = (sortInput || "recent").trim().toLowerCase();
+  return ALLOWED_SORTS.has(s) ? s : "recent";
+}
+
+function validatePage(pageInput) {
+  const p = parseInt(pageInput || "1", 10);
+  return (isNaN(p) || p < 1) ? 1 : Math.min(p, 50000);
+}
+
+function validatePageSize(pageSizeInput, defaultSize = 24) {
+  const ps = parseInt(pageSizeInput || String(defaultSize), 10);
+  return (isNaN(ps) || ps < 1) ? defaultSize : Math.min(ps, 100);
+}
+
+// =============================================================================
+// CABECERAS CORS ESTRICTAS (SIN WILDCARD CUANDO HAY CREDENCIALES)
+// =============================================================================
+function getCorsHeaders(origin = "") {
+  const allowed = origin && (
+    origin.endsWith(".pages.dev") ||
+    origin.includes("morbohub") ||
+    origin.includes("localhost") ||
+    origin.includes("127.0.0.1")
+  );
+  const allowOrigin = allowed ? origin : (origin || "https://morbohub.pages.dev");
+  const headers = {
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, Range, X-Requested-With, X-Refresh-Token, X-Device-Token, x-velvet-client",
     "Server": "Velvet-Cloud",
-    "X-Powered-By": "Velvet-Native-Cloudflare-Engine/3.0"
+    "X-Powered-By": "Velvet-Native-Cloudflare-Engine/3.0",
+    "Vary": "Origin"
   };
+  if (allowed) {
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+  return headers;
 }
 
 // Memoria RAM Isolate Cache (Nivel 1: < 1ms de latencia en el Edge de Cloudflare)
@@ -197,6 +434,21 @@ async function syncSqlFavorite(userId, itemId, isAdd) {
 }
 
 export async function onRequest(context) {
+  const env = context.env || {};
+  const SUPABASE_URL = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || "https://qnmcejlxoufheisgkuyo.supabase.co";
+  const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  const SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const MEDIA_SECRET = env.MEDIA_SECRET || "";
+  _activeMediaSecret = MEDIA_SECRET;
+
+  // Helper local con inyección de secreto para firmar tokens sin exponer nada al cliente
+  const encodeToken = (targetUrl, referer = "") => encodeMediaToken(targetUrl, referer, MEDIA_SECRET);
+
+  // Clave de mínimo privilegio para catálogo público y operaciones autenticadas con RLS
+  const SUPABASE_KEY = SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  // Clave administrativa reservada para backend
+  const SUPABASE_ADMIN_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+
   const url = new URL(context.request.url);
   const origin = context.request.headers.get("origin") || "*";
   const method = context.request.method;
@@ -216,14 +468,31 @@ export async function onRequest(context) {
     url.pathname.startsWith("/api/video/stream");
 
   if (isMediaRoute) {
+    if (!MEDIA_SECRET) {
+      return new Response(JSON.stringify({
+        error: "Configuración incompleta: MEDIA_SECRET no está configurada en las variables de entorno de Cloudflare Pages."
+      }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
+
     const tParam = url.searchParams.get("t");
     const urlParam = url.searchParams.get("url") || url.searchParams.get("i");
     const refParam = url.searchParams.get("r") || url.searchParams.get("referer");
 
-    const payload = decodePayload(tParam, urlParam, refParam);
+    const payload = decodePayload(tParam, urlParam, refParam, MEDIA_SECRET);
     if (!payload || !payload.u || !/^https?:\/\//i.test(payload.u)) {
       return new Response("Media token invalido o expirado", {
-        status: 400,
+        status: 403,
+        headers: { "Content-Type": "text/plain; charset=utf-8", ...getCorsHeaders(origin) }
+      });
+    }
+
+    // Validación estricta anti-SSRF: bloqueo de IPs privadas y verificación de dominios upstream permitidos
+    if (!isSafeUpstreamUrl(payload.u)) {
+      return new Response("Destino upstream no permitido", {
+        status: 403,
         headers: { "Content-Type": "text/plain; charset=utf-8", ...getCorsHeaders(origin) }
       });
     }
@@ -462,9 +731,9 @@ export async function onRequest(context) {
   // =========================================================================
   const itemDetailMatch = url.pathname.match(/^\/api\/items\/(?:id\/([^/]+)|([^/]+)\/([^/]+))$/);
   if (itemDetailMatch && method === "GET") {
-    const rawId = itemDetailMatch[1];
-    const rawSource = itemDetailMatch[2];
-    const rawSourceId = itemDetailMatch[3];
+    const rawId = itemDetailMatch[1] ? itemDetailMatch[1].replace(/[^a-zA-Z0-9_\-]/g, "") : null;
+    const rawSource = itemDetailMatch[2] ? sanitizeSlug(decodeURIComponent(itemDetailMatch[2])) : null;
+    const rawSourceId = itemDetailMatch[3] ? decodeURIComponent(itemDetailMatch[3]).replace(/[(),.*"&:;{}[\]\\]/g, "") : null;
 
     // Cache L1 de Memoria RAM Isolate (0ms)
     const detailCacheKey = url.pathname;
@@ -1015,14 +1284,15 @@ export async function onRequest(context) {
   // 3. CATÁLOGO PRINCIPAL Y BÚSQUEDA (/api/items)
   // =========================================================================
   if (url.pathname === "/api/items" && (method === "GET" || method === "HEAD")) {
-    const mediaType = url.searchParams.get("media_type") || "comic";
-    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("page_size") || "24", 10)));
-    const q = (url.searchParams.get("q") || "").trim();
-    const category = (url.searchParams.get("category") || "").trim().toLowerCase();
-    const tag = (url.searchParams.get("tag") || "").trim().toLowerCase();
-    const seedParam = parseInt(url.searchParams.get("seed") || "0", 10);
-    const sort = (url.searchParams.get("sort") || "recent").trim().toLowerCase();
+    const rawMediaType = (url.searchParams.get("media_type") || "comic").trim().toLowerCase();
+    const mediaType = ["comic", "video", "gallery", "cosplay"].includes(rawMediaType) ? rawMediaType : "comic";
+    const page = validatePage(url.searchParams.get("page"));
+    const pageSize = validatePageSize(url.searchParams.get("page_size"), 24);
+    const q = sanitizeSearchQuery(url.searchParams.get("q"));
+    const category = sanitizeSlug(url.searchParams.get("category"));
+    const tag = sanitizeSlug(url.searchParams.get("tag"));
+    const seedParam = Math.max(0, Math.min(1000000, parseInt(url.searchParams.get("seed") || "0", 10) || 0));
+    const sort = validateSort(url.searchParams.get("sort"));
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
     const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam}:${sort}`;

@@ -7,8 +7,17 @@ node_modules/
 sync/.env
 *.log
 *.db
+*.sqlite
+*.sqlite3
 .deploy-state.json
 __pycache__/
+
+# Backups y archivos comprimidos
+*.zip
+*.rar
+*.tar
+*.gz
+*.7z
 
 tsconfig.tsbuildinfo
 

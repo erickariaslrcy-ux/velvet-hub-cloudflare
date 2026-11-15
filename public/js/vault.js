@@ -249,7 +249,10 @@
                 type="button"
                 class="absolute bottom-2 right-2 w-7 h-7 rounded-lg bg-black/90 hover:bg-rose-600 text-lav hover:text-white flex items-center justify-center text-xs transition-all shadow-md cursor-pointer border border-white/10"
                 title="Quitar de favoritos"
-                onclick="event.preventDefault(); event.stopPropagation(); window.VelvetVault.removeFavoriteItem('${it.source}', '${it.source_id}', '${it.id || ''}')"
+                data-fav-source="${escapeHtml(it.source || '')}"
+                data-fav-source-id="${escapeHtml(it.source_id || '')}"
+                data-fav-id="${escapeHtml(String(it.id || ''))}"
+                onclick="event.preventDefault(); event.stopPropagation(); window.VelvetVault.removeFavoriteItem(this.dataset.favSource, this.dataset.favSourceId, this.dataset.favId)"
               >
                 <i class="fa-solid fa-trash-can text-[11px]"></i>
               </button>
@@ -284,7 +287,10 @@
               type="button"
               class="p-2 text-lav/60 hover:text-rose-400 transition-colors cursor-pointer shrink-0"
               title="Quitar de favoritos"
-              onclick="event.preventDefault(); event.stopPropagation(); window.VelvetVault.removeFavoriteItem('${it.source}', '${it.source_id}', '${it.id || ''}')"
+              data-fav-source="${escapeHtml(it.source || '')}"
+              data-fav-source-id="${escapeHtml(it.source_id || '')}"
+              data-fav-id="${escapeHtml(String(it.id || ''))}"
+              onclick="event.preventDefault(); event.stopPropagation(); window.VelvetVault.removeFavoriteItem(this.dataset.favSource, this.dataset.favSourceId, this.dataset.favId)"
             >
               <i class="fa-solid fa-trash-can text-sm"></i>
             </button>
@@ -498,7 +504,10 @@
                 type="button"
                 class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-rose-950/60 text-lav/60 hover:text-rose-400 flex items-center justify-center text-xs transition-colors cursor-pointer"
                 title="Eliminar de mi historial"
-                onclick="window.VelvetVault.removeHistoryItem('${h.source}', '${h.source_id}', '${h.id || ''}')"
+                data-hist-source="${escapeHtml(h.source || '')}"
+                data-hist-source-id="${escapeHtml(h.source_id || '')}"
+                data-hist-id="${escapeHtml(String(h.id || ''))}"
+                onclick="window.VelvetVault.removeHistoryItem(this.dataset.histSource, this.dataset.histSourceId, this.dataset.histId)"
               >
                 <i class="fa-solid fa-trash-can text-xs"></i>
               </button>

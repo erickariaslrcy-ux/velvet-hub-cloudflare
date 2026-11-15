@@ -1,11 +1,17 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const PATREON_CLIENT_ID =
-  process.env.PATREON_CLIENT_ID || "0gJLjj89ySdbwdCHgGvPnPLbrPGBouKCe2yH5u4mBnDk0BMbe21AcQ7cwVtK5Cbu";
-export const PATREON_CLIENT_SECRET =
-  process.env.PATREON_CLIENT_SECRET || "A4GVPPsrInVVr1vEjAyFyD8eOLzt0qFqqae2-TCDepH-aX1aKLFD0B_wTN33YLtd";
-export const PATREON_CAMPAIGN_ID = process.env.PATREON_CAMPAIGN_ID || "17101887";
-export const MASTER_EMAIL = (process.env.MASTER_EMAIL || "erickariaslrcy@gmail.com").toLowerCase().trim();
+export const PATREON_CLIENT_ID = process.env.PATREON_CLIENT_ID || "";
+export const PATREON_CLIENT_SECRET = process.env.PATREON_CLIENT_SECRET || "";
+export const PATREON_CAMPAIGN_ID = process.env.PATREON_CAMPAIGN_ID || "";
+export const MASTER_EMAIL = (process.env.MASTER_EMAIL || "").toLowerCase().trim();
+
+function assertPatreonConfig() {
+  if (!PATREON_CLIENT_ID || !PATREON_CLIENT_SECRET || !PATREON_CAMPAIGN_ID) {
+    throw new Error(
+      "Configuración incompleta: PATREON_CLIENT_ID, PATREON_CLIENT_SECRET y PATREON_CAMPAIGN_ID deben estar definidas en las variables de entorno."
+    );
+  }
+}
 
 export interface PatreonUserInfo {
   id: string;
@@ -25,6 +31,7 @@ export interface PatreonUserInfo {
  * Genera la URL de autorización de OAuth para Patreon
  */
 export function getPatreonOAuthUrl(redirectUri: string, state?: string): string {
+  assertPatreonConfig();
   const params = new URLSearchParams({
     response_type: "code",
     client_id: PATREON_CLIENT_ID,
@@ -41,6 +48,7 @@ export function getPatreonOAuthUrl(redirectUri: string, state?: string): string 
  * Intercambia el código temporal por access_token de Patreon
  */
 export async function exchangePatreonCode(code: string, redirectUri: string) {
+  assertPatreonConfig();
   const params = new URLSearchParams({
     code,
     grant_type: "authorization_code",

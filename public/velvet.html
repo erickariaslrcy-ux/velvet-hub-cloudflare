@@ -4469,28 +4469,7 @@
       return null;
     }
 
-    // Helper de Enmascaramiento Stealth y Tokens Seguros
-    const MEDIA_SECRET = "velvet_ultra_stealth_secret_key_2026";
-
-    function encodeMediaToken(targetUrl, referer) {
-      if (!targetUrl) return '';
-      try {
-        const raw = JSON.stringify({ u: targetUrl, r: referer || '' });
-        const utf8Bytes = new TextEncoder().encode(raw);
-        const keyBytes = new TextEncoder().encode(MEDIA_SECRET);
-        const xorBytes = new Uint8Array(utf8Bytes.length);
-        for (let i = 0; i < utf8Bytes.length; i++) {
-          xorBytes[i] = utf8Bytes[i] ^ keyBytes[i % keyBytes.length];
-        }
-        let bin = '';
-        for (let i = 0; i < xorBytes.length; i++) {
-          bin += String.fromCharCode(xorBytes[i]);
-        }
-        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      } catch (e) {
-        return '';
-      }
-    }
+    // Enrutamiento seguro de imágenes y medios (los tokens son firmados exclusivamente por el servidor)
 
     
     // =======================================================================
@@ -4608,26 +4587,16 @@
     function getStealthImageUrl(url, referer, width = 0, quality = 70) {
       if (!url || typeof url !== 'string') return '';
       if (url.startsWith('data:') || url.startsWith('blob:')) return url;
-      let finalUrl = '';
-      if (url.startsWith('/api/media?t=')) {
-        finalUrl = url;
-      } else if (url.startsWith('/api/') && !url.includes('url=') && !url.includes('t=')) {
-        finalUrl = url;
-      } else {
-        const token = encodeMediaToken(url, referer);
-        finalUrl = `/api/media?t=${token}`;
-      }
+      let finalUrl = url;
       if (width > 0 && !finalUrl.includes('&w=') && !finalUrl.includes('?w=')) {
-        finalUrl += `&w=${width}&q=${quality}&fmt=auto`;
+        finalUrl += (finalUrl.includes('?') ? '&' : '?') + `w=${width}&q=${quality}&fmt=auto`;
       }
       return finalUrl;
     }
 
     function getStealthStreamUrl(streamUrl, referer) {
       if (!streamUrl || typeof streamUrl !== 'string') return '';
-      if (streamUrl.startsWith('blob:') || streamUrl.startsWith('/api/media?t=')) return streamUrl;
-      const token = encodeMediaToken(streamUrl, referer);
-      return `/api/media?t=${token}`;
+      return streamUrl;
     }
 
     // Prefijo de almacenamiento particionado por cuenta de usuario (aislado por ID real)
