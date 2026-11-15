@@ -320,8 +320,23 @@
       max-width: 100vw;
       width: 100%;
       min-height: 100vh;
+      min-height: 100dvh;
       overflow-x: hidden;
       background-color: #040209;
+    }
+
+    @supports (min-height: 100dvh) {
+      body, .min-h-screen {
+        min-height: 100dvh !important;
+      }
+      .h-screen {
+        height: 100dvh !important;
+      }
+    }
+
+    #reader-body {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
     }
 
     /* RENDERIZADO FLUIDO EN CASCADA SIN CUADROS NEGROS NI PARPADEOS (120 FPS FLUID) */
@@ -344,12 +359,14 @@
       }
       #global-header {
         background-color: rgba(4, 2, 9, 0.98) !important;
+        padding-top: max(env(safe-area-inset-top, 0px), 0px);
       }
       #mobile-navbar {
         background-color: rgba(4, 2, 9, 0.98) !important;
       }
       #reader-hud-top {
         background-color: rgba(4, 2, 9, 0.98) !important;
+        padding-top: max(env(safe-area-inset-top, 0px), 0px);
       }
       #thumbbar-controls {
         background-color: rgba(4, 2, 9, 0.98) !important;
@@ -1087,8 +1104,10 @@
     #video-stage:-webkit-full-screen {
       width: 100vw !important;
       height: 100vh !important;
+      height: 100dvh !important;
       max-width: none !important;
       max-height: none !important;
+      max-height: 100dvh !important;
       aspect-ratio: auto !important;
       border-radius: 0 !important;
       border: none !important;
@@ -1096,18 +1115,22 @@
       background: #000 !important;
       margin: 0 !important;
       padding: 0 !important;
+      transform: translateZ(0);
+      will-change: transform;
     }
     #video-stage:fullscreen #html5-video-player,
     #video-stage:-webkit-full-screen #html5-video-player {
       width: 100% !important;
       height: 100% !important;
       max-height: 100vh !important;
+      max-height: 100dvh !important;
       object-fit: contain !important;
     }
     #video-stage.theater-mode {
       max-width: 98vw !important;
       width: 100% !important;
       height: min(82vh, calc(98vw * 9 / 16)) !important;
+      height: min(82dvh, calc(98vw * 9 / 16)) !important;
       aspect-ratio: auto !important;
     }
     #video-stage.theater-mode #html5-video-player {
@@ -4487,19 +4510,36 @@
 
     function getResponsiveSrcSet(url, referer) {
       if (!url || typeof url !== 'string' || url.startsWith('data:')) return '';
+      const isSlow = (typeof navigator !== 'undefined' && navigator.connection &&
+        (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
       const base = getStealthImageUrl(url, referer);
       const clean = base.replace(/&w=\d+/g, '').replace(/&q=\d+/g, '').replace(/&fmt=\w+/g, '');
+      if (isSlow) {
+        return `${clean}&w=180&q=50&fmt=auto 180w, ${clean}&w=240&q=50&fmt=auto 240w`;
+      }
       return `${clean}&w=240&q=70&fmt=auto 240w, ${clean}&w=360&q=70&fmt=auto 360w, ${clean}&w=480&q=75&fmt=auto 480w`;
     }
 
-    // Lazy loader con cola de concurrencia y cancelación con AbortController
+    // Lazy loader con cola de concurrencia, priorización y cancelación con AbortController
     const SmartImageLoader = (function() {
       const isSlowConn = (typeof navigator !== 'undefined' && navigator.connection &&
         (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
-      const MAX_CONCURRENT = isSlowConn ? 3 : 6;
+      const MAX_CONCURRENT = isSlowConn ? 2 : 5;
       let active = 0;
       const queue = [];
       const controllers = new Map();
+
+      function cancelPendingForElement(el) {
+        const qIdx = queue.findIndex(t => t.el === el);
+        if (qIdx !== -1) {
+          queue.splice(qIdx, 1);
+        }
+        if (controllers.has(el)) {
+          try { controllers.get(el).abort(); } catch (e) {}
+          controllers.delete(el);
+          active = Math.max(0, active - 1);
+        }
+      }
 
       function processQueue() {
         if (active >= MAX_CONCURRENT || queue.length === 0) return;
@@ -4524,9 +4564,10 @@
           if (done) return;
           done = true;
           controllers.delete(img);
-          active--;
+          active = Math.max(0, active - 1);
 
           if (ok) {
+            img.dataset.loaded = 'true';
             img.src = src;
             if (srcSet) img.srcset = srcSet;
             img.classList.remove('opacity-0');
@@ -4536,8 +4577,14 @@
               sk.style.opacity = '0';
               setTimeout(() => { try { sk.remove(); } catch(e){} }, 200);
             }
+            if (observer) {
+              try { observer.unobserve(img); } catch(e){}
+            }
           } else {
             handleCardImageError(img, task.type || 'comic');
+            if (observer) {
+              try { observer.unobserve(img); } catch(e){}
+            }
           }
           processQueue();
         };
@@ -4559,18 +4606,21 @@
           if (entry.isIntersecting) {
             const src = img.dataset.src;
             const srcSet = img.dataset.srcset;
-            if (src) {
-              queue.push({ el: img, src, srcSet, type: img.dataset.mediaType });
-              processQueue();
-              observer.unobserve(img);
+            if (src && !img.dataset.loaded) {
+              const alreadyQueued = queue.some(t => t.el === img);
+              if (!alreadyQueued && !controllers.has(img)) {
+                queue.push({ el: img, src, srcSet, type: img.dataset.mediaType });
+                processQueue();
+              }
             }
           } else {
-            if (controllers.has(img)) {
-              controllers.get(img).abort();
+            // Cancelar descarga activa o sacar de cola si sale de pantalla antes de cargar
+            if (!img.dataset.loaded) {
+              cancelPendingForElement(img);
             }
           }
         });
-      }, { rootMargin: '350px 0px' }) : null;
+      }, { rootMargin: isSlowConn ? '200px 0px' : '350px 0px' }) : null;
 
       return {
         register: (img) => {
@@ -4579,6 +4629,12 @@
             return;
           }
           observer.observe(img);
+        },
+        cancel: (img) => {
+          cancelPendingForElement(img);
+          if (observer) {
+            try { observer.unobserve(img); } catch(e){}
+          }
         }
       };
     })();
@@ -4586,9 +4642,17 @@
     function getStealthImageUrl(url, referer, width = 0, quality = 70) {
       if (!url || typeof url !== 'string') return '';
       if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+      const isSlow = (typeof navigator !== 'undefined' && navigator.connection &&
+        (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
+      let finalQuality = quality;
+      let finalWidth = width;
+      if (isSlow) {
+        finalQuality = Math.min(quality, 50);
+        if (finalWidth > 240) finalWidth = 240;
+      }
       let finalUrl = url;
-      if (width > 0 && !finalUrl.includes('&w=') && !finalUrl.includes('?w=')) {
-        finalUrl += (finalUrl.includes('?') ? '&' : '?') + `w=${width}&q=${quality}&fmt=auto`;
+      if (finalWidth > 0 && !finalUrl.includes('&w=') && !finalUrl.includes('?w=')) {
+        finalUrl += (finalUrl.includes('?') ? '&' : '?') + `w=${finalWidth}&q=${finalQuality}&fmt=auto`;
       }
       return finalUrl;
     }
@@ -9288,6 +9352,24 @@
       pre.src = url;
     }
 
+    function preloadNextImages(pages, referer, currentIndex) {
+      if (!pages || !Array.isArray(pages) || pages.length === 0) return;
+      const isSlow = (typeof navigator !== 'undefined' && navigator.connection &&
+        (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
+      if (isSlow && navigator.connection && navigator.connection.saveData) {
+        return; // Ahorro de datos activo: no precargar imágenes adelantadas
+      }
+      // Conexión lenta: precargar 1 página; normal: 2 páginas adelantadas. Cómics > 50 páginas acotados a 2.
+      const lookAhead = isSlow ? 1 : 2;
+      const maxPages = pages.length;
+      for (let offset = 1; offset <= lookAhead; offset++) {
+        const targetIdx = currentIndex + offset;
+        if (targetIdx < maxPages) {
+          preloadSinglePage(targetIdx);
+        }
+      }
+    }
+
     function retryImage(btn, originalSrc) {
       const parent = btn.parentElement;
       const wrapper = parent.parentElement;
@@ -9337,10 +9419,13 @@
 
       pages.forEach(p => window._readerObserver.observe(p));
 
-      // Observador proactivo adelantado 2500px para descarga de imágenes antes de que lleguen a la vista
+      // Observador adaptativo para descarga de imágenes antes de llegar a la vista (800px en móvil lento, 1500px normal)
       if (window._readerPrefetchObserver) {
         window._readerPrefetchObserver.disconnect();
       }
+      const isSlowConn = (typeof navigator !== 'undefined' && navigator.connection &&
+        (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
+      const prefetchMargin = isSlowConn ? '800px 0px 800px 0px' : '1500px 0px 1500px 0px';
       window._readerPrefetchObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
@@ -9350,7 +9435,7 @@
             }
           }
         });
-      }, { rootMargin: '2500px 0px 2500px 0px' });
+      }, { rootMargin: prefetchMargin });
       pages.forEach(p => window._readerPrefetchObserver.observe(p));
     }
 

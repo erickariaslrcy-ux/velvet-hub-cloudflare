@@ -8,8 +8,8 @@
     "dev": "wrangler pages dev public",
     "preview": "wrangler pages dev public",
     "deploy": "wrangler pages deploy public",
-    "test": "node test/test_pagination.mjs && node test/test_security.mjs && node test/test_database.mjs",
-    "check": "node test/test_pagination.mjs && node test/test_security.mjs && node test/test_database.mjs"
+    "test": "node test/test_pagination.mjs && node test/test_security.mjs && node test/test_database.mjs && node test/test_performance.mjs",
+    "check": "node test/test_pagination.mjs && node test/test_security.mjs && node test/test_database.mjs && node test/test_performance.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.160.0"
