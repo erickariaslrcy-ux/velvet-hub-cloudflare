@@ -1313,7 +1313,7 @@
 
   <!-- ===================================================================== -->
 
-  <div id="filter-bar" class="w-full max-w-full overflow-hidden bg-[#0c061d]/98 border-b border-purple-500/15 py-2 px-2.5 sm:px-6 lg:px-8 sticky top-16 z-30 shadow-lg">
+  <div id="filter-bar" class="w-full max-w-full bg-[#0c061d]/98 border-b border-purple-500/15 py-2 px-2.5 sm:px-6 lg:px-8 sticky top-16 z-30 shadow-lg overflow-visible">
 
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-2.5 sm:gap-4 w-full">
 
@@ -1356,13 +1356,35 @@
         <div id="sort-dropdown-menu"
              role="listbox"
              aria-label="Opciones de ordenación"
-             class="hidden md:block absolute right-0 top-full mt-2 w-56 rounded-2xl bg-[#120726]/95 border border-purple-500/30 backdrop-blur-xl shadow-2xl p-1.5 z-50 transition-all opacity-0 pointer-events-none scale-95 duration-150">
+             class="hidden md:block absolute right-0 top-full mt-2 w-64 rounded-2xl bg-[#120726]/98 border border-purple-500/30 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-2 z-50 transition-all opacity-0 pointer-events-none scale-95 duration-150">
           <!-- Opciones renderizadas dinámicamente -->
         </div>
       </div>
 
     </div>
 
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- VELVET PORTAL TRANSITION CURTAIN (CAMBIO DE PANTALLAS ULTRA-SUAVE) -->
+  <!-- ===================================================================== -->
+  <div id="portal-transition-curtain"
+       class="fixed inset-0 z-40 pointer-events-none opacity-0 transition-opacity duration-300 flex items-center justify-center bg-[#06020c]/80 backdrop-blur-md"
+       aria-hidden="true">
+    <div id="portal-transition-card"
+         class="flex flex-col items-center gap-3.5 p-6 rounded-3xl bg-[#120726]/95 border border-pink-500/30 shadow-[0_0_50px_rgba(236,72,153,0.25)] scale-95 transition-all duration-300 transform select-none">
+      <div class="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 via-magenta to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
+        <i id="portal-transition-icon" class="fa-solid fa-book-open text-white text-xl animate-pulse"></i>
+        <div class="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 opacity-40 blur-sm -z-10 animate-pulse"></div>
+      </div>
+      <div class="text-center space-y-1">
+        <p id="portal-transition-text" class="text-sm font-black text-white tracking-wide">Accediendo a Cómics VIP...</p>
+        <p class="text-[11px] text-lav/60">Cargando catálogo en alta definición</p>
+      </div>
+      <div class="w-40 h-1.5 rounded-full bg-white/10 overflow-hidden relative">
+        <div class="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-400 to-pink-500 animate-pulse"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ===================================================================== -->
@@ -3513,8 +3535,11 @@
       if (!img) return;
       img.onerror = null;
       img.classList.remove('opacity-0');
+      img.classList.add('opacity-100');
       const sk = img.previousElementSibling;
-      if (sk && sk.classList.contains('skeleton-shimmer')) sk.remove();
+      if (sk && (sk.classList.contains('skeleton-shimmer') || sk.classList.contains('velvet-skeleton'))) {
+        sk.remove();
+      }
       img.src = (type === 'video') ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG;
     };
 
@@ -3759,7 +3784,65 @@
       }
     }
 
+    let _portalTransitionTimer = null;
+    let _portalTransitionStart = 0;
+
+    function showPortalTransition(mode) {
+      const curtain = document.getElementById('portal-transition-curtain');
+      const card = document.getElementById('portal-transition-card');
+      const icon = document.getElementById('portal-transition-icon');
+      const text = document.getElementById('portal-transition-text');
+      if (!curtain) return;
+
+      _portalTransitionStart = Date.now();
+      if (_portalTransitionTimer) {
+        clearTimeout(_portalTransitionTimer);
+        _portalTransitionTimer = null;
+      }
+
+      if (mode === 'videos') {
+        if (icon) icon.className = 'fa-solid fa-film text-white text-xl animate-pulse';
+        if (text) text.textContent = 'Accediendo a Videos HD...';
+      } else if (mode === 'galleries') {
+        if (icon) icon.className = 'fa-solid fa-camera-retro text-white text-xl animate-pulse';
+        if (text) text.textContent = 'Accediendo a Cosplay & Modelos...';
+      } else {
+        if (icon) icon.className = 'fa-solid fa-book-open text-white text-xl animate-pulse';
+        if (text) text.textContent = 'Accediendo a Cómics VIP...';
+      }
+
+      curtain.classList.remove('pointer-events-none', 'opacity-0');
+      curtain.classList.add('opacity-100');
+      if (card) {
+        card.classList.remove('scale-95');
+        card.classList.add('scale-100');
+      }
+    }
+
+    function hidePortalTransition() {
+      const curtain = document.getElementById('portal-transition-curtain');
+      const card = document.getElementById('portal-transition-card');
+      if (!curtain || curtain.classList.contains('opacity-0')) return;
+
+      const elapsed = Date.now() - _portalTransitionStart;
+      const minDuration = 280;
+      const remaining = Math.max(0, minDuration - elapsed);
+
+      if (_portalTransitionTimer) clearTimeout(_portalTransitionTimer);
+      _portalTransitionTimer = setTimeout(() => {
+        curtain.classList.remove('opacity-100');
+        curtain.classList.add('opacity-0', 'pointer-events-none');
+        if (card) {
+          card.classList.remove('scale-100');
+          card.classList.add('scale-95');
+        }
+      }, remaining);
+    }
+
     function setPortalMode(mode, isUserClick = false, options = {}) {
+      if (isUserClick || options.animate) {
+        showPortalTransition(mode);
+      }
 
       console.log('%c🔄 [VELVET HUB] Cambiando Portal a Modo: ' + mode.toUpperCase(), 'color: #a855f7; font-weight: bold; font-size: 13px;');
 
@@ -4841,7 +4924,7 @@
 
         const targetMode = route.mode || 'comics';
         if (targetMode !== state.mode) {
-          setPortalMode(targetMode, false);
+          setPortalMode(targetMode, true);
         }
         if (route.category && route.category !== state.category) {
           state.category = route.category;
@@ -5481,6 +5564,7 @@
       renderPaginationControls(currentPage, totalPages, totalItemsCount);
       updateInfiniteScrollUI(currentPage, totalPages, currentLoadedCount, totalItemsCount);
       initInfiniteScrollObserver();
+      hidePortalTransition();
     }
 
     // CARGA EN TIEMPO REAL DIRECTO CON CACHE LOCAL INSTANTÁNEO (0ms)
@@ -5611,6 +5695,7 @@
         showToast('Error cargando contenido: ' + (err.message || 'Servidores ocupados'), 'error');
       } finally {
         _isLoadingFeed = false;
+        hidePortalTransition();
       }
     }
 
@@ -5698,7 +5783,7 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden select-none" style="background-color: ${domColor};">
             <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
@@ -5706,7 +5791,7 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
+              onload="if(this.src && !this.src.startsWith('data:image/svg')){this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}}"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -5842,7 +5927,7 @@
           <div class="relative aspect-video w-full overflow-hidden select-none" style="background-color: ${domColor};">
             <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
@@ -5850,7 +5935,7 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
+              onload="if(this.src && !this.src.startsWith('data:image/svg')){this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}}"
               onerror="handleCardImageError(this, 'video')"
             />
             <div class="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors pointer-events-none"></div>
@@ -8391,7 +8476,7 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden select-none" style="background-color: ${domColor};">
             <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
@@ -8399,7 +8484,7 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
+              onload="if(this.src && !this.src.startsWith('data:image/svg')){this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}}"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>

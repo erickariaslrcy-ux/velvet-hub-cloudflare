@@ -698,6 +698,12 @@ export async function onRequest(context) {
             },
       });
 
+      // Si el origen upstream bloqueó la IP del servidor con 403/401/503 (ej. WAF/anti-bot en Buondua),
+      // redirigir con 307 al navegador residencial del cliente para descarga directa limpia
+      if (!upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
+        return Response.redirect(targetMediaUrl, 307);
+      }
+
       const respHeaders = new Headers();
       respHeaders.set("Content-Type", upstream.headers.get("content-type") || (isVideo ? "video/mp4" : "image/jpeg"));
       respHeaders.set("Access-Control-Allow-Origin", "*");
