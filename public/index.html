@@ -1396,35 +1396,38 @@
 
       </div>
 
-      <!-- Chips de Categoría Limpios con Scroll Suave -->
-
-      <div class="flex-1 overflow-x-auto no-scrollbar flex items-center gap-1.5 py-0.5" id="category-chips">
-
-        <!-- Chips renderizados dinámicamente por JS según Cómics, Videos o Modelos -->
-
+      <!-- Chips de Categoría Limpios con Scroll Suave y Scroll-Snap -->
+      <div class="relative flex-1 min-w-0 flex items-center overflow-hidden">
+        <div id="category-chips-scroll" class="w-full overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory flex items-center gap-2 py-1 px-1">
+          <div class="flex items-center gap-2 shrink-0" id="category-chips">
+            <!-- Chips renderizados dinámicamente por JS con data-action="filter-category" -->
+          </div>
+        </div>
+        <!-- Máscara de desvanecimiento sutil a la derecha en móvil para indicar más contenido -->
+        <div class="pointer-events-none md:hidden absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#0b0416] to-transparent"></div>
       </div>
 
-      <!-- Indicador de Catálogo y Ordenamiento -->
+      <!-- Selector de Orden Personalizado Accesible (Dropdown Desktop / Bottom Sheet Móvil) -->
+      <div id="sort-menu-container" class="relative shrink-0 flex items-center">
+        <button id="sort-menu-btn"
+                type="button"
+                data-action="toggle-sort-menu"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-label="Seleccionar modo de ordenación del catálogo"
+                class="h-10 px-3 sm:px-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] active:bg-white/[0.15] border border-white/10 hover:border-pink-500/50 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer select-none">
+          <span id="sort-current-icon" class="text-pink-400">🎲</span>
+          <span id="sort-current-label" class="hidden sm:inline">Modo Aleatorio</span>
+          <i class="fa-solid fa-chevron-down text-[10px] text-white/60 transition-transform duration-200" id="sort-menu-chevron"></i>
+        </button>
 
-      <div class="hidden md:flex items-center gap-2.5 shrink-0">
-
-        <div class="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-white/[0.04] border border-white/10 px-3 py-1.5 rounded-full">
-
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-
-          <span id="results-count">Catálogo Listo</span>
-
+        <!-- Menú Desplegable Flotante (Desktop >= 768px) -->
+        <div id="sort-dropdown-menu"
+             role="listbox"
+             aria-label="Opciones de ordenación"
+             class="hidden md:block absolute right-0 top-full mt-2 w-56 rounded-2xl bg-[#120726]/95 border border-purple-500/30 backdrop-blur-xl shadow-2xl p-1.5 z-50 transition-all opacity-0 pointer-events-none scale-95 duration-150">
+          <!-- Opciones renderizadas dinámicamente -->
         </div>
-
-        <!-- Selector de Orden y Modo de Catálogo -->
-        <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-white/[0.05] border border-white/10 text-white/80 hover:text-white text-xs font-semibold rounded-full px-3 py-1.5 focus:outline-none focus:border-pink-500 cursor-pointer">
-          <option value="recent">📌 Más Recientes</option>
-          <option value="random">🎲 Modo Aleatorio</option>
-          <option value="rating">⭐ Más Valorados</option>
-          <option value="views">🔥 Más Vistos</option>
-          <option value="pages">📚 Más Páginas</option>
-        </select>
-
       </div>
 
     </div>
@@ -1566,33 +1569,14 @@
         <h2 class="font-display text-xl sm:text-2xl text-white font-black flex items-center gap-2">
           <i class="fa-solid fa-clock-rotate-left text-pink-500"></i> <span id="continue-shelf-title">Continuar Leyendo</span>
         </h2>
-        <span id="continue-shelf-subtitle" class="text-xs text-purple-200/60">Reanuda donde lo dejaste con 1 toque</span>
       </div>
-      <div id="continue-shelf-cards" class="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-        <!-- Tarjetas dinámicas de continuar leyendo / viendo -->
+      <div id="continue-shelf-cards" class="flex gap-3 sm:gap-4 overflow-x-auto no-scrollbar pb-2 snap-x snap-mandatory">
+        <!-- Tarjetas verticales dinámicas de continuar leyendo / viendo -->
       </div>
     </section>
 
     <!-- 3. GRID PRINCIPAL DE CONTENIDO -->
-
     <section class="space-y-4">
-
-      <div class="flex items-center justify-between">
-
-        <h2 id="grid-section-title" class="font-display text-xl sm:text-2xl text-white font-black flex items-center gap-2">
-
-          <i class="fa-solid fa-fire text-pink-500"></i> Últimas Novedades Calientes
-
-        </h2>
-
-        <span id="grid-status-badge" class="text-xs font-semibold text-purple-200/70 bg-white/[0.04] border border-white/10 px-3 py-1 rounded-full">
-
-          Actualizado hace instantes
-
-        </span>
-
-      </div>
-
       <div id="comics-grid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6">
 
         <!-- Skeletons por defecto -->
@@ -3798,19 +3782,20 @@
     const GALLERY_TRENDS = ['Cosplay', 'ArtGravia', 'Xiuren', 'Genshin', 'Bikini', 'Lingerie', 'Kang In-kyung', 'Patreon', '4K'];
 
     const COMIC_CATEGORIES = [
+      { id: 'all', label: 'Todos los Estrenos', icon: 'fa-solid fa-fire text-amber-400' },
+      { id: 'manhwa', label: 'Manhwas +18', icon: 'fa-solid fa-book-open text-purple-400' },
+      { id: '3d', label: '3D CGI Novels', icon: 'fa-solid fa-gem text-cyan-400' },
+      { id: 'doujin', label: 'Doujinshi & Manga', icon: 'fa-solid fa-torii-gate text-rose-400' },
+      { id: 'parody', label: 'Parodias Animadas', icon: 'fa-solid fa-wand-magic-sparkles text-pink-400' },
+      { id: 'western', label: 'Cómics XXX Clásicos', icon: 'fa-solid fa-bolt text-yellow-400' }
+    ];
 
-      { id: 'all', label: '🔥 Todos los Estrenos' },
-
-      { id: 'manhwa', label: '🔞 Manhwas +18' },
-
-      { id: '3d', label: '💎 3D CGI Novels' },
-
-      { id: 'doujin', label: '🎌 Doujinshi & Manga' },
-
-      { id: 'toon', label: '✨ Parodias Animadas' },
-
-      { id: 'western', label: '💥 Cómics XXX Clásicos' }
-
+    const SORT_OPTIONS = [
+      { id: 'random', label: 'Modo Aleatorio', icon: '🎲', desc: 'Descubre cómics y novedades al azar' },
+      { id: 'recent', label: 'Más Recientes', icon: '📌', desc: 'Últimos estrenos agregados al catálogo' },
+      { id: 'popular', label: 'Más Populares', icon: '⭐', desc: 'Favoritos más guardados por la comunidad' },
+      { id: 'views', label: 'Más Vistos', icon: '🔥', desc: 'Los títulos con mayor número de lecturas' },
+      { id: 'rating', label: 'Mejor Valorados', icon: '💎', desc: 'Mayor calificación y reseñas VIP' }
     ];
 
     const COMIC_TRENDS = ['Milf', 'Harem', 'Madre', 'Incesto', '3D', 'Casadas', 'Superheroes', 'SinCensura', 'FullColor'];
@@ -4032,36 +4017,178 @@
         cats = VIDEO_CATEGORIES;
       }
 
+      const activeCat = state.category || 'all';
+
       cats.forEach(cat => {
         const btn = document.createElement('button');
-        const isActive = (state.category === cat.id) || (state.category === 'all' && cat.id === 'all');
-        btn.className = `category-chip ${isActive ? 'is-active' : ''}`;
-        btn.textContent = cat.label;
-        btn.onclick = () => setCategory(cat.id, btn);
+        const isActive = (activeCat === cat.id) || (activeCat === 'all' && cat.id === 'all');
+        btn.type = 'button';
+        btn.setAttribute('data-action', 'filter-category');
+        btn.setAttribute('data-category', cat.id);
+        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        btn.className = `cat-chip h-10 px-3.5 sm:px-4 rounded-xl text-xs whitespace-nowrap shrink-0 snap-start flex items-center gap-2 transition-all cursor-pointer select-none font-bold ${
+          isActive
+            ? 'is-active bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md shadow-pink-500/25 border border-pink-400/50 font-black'
+            : 'bg-white/[0.04] text-white/75 hover:text-white hover:bg-white/[0.08] border border-white/10 hover:border-pink-500/40'
+        }`;
+
+        if (cat.icon) {
+          const iconEl = document.createElement('i');
+          iconEl.className = `${cat.icon} text-xs`;
+          btn.appendChild(iconEl);
+        }
+        const textSpan = document.createElement('span');
+        textSpan.textContent = cat.label.replace(/^[^\w\s\+]+/, '').trim();
+        btn.appendChild(textSpan);
+
         container.appendChild(btn);
       });
     }
 
-    function setVideoSource(srcId, btn) {
+    let isSortMenuOpen = false;
 
-      console.log('📌 [VELVET] Filtro de Categoría de Video:', srcId);
+    function renderSortOptions() {
+      const dropdown = document.getElementById('sort-dropdown-menu');
+      const sheet = document.getElementById('sort-sheet-options');
+      const currentSort = state.sort || 'random';
 
-      state.category = srcId;
+      const renderOption = (opt) => {
+        const isSelected = (currentSort === opt.id);
+        return `
+          <button type="button"
+                  data-action="select-sort"
+                  data-sort="${opt.id}"
+                  role="option"
+                  aria-selected="${isSelected ? 'true' : 'false'}"
+                  class="w-full text-left px-3 py-2.5 rounded-xl text-xs flex items-center justify-between gap-3 transition-all cursor-pointer select-none ${
+                    isSelected
+                      ? 'bg-gradient-to-r from-pink-500/20 to-purple-600/20 border border-pink-500/40 text-pink-300 font-extrabold'
+                      : 'hover:bg-white/[0.06] text-white/80 hover:text-white border border-transparent'
+                  }">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <span class="text-base shrink-0">${opt.icon}</span>
+              <div class="min-w-0">
+                <span class="block truncate ${isSelected ? 'text-white font-extrabold' : 'font-medium'}">${opt.label}</span>
+                <span class="block text-[10px] text-lav/60 truncate font-normal">${opt.desc}</span>
+              </div>
+            </div>
+            ${isSelected ? '<i class="fa-solid fa-check text-pink-400 text-xs shrink-0"></i>' : ''}
+          </button>
+        `;
+      };
 
-      state.videoSource = srcId;
+      if (dropdown) {
+        dropdown.innerHTML = SORT_OPTIONS.map(renderOption).join('');
+      }
+      if (sheet) {
+        sheet.innerHTML = SORT_OPTIONS.map(renderOption).join('');
+      }
+
+      updateSortUI(currentSort);
+    }
+
+    function updateSortUI(sortId) {
+      const opt = SORT_OPTIONS.find(s => s.id === sortId) || SORT_OPTIONS[0];
+      const iconEl = document.getElementById('sort-current-icon');
+      const labelEl = document.getElementById('sort-current-label');
+      if (iconEl) iconEl.textContent = opt.icon;
+      if (labelEl) labelEl.textContent = opt.label;
+    }
+
+    function toggleSortMenu() {
+      if (isSortMenuOpen) {
+        closeSortMenu();
+      } else {
+        openSortMenu();
+      }
+    }
+
+    function openSortMenu() {
+      isSortMenuOpen = true;
+      renderSortOptions();
+      const isMobile = window.innerWidth < 768;
+      const btn = document.getElementById('sort-menu-btn');
+      const chevron = document.getElementById('sort-menu-chevron');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+      if (chevron) chevron.classList.add('rotate-180');
+
+      if (isMobile) {
+        const backdrop = document.getElementById('sort-bottom-sheet-backdrop');
+        const sheet = document.getElementById('sort-bottom-sheet');
+        if (backdrop && sheet) {
+          backdrop.classList.remove('hidden');
+          requestAnimationFrame(() => {
+            backdrop.classList.remove('opacity-0');
+            sheet.classList.remove('translate-y-full');
+          });
+        }
+      } else {
+        const dropdown = document.getElementById('sort-dropdown-menu');
+        if (dropdown) {
+          dropdown.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+          dropdown.classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+        }
+      }
+    }
+
+    function closeSortMenu() {
+      isSortMenuOpen = false;
+      const btn = document.getElementById('sort-menu-btn');
+      const chevron = document.getElementById('sort-menu-chevron');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+      if (chevron) chevron.classList.remove('rotate-180');
+
+      const dropdown = document.getElementById('sort-dropdown-menu');
+      if (dropdown) {
+        dropdown.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+        dropdown.classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
+      }
+
+      const backdrop = document.getElementById('sort-bottom-sheet-backdrop');
+      const sheet = document.getElementById('sort-bottom-sheet');
+      if (sheet) sheet.classList.add('translate-y-full');
+      if (backdrop) {
+        backdrop.classList.add('opacity-0');
+        setTimeout(() => {
+          if (!isSortMenuOpen && backdrop) backdrop.classList.add('hidden');
+        }, 200);
+      }
+    }
+
+    function selectSortOption(sortId) {
+      closeSortMenu();
+      if (sortId === 'random') {
+        state.catalogMode = 'dynamic';
+        state.sort = 'random';
+        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.videoSeed = state.feedSeed;
+      } else {
+        state.catalogMode = 'static';
+        state.sort = sortId;
+        state.feedSeed = 0;
+        state.videoSeed = 0;
+      }
 
       state.page = 1;
 
-      document.querySelectorAll('#category-chips .cat-chip').forEach(c => {
-        c.className = 'cat-chip whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold text-white/70 bg-white/[0.04] border border-white/10 hover:border-pink-500/50 hover:text-white transition-all shrink-0 cursor-pointer';
-      });
-
-      if (btn) {
-        btn.className = 'cat-chip active whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-extrabold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.35)] border border-pink-400/50 transition-all shrink-0 cursor-pointer';
+      // Sincronizar parámetro URL ?sort=
+      const url = new URL(window.location.href);
+      if (sortId && sortId !== 'random') {
+        url.searchParams.set('sort', sortId);
+      } else {
+        url.searchParams.delete('sort');
+      }
+      if (window.history && window.history.pushState) {
+        window.history.pushState({ sort: sortId }, '', url.toString());
       }
 
-      fetchLiveFeed();
+      updateSortUI(sortId);
+      renderSortOptions();
+      fetchLiveFeed(true);
+    }
 
+    function setVideoSource(srcId, btn) {
+      setCategory(srcId, btn);
     }
 
     function renderTrendingTags() {
@@ -4358,7 +4485,26 @@
         state.mode = 'comics';
       }
 
+      const initUrlParams = new URLSearchParams(window.location.search);
+      const initCat = initUrlParams.get('cat');
+      if (initCat) {
+        state.category = initCat;
+      }
+      const initSort = initUrlParams.get('sort');
+      if (initSort && ['random', 'recent', 'popular', 'views', 'rating'].includes(initSort)) {
+        state.sort = initSort;
+        if (initSort === 'random') state.catalogMode = 'dynamic';
+        else state.catalogMode = 'static';
+      }
+
       setPortalMode(state.mode);
+      if (typeof renderSortOptions === 'function') {
+        renderSortOptions();
+      }
+      const initialPageInfo = window.VelvetPagination?.parseUrlPage(window.location.search);
+      if (initialPageInfo && initialPageInfo.page > 1) {
+        state.page = initialPageInfo.page;
+      }
       renderContinueShelf();
 
       if (videoMatch) {
@@ -5301,7 +5447,8 @@
         if (!append) {
           grid.classList.add('hidden');
           empty.classList.remove('hidden');
-          resCount.textContent = '0 resultados';
+          window.VelvetPagination?.render(1, 0, 0);
+          if (resCount) resCount.textContent = '0 resultados';
           const emptyTitle = empty.querySelector('h3');
           const emptyDesc = empty.querySelector('p');
           const emptyBtn = empty.querySelector('button');
@@ -5346,41 +5493,49 @@
       const currentLoadedCount = state.catalogCache ? state.catalogCache.length : data.items.length;
 
       if (state.mode === 'galleries') {
-        resCount.textContent = `${currentLoadedCount} Galerías VIP Listas`;
+        if (resCount) resCount.textContent = `${currentLoadedCount} Galerías VIP Listas`;
         const badgeEl = document.getElementById('grid-status-badge');
         if (badgeEl) badgeEl.textContent = `${currentLoadedCount} sets en ultra alta definición`;
-        if (state.query) {
-          titleSec.innerHTML = `<i class="fa-solid fa-camera-retro text-hot"></i> Galerías encontradas para: "${escapeHtml(state.query)}"`;
-        } else if (state.category && state.category !== 'all') {
-          const catObj = GALLERY_CATEGORIES.find(cat => cat.id === state.category);
-          const catLabel = catObj ? catObj.label.replace(/^[^\w\s]+/, '').trim() : state.category.toUpperCase();
-          titleSec.innerHTML = `<i class="fa-solid fa-camera text-hot"></i> Galerías: ${catLabel}`;
-        } else {
-          titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Sets Exclusivos de Cosplay & Modelos`;
+        if (titleSec) {
+          if (state.query) {
+            titleSec.innerHTML = `<i class="fa-solid fa-camera-retro text-hot"></i> Galerías encontradas para: "${escapeHtml(state.query)}"`;
+          } else if (state.category && state.category !== 'all') {
+            const catObj = GALLERY_CATEGORIES.find(cat => cat.id === state.category);
+            const catLabel = catObj ? catObj.label.replace(/^[^\w\s]+/, '').trim() : state.category.toUpperCase();
+            titleSec.innerHTML = `<i class="fa-solid fa-camera text-hot"></i> Galerías: ${catLabel}`;
+          } else {
+            titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Sets Exclusivos de Cosplay & Modelos`;
+          }
         }
         renderGalleryGrid(itemsToRender, append);
       } else if (state.mode === 'videos') {
-        resCount.textContent = `${currentLoadedCount} Videos HD Listos`;
-        document.getElementById('grid-status-badge').textContent = `${currentLoadedCount} videos en streaming directo`;
-        if (state.query) {
-          titleSec.innerHTML = `<i class="fa-solid fa-film text-hot"></i> Videos encontrados para: "${escapeHtml(state.query)}"`;
-        } else if (state.category && state.category !== 'all') {
-          const catObj = VIDEO_CATEGORIES.find(c => c.id === state.category);
-          const catLabel = catObj ? catObj.label.replace(/^[^\w\s]+/, '').trim() : state.category.toUpperCase();
-          titleSec.innerHTML = `<i class="fa-solid fa-play text-hot"></i> Videos: ${catLabel}`;
-        } else {
-          titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición`;
+        if (resCount) resCount.textContent = `${currentLoadedCount} Videos HD Listos`;
+        const vBadge = document.getElementById('grid-status-badge');
+        if (vBadge) vBadge.textContent = `${currentLoadedCount} videos en streaming directo`;
+        if (titleSec) {
+          if (state.query) {
+            titleSec.innerHTML = `<i class="fa-solid fa-film text-hot"></i> Videos encontrados para: "${escapeHtml(state.query)}"`;
+          } else if (state.category && state.category !== 'all') {
+            const catObj = VIDEO_CATEGORIES.find(c => c.id === state.category);
+            const catLabel = catObj ? catObj.label.replace(/^[^\w\s]+/, '').trim() : state.category.toUpperCase();
+            titleSec.innerHTML = `<i class="fa-solid fa-play text-hot"></i> Videos: ${catLabel}`;
+          } else {
+            titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición`;
+          }
         }
         renderVideoGrid(itemsToRender, append);
       } else {
-        resCount.textContent = `${currentLoadedCount} Cómics Calientes Listos`;
-        document.getElementById('grid-status-badge').textContent = `${currentLoadedCount} historias listas para leer`;
-        if (state.query) {
-          titleSec.innerHTML = `<i class="fa-solid fa-magnifying-glass text-hot"></i> Resultados para: "${escapeHtml(state.query)}"`;
-        } else if (state.category && state.category !== 'all') {
-          titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Catálogo: ${state.category.toUpperCase()}`;
-        } else {
-          titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Últimas Novedades Calientes`;
+        if (resCount) resCount.textContent = `${currentLoadedCount} Cómics Calientes Listos`;
+        const cBadge = document.getElementById('grid-status-badge');
+        if (cBadge) cBadge.textContent = `${currentLoadedCount} historias listas para leer`;
+        if (titleSec) {
+          if (state.query) {
+            titleSec.innerHTML = `<i class="fa-solid fa-magnifying-glass text-hot"></i> Resultados para: "${escapeHtml(state.query)}"`;
+          } else if (state.category && state.category !== 'all') {
+            titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Catálogo: ${state.category.toUpperCase()}`;
+          } else {
+            titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Últimas Novedades Calientes`;
+          }
         }
         renderGrid(itemsToRender, append);
       }
@@ -5443,7 +5598,7 @@
       const empty = document.getElementById('empty-state');
       const resCount = document.getElementById('results-count');
 
-      resCount.textContent = 'Actualizando catálogo...';
+      if (resCount) resCount.textContent = 'Actualizando catálogo...';
 
       try {
         const params = new URLSearchParams({
@@ -8655,7 +8810,17 @@
       const isVideoMode = (state.mode === 'videos');
       const isGalleryMode = (state.mode === 'galleries');
       if (titleEl) titleEl.textContent = isVideoMode ? 'Continuar Viendo' : (isGalleryMode ? 'Continuar Viendo Galerías' : 'Continuar Leyendo');
-      if (subtitleEl) subtitleEl.textContent = isVideoMode ? 'Reanuda tus videos donde los pausaste' : (isGalleryMode ? 'Reanuda tus galerías donde las dejaste' : 'Reanuda tus cómics donde los dejaste con 1 toque');
+      if (subtitleEl) subtitleEl.textContent = isVideoMode ? 'Reanuda tus videos donde los pausaste' : (isGalleryMode ? 'Reanuda tus galerías donde las dejaste' : 'Reanuda tus cómics donde los dejaste');
+
+      const isPaused = !!(
+        (window.VelvetStore?.getState()?.preferences?.pauseHistory) ||
+        (window.VelvetStore?.getPreferences && window.VelvetStore.getPreferences()?.pauseHistory) ||
+        (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_pause_history') === 'true')
+      );
+      if (isPaused) {
+        section.classList.add('hidden');
+        return;
+      }
 
       const activeItems = (state.history || []).filter(h => {
         const isVid = (h.media_type === 'video');
@@ -8705,71 +8870,169 @@
           const dur = p.duration || p.total || 1;
           const cur = p.currentTime || p.page || 0;
           pct = Math.min(99, Math.round((cur / dur) * 100));
-          progressLabel = `${formatVideoTime(cur)} / ${formatVideoTime(dur)} (${pct}%)`;
+          progressLabel = `${formatVideoTime(cur)} / ${formatVideoTime(dur)}`;
         } else {
           const total = p.total || 1;
           const cur = p.page || 1;
           pct = Math.min(99, Math.round((cur / total) * 100));
-          progressLabel = `Pág. ${cur} de ${total} (${pct}%)`;
+          progressLabel = `Pág. ${cur} de ${total}`;
         }
 
         const isLocked = isItemLockedForUser(h);
-        const card = document.createElement('a');
+        const card = document.createElement('div');
         const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(h) : '#';
-        card.href = itemUrl;
-        card.setAttribute('aria-label', h.title || 'Continuar viendo');
-        card.className = `group relative ${isVid ? 'w-64 sm:w-72' : 'w-56 sm:w-64'} shrink-0 bg-[#0e061e]/90 border border-white/10 hover:border-pink-500 rounded-2xl overflow-hidden cursor-pointer shadow-lg p-2.5 flex items-center gap-3 transition-all hover:scale-[1.02]`;
-        if (isLocked) {
-          card.onclick = (e) => {
-            e.preventDefault();
-            openProUpgradeModal(h);
-          };
-        }
+        card.className = `group relative w-[155px] sm:w-[170px] shrink-0 snap-start bg-[#0e061e]/90 border border-white/10 hover:border-pink-500/60 rounded-2xl overflow-hidden shadow-lg p-2 flex flex-col justify-between transition-all hover:scale-[1.02] select-none`;
 
         const coverSrc = h.cover_url
           ? getStealthImageUrl(h.cover_url, h.url)
           : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
         const domColor = getCardDominantColor(h.id || (h.source + '_' + h.source_id));
+
         card.innerHTML = `
-          <div class="${isVid ? 'w-24 h-14 aspect-video' : 'w-12 h-16 aspect-[3/4]'} rounded-xl overflow-hidden shrink-0 relative select-none border border-white/10" style="background-color: ${domColor};">
+          <!-- Portada Vertical Aspecto 2:3 -->
+          <div class="relative w-full aspect-[2/3] rounded-xl overflow-hidden border border-white/10" style="background-color: ${domColor};">
             <div class="velvet-skeleton absolute inset-0"></div>
-            <img src="${coverSrc}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s) s.remove();" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
-            <div class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-[#ff4da8] text-sm drop-shadow"></i>
-            </div>
+            <img src="${coverSrc}"
+                 alt="${escapeHtml(h.title || 'Portada')}"
+                 loading="lazy"
+                 class="w-full h-full object-cover opacity-0 transition-all duration-300 group-hover:scale-105"
+                 onload="this.classList.remove('opacity-0'); const s=this.previousElementSibling; if(s) s.remove();"
+                 onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+
+            <!-- Botón discreto (X) para remover con Deshacer -->
+            <button type="button"
+                    data-action="dismiss-continue"
+                    data-source="${escapeHtml(h.source)}"
+                    data-source-id="${escapeHtml(String(h.source_id))}"
+                    class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/75 hover:bg-rose-600 text-white/80 hover:text-white flex items-center justify-center text-xs opacity-90 sm:opacity-0 group-hover:opacity-100 transition-all z-20 cursor-pointer shadow-md"
+                    title="Quitar de Continuar"
+                    aria-label="Quitar de Continuar">
+              <i class="fa-solid fa-xmark pointer-events-none"></i>
+            </button>
+
+            <!-- Overlay con icono de acción -->
+            <a href="${itemUrl}"
+               ${isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : ''}
+               class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+               aria-label="Continuar ${escapeHtml(h.title || '')}">
+              <span class="w-10 h-10 rounded-full bg-pink-600/90 text-white flex items-center justify-center shadow-lg">
+                <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-xs"></i>
+              </span>
+            </a>
           </div>
-          <div class="flex-1 min-w-0 pr-3">
-            <h5 class="text-xs font-bold text-white truncate group-hover:text-pink-300 transition-colors">${escapeHtml(h.title)}</h5>
-            <span class="text-[10px] text-[#ff4da8] font-bold block mt-0.5 truncate">${progressLabel}</span>
-            <div class="w-full bg-black/60 rounded-full h-1.5 mt-1.5 overflow-hidden border border-white/10">
-              <div class="bg-gradient-to-r from-pink-500 to-purple-600 h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+
+          <!-- Información y Barra Fina de Progreso -->
+          <div class="mt-2 flex-1 flex flex-col justify-between">
+            <a href="${itemUrl}"
+               ${isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : ''}
+               class="block">
+              <h5 class="text-xs font-bold text-white group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug min-h-[32px]" title="${escapeHtml(h.title)}">
+                ${escapeHtml(h.title)}
+              </h5>
+            </a>
+
+            <div class="mt-2">
+              <div class="flex items-center justify-between text-[10px] text-pink-400 font-bold mb-1">
+                <span>${progressLabel}</span>
+                <span>${pct}%</span>
+              </div>
+              <div class="w-full bg-black/60 rounded-full h-1 overflow-hidden border border-white/10">
+                <div class="bg-[#ff2d95] h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+              </div>
             </div>
+
+            <!-- Botón Pequeño 'Continuar' -->
+            <a href="${itemUrl}"
+               ${isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : ''}
+               class="mt-2 w-full py-1.5 px-2 rounded-lg bg-white/[0.06] hover:bg-gradient-to-r hover:from-pink-500 hover:to-purple-600 border border-white/10 hover:border-transparent text-white/90 hover:text-white text-[11px] font-black flex items-center justify-center gap-1.5 transition-all shadow-sm">
+              <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-[10px]"></i>
+              <span>Continuar</span>
+            </a>
           </div>
-          <button class="dismiss-continue-btn absolute top-2 right-2 w-5 h-5 rounded-full bg-black/70 hover:bg-pink-600 text-white/70 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all cursor-pointer" title="Quitar de continuar">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
         `;
-        const disBtn = card.querySelector('.dismiss-continue-btn');
-        if (disBtn) {
-          disBtn.onclick = (e) => {
-            e.stopPropagation();
-            dismissContinueItem(h.source, h.source_id);
-          };
-        }
         container.appendChild(card);
       });
     }
 
-    function dismissContinueItem(source, sourceId) {
-      const key = `${source}:${sourceId}`;
-      if (state.progress[key]) {
-        state.progress[key].completed = true;
+    let continueDismissUndoData = null;
+    let continueDismissUndoTimeout = null;
+
+    function dismissContinueItemWithUndo(source, sourceId) {
+      const idx = (state.history || []).findIndex(h => h.source === source && String(h.source_id) === String(sourceId));
+      if (idx === -1) return;
+
+      const removedItem = state.history[idx];
+      const removedProgress = state.progress[`${source}:${sourceId}`];
+
+      continueDismissUndoData = {
+        item: removedItem,
+        progress: removedProgress,
+        index: idx
+      };
+
+      state.history.splice(idx, 1);
+      if (removedProgress) {
+        delete state.progress[`${source}:${sourceId}`];
       }
-      const histItem = state.history.find(h => h.source === source && h.source_id === sourceId);
-      if (histItem) histItem.completed = true;
       saveStorage();
       renderContinueShelf();
+
+      showContinueUndoToast(removedItem.title || 'Elemento');
+    }
+
+    function showContinueUndoToast(title) {
+      if (continueDismissUndoTimeout) {
+        clearTimeout(continueDismissUndoTimeout);
+      }
+
+      let toast = document.getElementById('continue-undo-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'continue-undo-toast';
+        toast.className = 'fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-[#18092e]/95 border border-purple-500/40 text-white px-4 py-2.5 rounded-2xl shadow-2xl backdrop-blur-md text-xs select-none';
+        document.body.appendChild(toast);
+      }
+
+      toast.innerHTML = `
+        <span class="truncate max-w-[200px] text-white/90">Removido de Continuar</span>
+        <button type="button" data-action="undo-dismiss-continue" class="px-2.5 py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40 text-pink-300 hover:text-white font-extrabold text-[11px] transition-all cursor-pointer">
+          Deshacer (5s)
+        </button>
+      `;
+      toast.classList.remove('hidden');
+
+      continueDismissUndoTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+        continueDismissUndoData = null;
+        continueDismissUndoTimeout = null;
+      }, 5000);
+    }
+
+    function undoDismissContinue() {
+      if (!continueDismissUndoData) return;
+      const { item, progress, index } = continueDismissUndoData;
+      if (item) {
+        state.history.splice(index, 0, item);
+      }
+      if (progress && item) {
+        state.progress[`${item.source}:${item.source_id}`] = progress;
+      }
+      saveStorage();
+      renderContinueShelf();
+
+      const toast = document.getElementById('continue-undo-toast');
+      if (toast) toast.classList.add('hidden');
+      if (continueDismissUndoTimeout) {
+        clearTimeout(continueDismissUndoTimeout);
+        continueDismissUndoTimeout = null;
+      }
+      continueDismissUndoData = null;
+      showToast('Elemento restaurado a Continuar', 'info');
+    }
+
+    function dismissContinueItem(source, sourceId) {
+      dismissContinueItemWithUndo(source, sourceId);
     }
 
     // =======================================================================
@@ -11942,26 +12205,33 @@
       state.category = cat;
       state.page = 1;
 
-      document.querySelectorAll('.cat-chip').forEach(c => {
-        c.className = 'cat-chip whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold text-white/70 bg-white/[0.04] border border-white/10 hover:border-pink-500/50 hover:text-white transition-all shrink-0 cursor-pointer';
-      });
+      // Sincronizar parámetro URL ?cat= para compartir y navegación de historial
+      const url = new URL(window.location.href);
+      if (cat && cat !== 'all') {
+        url.searchParams.set('cat', cat);
+      } else {
+        url.searchParams.delete('cat');
+      }
+      if (window.history && window.history.pushState) {
+        window.history.pushState({ category: cat }, '', url.toString());
+      }
 
-      btn.className = 'cat-chip active whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-extrabold bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.35)] border border-pink-400/50 transition-all shrink-0 cursor-pointer';
+      renderCategoryChips();
+
+      // Scroll suave hacia arriba
+      window.scrollTo({ top: 0, behavior: 'smooth' });
 
       fetchLiveFeed(true);
     }
 
     function handleSortChange(sortVal) {
-      if (sortVal === 'random') {
-        setCatalogMode('dynamic');
-        return;
-      } else if (sortVal === 'recent') {
-        setCatalogMode('static');
-        return;
+      if (typeof selectSortOption === 'function') {
+        selectSortOption(sortVal);
+      } else {
+        state.sort = sortVal;
+        state.page = 1;
+        fetchLiveFeed(true);
       }
-      state.sort = sortVal;
-      state.page = 1;
-      fetchLiveFeed(true);
     }
 
     function toggleCatalogMode() {
@@ -12340,12 +12610,40 @@
     });
 
     document.addEventListener('click', (e) => {
+      // Clic fuera del menú de orden (cierra dropdown o bottom sheet)
+      if (typeof isSortMenuOpen !== 'undefined' && isSortMenuOpen) {
+        const sortContainer = document.getElementById('sort-menu-container');
+        const sortSheet = document.getElementById('sort-bottom-sheet');
+        if (sortContainer && !sortContainer.contains(e.target) && sortSheet && !sortSheet.contains(e.target)) {
+          closeSortMenu();
+        }
+      }
+
       const el = e.target.closest('[data-action]');
       if (!el) return;
       const act = el.getAttribute('data-action');
 
+      // 0. Categorías, Menú de Orden y Shelf de Continuar
+      if (act === 'filter-category') {
+        const cat = el.getAttribute('data-category');
+        if (cat && typeof setCategory === 'function') setCategory(cat);
+      } else if (act === 'toggle-sort-menu') {
+        if (typeof toggleSortMenu === 'function') toggleSortMenu();
+      } else if (act === 'close-sort-sheet') {
+        if (typeof closeSortMenu === 'function') closeSortMenu();
+      } else if (act === 'select-sort') {
+        const sortId = el.getAttribute('data-sort');
+        if (sortId && typeof selectSortOption === 'function') selectSortOption(sortId);
+      } else if (act === 'dismiss-continue') {
+        const src = el.getAttribute('data-source');
+        const srcId = el.getAttribute('data-source-id');
+        if (src && srcId && typeof dismissContinueItemWithUndo === 'function') dismissContinueItemWithUndo(src, srcId);
+      } else if (act === 'undo-dismiss-continue') {
+        if (typeof undoDismissContinue === 'function') undoDismissContinue();
+      }
+
       // 1. Navegación, Búsqueda y Home
-      if (act === 'fetch-random') {
+      else if (act === 'fetch-random') {
         if (typeof fetchRandom === 'function') fetchRandom();
       } else if (act === 'clear-search') {
         if (typeof clearSearch === 'function') clearSearch();
@@ -12422,8 +12720,83 @@
       }
     });
 
+    // Accesibilidad por Teclado para Menú de Orden (Escape, Flechas Arriba/Abajo)
+    document.addEventListener('keydown', (e) => {
+      if (typeof isSortMenuOpen !== 'undefined' && isSortMenuOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          closeSortMenu();
+          const btn = document.getElementById('sort-menu-btn');
+          if (btn) btn.focus();
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const isMobile = window.innerWidth < 768;
+          const container = isMobile ? document.getElementById('sort-sheet-options') : document.getElementById('sort-dropdown-menu');
+          if (container) {
+            const btns = Array.from(container.querySelectorAll('button[data-action="select-sort"]'));
+            if (btns.length > 0) {
+              const activeIdx = btns.indexOf(document.activeElement);
+              let nextIdx;
+              if (e.key === 'ArrowDown') {
+                nextIdx = activeIdx < 0 ? 0 : (activeIdx + 1) % btns.length;
+              } else {
+                nextIdx = activeIdx < 0 ? btns.length - 1 : (activeIdx - 1 + btns.length) % btns.length;
+              }
+              btns[nextIdx]?.focus();
+            }
+          }
+        }
+      }
+    });
+
+    // Soporte para Navegación Historial (Atrás / Adelante) con ?cat= y ?sort=
+    window.addEventListener('popstate', () => {
+      const q = new URLSearchParams(window.location.search);
+      const cat = q.get('cat') || 'all';
+      const sort = q.get('sort') || 'random';
+      let shouldRefresh = false;
+
+      if (state.category !== cat) {
+        state.category = cat;
+        if (typeof renderCategoryChips === 'function') renderCategoryChips();
+        shouldRefresh = true;
+      }
+      if (state.sort !== sort) {
+        state.sort = sort;
+        if (typeof updateSortUI === 'function') updateSortUI(sort);
+        shouldRefresh = true;
+      }
+      if (shouldRefresh) {
+        state.page = 1;
+        if (typeof fetchLiveFeed === 'function') fetchLiveFeed(true);
+      }
+    });
+
   </script>
 
+
+  <!-- ===================================================================== -->
+  <!-- BOTTOM SHEET DE ORDENACIÓN PARA MÓVIL (< 768px) -->
+  <!-- ===================================================================== -->
+  <div id="sort-bottom-sheet-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-200 md:hidden" data-action="close-sort-sheet"></div>
+  <div id="sort-bottom-sheet"
+       role="dialog"
+       aria-modal="true"
+       aria-label="Seleccionar ordenación del catálogo"
+       class="fixed bottom-0 inset-x-0 z-50 bg-[#120726] border-t border-purple-500/40 rounded-t-3xl p-4 shadow-2xl transform translate-y-full transition-transform duration-300 md:hidden max-h-[85vh] flex flex-col select-none">
+    <div class="w-12 h-1 bg-white/20 rounded-full mx-auto mb-3 shrink-0"></div>
+    <div class="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
+      <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
+        <i class="fa-solid fa-arrow-down-short-wide text-pink-500"></i> Ordenar Catálogo
+      </h3>
+      <button type="button" data-action="close-sort-sheet" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center text-xs cursor-pointer" aria-label="Cerrar menú">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div id="sort-sheet-options" role="listbox" class="space-y-1.5 py-3 overflow-y-auto">
+      <!-- Opciones renderizadas dinámicamente -->
+    </div>
+  </div>
 
   <!-- ===================================================================== -->
   <!-- MODAL PERSISTENTE DE VERIFICACIÓN DE EDAD (+18) -->
