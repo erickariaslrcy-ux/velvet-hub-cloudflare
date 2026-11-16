@@ -67,6 +67,11 @@ function fromBase64Url(str) {
 
 // Clave activa inyectada en runtime por onRequest
 let _activeMediaSecret = "";
+let _activeSupabaseUrl = "";
+let _activeSupabaseKey = "";
+
+// Paginación real de datos personales desde PostgreSQL (única fuente de verdad)
+const PERSONAL_PAGE_SIZE = 24;
 
 // Generación de token firmado con Web Crypto HMAC-SHA256 y expiración en segundos (14 días)
 async function encodeMediaToken(targetUrl, referer = "", secret = "") {
@@ -302,8 +307,32 @@ function setIsolateCache(map, key, data) {
   map.set(key, { ts: Date.now(), data });
 }
 
+// Límite de escritura en memoria Isolate por usuario para prevenir spam en endpoints personales
+const PERSONAL_WRITE_LIMIT_MAP = new Map();
+function checkPersonalWriteRateLimit(userId, maxPerMin = 60) {
+  if (!userId) return true;
+  const now = Date.now();
+  let entry = PERSONAL_WRITE_LIMIT_MAP.get(userId);
+  if (!entry || now - entry.windowStart > 60000) {
+    entry = { windowStart: now, count: 1 };
+    PERSONAL_WRITE_LIMIT_MAP.set(userId, entry);
+    if (PERSONAL_WRITE_LIMIT_MAP.size > 2000) {
+      const oldest = PERSONAL_WRITE_LIMIT_MAP.keys().next().value;
+      PERSONAL_WRITE_LIMIT_MAP.delete(oldest);
+    }
+    return true;
+  }
+  entry.count++;
+  if (entry.count > maxPerMin) {
+    return false;
+  }
+  return true;
+}
+
 // Helper para resolver usuario autenticado via Bearer Token o auto-refresh con x-refresh-token
-async function resolveAuthUser(request) {
+async function resolveAuthUser(request, sbUrl, sbKey) {
+  const activeUrl = sbUrl || _activeSupabaseUrl || (typeof SUPABASE_URL !== "undefined" ? SUPABASE_URL : "");
+  const activeKey = sbKey || _activeSupabaseKey || (typeof SUPABASE_KEY !== "undefined" ? SUPABASE_KEY : "");
   const authHeader = request.headers.get("authorization") || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   const refreshToken = request.headers.get("x-refresh-token") || null;
@@ -311,13 +340,13 @@ async function resolveAuthUser(request) {
   // 1. Intentar validar access_token con Supabase Auth
   if (token && token !== "velvet_token" && token !== "null" && token !== "undefined") {
     try {
-      const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` }
+      const userRes = await fetch(`${activeUrl}/auth/v1/user`, {
+        headers: { "apikey": activeKey, "Authorization": `Bearer ${token}` }
       });
       if (userRes.ok) {
         const user = await userRes.json();
         if (user && user.id) {
-          return { user, newToken: null, newRefreshToken: null };
+          return { user, token, newToken: null, newRefreshToken: null };
         }
       }
     } catch (e) {}
@@ -326,9 +355,9 @@ async function resolveAuthUser(request) {
   // 2. Si el token expiró o falló pero se envió x-refresh-token, autorenovar sesión silenciosamente
   if (refreshToken && refreshToken !== "null" && refreshToken !== "undefined") {
     try {
-      const refRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      const refRes = await fetch(`${activeUrl}/auth/v1/token?grant_type=refresh_token`, {
         method: "POST",
-        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        headers: { "apikey": activeKey, "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken })
       });
       if (refRes.ok) {
@@ -336,6 +365,7 @@ async function resolveAuthUser(request) {
         if (refData && refData.user && refData.access_token) {
           return {
             user: refData.user,
+            token: refData.access_token,
             newToken: refData.access_token,
             newRefreshToken: refData.refresh_token || refreshToken
           };
@@ -344,17 +374,19 @@ async function resolveAuthUser(request) {
     } catch (e) {}
   }
 
-  return { user: null, newToken: null, newRefreshToken: null };
+  return { user: null, token: null, newToken: null, newRefreshToken: null };
 }
 
 // Helper para guardar user_metadata en Supabase de forma atómica e infalible
-async function updateSupabaseUserMetadata(userId, newMetadata) {
+async function updateSupabaseUserMetadata(userId, newMetadata, sbUrl, sbKey) {
+  const activeUrl = sbUrl || _activeSupabaseUrl;
+  const activeKey = sbKey || _activeSupabaseKey;
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+    const res = await fetch(`${activeUrl}/auth/v1/admin/users/${userId}`, {
       method: "PUT",
       headers: {
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "apikey": activeKey,
+        "Authorization": `Bearer ${activeKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ user_metadata: newMetadata })
@@ -366,27 +398,29 @@ async function updateSupabaseUserMetadata(userId, newMetadata) {
 }
 
 // Helper para sincronizar tabla SQL favorites si el ítem tiene ID numérico
-async function syncSqlFavorite(userId, itemId, isAdd) {
+async function syncSqlFavorite(userId, itemId, isAdd, sbUrl, sbKey) {
   if (!itemId || !Number.isInteger(Number(itemId))) return;
   const numId = Number(itemId);
+  const activeUrl = sbUrl || _activeSupabaseUrl;
+  const activeKey = sbKey || _activeSupabaseKey;
   try {
     if (isAdd) {
-      await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+      await fetch(`${activeUrl}/rest/v1/favorites`, {
         method: "POST",
         headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "apikey": activeKey,
+          "Authorization": `Bearer ${activeKey}`,
           "Content-Type": "application/json",
           "Prefer": "resolution=merge-duplicates"
         },
         body: JSON.stringify({ user_id: userId, item_id: numId })
       });
     } else {
-      await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${userId}&item_id=eq.${numId}`, {
+      await fetch(`${activeUrl}/rest/v1/favorites?user_id=eq.${userId}&item_id=eq.${numId}`, {
         method: "DELETE",
         headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`
+          "apikey": activeKey,
+          "Authorization": `Bearer ${activeKey}`
         }
       });
     }
@@ -431,6 +465,9 @@ export async function onRequest(context) {
   const SUPABASE_KEY = SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
   // Clave administrativa reservada para backend
   const SUPABASE_ADMIN_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+
+  _activeSupabaseUrl = SUPABASE_URL;
+  _activeSupabaseKey = SUPABASE_KEY;
 
   const url = new URL(context.request.url);
   const origin = context.request.headers.get("origin") || "*";
@@ -2514,7 +2551,7 @@ export async function onRequest(context) {
       const serialized = JSON.stringify(dataObj);
       if (serialized.length > 16384) {
         return new Response(JSON.stringify({ error: "Tamaño máximo de preferencias excedido (16KB)" }), {
-          status: 400,
+          status: 413,
           headers: getPersonalHeaders(origin, newToken)
         });
       }

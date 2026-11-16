@@ -78,6 +78,44 @@
     return groups;
   }
 
+  function renderFallbackPagination(container, currentPage, totalPages, onPageChange) {
+    if (!container || totalPages <= 1) {
+      if (container) container.innerHTML = '';
+      return;
+    }
+    container.innerHTML = `
+      <!-- VelvetPagination Fallback Temporal -->
+      <nav class="flex items-center justify-center gap-3 my-6 py-3 px-5 rounded-full bg-[#0d061e]/90 border border-purple-500/30 text-xs font-bold text-white shadow-lg backdrop-blur-md" aria-label="Paginación Temporal de Bóveda">
+        <button type="button" class="vault-fb-prev px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center" ${currentPage <= 1 ? 'disabled' : ''}>
+          &larr; Anterior
+        </button>
+        <span class="text-purple-300 font-mono">Página ${currentPage} de ${totalPages}</span>
+        <button type="button" class="vault-fb-next px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center" ${currentPage >= totalPages ? 'disabled' : ''}>
+          Siguiente &rarr;
+        </button>
+      </nav>
+    `;
+    const prevBtn = container.querySelector('.vault-fb-prev');
+    const nextBtn = container.querySelector('.vault-fb-next');
+    if (prevBtn) prevBtn.onclick = () => onPageChange(currentPage - 1);
+    if (nextBtn) nextBtn.onclick = () => onPageChange(currentPage + 1);
+  }
+
+  function renderSkeletonGrid(container, count = 8) {
+    if (!container) return;
+    container.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5';
+    container.innerHTML = Array.from({ length: count }).map(() => `
+      <div class="flex flex-col bg-[#0e071c] border border-purple-500/10 rounded-2xl overflow-hidden animate-pulse">
+        <div class="aspect-[3/4] w-full bg-white/[0.04] relative"></div>
+        <div class="p-3 space-y-2">
+          <div class="h-3 w-4/5 bg-white/[0.06] rounded"></div>
+          <div class="h-2.5 w-1/2 bg-white/[0.04] rounded"></div>
+        </div>
+      </div>
+    `).join('');
+    container.classList.remove('hidden');
+  }
+
   const VelvetVault = {
     init() {
       window.addEventListener('velvet:route-render', (e) => {
@@ -92,8 +130,24 @@
         if (currentTab === 'favorites') this.renderFavorites();
       });
 
+      window.addEventListener('velvet:favorites-loading', () => {
+        if (currentTab === 'favorites') this.renderFavorites();
+      });
+
+      window.addEventListener('velvet:favorites-error', () => {
+        if (currentTab === 'favorites') this.renderFavorites();
+      });
+
       window.addEventListener('velvet:history-updated', () => {
         this.updateCounters();
+        if (currentTab === 'history') this.renderHistory();
+      });
+
+      window.addEventListener('velvet:history-loading', () => {
+        if (currentTab === 'history') this.renderHistory();
+      });
+
+      window.addEventListener('velvet:history-error', () => {
         if (currentTab === 'history') this.renderHistory();
       });
     },
@@ -102,6 +156,14 @@
       currentTab = tab;
       const root = document.getElementById('view-vault');
       if (!root) return;
+
+      // Ocultar explícitamente el catálogo principal, su paginación y barra de filtros para evitar fugas visuales
+      const mainContent = document.getElementById('main-content');
+      if (mainContent) mainContent.classList.add('hidden');
+      const filterBar = document.getElementById('filter-bar');
+      if (filterBar) filterBar.classList.add('hidden');
+      const infiniteContainer = document.getElementById('infinite-scroll-container');
+      if (infiniteContainer) infiniteContainer.classList.add('hidden');
 
       // Asegurar visibilidad del contenedor de la Bóveda y ocultar el resto
       const vaultEl = document.getElementById('vault-view') || document.getElementById('view-vault');
@@ -115,8 +177,14 @@
       this.updateCounters();
 
       if (tab === 'favorites') {
+        if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
+          window.VelvetPersonalData.fetchFavorites(1, { filter: favFilterType, sort: favSortMode, search: favSearchQuery });
+        }
         this.renderFavorites();
       } else if (tab === 'history') {
+        if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
+          window.VelvetPersonalData.fetchHistory(1, { filter: historyFilterType, onlyUnfinished: historyOnlyUnfinished, search: historySearchQuery });
+        }
         this.renderHistory();
       } else if (tab === 'account') {
         this.renderAccount();
@@ -131,22 +199,27 @@
 
         const isActive = t === tab;
         if (desktopBtn) {
+          desktopBtn.setAttribute('role', 'tab');
+          desktopBtn.setAttribute('aria-selected', isActive ? 'true' : 'false');
           if (isActive) {
-            desktopBtn.className = 'w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-pink-500/20 to-purple-500/10 border border-pink-500/40 text-white font-bold flex items-center justify-between text-xs transition-all shadow-sm';
+            desktopBtn.className = 'w-full px-4 py-3 rounded-2xl bg-gradient-to-r from-pink-500/20 to-purple-500/10 border border-pink-500/40 text-white font-bold flex items-center justify-between text-xs transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500';
           } else {
-            desktopBtn.className = 'w-full px-4 py-3 rounded-2xl hover:bg-white/[0.04] text-lav/70 hover:text-white font-medium flex items-center justify-between text-xs transition-all border border-transparent';
+            desktopBtn.className = 'w-full px-4 py-3 rounded-2xl hover:bg-white/[0.04] text-lav/70 hover:text-white font-medium flex items-center justify-between text-xs transition-all border border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500';
           }
         }
 
         if (mobileBtn) {
+          mobileBtn.setAttribute('role', 'tab');
+          mobileBtn.setAttribute('aria-selected', isActive ? 'true' : 'false');
           if (isActive) {
-            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-pink-500 text-white font-black text-xs shrink-0 shadow-md';
+            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-pink-500 text-white font-black text-xs shrink-0 shadow-md min-h-[44px] flex items-center';
           } else {
-            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-white/[0.05] text-lav/70 font-semibold text-xs shrink-0 hover:text-white';
+            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-white/[0.05] text-lav/70 font-semibold text-xs shrink-0 hover:text-white min-h-[44px] flex items-center';
           }
         }
 
         if (contentPanel) {
+          contentPanel.setAttribute('role', 'tabpanel');
           if (isActive) contentPanel.classList.remove('hidden');
           else contentPanel.classList.add('hidden');
         }
@@ -154,6 +227,10 @@
     },
 
     updateCounters() {
+      if (window.VelvetPersonalData) {
+        window.VelvetPersonalData.updateAllCounters();
+        return;
+      }
       const favs = window.VelvetStore?.getFavorites() || [];
       const hist = window.VelvetStore?.getHistory() || [];
 
@@ -170,35 +247,114 @@
     renderFavorites() {
       const container = document.getElementById('vault-favorites-list');
       const emptyEl = document.getElementById('vault-favorites-empty');
+      const paginationContainer = document.getElementById('vault-pagination-root');
       if (!container) return;
 
-      let favs = window.VelvetStore?.getFavorites() || [];
+      const pData = window.VelvetPersonalData;
+      const isAuth = pData ? pData.isAuthenticated() : !!window.VelvetStore?.getCurrentUser();
 
-      // Filtro por tipo
-      if (favFilterType !== 'all') {
-        favs = favs.filter((f) => {
-          const type = f.media_type || (f.video_sources?.length ? 'video' : 'comic');
-          return type === favFilterType;
-        });
+      // ESTADO 1: Visitante sin sesión iniciada
+      if (!isAuth) {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        if (emptyEl) {
+          emptyEl.innerHTML = `
+            <div class="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(255,45,149,0.2)]">
+              <i class="fa-solid fa-lock text-2xl text-pink-500"></i>
+            </div>
+            <h3 class="font-serif text-xl font-bold text-white mb-2">Inicia sesión en tu Bóveda</h3>
+            <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
+              Tus favoritos e historial se sincronizan permanentemente en la nube para acceder desde tu PC, teléfono o tableta sin perder ningún progreso.
+            </p>
+            <div class="flex items-center gap-3">
+              <button type="button" onclick="if(window.openAuthModal) window.openAuthModal('login');" class="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md cursor-pointer min-h-[44px]">
+                Iniciar Sesión / Registrarse
+              </button>
+            </div>
+          `;
+          emptyEl.classList.remove('hidden');
+        }
+        return;
       }
 
-      // Filtro por búsqueda
+      const favState = pData ? pData.getFavoritesState() : {
+        items: window.VelvetStore?.getFavorites() || [],
+        total: (window.VelvetStore?.getFavorites() || []).length,
+        page: 1,
+        pageSize: 24,
+        totalPages: 1,
+        isLoading: false,
+        error: null
+      };
+
+      // ESTADO 2: Cargando (Skeletons del mismo tamaño que las tarjetas)
+      if (favState.isLoading) {
+        if (emptyEl) emptyEl.classList.add('hidden');
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        renderSkeletonGrid(container, 8);
+        return;
+      }
+
+      // ESTADO 3: Error de red / servidor (Con botón de Reintentar)
+      if (favState.error) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 px-4 rounded-3xl bg-[#0e071c] border border-rose-500/30 text-center flex flex-col items-center justify-center">
+            <div class="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-3">
+              <i class="fa-solid fa-triangle-exclamation text-xl text-rose-400"></i>
+            </div>
+            <h3 class="text-base font-bold text-white mb-1">No se pudieron cargar tus favoritos</h3>
+            <p class="text-xs text-lav/70 mb-5 max-w-xs">${escapeHtml(favState.error)}</p>
+            <button type="button" onclick="if(window.VelvetPersonalData) window.VelvetPersonalData.fetchFavorites(${favState.page});" class="px-5 py-2.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/40 hover:bg-pink-500/30 text-xs font-bold transition-all cursor-pointer min-h-[44px] flex items-center justify-center">
+              <i class="fa-solid fa-rotate-right mr-1.5"></i> Reintentar
+            </button>
+          </div>
+        `;
+        container.className = 'grid grid-cols-1 gap-4';
+        container.classList.remove('hidden');
+        if (emptyEl) emptyEl.classList.add('hidden');
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        return;
+      }
+
+      let favs = favState.items || [];
+
+      // Filtro local adicional de búsqueda si el usuario escribe
       if (favSearchQuery) {
         const q = favSearchQuery.toLowerCase();
         favs = favs.filter((f) => (f.title || '').toLowerCase().includes(q));
       }
 
-      // Ordenación
+      // Ordenación local adicional si aplica
       if (favSortMode === 'az') {
         favs = favs.slice().sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-      } else {
-        favs = favs.slice().sort((a, b) => (b.added_at || 0) - (a.added_at || 0));
       }
 
-      if (favs.length === 0) {
+      // ESTADO 4: Bóveda Vacía
+      if (favs.length === 0 && favState.total === 0) {
         container.innerHTML = '';
         container.classList.add('hidden');
-        if (emptyEl) emptyEl.classList.remove('hidden');
+        if (paginationContainer) paginationContainer.classList.add('hidden');
+        if (emptyEl) {
+          emptyEl.innerHTML = `
+            <div class="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(255,45,149,0.2)]">
+              <i class="fa-solid fa-heart-crack text-2xl text-pink-500"></i>
+            </div>
+            <h3 class="font-serif text-xl font-bold text-white mb-2">Tu Bóveda está vacía</h3>
+            <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
+              Toca el icono del corazón en cualquier video, cómic o galería para guardarlo aquí y acceder sin conexión o desde cualquier dispositivo.
+            </p>
+            <div class="flex items-center gap-3">
+              <a href="/videos" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md min-h-[44px] flex items-center">
+                Explorar Videos
+              </a>
+              <a href="/comics" class="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-lav hover:text-white text-xs font-bold transition-all border border-white/10 min-h-[44px] flex items-center">
+                Ver Cómics
+              </a>
+            </div>
+          `;
+          emptyEl.classList.remove('hidden');
+        }
         return;
       }
 
@@ -215,6 +371,8 @@
       }
 
       container.innerHTML = '';
+
+      // ESTADO 5: Con Resultados (Renderizado de tarjetas)
 
       favs.forEach((it) => {
         const itemUrl = window.VelvetRouter?.getItemUrl(it) || '#';

@@ -71,6 +71,9 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/api/admin') ||
     url.pathname.startsWith('/api/user') ||
     url.pathname.startsWith('/api/favorites') ||
+    url.pathname.startsWith('/api/history') ||
+    url.pathname.startsWith('/api/preferences') ||
+    url.pathname.startsWith('/api/sync') ||
     req.headers.has('range') ||
     req.headers.has('authorization')
   ) {

@@ -113,6 +113,9 @@
 
     // --- PREFERENCIAS VERSIONADAS ---
     getPreferences() {
+      if (window.VelvetPersonalData) {
+        return window.VelvetPersonalData.getPreferences();
+      }
       try {
         const raw = localStorage.getItem(PREFERENCES_KEY);
         if (!raw) return { ...DEFAULT_PREFERENCES };
@@ -131,6 +134,9 @@
     },
 
     setPreferences(newPrefs) {
+      if (window.VelvetPersonalData) {
+        window.VelvetPersonalData.setPreferences(newPrefs);
+      }
       try {
         const current = this.getPreferences();
         const updated = { ...current, ...newPrefs, version: DEFAULT_PREFERENCES.version };
@@ -186,6 +192,9 @@
     },
 
     setCurrentUser(user, token = null, refreshToken = null, deviceToken = null) {
+      if (window.VelvetPersonalData) {
+        window.VelvetPersonalData.setSession(user, token, refreshToken);
+      }
       try {
         if (user) {
           localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -244,6 +253,10 @@
 
     // --- HISTORIAL Y PROGRESO ---
     getHistory() {
+      if (window.VelvetPersonalData) {
+        const hist = window.VelvetPersonalData.getHistoryState().items;
+        if (hist && hist.length > 0) return hist;
+      }
       try {
         const raw = localStorage.getItem(HISTORY_KEY);
         return raw ? JSON.parse(raw) : [];
@@ -275,6 +288,9 @@
     },
 
     recordProgress(item, progressData) {
+      if (window.VelvetPersonalData) {
+        window.VelvetPersonalData.recordProgress(item, progressData);
+      }
       const prefs = this.getPreferences();
       if (prefs.pauseHistory) {
         // Modo privacidad activo: no almacenar en historial
@@ -404,6 +420,10 @@
 
     // --- FAVORITOS ---
     getFavorites() {
+      if (window.VelvetPersonalData) {
+        const favs = window.VelvetPersonalData.getFavoritesState().items;
+        if (favs && favs.length > 0) return favs;
+      }
       try {
         const raw = localStorage.getItem(FAVORITES_KEY) || localStorage.getItem('velvet_guest_favs') || localStorage.getItem('velvet_favs');
         if (raw) return JSON.parse(raw);
@@ -438,6 +458,9 @@
 
     addFavorite(item) {
       if (!item) return;
+      if (window.VelvetPersonalData) {
+        window.VelvetPersonalData.addFavorite(item);
+      }
       const favs = this.getFavorites();
       const exists = favs.some((f) => {
         if (item.id && f.id && String(f.id) === String(item.id)) return true;
@@ -475,6 +498,9 @@
     },
 
     removeFavorite(source, sourceId, id = null) {
+      if (window.VelvetPersonalData) {
+        window.VelvetPersonalData.removeFavorite(id || sourceId);
+      }
       let favs = this.getFavorites();
       const removedItem = favs.find((f) => {
         if (id && f.id && String(f.id) === String(id)) return true;

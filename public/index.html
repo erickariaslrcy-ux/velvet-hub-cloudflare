@@ -51,6 +51,8 @@
   <link rel="preload" as="script" href="https://cdn.tailwindcss.com">
   <script src="https://cdn.tailwindcss.com"></script>
     <!-- Modular Architecture: Store, Router & Vault -->
+  <script defer src="/js/personal-data.js"></script>
+  <script defer src="/js/personal-data.js"></script>
   <script defer src="/js/store.js"></script>
   <script defer src="/js/router.js"></script>
   <script defer src="/js/vault.js"></script>
@@ -1769,7 +1771,7 @@
 
         <div class="p-3.5 rounded-2xl bg-[#0e071c]/60 border border-purple-500/15 text-[11px] text-lav/60 flex items-center gap-2">
           <i class="fa-solid fa-cloud-arrow-up text-pink-400 shrink-0"></i>
-          <span>Sincronizado con Supabase en tiempo real.</span>
+          <span id="vault-sync-status-text" class="vault-sync-text">Sincronizado con la nube</span>
         </div>
       </aside>
 
@@ -1858,6 +1860,9 @@
               </a>
             </div>
           </div>
+
+          <!-- Contenedor Paginación Bóveda (window.VelvetPagination) -->
+          <div id="vault-pagination-root" class="w-full flex justify-center py-4"></div>
         </div>
 
         <!-- ========================================== -->
