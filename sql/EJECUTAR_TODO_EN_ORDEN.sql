@@ -53,17 +53,17 @@ CREATE POLICY items_public_select ON public.items
 -- 2.4 Revocar acceso de columna a datos sensibles para anon
 REVOKE ALL ON public.items FROM anon;
 
--- Conceder SELECT ÚNICAMENTE sobre las 14 columnas necesarias para el catálogo público
+-- Conceder SELECT ÚNICAMENTE sobre las columnas necesarias para el catálogo público
 GRANT SELECT (
     id, source, source_id, title, cover_url, thumb_color, thumb_lqip,
-    media_type, language, tags, artists, page_count, scraped_at, created_at
+    media_type, language, tags, artists, page_count, published_at, scraped_at
 ) ON public.items TO anon;
 
 -- 2.5 Rol authenticated: acceso a catálogo y favoritos
 REVOKE INSERT, UPDATE, DELETE ON public.items FROM authenticated;
 GRANT SELECT (
     id, source, source_id, title, cover_url, thumb_color, thumb_lqip,
-    media_type, language, tags, artists, page_count, scraped_at, created_at
+    media_type, language, tags, artists, page_count, published_at, scraped_at
 ) ON public.items TO authenticated;
 
 -- 2.6 Rol service_role: acceso administrativo completo
@@ -87,7 +87,8 @@ RETURNS TABLE (
     pages jsonb,
     video_sources jsonb,
     chapters jsonb,
-    created_at timestamptz
+    published_at text,
+    scraped_at timestamptz
 )
 LANGUAGE sql
 STABLE
@@ -98,7 +99,7 @@ AS $$
         i.id, i.source, i.source_id, i.title, i.cover_url,
         i.thumb_color, i.thumb_lqip, i.media_type, i.language,
         i.tags, i.artists, i.page_count, i.pages, i.video_sources,
-        i.chapters, i.created_at
+        i.chapters, i.published_at, i.scraped_at
     FROM public.items i
     WHERE i.id = p_id
       AND (i.status IS NULL OR i.status <> 'blocked')

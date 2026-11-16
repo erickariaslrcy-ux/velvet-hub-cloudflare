@@ -75,7 +75,7 @@ create policy "items_admin_all" on public.items
 revoke select on public.items from anon;
 grant select (
   id, source, source_id, title, cover_url, thumb_color, thumb_lqip,
-  media_type, language, tags, artists, page_count, scraped_at, created_at
+  media_type, language, tags, artists, page_count, published_at, scraped_at
 ) on public.items to anon;
 
 grant select on public.items to authenticated;
@@ -99,8 +99,8 @@ returns table (
   pages jsonb,
   video_sources jsonb,
   chapters jsonb,
-  scraped_at timestamptz,
-  created_at timestamptz
+  published_at text,
+  scraped_at timestamptz
 )
 language sql
 security definer
@@ -110,7 +110,7 @@ as $$
     i.id, i.source, i.source_id, i.title, i.cover_url,
     i.thumb_color, i.thumb_lqip, i.media_type, i.language,
     i.tags, i.artists, i.page_count, i.pages, i.video_sources,
-    i.chapters, i.scraped_at, i.created_at
+    i.chapters, i.published_at, i.scraped_at
   from public.items i
   where i.id = p_id
     and i.status <> 'blocked'
