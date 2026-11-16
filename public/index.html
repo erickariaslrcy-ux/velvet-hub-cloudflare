@@ -51,8 +51,8 @@
   <noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   </noscript>
-  <link rel="preload" as="script" href="/js/tailwindcss.js">
-  <script src="/js/tailwindcss.js" onerror="this.onerror=null;this.src='https://cdn.tailwindcss.com';"></script>
+  <link rel="preload" as="script" href="https://cdn.tailwindcss.com">
+  <script src="https://cdn.tailwindcss.com"></script>
     <!-- Modular Architecture: Store, Router, Vault & Pagination -->
   <link rel="stylesheet" href="/css/pagination.css">
   <script defer src="/js/personal-data.js"></script>
@@ -63,7 +63,6 @@
 
   <script>
 
-    window.tailwind = window.tailwind || {};
     tailwind.config = {
 
       darkMode: 'class',
@@ -135,20 +134,6 @@
   </script>
 
   <style>
-    /* =======================================================================
-       ANTI-FOUC CRITICAL RULES (PREVIENE DESTELLO DE ELEMENTOS ANTES DE CARGAR CSS)
-       ======================================================================= */
-    .hidden { display: none !important; }
-    [hidden] { display: none !important; }
-    #sort-dropdown-menu.hidden { display: none !important; }
-    #sort-bottom-sheet.hidden { display: none !important; }
-    #view-vault.hidden { display: none !important; }
-    #video-view.hidden { display: none !important; }
-    #reader-modal.hidden { display: none !important; }
-    #velvet-age-gate.hidden { display: none !important; }
-    #empty-state.hidden { display: none !important; }
-    html, body { background-color: #0a0610; color: #f8fafc; }
-
     /* =======================================================================
        Z-INDEX HIERARCHY & HARDWARE ISOLATION (ZERO SOFTWARE PAINT BOTTLENECK)
        ======================================================================= */
