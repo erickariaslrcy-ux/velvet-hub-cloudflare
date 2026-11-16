@@ -1994,8 +1994,22 @@ export async function onRequest(context) {
     }
   }
 
+  // Cabeceras estrictas para endpoints privados / personales (CERO caché en navegador ni proxies)
+  const getPersonalHeaders = (orig, newTok = null) => {
+    const h = {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "private, no-cache, no-store, must-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+      ...getCorsHeaders(orig)
+    };
+    if (newTok) h["x-new-token"] = newTok;
+    return h;
+  };
+
   // =========================================================================
   // 8. FAVORITOS (/api/user/favorites, /api/favorites)
+  // Persistencia atómica en PostgreSQL con paginación real de 24 en 24
   // =========================================================================
   const isFavoritesRoute =
     url.pathname === "/api/favorites" ||
@@ -2004,306 +2018,584 @@ export async function onRequest(context) {
     url.pathname.startsWith("/api/user/favorites/");
 
   if (isFavoritesRoute) {
-    const { user, newToken } = await resolveAuthUser(context.request);
+    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
     if (!user) {
       return new Response(JSON.stringify({ error: "No autenticado" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        headers: getPersonalHeaders(origin)
       });
     }
 
-    const meta = user.user_metadata || {};
-    let cloudFavs = Array.isArray(meta.favorites) ? [...meta.favorites] : [];
-
-    // --- GET FAVORITOS ---
+    // --- GET FAVORITOS (Paginación determinista 24/página desde PostgreSQL) ---
     if (method === "GET") {
-      const favMap = new Map();
-      cloudFavs.forEach((f) => {
-        if (!f) return;
-        const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-        favMap.set(k, f);
+      const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+      const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") || String(PERSONAL_PAGE_SIZE), 10)));
+      const offset = (page - 1) * pageSize;
+      const to = offset + pageSize - 1;
+
+      let favQueryUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,url,page_count,video_sources,status)&order=created_at.desc,item_id.desc`;
+      const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
+      if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
+        favQueryUrl += `&items.media_type=eq.${typeFilter}`;
+      }
+
+      const favRes = await fetch(favQueryUrl, {
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "count=exact",
+          "Range": `${offset}-${to}`
+        }
       });
 
-      // Si user_metadata tiene pocos o ninguno, leer también tabla SQL
-      try {
-        const sqlRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,url)&order=created_at.desc&limit=300`,
-          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-        );
-        if (sqlRes.ok) {
-          const sqlData = await sqlRes.json();
-          let addedFromSql = false;
-          (sqlData || []).forEach((r) => {
-            if (!r || !r.items) return;
-            const k = String(r.items.id);
-            if (!favMap.has(k)) {
-              favMap.set(k, {
-                id: r.items.id,
-                title: r.items.title || "Sin título",
-                cover_url: r.items.cover_url || "",
-                media_type: r.items.media_type || "comic",
-                source: r.items.source || "",
-                source_id: r.items.source_id || "",
-                url: r.items.url || "",
-                created_at: r.created_at
-              });
-              addedFromSql = true;
-            }
-          });
-
-          // Si recuperamos de SQL, actualizar user_metadata para futuras peticiones instantáneas
-          if (addedFromSql) {
-            const mergedList = Array.from(favMap.values()).slice(0, 300);
-            updateSupabaseUserMetadata(user.id, { ...meta, favorites: mergedList });
-          }
+      let total = 0;
+      const cr = favRes.headers.get("content-range") || "";
+      const slashIdx = cr.indexOf("/");
+      if (slashIdx !== -1) {
+        const totalPart = cr.substring(slashIdx + 1);
+        if (totalPart && totalPart !== "*") {
+          total = parseInt(totalPart, 10) || 0;
         }
-      } catch (e) {}
+      }
 
-      const finalFavs = Array.from(favMap.values()).slice(0, 300);
-      const respHeaders = {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "private, no-cache, no-store, must-revalidate",
-        ...getCorsHeaders(origin)
-      };
-      if (newToken) respHeaders["x-new-token"] = newToken;
+      const rawRows = favRes.ok ? await favRes.json().catch(() => []) : [];
+      const items = await Promise.all((rawRows || []).map(async (r) => {
+        const it = r.items || {};
+        const isAvailable = it && it.id && it.status !== "blocked";
+        const coverUrl = it.cover_url || "";
+        const maskedCover = coverUrl ? await encodeToken(coverUrl, it.url || "") : "";
+        return {
+          id: it.id || r.item_id,
+          item_id: r.item_id,
+          title: isAvailable ? (it.title || "Sin título") : "Contenido no disponible",
+          cover_url: maskedCover ? `/api/media?t=${maskedCover}` : (it.cover_url || "/velvet_logo.png"),
+          media_type: it.media_type || "comic",
+          source: it.source || "",
+          source_id: it.source_id || "",
+          url: isAvailable ? (it.url || "") : "",
+          page_count: it.page_count || 0,
+          created_at: r.created_at,
+          available: isAvailable
+        };
+      }));
 
-      return new Response(JSON.stringify(finalFavs), { status: 200, headers: respHeaders });
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      return new Response(JSON.stringify({ items, total, page, pageSize, totalPages }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
     }
 
-    // --- POST FAVORITOS (AGREGAR / SINCRONIZAR) ---
+    // --- POST FAVORITOS (Agregar o Sincronización Idempotente) ---
     if (method === "POST") {
+      if (!checkPersonalWriteRateLimit(user.id, 60)) {
+        return new Response(JSON.stringify({ error: "Límite de peticiones excedido" }), {
+          status: 429,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
       try {
         const body = await context.request.json().catch(() => ({}));
 
-        // Caso A: Sincronización masiva de favoritos (ej: /sync o al iniciar sesión)
+        // Caso A: Sincronización masiva desde dispositivo o localStorage
         if (Array.isArray(body.items)) {
-          const incoming = body.items;
-          const favMap = new Map();
-          cloudFavs.forEach((f) => {
-            if (!f) return;
-            const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-            favMap.set(k, f);
-          });
-
-          incoming.forEach((f) => {
-            if (!f) return;
-            const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-            if (!favMap.has(k)) {
-              favMap.set(k, {
-                id: f.id || null,
-                source: f.source || "",
-                source_id: f.source_id || "",
-                title: f.title || "Sin título",
-                cover_url: f.cover_url || "",
-                url: f.url || "",
-                media_type: f.media_type || "comic",
-                created_at: f.created_at || new Date().toISOString()
-              });
-              if (f.id && Number.isInteger(Number(f.id))) {
-                syncSqlFavorite(user.id, f.id, true);
-              }
-            }
-          });
-
-          const mergedFavs = Array.from(favMap.values()).slice(0, 300);
-          await updateSupabaseUserMetadata(user.id, { ...meta, favorites: mergedFavs });
-
-          return new Response(JSON.stringify({ ok: true, success: true, count: mergedFavs.length, items: mergedFavs }), {
+          const validIds = body.items
+            .map((it) => parseInt(it.id || it.item_id, 10))
+            .filter((id) => Number.isInteger(id) && id > 0);
+          if (validIds.length > 0) {
+            const rows = validIds.slice(0, 300).map((id) => ({ user_id: user.id, item_id: id }));
+            await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+              method: "POST",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Prefer": "resolution=ignore-duplicates"
+              },
+              body: JSON.stringify(rows)
+            }).catch(() => {});
+          }
+          return new Response(JSON.stringify({ ok: true, synced: validIds.length }), {
             status: 200,
-            headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+            headers: getPersonalHeaders(origin, newToken)
           });
         }
 
-        // Caso B: Toggle a falso (desmarcar favorito)
-        const itemId = body.id || body.item_id || null;
-        const source = body.source || "";
-        const sourceId = body.source_id || "";
-
+        // Caso B: Toggle a falso si se envía favorite: false
         if (body.favorite === false) {
-          cloudFavs = cloudFavs.filter((f) => {
-            if (itemId && f.id && Number(f.id) === Number(itemId)) return false;
-            if (source && sourceId && f.source === source && String(f.source_id) === String(sourceId)) return false;
-            return true;
-          });
-          if (itemId) syncSqlFavorite(user.id, itemId, false);
-          await updateSupabaseUserMetadata(user.id, { ...meta, favorites: cloudFavs });
-          return new Response(JSON.stringify({ ok: true, success: true, count: cloudFavs.length }), {
+          const removeId = parseInt(body.id || body.item_id, 10);
+          if (Number.isInteger(removeId) && removeId > 0) {
+            await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${removeId}`, {
+              method: "DELETE",
+              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+            });
+          }
+          return new Response(JSON.stringify({ ok: true, removed: true }), {
             status: 200,
-            headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+            headers: getPersonalHeaders(origin, newToken)
           });
         }
 
-        // Caso C: Agregar favorito individual
-        cloudFavs = cloudFavs.filter((f) => {
-          if (itemId && f.id && Number(f.id) === Number(itemId)) return false;
-          if (source && sourceId && f.source === source && String(f.source_id) === String(sourceId)) return false;
-          return true;
+        // Caso C: Agregar favorito individual (idempotente con ignore-duplicates)
+        const targetItemId = parseInt(body.id || body.item_id, 10);
+        if (!Number.isInteger(targetItemId) || targetItemId <= 0) {
+          return new Response(JSON.stringify({ error: "item_id entero requerido" }), {
+            status: 400,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
+
+        await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+            "Prefer": "resolution=ignore-duplicates"
+          },
+          body: JSON.stringify({ user_id: user.id, item_id: targetItemId })
         });
 
-        const newFav = {
-          id: itemId,
-          source,
-          source_id: sourceId,
-          title: body.title || "Sin título",
-          cover_url: body.cover_url || "",
-          url: body.url || "",
-          media_type: body.media_type || "comic",
-          created_at: new Date().toISOString()
-        };
-
-        cloudFavs.unshift(newFav);
-        if (cloudFavs.length > 300) cloudFavs = cloudFavs.slice(0, 300);
-
-        await updateSupabaseUserMetadata(user.id, { ...meta, favorites: cloudFavs });
-        if (itemId) syncSqlFavorite(user.id, itemId, true);
-
-        return new Response(JSON.stringify({ ok: true, success: true, item: newFav, count: cloudFavs.length }), {
+        return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
           status: 200,
-          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+          headers: getPersonalHeaders(origin, newToken)
         });
       } catch (err) {
-        return new Response(JSON.stringify({ error: err.message }), {
+        return new Response(JSON.stringify({ error: "Error procesando favorito" }), {
           status: 500,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          headers: getPersonalHeaders(origin, newToken)
         });
       }
     }
 
     // --- DELETE FAVORITOS ---
     if (method === "DELETE") {
-      try {
-        let slugParts = [];
-        if (url.pathname.startsWith("/api/user/favorites/")) {
-          slugParts = url.pathname.replace("/api/user/favorites/", "").split("/").filter(Boolean);
-        } else if (url.pathname.startsWith("/api/favorites/")) {
-          slugParts = url.pathname.replace("/api/favorites/", "").split("/").filter(Boolean);
-        }
-
-        let targetId = url.searchParams.get("id") || null;
-        let targetSource = url.searchParams.get("source") || null;
-        let targetSourceId = url.searchParams.get("source_id") || null;
-
-        if (slugParts.length === 1 && /^\d+$/.test(slugParts[0])) {
-          targetId = slugParts[0];
-        } else if (slugParts.length >= 2) {
-          targetSource = decodeURIComponent(slugParts[0]);
-          targetSourceId = decodeURIComponent(slugParts.slice(1).join("/"));
-        } else if (slugParts.length === 1) {
-          targetSourceId = decodeURIComponent(slugParts[0]);
-        }
-
-        cloudFavs = cloudFavs.filter((f) => {
-          if (targetId && f.id && Number(f.id) === Number(targetId)) return false;
-          if (targetSource && targetSourceId && f.source === targetSource && String(f.source_id) === String(targetSourceId)) return false;
-          if (targetSourceId && String(f.source_id) === String(targetSourceId)) return false;
-          return true;
-        });
-
-        if (targetId) syncSqlFavorite(user.id, targetId, false);
-        await updateSupabaseUserMetadata(user.id, { ...meta, favorites: cloudFavs });
-
-        return new Response(JSON.stringify({ ok: true, success: true, count: cloudFavs.length }), {
-          status: 200,
-          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
-        });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: err.message }), {
-          status: 500,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      if (!checkPersonalWriteRateLimit(user.id, 60)) {
+        return new Response(JSON.stringify({ error: "Límite de peticiones excedido" }), {
+          status: 429,
+          headers: getPersonalHeaders(origin, newToken)
         });
       }
+
+      let targetId = parseInt(url.searchParams.get("id") || url.searchParams.get("item_id"), 10);
+      if (!targetId || isNaN(targetId)) {
+        const parts = url.pathname.split("/").filter(Boolean);
+        const lastPart = parts[parts.length - 1];
+        if (/^\d+$/.test(lastPart)) targetId = parseInt(lastPart, 10);
+      }
+
+      if (!Number.isInteger(targetId) || targetId <= 0) {
+        return new Response(JSON.stringify({ error: "id numérico válido requerido" }), {
+          status: 400,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+
+      return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
     }
   }
 
   // =========================================================================
-  // 9. HISTORIAL (/api/user/history)
+  // 9. HISTORIAL Y PROGRESO (/api/user/history, /api/history)
+  // Persistencia atómica en tabla user_history con resolución de concurrencia
   // =========================================================================
-  if (url.pathname.startsWith("/api/user/history")) {
-    const { user, newToken } = await resolveAuthUser(context.request);
+  const isHistoryRoute =
+    url.pathname === "/api/user/history" ||
+    url.pathname.startsWith("/api/user/history/") ||
+    url.pathname === "/api/history" ||
+    url.pathname.startsWith("/api/history/");
+
+  if (isHistoryRoute) {
+    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
     if (!user) {
       return new Response(JSON.stringify({ error: "No autenticado" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        headers: getPersonalHeaders(origin)
       });
     }
 
-    const meta = user.user_metadata || {};
-    let currentHistory = Array.isArray(meta.history) ? [...meta.history] : [];
-    let currentProgress = meta.progress && typeof meta.progress === "object" ? { ...meta.progress } : {};
-
+    // --- GET HISTORIAL (Paginado determinista 24/página desde PostgreSQL) ---
     if (method === "GET") {
-      const respHeaders = {
-        "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "private, no-cache, no-store, must-revalidate",
-        "X-Velvet-Progress": JSON.stringify(currentProgress),
-        ...getCorsHeaders(origin)
-      };
-      if (newToken) respHeaders["x-new-token"] = newToken;
-      return new Response(JSON.stringify(currentHistory), { status: 200, headers: respHeaders });
+      const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+      const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") || String(PERSONAL_PAGE_SIZE), 10)));
+      const offset = (page - 1) * pageSize;
+      const to = offset + pageSize - 1;
+
+      let histQueryUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,url,page_count,video_sources,status)&order=last_activity.desc,id.desc`;
+      const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
+      if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
+        histQueryUrl += `&media_type=eq.${typeFilter}`;
+      }
+
+      const histRes = await fetch(histQueryUrl, {
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "count=exact",
+          "Range": `${offset}-${to}`
+        }
+      });
+
+      let total = 0;
+      const cr = histRes.headers.get("content-range") || "";
+      const slashIdx = cr.indexOf("/");
+      if (slashIdx !== -1) {
+        const totalPart = cr.substring(slashIdx + 1);
+        if (totalPart && totalPart !== "*") {
+          total = parseInt(totalPart, 10) || 0;
+        }
+      }
+
+      const rawRows = histRes.ok ? await histRes.json().catch(() => []) : [];
+      const items = await Promise.all((rawRows || []).map(async (r) => {
+        const it = r.items || {};
+        const isAvailable = it && it.id && it.status !== "blocked";
+        const coverUrl = it.cover_url || "";
+        const maskedCover = coverUrl ? await encodeToken(coverUrl, it.url || "") : "";
+        return {
+          id: it.id || r.item_id,
+          history_id: r.id,
+          item_id: r.item_id,
+          title: isAvailable ? (it.title || "Sin título") : "Contenido no disponible",
+          cover_url: maskedCover ? `/api/media?t=${maskedCover}` : (it.cover_url || "/velvet_logo.png"),
+          media_type: r.media_type || it.media_type || "comic",
+          source: it.source || "",
+          source_id: it.source_id || "",
+          url: isAvailable ? (it.url || "") : "",
+          page_count: it.page_count || 0,
+          position: r.position || 0,
+          duration: r.duration || 0,
+          completed: !!r.completed,
+          last_activity: r.last_activity,
+          at: r.client_timestamp ? Number(r.client_timestamp) : new Date(r.last_activity).getTime(),
+          available: isAvailable
+        };
+      }));
+
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      return new Response(JSON.stringify({ items, total, page, pageSize, totalPages }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
     }
 
+    // --- POST HISTORIAL (Registro o Fusión Idempotente con RPC upsert_history) ---
     if (method === "POST") {
+      if (!checkPersonalWriteRateLimit(user.id, 60)) {
+        return new Response(JSON.stringify({ error: "Límite de peticiones excedido" }), {
+          status: 429,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
       try {
         const body = await context.request.json().catch(() => ({}));
-        const item = body.item || body;
-        if (item && (item.id || item.source_id)) {
-          const itemId = item.id || null;
-          const itemKey = itemId ? String(itemId) : `${item.source}:${item.source_id}`;
 
-          currentHistory = currentHistory.filter((h) => {
-            if (itemId && h.id && Number(h.id) === Number(itemId)) return false;
-            if (item.source && item.source_id && h.source === item.source && String(h.source_id) === String(item.source_id)) return false;
-            return true;
-          });
+        // Caso A: Fusión masiva de historial desde dispositivo o localStorage
+        if (Array.isArray(body.items)) {
+          let synced = 0;
+          for (const it of body.items.slice(0, 100)) {
+            const itId = parseInt(it.id || it.item_id, 10);
+            if (!Number.isInteger(itId) || itId <= 0) continue;
+            const mediaType = it.media_type === "video" ? "video" : (it.media_type === "gallery" ? "gallery" : "comic");
+            const pos = Math.max(0, parseInt(it.position || it.page || it.currentTime || 0, 10));
+            const dur = Math.max(0, parseInt(it.duration || it.total || 0, 10));
+            const comp = Boolean(it.completed);
+            const clientTs = parseInt(it.client_timestamp || it.at || Date.now(), 10);
 
-          const newEntry = {
-            id: itemId,
-            source: item.source || "",
-            source_id: item.source_id || "",
-            title: item.title || "Sin título",
-            cover_url: item.cover_url || "",
-            url: item.url || "",
-            media_type: item.media_type || "comic",
-            page: item.page || 1,
-            total: item.total || 1,
-            currentTime: item.currentTime || 0,
-            duration: item.duration || 0,
-            completed: !!item.completed,
-            at: Date.now()
-          };
+            const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_history`, {
+              method: "POST",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${token || SUPABASE_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                p_item_id: itId,
+                p_media_type: mediaType,
+                p_position: pos,
+                p_duration: dur,
+                p_completed: comp,
+                p_client_timestamp: clientTs
+              })
+            }).catch(() => null);
 
-          currentHistory.unshift(newEntry);
-          if (currentHistory.length > 50) currentHistory = currentHistory.slice(0, 50);
-
-          currentProgress[itemKey] = {
-            page: newEntry.page,
-            total: newEntry.total,
-            currentTime: newEntry.currentTime,
-            duration: newEntry.duration,
-            completed: newEntry.completed,
-            at: newEntry.at
-          };
-          if (item.source && item.source_id) {
-            currentProgress[`${item.source}:${item.source_id}`] = currentProgress[itemKey];
+            if (!rpcRes || !rpcRes.ok) {
+              await fetch(`${SUPABASE_URL}/rest/v1/user_history`, {
+                method: "POST",
+                headers: {
+                  "apikey": SUPABASE_KEY,
+                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Content-Type": "application/json",
+                  "Prefer": "resolution=merge-duplicates"
+                },
+                body: JSON.stringify({
+                  user_id: user.id,
+                  item_id: itId,
+                  media_type: mediaType,
+                  position: pos,
+                  duration: dur,
+                  completed: comp,
+                  last_activity: new Date().toISOString(),
+                  client_timestamp: clientTs
+                })
+              }).catch(() => {});
+            }
+            synced++;
           }
-
-          await updateSupabaseUserMetadata(user.id, {
-            ...meta,
-            history: currentHistory,
-            progress: currentProgress
+          return new Response(JSON.stringify({ ok: true, synced }), {
+            status: 200,
+            headers: getPersonalHeaders(origin, newToken)
           });
         }
 
-        return new Response(JSON.stringify({ ok: true, success: true }), {
+        // Caso B: Progreso individual
+        const itemData = body.item || body;
+        const targetItemId = parseInt(itemData.id || itemData.item_id, 10);
+        if (!Number.isInteger(targetItemId) || targetItemId <= 0) {
+          return new Response(JSON.stringify({ error: "item_id entero requerido" }), {
+            status: 400,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
+
+        const mediaType = itemData.media_type === "video" ? "video" : (itemData.media_type === "gallery" ? "gallery" : "comic");
+        const pos = Math.max(0, parseInt(itemData.position || itemData.page || itemData.currentTime || 0, 10));
+        const dur = Math.max(0, parseInt(itemData.duration || itemData.total || 0, 10));
+        const comp = Boolean(itemData.completed);
+        const clientTs = parseInt(itemData.client_timestamp || itemData.at || Date.now(), 10);
+
+        const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_history`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${token || SUPABASE_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            p_item_id: targetItemId,
+            p_media_type: mediaType,
+            p_position: pos,
+            p_duration: dur,
+            p_completed: comp,
+            p_client_timestamp: clientTs
+          })
+        }).catch(() => null);
+
+        if (!rpcRes || !rpcRes.ok) {
+          await fetch(`${SUPABASE_URL}/rest/v1/user_history`, {
+            method: "POST",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Prefer": "resolution=merge-duplicates"
+            },
+            body: JSON.stringify({
+              user_id: user.id,
+              item_id: targetItemId,
+              media_type: mediaType,
+              position: pos,
+              duration: dur,
+              completed: comp,
+              last_activity: new Date().toISOString(),
+              client_timestamp: clientTs
+            })
+          }).catch(() => {});
+        }
+
+        return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
           status: 200,
-          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+          headers: getPersonalHeaders(origin, newToken)
         });
       } catch (err) {
-        return new Response(JSON.stringify({ error: err.message }), {
+        return new Response(JSON.stringify({ error: "Error procesando historial" }), {
           status: 500,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          headers: getPersonalHeaders(origin, newToken)
         });
       }
+    }
+
+    // --- DELETE HISTORIAL (Individual o Vaciar Todo) ---
+    if (method === "DELETE") {
+      if (!checkPersonalWriteRateLimit(user.id, 60)) {
+        return new Response(JSON.stringify({ error: "Límite de peticiones excedido" }), {
+          status: 429,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      const isClearAll = url.searchParams.get("clear") === "all" || url.searchParams.get("action") === "clear";
+      if (isClearAll) {
+        await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}`, {
+          method: "DELETE",
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        });
+        return new Response(JSON.stringify({ ok: true, cleared: true }), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      let targetId = parseInt(url.searchParams.get("id") || url.searchParams.get("item_id"), 10);
+      if (!targetId || isNaN(targetId)) {
+        const parts = url.pathname.split("/").filter(Boolean);
+        const lastPart = parts[parts.length - 1];
+        if (/^\d+$/.test(lastPart)) targetId = parseInt(lastPart, 10);
+      }
+
+      if (!Number.isInteger(targetId) || targetId <= 0) {
+        return new Response(JSON.stringify({ error: "id numérico requerido o clear=all" }), {
+          status: 400,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+
+      return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+  }
+
+  // =========================================================================
+  // 10. PREFERENCIAS DE USUARIO (/api/user/preferences)
+  // Persistencia segura en tabla user_preferences (aislada de profiles)
+  // =========================================================================
+  if (url.pathname === "/api/user/preferences") {
+    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "No autenticado" }), {
+        status: 401,
+        headers: getPersonalHeaders(origin)
+      });
+    }
+
+    if (method === "GET") {
+      const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data,version,updated_at&limit=1`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+      const prefRows = prefRes.ok ? await prefRes.json().catch(() => []) : [];
+      if (prefRows && prefRows.length > 0 && prefRows[0]) {
+        return new Response(JSON.stringify(prefRows[0]), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+      return new Response(JSON.stringify({ data: {}, version: 2, updated_at: null }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+
+    if (method === "PUT" || method === "POST") {
+      if (!checkPersonalWriteRateLimit(user.id, 60)) {
+        return new Response(JSON.stringify({ error: "Límite de peticiones excedido" }), {
+          status: 429,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+      const body = await context.request.json().catch(() => ({}));
+      const dataObj = (body.data && typeof body.data === "object") ? body.data : body;
+      const serialized = JSON.stringify(dataObj);
+      if (serialized.length > 16384) {
+        return new Response(JSON.stringify({ error: "Tamaño máximo de preferencias excedido (16KB)" }), {
+          status: 400,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+      const ver = parseInt(body.version || 2, 10);
+      const nowIso = new Date().toISOString();
+
+      await fetch(`${SUPABASE_URL}/rest/v1/user_preferences`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "resolution=merge-duplicates"
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          data: dataObj,
+          version: ver,
+          updated_at: nowIso
+        })
+      });
+
+      return new Response(JSON.stringify({ ok: true, success: true, data: dataObj, version: ver, updated_at: nowIso }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+  }
+
+  // =========================================================================
+  // 11. ESTADO DE SINCRONIZACIÓN (/api/user/sync-status)
+  // =========================================================================
+  if (url.pathname === "/api/user/sync-status" && method === "GET") {
+    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (!user) {
+      return new Response(JSON.stringify({ authenticated: false }), {
+        status: 200,
+        headers: getPersonalHeaders(origin)
+      });
+    }
+
+    try {
+      const [favRes, histRes, prefRes] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id`, {
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
+        }),
+        fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id`, {
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
+        }),
+        fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=updated_at&limit=1`, {
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        })
+      ]);
+
+      const parseCount = (res) => {
+        const cr = res.headers.get("content-range") || "";
+        const s = cr.indexOf("/");
+        return s !== -1 ? parseInt(cr.substring(s + 1), 10) || 0 : 0;
+      };
+
+      const favCount = parseCount(favRes);
+      const histCount = parseCount(histRes);
+      const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
+      const prefUpdatedAt = prefData && prefData[0] ? prefData[0].updated_at : null;
+
+      return new Response(JSON.stringify({
+        authenticated: true,
+        user_id: user.id,
+        favorites_count: favCount,
+        history_count: histCount,
+        preferences_updated_at: prefUpdatedAt,
+        server_time: new Date().toISOString()
+      }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ authenticated: true, user_id: user.id, error: "Sync query failed" }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
     }
   }
 
