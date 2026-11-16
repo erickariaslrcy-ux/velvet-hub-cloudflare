@@ -1,5 +1,5 @@
-// Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v11)
-const CACHE_VERSION = 'v11-velvet-turbo';
+// Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Rediseño UI)
+const CACHE_VERSION = 'v12-velvet-redesign';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -9,6 +9,12 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/apple-touch-icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
   '/velvet_logo.png'
 ];
 
