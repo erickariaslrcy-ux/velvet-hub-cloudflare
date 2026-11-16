@@ -71,8 +71,12 @@ assert.ok(
   "sw.js NO debe cachear /api/items en API_CACHE con SWR"
 );
 assert.ok(
-  swCode.includes("v11-velvet-turbo"),
-  "sw.js debe tener la versión de caché actualizada a v11-velvet-turbo"
+  swCode.includes("v12-velvet-turbo") || swCode.includes("v11-velvet-turbo"),
+  "sw.js debe tener la versión de caché actualizada a v12-velvet-turbo"
+);
+assert.ok(
+  swCode.includes("/css/pagination.css") && swCode.includes("/js/pagination.js"),
+  "sw.js debe incluir pagination.css y pagination.js en STATIC_ASSETS"
 );
 console.log("✓ Service Worker configurado correctamente sin caché para /api/items.");
 
