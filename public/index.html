@@ -4340,6 +4340,10 @@
       }
 
       setPortalMode(state.mode);
+      const initialPageInfo = window.VelvetPagination?.parseUrlPage(window.location.search);
+      if (initialPageInfo && initialPageInfo.page > 1) {
+        state.page = initialPageInfo.page;
+      }
       renderContinueShelf();
 
       if (videoMatch) {
@@ -4397,6 +4401,7 @@
         if (ageGate) ageGate.classList.remove('hidden');
       }
       window.VelvetRouter?.init();
+      window.VelvetPagination?.init();
       
     document.addEventListener('fullscreenchange', () => {
       const fsIcon = document.getElementById('video-fullscreen-icon');
@@ -5282,6 +5287,7 @@
         if (!append) {
           grid.classList.add('hidden');
           empty.classList.remove('hidden');
+          window.VelvetPagination?.render(1, 0, 0);
           resCount.textContent = '0 resultados';
           const emptyTitle = empty.querySelector('h3');
           const emptyDesc = empty.querySelector('p');
@@ -5372,7 +5378,7 @@
 
       const totalPages = parseInt(data.total_pages, 10) || state.totalPages || 1;
       const currentPage = parseInt(data.page, 10) || state.page || 1;
-      renderPaginationControls(currentPage, totalPages);
+      renderPaginationControls(currentPage, totalPages, totalItemsCount);
       updateInfiniteScrollUI(currentPage, totalPages, currentLoadedCount, totalItemsCount);
       initInfiniteScrollObserver();
     }
@@ -12056,113 +12062,28 @@
 
     }
 
-    function renderPaginationControls(currentPage, totalPages) {
-      currentPage = parseInt(currentPage, 10);
-      if (isNaN(currentPage) || currentPage < 1) currentPage = 1;
-      totalPages = parseInt(totalPages, 10);
-      if (isNaN(totalPages) || totalPages < 1) totalPages = 1;
-      if (currentPage > totalPages) currentPage = totalPages;
-
-      state.page = currentPage;
-      state.totalPages = totalPages;
-
-      const currLabel = document.getElementById('pagination-current-label');
-      const totalLabel = document.getElementById('pagination-total-label');
-      const inputQuick = document.getElementById('direct-page-input-quick');
-      if (currLabel) currLabel.textContent = currentPage.toLocaleString();
-      if (totalLabel) totalLabel.textContent = totalPages.toLocaleString();
-      if (inputQuick) {
-        inputQuick.max = totalPages;
-        inputQuick.placeholder = String(currentPage);
+    function renderPaginationControls(currentPage, totalPages, totalItems) {
+      if (window.VelvetPagination && typeof window.VelvetPagination.render === 'function') {
+        window.VelvetPagination.render(currentPage, totalPages, totalItems);
+        return;
       }
-
-      const container = document.getElementById('pagination-numbers-row');
-      if (!container) return;
-      container.innerHTML = '';
-
-      if (totalPages <= 1) return;
-
-      // Botón Anterior
-      const prevBtn = document.createElement('button');
-      prevBtn.type = 'button';
-      prevBtn.disabled = currentPage <= 1;
-      prevBtn.className = 'pagination-btn';
-      prevBtn.innerHTML = '<i class="fa-solid fa-chevron-left text-[10px]"></i> <span class="hidden sm:inline">Ant</span>';
-      prevBtn.onclick = () => jumpToPage(currentPage - 1);
-      container.appendChild(prevBtn);
-
-      // Ventana de páginas numeradas
-      const delta = window.innerWidth < 640 ? 1 : 2;
-      const left = Math.max(1, currentPage - delta);
-      const right = Math.min(totalPages, currentPage + delta);
-
-      if (left > 1) {
-        container.appendChild(createPageNumBtn(1, currentPage));
-        if (left > 2) {
-          const dots = document.createElement('span');
-          dots.className = 'px-1 text-lav/40 text-xs font-bold';
-          dots.textContent = '...';
-          container.appendChild(dots);
-        }
-      }
-
-      for (let p = left; p <= right; p++) {
-        container.appendChild(createPageNumBtn(p, currentPage));
-      }
-
-      if (right < totalPages) {
-        if (right < totalPages - 1) {
-          const dots = document.createElement('span');
-          dots.className = 'px-1 text-lav/40 text-xs font-bold';
-          dots.textContent = '...';
-          container.appendChild(dots);
-        }
-        container.appendChild(createPageNumBtn(totalPages, currentPage));
-      }
-
-      // Botón Siguiente
-      const nextBtn = document.createElement('button');
-      nextBtn.type = 'button';
-      nextBtn.disabled = currentPage >= totalPages;
-      nextBtn.className = 'pagination-btn';
-      nextBtn.innerHTML = '<span class="hidden sm:inline">Sig</span> <i class="fa-solid fa-chevron-right text-[10px]"></i>';
-      nextBtn.onclick = () => jumpToPage(currentPage + 1);
-      container.appendChild(nextBtn);
     }
 
-    function createPageNumBtn(pageNum, currentPage) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      const isActive = pageNum === currentPage;
-      btn.className = `page-num-btn ${isActive ? 'is-active' : ''}`;
-      btn.textContent = pageNum.toLocaleString();
-      btn.onclick = () => jumpToPage(pageNum);
-      return btn;
+    function jumpToPage(targetPage, opts = {}) {
+      if (window.VelvetPagination && typeof window.VelvetPagination.jumpToPage === 'function') {
+        return window.VelvetPagination.jumpToPage(targetPage, opts);
+      }
+      targetPage = parseInt(targetPage, 10) || 1;
+      if (state.totalPages && targetPage > state.totalPages) targetPage = state.totalPages;
+      if (targetPage === state.page) return;
+      state.page = targetPage;
+      fetchLiveFeed();
     }
 
     function executeQuickJump() {
       const input = document.getElementById('direct-page-input-quick');
       if (!input || !input.value) return;
-      let target = parseInt(input.value.trim(), 10);
-      input.value = '';
-      if (isNaN(target) || target < 1) target = 1;
-      if (state.totalPages && target > state.totalPages) target = state.totalPages;
-      jumpToPage(target);
-    }
-
-    function jumpToPage(targetPage) {
-      targetPage = parseInt(targetPage, 10);
-      if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
-      if (state.totalPages && targetPage > state.totalPages) targetPage = state.totalPages;
-      if (targetPage === state.page) return;
-
-      state.page = targetPage;
-      const grid = document.getElementById('comics-grid');
-      if (grid) {
-        const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
-        window.scrollTo({ top: Math.max(0, topOffset), behavior: 'smooth' });
-      }
-      fetchLiveFeed();
+      jumpToPage(input.value);
     }
 
     function changePage(delta) {
