@@ -1574,8 +1574,8 @@ export async function onRequest(context) {
     postgrestUrl += "&order=id.desc";
 
     try {
-      // Optimización PostgREST: count=exact para búsquedas/tags; count configurable (o estimated) para catálogos masivos
-      const preferCount = (q || tag) ? "count=exact" : (env.POSTGREST_COUNT_MODE || "count=exact");
+      // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
+      const preferCount = (q || tag) ? "count=exact" : (env.POSTGREST_COUNT_MODE || "count=planned");
       let spRes = await fetch(postgrestUrl, {
         headers: {
           "apikey": SUPABASE_KEY,
@@ -1584,12 +1584,25 @@ export async function onRequest(context) {
         }
       });
 
+      // Blindaje contra timeout: Si PostgREST se demora o devuelve 57014 (statement timeout), reintentar sin Prefer count
       if (!spRes.ok) {
         const errText = await spRes.text();
-        return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: errText }), {
-          status: 500,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
-        });
+        if (errText.includes("57014") || errText.includes("timeout") || errText.includes("canceling statement")) {
+          console.warn("[Velvet-Items] Timeout detectado en PostgREST count. Reintentando sin cabecera Prefer...");
+          spRes = await fetch(postgrestUrl, {
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`
+            }
+          });
+        }
+        if (!spRes.ok) {
+          const finalErr = spRes === null ? errText : await spRes.text().catch(() => errText);
+          return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: finalErr }), {
+            status: 500,
+            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          });
+        }
       }
 
       // Obtener el conteo real exacto mediante cabecera Content-Range
