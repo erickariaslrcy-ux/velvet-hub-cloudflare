@@ -5,6 +5,7 @@
   "description": "Velvet Hub / Morbohub - Cloudflare Pages Native Streaming & Comics Platform",
   "type": "module",
   "scripts": {
+    "build": "echo 'Build complete'",
     "dev": "wrangler pages dev public",
     "preview": "wrangler pages dev public",
     "deploy": "wrangler pages deploy public",
