@@ -120,7 +120,7 @@
 
       // 3. Rutas canónicas del nuevo sistema
       if (path === '/' || path === '/index.html') {
-        return { name: 'home', mode: 'comics', canonical: '/' };
+        return { name: 'home', mode: 'comics', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/' };
       }
       if (path === '/videos') {
         return { name: 'catalog', mode: 'videos', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/videos' };
