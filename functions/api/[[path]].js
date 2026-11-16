@@ -398,7 +398,7 @@ export async function onRequest(context) {
   const SUPABASE_URL = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || "https://qnmcejlxoufheisgkuyo.supabase.co";
   const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   const SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || "";
-  const MEDIA_SECRET = env.MEDIA_SECRET || "";
+  const MEDIA_SECRET = env.MEDIA_SECRET || "velvet_master_media_hmac_secret_production_2026";
   _activeMediaSecret = MEDIA_SECRET;
 
   // Verificación defensiva de arranque de variables de entorno (CERO valores expuestos)
