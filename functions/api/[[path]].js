@@ -1453,7 +1453,7 @@ export async function onRequest(context) {
     const offset = baseOffset + (safePage - 1) * pageSize;
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists";
-    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}&status=neq.blocked&cover_url=not.is.null&cover_url=neq.`;
+    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
 
     if (mediaType === "video") {
       postgrestUrl += "&media_type=eq.video";
@@ -1464,7 +1464,7 @@ export async function onRequest(context) {
         postgrestUrl += "&source=neq.leakgallery";
       }
     } else {
-      postgrestUrl += "&media_type=eq.comic&page_count=gt.0&real_people=eq.false";
+      postgrestUrl += "&media_type=eq.comic&page_count=gt.0";
     }
 
     if (tag) {
