@@ -50,10 +50,12 @@
   </noscript>
   <link rel="preload" as="script" href="https://cdn.tailwindcss.com">
   <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Modular Architecture: Store, Router & Vault -->
+    <!-- Modular Architecture: Store, Router, Vault & Pagination -->
+  <link rel="stylesheet" href="/css/pagination.css">
   <script defer src="/js/store.js"></script>
   <script defer src="/js/router.js"></script>
   <script defer src="/js/vault.js"></script>
+  <script defer src="/js/pagination.js"></script>
 
   <script>
 
@@ -1635,26 +1637,8 @@
         <span class="text-xs font-black text-lav">Cargando siguiente página en alta definición...</span>
       </div>
 
-      <!-- Barra de Paginación Clásica Velvet Pro -->
-      <nav id="velvet-pagination-container" aria-label="Navegación del Catálogo" class="w-full max-w-2xl mx-auto flex flex-col items-center justify-center gap-3 py-6 my-4 select-none">
-        <!-- Fila de Botones Numerados (1, 2, 3...) -->
-        <div id="pagination-numbers-row" class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 w-full px-2"></div>
-
-        <!-- Fila de Salto Rápido y Total de Páginas -->
-        <div class="flex flex-wrap items-center justify-center gap-3 text-xs text-lav/80 bg-[#0d061e]/90 border border-purple-500/25 px-4 py-2 rounded-2xl backdrop-blur-md shadow-lg">
-          <span>
-            Página <strong id="pagination-current-label" class="text-pink-400 font-extrabold text-sm">1</strong> de <span id="pagination-total-label" class="text-purple-300 font-mono font-bold">1,562</span>
-          </span>
-          <span class="text-purple-500/40">|</span>
-          <div class="flex items-center gap-1.5">
-            <span class="text-[11px] text-lav/60">Ir a:</span>
-            <input id="direct-page-input-quick" type="number" min="1" class="w-16 h-8 text-center text-xs font-black text-white bg-black/80 border border-purple-500/30 rounded-xl focus:outline-none focus:border-pink-500" placeholder="1" onkeydown="if(event.key==='Enter') executeQuickJump()" />
-            <button type="button" onclick="executeQuickJump()" class="px-3 h-8 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white text-xs font-black shadow-md cursor-pointer transition-all">
-              Ir
-            </button>
-          </div>
-        </div>
-      </nav>
+      <!-- Barra de Paginación Rediseñada Velvet Pro -->
+      <div id="velvet-pagination-root" class="w-full select-none"></div>
 
       <!-- Fin del catálogo -->
       <div id="infinite-end-reached" class="hidden text-center py-4 space-y-1">
