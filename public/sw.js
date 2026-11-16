@@ -17,6 +17,7 @@ const STATIC_ASSETS = [
   '/icon-512.png',
   '/velvet_logo.png',
   '/css/pagination.css',
+  '/js/tailwindcss.js',
   '/js/personal-data.js',
   '/js/store.js',
   '/js/router.js',
@@ -117,7 +118,8 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('.woff2') ||
     url.pathname.endsWith('.woff') ||
     url.pathname === '/velvet_logo.png' ||
-    url.pathname === '/manifest.json';
+    url.pathname === '/manifest.json' ||
+    url.pathname === '/js/tailwindcss.js';
 
   if (isFontOrIcon) {
     event.respondWith(

@@ -1509,8 +1509,14 @@ export async function onRequest(context) {
     }
 
     const safePage = Math.max(1, page);
-    // Paginación continua y secuencial: las páginas 1 hasta la 12 avanzan fluidamente sin duplicados
-    const offset = baseOffset + (safePage - 1) * pageSize;
+    // Paginación continua y acotada: en modo aleatorio envuelve dentro del catálogo total, en orden directo respeta offset
+    const maxOffset = Math.max(0, estimatedTotal - pageSize);
+    let offset = 0;
+    if (isRandomMode) {
+      offset = (baseOffset + (safePage - 1) * pageSize) % Math.max(pageSize, maxOffset);
+    } else {
+      offset = Math.min((safePage - 1) * pageSize, maxOffset);
+    }
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists";
     let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
@@ -1590,6 +1596,16 @@ export async function onRequest(context) {
         if (errText.includes("57014") || errText.includes("timeout") || errText.includes("canceling statement")) {
           console.warn("[Velvet-Items] Timeout detectado en PostgREST count. Reintentando sin cabecera Prefer...");
           spRes = await fetch(postgrestUrl, {
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`
+            }
+          });
+        }
+        if (!spRes.ok) {
+          // Si el offset profundo sigue fallando por timeout en base de datos, reintentar con offset seguro
+          const safeFallbackUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=0&media_type=eq.${mediaType === 'video' ? 'video' : (mediaType === 'gallery' ? 'gallery' : 'comic')}&page_count=gt.0&order=id.desc`;
+          spRes = await fetch(safeFallbackUrl, {
             headers: {
               "apikey": SUPABASE_KEY,
               "Authorization": `Bearer ${SUPABASE_KEY}`
