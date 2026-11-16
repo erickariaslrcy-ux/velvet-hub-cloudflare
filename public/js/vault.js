@@ -104,8 +104,10 @@
       if (!root) return;
 
       // Asegurar visibilidad del contenedor de la Bóveda y ocultar el resto
+      const vaultEl = document.getElementById('vault-view') || document.getElementById('view-vault');
+      if (vaultEl) vaultEl.classList.remove('hidden');
       document.querySelectorAll('.velvet-view').forEach((el) => {
-        if (el.id === 'view-vault') el.classList.remove('hidden');
+        if (el.id === 'vault-view' || el.id === 'view-vault') el.classList.remove('hidden');
         else el.classList.add('hidden');
       });
 
@@ -227,7 +229,18 @@
           const card = document.createElement('a');
           card.href = itemUrl;
           card.id = `fav-card-${itemId}`;
-          card.className = 'group flex flex-col bg-[#0e071c] border border-purple-500/20 hover:border-pink-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_25px_rgba(255,45,149,0.25)] transition-all relative';
+          card.className = 'group flex flex-col bg-[#0e071c] border border-purple-500/20 hover:border-pink-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_25px_rgba(255,45,149,0.25)] transition-all relative cursor-pointer';
+          card.onclick = (e) => {
+            if (e.target.closest('button') || e.target.closest('input')) return;
+            e.preventDefault();
+            if (isVid && typeof window.openVideoPlayer === 'function') {
+              window.openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, false, it.id);
+            } else if (typeof window.openReader === 'function') {
+              window.openReader(it.source, it.source_id, false, it.id);
+            } else if (itemUrl && itemUrl !== '#') {
+              window.location.href = itemUrl;
+            }
+          };
           card.innerHTML = `
             <div class="relative aspect-[3/4] w-full overflow-hidden bg-black select-none">
               <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" onerror="this.src='/velvet_logo.png'" />
@@ -269,7 +282,18 @@
           const row = document.createElement('a');
           row.href = itemUrl;
           row.id = `fav-card-${itemId}`;
-          row.className = 'group p-2.5 rounded-2xl bg-[#0e071c] border border-purple-500/20 hover:border-pink-500/60 flex items-center justify-between gap-3 transition-all';
+          row.className = 'group p-2.5 rounded-2xl bg-[#0e071c] border border-purple-500/20 hover:border-pink-500/60 flex items-center justify-between gap-3 transition-all cursor-pointer';
+          row.onclick = (e) => {
+            if (e.target.closest('button') || e.target.closest('input')) return;
+            e.preventDefault();
+            if (isVid && typeof window.openVideoPlayer === 'function') {
+              window.openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, false, it.id);
+            } else if (typeof window.openReader === 'function') {
+              window.openReader(it.source, it.source_id, false, it.id);
+            } else if (itemUrl && itemUrl !== '#') {
+              window.location.href = itemUrl;
+            }
+          };
           row.innerHTML = `
             <div class="flex items-center gap-3 overflow-hidden flex-1">
               ${isMultiSelectMode ? `

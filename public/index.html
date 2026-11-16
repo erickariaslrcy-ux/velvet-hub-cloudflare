@@ -1259,23 +1259,14 @@
         <!-- Botón Aleatorio -->
 
         <button
-
           id="random-btn"
-
           data-action="fetch-random"
-
-          onclick="fetchRandom()"
-
-          title="Descubrir contenido al azar"
-
-          class="hidden sm:flex h-9 px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-white/80 hover:text-white text-xs font-semibold items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
-
+          onclick="shuffleCurrentFeed()"
+          title="Descubrir videos y mangas al azar"
+          class="flex h-8 sm:h-9 px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] hover:opacity-90 text-white text-[11px] sm:text-xs font-bold items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-hot-glow active:scale-95 cursor-pointer shrink-0"
         >
-
-          <i class="fa-solid fa-dice text-pink-400"></i>
-
+          <i class="fa-solid fa-dice text-xs sm:text-sm"></i>
           <span>Al Azar</span>
-
         </button>
 
         <!-- Botón Perfil / Mi Bóveda -->
@@ -3640,37 +3631,38 @@
       } catch(e) {}
     })();
 
-    console.log('%c🚀 [VELVET HUB] Inicializando Plataforma Unificada (Cómics + Videos)...', 'color: #ec4899; font-weight: bold; font-size: 15px;');
+    function getRotatingSeed() {
+      const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+      const currentSlot = Math.floor(Date.now() / THREE_HOURS_MS);
+      let userSalt = 1;
+      try {
+        userSalt = parseInt(localStorage.getItem('velvet_user_rot_salt') || '0', 10);
+        if (!userSalt) {
+          userSalt = Math.floor(Math.random() * 50000) + 1;
+          localStorage.setItem('velvet_user_rot_salt', String(userSalt));
+        }
+      } catch (e) {
+        userSalt = 1234;
+      }
+      return ((currentSlot * 7919 + userSalt) % 50000) + 1;
+    }
 
     // =======================================================================
-
     // ESTADO GLOBAL CENTRALIZADO (INICIALIZADO PRIMERO PARA EVITAR TDZ)
-
     // =======================================================================
 
     const state = {
-
       user: null,
-
       mode: 'comics', // 'comics' o 'videos'
-
-      videoSource: 'all', // 'all', 'damplips', 'pornone', 'redporn', 'pornhd', 'anyporn', 'alotporn'
-
+      videoSource: 'all',
       currentVideo: null,
-
       query: '',
-
       page: 1,
-
       pageSize: (typeof window !== 'undefined' && window.innerWidth < 768) ? 8 : 12,
-
       category: 'all',
-
-      sort: 'recent',
-
-      catalogMode: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode')) || 'static',
-
-      feedSeed: (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_catalog_mode') === 'dynamic') ? (Math.floor(Math.random() * 500) + 1) : 0,
+      sort: 'random',
+      catalogMode: 'dynamic',
+      feedSeed: getRotatingSeed(),
 
       live: true,
 
@@ -4747,7 +4739,12 @@
         if (gHeader) gHeader.classList.remove('hidden');
         if (mobNav) mobNav.classList.remove('hidden');
         if (vaultView) vaultView.classList.remove('hidden');
-        window.VelvetVault?.mount(route.tab || 'favorites');
+        if (window.VelvetVault && typeof window.VelvetVault.mount === 'function') {
+          window.VelvetVault.mount(route.tab || 'favorites');
+        } else if (typeof renderVaultFavoritesPro === 'function') {
+          renderVaultFavoritesPro();
+        }
+        updateVaultCounts();
         return;
       }
 
@@ -4879,21 +4876,20 @@
         const oled = localStorage.getItem('velvet_oled');
         if (oled === 'true') enableOled(true);
 
-        const savedCatalogMode = localStorage.getItem('velvet_catalog_mode');
-        if (savedCatalogMode === 'static' || savedCatalogMode === 'dynamic') {
-          state.catalogMode = savedCatalogMode;
-        } else {
-          state.catalogMode = 'static';
-        }
-        if (state.catalogMode === 'dynamic' && !state.feedSeed) {
-          state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        // Rotación dinámica cada 3 horas automática para mantener el catálogo vivo
+        state.catalogMode = 'dynamic';
+        const currentSlot = Math.floor(Date.now() / (3 * 3600 * 1000));
+        const storedSlot = parseInt(localStorage.getItem('velvet_last_rot_slot') || '0', 10);
+        if (storedSlot !== currentSlot) {
+          localStorage.setItem('velvet_last_rot_slot', String(currentSlot));
+          CLIENT_CACHE.clear();
+          state.feedSeed = getRotatingSeed();
           state.videoSeed = state.feedSeed;
-          state.sort = 'random';
-        } else if (state.catalogMode === 'static') {
-          state.feedSeed = 0;
-          state.videoSeed = 0;
-          state.sort = 'recent';
+        } else if (!state.feedSeed) {
+          state.feedSeed = getRotatingSeed();
+          state.videoSeed = state.feedSeed;
         }
+        state.sort = 'random';
       } catch (e) {
         state.user = { name: 'Invitado', avatar: '🔑', avatarBg: 'from-purple-900 to-slate-900', isVip: false };
       }
@@ -10953,18 +10949,8 @@
 
       if (dropMenu) dropMenu.classList.add('hidden');
 
-      if (!state.currentUser) {
-
-        openAuthModal('login');
-
-        return;
-
-      }
-
       const modal = document.getElementById('vault-modal');
-
       if (modal) modal.classList.remove('hidden');
-
       switchVaultTabPro(tab);
 
     }
@@ -11261,11 +11247,6 @@
         event.stopPropagation();
       }
       if (!item) return;
-      if (!hasFullAccess()) {
-        showToast('Para guardar en tu Bóveda necesitas Membresía VIP ($5.99) o Llave de Acceso.', 'warning');
-        openProUpgradeModal(item);
-        return;
-      }
 
       const itemId = item.id || null;
       const idx = state.favorites.findIndex(f => {
@@ -11299,7 +11280,7 @@
           created_at: new Date().toISOString()
         };
         state.favorites.unshift(favEntry);
-        showToast('Guardado en Mi Bóveda', 'success');
+        showToast('Guardado en Mi Bóveda ❤️', 'success');
 
         if (state.currentUser) {
           try {
@@ -11312,6 +11293,15 @@
           } catch (e) {}
         }
       }
+
+      // Sincronizar con VelvetStore y todos los almacenes locales
+      try {
+        const serialized = JSON.stringify(state.favorites);
+        localStorage.setItem('velvet_favorites', serialized);
+        localStorage.setItem('velvet_guest_favs', serialized);
+        localStorage.setItem('velvet_favs', serialized);
+        window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: state.favorites }));
+      } catch (e) {}
 
       // Actualizar inmediatamente botón clickeado
       if (event) {
@@ -11328,8 +11318,11 @@
       updateAllFeedFavoriteIcons();
       updateVaultFavCountBadge();
       updateVideoFavIcon();
-      updateAllFeedFavoriteIcons();
+      updateVaultCounts();
       renderContinueShelf();
+      if (window.VelvetVault && typeof window.VelvetVault.renderFavorites === 'function') {
+        window.VelvetVault.renderFavorites();
+      }
       if (document.getElementById('vault-modal') && !document.getElementById('vault-modal').classList.contains('hidden')) {
         renderVaultFavoritesPro();
       }
@@ -12213,12 +12206,14 @@
     }
 
     function shuffleCurrentFeed() {
-      const shuffleIcon = document.querySelector('#category-chips .fa-shuffle');
+      const shuffleIcon = document.querySelector('#random-btn i') || document.querySelector('#category-chips .fa-shuffle');
       if (shuffleIcon) shuffleIcon.classList.add('fa-spin');
       state.catalogMode = 'dynamic';
       try { localStorage.setItem('velvet_catalog_mode', 'dynamic'); } catch(e) {}
       updateCatalogModeUI();
-      state.feedSeed = Math.floor(Math.random() * 999) + 1;
+
+      // Semilla fresca de amplio rango (1 a 50,000) que salta a páginas profundas al azar (ej. pág 334 o 391)
+      state.feedSeed = Math.floor(Math.random() * 50000) + 1;
       state.videoSeed = state.feedSeed;
       state.page = 1;
       CLIENT_CACHE.clear();
@@ -12244,7 +12239,7 @@
       setTimeout(() => {
         if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
       }, 700);
-      showToast('🎲 Catálogo renovado con nuevo contenido variado', 'info');
+      showToast('🎲 ¡Páginas al azar cargadas con nuevo contenido variado!', 'info');
     }
 
     function shuffleVideoFeed() {
@@ -12252,19 +12247,9 @@
     }
 
     async function fetchRandom() {
-
-      try {
-        const endpoint = (state.mode === 'videos')
-          ? '/api/random?media_type=video&count=1'
-          : (state.mode === 'galleries'
-              ? '/api/random?media_type=gallery&count=1'
-              : '/api/random?media_type=comic&count=1');
-
-        const resp = await fetch(endpoint);
-
-        if (!resp.ok) throw new Error('Error al obtener elemento');
-
-        const items = await resp.json();
+      // Cargar páginas al azar en la grilla para Android y PC
+      shuffleCurrentFeed();
+    }
 
         if (items && items.length > 0) {
           const it = items[0];

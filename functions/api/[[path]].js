@@ -1447,9 +1447,32 @@ export async function onRequest(context) {
       estimatedTotal = 18260;
     }
 
+    // Modo aleatorio y rotación cada 3 horas cuando se solicita sort=random o viene seed
+    const isRandomMode = sort === "random" || seedParam > 0;
+    let baseOffset = 0;
+
+    if (isRandomMode) {
+      const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+      const threeHourSlot = Math.floor(Date.now() / THREE_HOURS_MS);
+      const effectiveSeed = seedParam > 0 ? seedParam : (((threeHourSlot * 7919) % 50000) + 1);
+
+      let maxCatalogOffset = 18000;
+      if (mediaType === "video") {
+        maxCatalogOffset = 35000;
+      } else if (mediaType === "gallery" || mediaType === "cosplay") {
+        maxCatalogOffset = 15000;
+      } else {
+        maxCatalogOffset = 18000;
+      }
+
+      const maxPageSlots = Math.floor(maxCatalogOffset / pageSize);
+      // Salto aleatorio de amplio espectro: permite iniciar en cualquier página profunda (ej. pág 334, 391)
+      const randomStartPage = (Math.abs(effectiveSeed * 313) % Math.max(1, maxPageSlots - 30));
+      baseOffset = randomStartPage * pageSize;
+    }
+
     const safePage = Math.max(1, page);
-    // Paginación estable: con o sin semilla, avanza de manera 100% secuencial y continua
-    const baseOffset = seedParam > 0 ? (Math.abs(seedParam * 137) % 500) : 0;
+    // Paginación continua y secuencial: las páginas 1 hasta la 12 avanzan fluidamente sin duplicados
     const offset = baseOffset + (safePage - 1) * pageSize;
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists";

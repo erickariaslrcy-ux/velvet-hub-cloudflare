@@ -405,8 +405,12 @@
     // --- FAVORITOS ---
     getFavorites() {
       try {
-        const raw = localStorage.getItem(FAVORITES_KEY);
-        return raw ? JSON.parse(raw) : [];
+        const raw = localStorage.getItem(FAVORITES_KEY) || localStorage.getItem('velvet_guest_favs') || localStorage.getItem('velvet_favs');
+        if (raw) return JSON.parse(raw);
+        if (window.state && Array.isArray(window.state.favorites) && window.state.favorites.length > 0) {
+          return window.state.favorites;
+        }
+        return [];
       } catch (e) {
         return [];
       }
@@ -414,8 +418,13 @@
 
     setFavorites(favs) {
       try {
-        localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs || []));
-        window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: favs }));
+        const list = Array.isArray(favs) ? favs : [];
+        const serialized = JSON.stringify(list);
+        localStorage.setItem(FAVORITES_KEY, serialized);
+        localStorage.setItem('velvet_guest_favs', serialized);
+        localStorage.setItem('velvet_favs', serialized);
+        if (window.state) window.state.favorites = list;
+        window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: list }));
       } catch (e) {}
     },
 
