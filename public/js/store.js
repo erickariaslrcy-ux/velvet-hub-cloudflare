@@ -88,6 +88,16 @@
   const VelvetStore = {
     texts: TEXTS,
 
+    // --- ACCESO A ESTADO GLOBAL ---
+    getState() {
+      return {
+        preferences: this.getPreferences(),
+        user: this.getCurrentUser(),
+        favorites: this.getFavorites(),
+        history: this.getHistory()
+      };
+    },
+
     // --- VERIFICACIÓN DE EDAD ---
     isAgeVerified() {
       try {

@@ -8801,11 +8801,16 @@
       if (titleEl) titleEl.textContent = isVideoMode ? 'Continuar Viendo' : (isGalleryMode ? 'Continuar Viendo Galerías' : 'Continuar Leyendo');
       if (subtitleEl) subtitleEl.textContent = isVideoMode ? 'Reanuda tus videos donde los pausaste' : (isGalleryMode ? 'Reanuda tus galerías donde las dejaste' : 'Reanuda tus cómics donde los dejaste');
 
-      const isPaused = !!(
-        (window.VelvetStore?.getState()?.preferences?.pauseHistory) ||
-        (window.VelvetStore?.getPreferences && window.VelvetStore.getPreferences()?.pauseHistory) ||
-        (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_pause_history') === 'true')
-      );
+      let isPaused = false;
+      try {
+        isPaused = !!(
+          (typeof window.VelvetStore?.getState === 'function' && window.VelvetStore.getState()?.preferences?.pauseHistory) ||
+          (typeof window.VelvetStore?.getPreferences === 'function' && window.VelvetStore.getPreferences()?.pauseHistory) ||
+          (typeof localStorage !== 'undefined' && localStorage.getItem('velvet_pause_history') === 'true')
+        );
+      } catch (e) {
+        isPaused = false;
+      }
       if (isPaused) {
         section.classList.add('hidden');
         return;

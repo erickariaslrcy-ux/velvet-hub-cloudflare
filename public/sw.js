@@ -17,6 +17,10 @@ const STATIC_ASSETS = [
   '/icon-512.png',
   '/velvet_logo.png',
   '/css/pagination.css',
+  '/js/personal-data.js',
+  '/js/store.js',
+  '/js/router.js',
+  '/js/vault.js',
   '/js/pagination.js'
 ];
 
