@@ -1490,8 +1490,8 @@ export async function onRequest(context) {
       estimatedTotal = 18260;
     }
 
-    // Modo aleatorio y rotación cada 3 horas cuando se solicita sort=random o viene seed
-    const isRandomMode = sort === "random" || seedParam > 0;
+    // Modo aleatorio y rotación cada 3 horas SOLO si sort=random o viene seed Y no hay búsqueda, categoría ni tag
+    const isRandomMode = (sort === "random" || seedParam > 0) && !q && !tag && (!category || category === "all");
     let baseOffset = 0;
 
     if (isRandomMode) {
@@ -1521,7 +1521,7 @@ export async function onRequest(context) {
     if (isRandomMode) {
       offset = (baseOffset + (safePage - 1) * pageSize) % Math.max(pageSize, maxOffset);
     } else {
-      offset = Math.min((safePage - 1) * pageSize, maxOffset);
+      offset = (safePage - 1) * pageSize;
     }
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists";
@@ -1609,9 +1609,9 @@ export async function onRequest(context) {
           });
         }
         if (!spRes.ok) {
-          // Si el offset profundo sigue fallando por timeout en base de datos, reintentar con offset seguro
-          const safeFallbackUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=0&media_type=eq.${mediaType === 'video' ? 'video' : (mediaType === 'gallery' ? 'gallery' : 'comic')}&page_count=gt.0&order=id.desc`;
-          spRes = await fetch(safeFallbackUrl, {
+          // Si el offset profundo sigue fallando por timeout o rango excedido (ej. 416), reintentar en página 1 preservando filtros
+          const pageOneUrl = postgrestUrl.replace(/offset=\d+/, 'offset=0');
+          spRes = await fetch(pageOneUrl, {
             headers: {
               "apikey": SUPABASE_KEY,
               "Authorization": `Bearer ${SUPABASE_KEY}`

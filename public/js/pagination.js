@@ -272,6 +272,15 @@
     }
   }
 
+  function resetLoadingState() {
+    state.isPaginating = false;
+    const root = getRootElement();
+    if (root) {
+      const bar = root.querySelector('.v-pagination-bar');
+      if (bar) bar.classList.remove('is-loading');
+    }
+  }
+
   // ==========================================================================
   // 3. RENDERIZADO DEL COMPONENTE HTML
   // ==========================================================================
@@ -805,6 +814,7 @@
     init,
     render,
     jumpToPage,
+    resetLoadingState,
     openBottomSheet,
     closeBottomSheet,
     getState: () => ({ ...state })

@@ -1,3 +1,15 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Solid Non-Transparent Backgrounds for Mobile Android & Sticky Bars */
+#filter-bar {
+  background-color: rgba(12, 6, 29, 0.98) !important;
+}
+#sort-dropdown-menu {
+  background-color: rgba(18, 7, 38, 0.98) !important;
+}
+#mobile-navbar {
+  background-color: rgba(10, 6, 16, 0.98) !important;
+}
+

@@ -36,23 +36,61 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://qnmcejlxoufheisgkuyo.supabase.co" crossorigin>
 
-  <!-- Google Fonts: Outfit + DM Serif Display + Inter (Non-blocking Swap) -->
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
-  <noscript>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
-  </noscript>
+  <!-- Google Fonts: Outfit + DM Serif Display + Inter -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
 
-  <!-- FontAwesome 6 (Non-blocking) + Tailwind CSS CDN -->
-  <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
-  <noscript>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  </noscript>
+  <!-- FontAwesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
   <!-- High-Performance Static Design System (Compiled Tailwind CSS) -->
   <link rel="stylesheet" href="/css/tailwind.css">
   <link rel="stylesheet" href="/css/pagination.css">
+
+  <!-- Tailwind CSS Engine for Dynamic JavaScript Components -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          opacity: {
+            '98': '0.98',
+            '95': '0.95',
+            '92': '0.92',
+            '85': '0.85',
+            '15': '0.15'
+          },
+          colors: {
+            pitch: '#000000',
+            obsidian: '#040209',
+            velvet: '#090518',
+            glass: '#0f0927',
+            glasscard: '#130b32',
+            violet: '#8b5cf6',
+            neon: '#a855f7',
+            hot: '#ec4899',
+            crimson: '#f43f5e',
+            magenta: '#d946ef',
+            gold: '#f59e0b',
+            ink: '#f8fafc',
+            lav: '#c4b5fd',
+            darkborder: '#271754'
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'Outfit', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            display: ['"Playfair Display"', '"DM Serif Display"', 'Georgia', 'serif']
+          },
+          boxShadow: {
+            'neon': '0 0 25px rgba(168, 85, 247, 0.25)',
+            'neon-strong': '0 0 35px rgba(217, 70, 239, 0.45)',
+            'hot-glow': '0 0 30px rgba(236, 72, 153, 0.4)',
+            'gold': '0 0 20px rgba(245, 158, 11, 0.35)',
+            'thumb': '0 -10px 30px rgba(0, 0, 0, 0.95)'
+          }
+        }
+      }
+    };
+  </script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
   <script defer src="/js/personal-data.js"></script>
@@ -3634,9 +3672,13 @@
 
     };
 
+    // Exposición global segura para módulos desacoplados (Pagination, Router, PersonalData, Store)
+    window.state = state;
+
     // Cache local en memoria para transiciones instantáneas a 0 milisegundos
 
     const CLIENT_CACHE = new Map();
+    window.CLIENT_CACHE = CLIENT_CACHE;
     const CLIENT_CACHE_TTL = 300000; // 5 minutos
 
     // Turbo Cache Persistente en Memoria & SessionStorage (0ms lectura y navegación)
@@ -4497,8 +4539,11 @@
       const initUrlParams = new URLSearchParams(window.location.search);
       const initCat = initUrlParams.get('cat');
       const initSort = initUrlParams.get('sort');
-      const initialPageInfo = window.VelvetPagination?.parseUrlPage(window.location.search);
-      const initPage = (initialPageInfo && initialPageInfo.page > 1) ? initialPageInfo.page : 1;
+      const rawPageParam = parseInt(initUrlParams.get('page'), 10);
+      const initialPageInfo = window.VelvetPagination?.parseUrlPage?.(window.location.search);
+      const initPage = (!isNaN(rawPageParam) && rawPageParam >= 1)
+        ? rawPageParam
+        : ((initialPageInfo && initialPageInfo.page >= 1) ? initialPageInfo.page : 1);
 
       if (initCat) {
         state.category = initCat;
@@ -5560,7 +5605,9 @@
       }
 
       const totalPages = parseInt(data.total_pages, 10) || state.totalPages || 1;
+      state.totalPages = totalPages;
       const currentPage = parseInt(data.page, 10) || state.page || 1;
+      state.page = currentPage;
       renderPaginationControls(currentPage, totalPages, totalItemsCount);
       updateInfiniteScrollUI(currentPage, totalPages, currentLoadedCount, totalItemsCount);
       initInfiniteScrollObserver();
@@ -5783,7 +5830,8 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden select-none" style="background-color: ${domColor};">
             <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              src="${coverSrc}"
+              ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
@@ -5791,7 +5839,7 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="if(this.src && !this.src.startsWith('data:image/svg')){this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -5866,10 +5914,6 @@
         `;
 
         frag.appendChild(card);
-        if (!isAboveFold) {
-          const img = card.querySelector('img.card-cover-img');
-          if (img) SmartImageLoader.register(img);
-        }
       });
       grid.appendChild(frag);
       grid.classList.remove('hidden');
@@ -5927,7 +5971,8 @@
           <div class="relative aspect-video w-full overflow-hidden select-none" style="background-color: ${domColor};">
             <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              src="${coverSrc}"
+              ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
@@ -5935,7 +5980,7 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="if(this.src && !this.src.startsWith('data:image/svg')){this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, 'video')"
             />
             <div class="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors pointer-events-none"></div>
@@ -5987,10 +6032,6 @@
         `;
 
         frag.appendChild(card);
-        if (!isAboveFold) {
-          const img = card.querySelector('img.card-cover-img');
-          if (img) SmartImageLoader.register(img);
-        }
       });
       grid.appendChild(frag);
       grid.classList.remove('hidden');
@@ -8476,7 +8517,8 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden select-none" style="background-color: ${domColor};">
             <div class="velvet-skeleton absolute inset-0"></div>
             <img
-              ${isAboveFold ? `src="${coverSrc}" srcset="${responsiveSrcSet}"` : `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3C/svg%3E" data-src="${coverSrc}" data-srcset="${responsiveSrcSet}"`}
+              src="${coverSrc}"
+              ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(it.title)}"
@@ -8484,7 +8526,7 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="if(this.src && !this.src.startsWith('data:image/svg')){this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, 'comic')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -8556,10 +8598,6 @@
         `;
 
         frag.appendChild(card);
-        if (!isAboveFold) {
-          const img = card.querySelector('img.card-cover-img');
-          if (img) SmartImageLoader.register(img);
-        }
       });
       grid.appendChild(frag);
       grid.classList.remove('hidden');
@@ -12375,13 +12413,13 @@
     }
 
     function jumpToPage(targetPage, opts = {}) {
+      targetPage = parseInt(targetPage, 10) || 1;
+      if (state.totalPages && targetPage > state.totalPages) targetPage = state.totalPages;
+      if (targetPage === state.page && !opts.force) return;
+      state.page = targetPage;
       if (window.VelvetPagination && typeof window.VelvetPagination.jumpToPage === 'function') {
         return window.VelvetPagination.jumpToPage(targetPage, opts);
       }
-      targetPage = parseInt(targetPage, 10) || 1;
-      if (state.totalPages && targetPage > state.totalPages) targetPage = state.totalPages;
-      if (targetPage === state.page) return;
-      state.page = targetPage;
       fetchLiveFeed();
     }
 

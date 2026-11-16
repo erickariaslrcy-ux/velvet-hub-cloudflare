@@ -7,6 +7,13 @@ module.exports = {
   darkMode: 'class',
   theme: {
     extend: {
+      opacity: {
+        '98': '0.98',
+        '95': '0.95',
+        '92': '0.92',
+        '85': '0.85',
+        '15': '0.15'
+      },
       colors: {
         pitch: '#000000',
         obsidian: '#040209',
