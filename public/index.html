@@ -28,13 +28,11 @@
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="dns-prefetch" href="https://fonts.gstatic.com">
   <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com">
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
   <link rel="dns-prefetch" href="https://qnmcejlxoufheisgkuyo.supabase.co">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://qnmcejlxoufheisgkuyo.supabase.co" crossorigin>
 
@@ -51,87 +49,17 @@
   <noscript>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   </noscript>
-  <link rel="preload" as="script" href="https://cdn.tailwindcss.com">
-  <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Modular Architecture: Store, Router, Vault & Pagination -->
+
+  <!-- High-Performance Static Design System (Compiled Tailwind CSS) -->
+  <link rel="stylesheet" href="/css/tailwind.css">
   <link rel="stylesheet" href="/css/pagination.css">
+
+  <!-- Modular Architecture: Store, Router, Vault & Pagination -->
   <script defer src="/js/personal-data.js"></script>
   <script defer src="/js/store.js"></script>
   <script defer src="/js/router.js"></script>
   <script defer src="/js/vault.js"></script>
   <script defer src="/js/pagination.js"></script>
-
-  <script>
-
-    tailwind.config = {
-
-      darkMode: 'class',
-
-      theme: {
-
-        extend: {
-
-          colors: {
-
-            pitch: '#000000',
-
-            obsidian: '#040209',
-
-            velvet: '#090518',
-
-            glass: '#0f0927',
-
-            glasscard: '#130b32',
-
-            violet: '#8b5cf6',
-
-            neon: '#a855f7',
-
-            hot: '#ec4899',
-
-            crimson: '#f43f5e',
-
-            magenta: '#d946ef',
-
-            gold: '#f59e0b',
-
-            ink: '#f8fafc',
-
-            lav: '#c4b5fd',
-
-            darkborder: '#271754'
-
-          },
-
-          fontFamily: {
-
-            sans: ['"Plus Jakarta Sans"', 'Inter', 'Outfit', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-
-            display: ['"Playfair Display"', '"DM Serif Display"', 'Georgia', 'serif']
-
-          },
-
-          boxShadow: {
-
-            'neon': '0 0 25px rgba(168, 85, 247, 0.25)',
-
-            'neon-strong': '0 0 35px rgba(217, 70, 239, 0.45)',
-
-            'hot-glow': '0 0 30px rgba(236, 72, 153, 0.4)',
-
-            'gold': '0 0 20px rgba(245, 158, 11, 0.35)',
-
-            'thumb': '0 -10px 30px rgba(0, 0, 0, 0.95)'
-
-          }
-
-        }
-
-      }
-
-    }
-
-  </script>
 
   <style>
     /* =======================================================================
@@ -4454,20 +4382,19 @@
         }, 400);
       }
 
-      if (tabParam === 'videos' || tabParam === 'comics' || tabParam === 'galleries') {
-
+      if (path === '/comics' || path.startsWith('/comics/')) {
+        state.mode = 'comics';
+      } else if (path === '/videos' || path.startsWith('/videos/')) {
+        state.mode = 'videos';
+      } else if (path === '/cosplay' || path === '/modelos' || path.startsWith('/cosplay/') || path.startsWith('/modelos/')) {
+        state.mode = 'galleries';
+      } else if (tabParam === 'videos' || tabParam === 'comics' || tabParam === 'galleries') {
         state.mode = tabParam;
-
       } else {
-
         const savedMode = localStorage.getItem('velvet_mode');
-
         if (savedMode === 'videos' || savedMode === 'comics' || savedMode === 'galleries') {
-
           state.mode = savedMode;
-
         }
-
       }
 
       // Comprobar si se abrió una URL directa de Video, Cómic o Galería VIP

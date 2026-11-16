@@ -5,7 +5,8 @@
   "description": "Velvet Hub / Morbohub - Cloudflare Pages Native Streaming & Comics Platform",
   "type": "module",
   "scripts": {
-    "build": "echo 'Build complete'",
+    "build": "tailwindcss -c tailwind.config.cjs -i src/input.css -o public/css/tailwind.css --minify",
+    "build:css": "tailwindcss -c tailwind.config.cjs -i src/input.css -o public/css/tailwind.css --minify",
     "dev": "wrangler pages dev public",
     "preview": "wrangler pages dev public",
     "deploy": "wrangler pages deploy public",
@@ -13,6 +14,9 @@
     "check": "node test/test_pagination.mjs && node test/test_pagination_redesign.mjs && node test/test_ui_redesign.mjs && node test/test_security.mjs && node test/test_database.mjs && node test/test_performance.mjs && node test/test_quality_suite.mjs && node test/test_integration_pages.mjs && node test/test_personal_data.mjs"
   },
   "devDependencies": {
+    "autoprefixer": "^10.6.2",
+    "postcss": "^8.5.33",
+    "tailwindcss": "^3.4.19",
     "wrangler": "^4.160.0"
   }
 }
