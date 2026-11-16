@@ -12428,23 +12428,6 @@
       shuffleCurrentFeed();
     }
 
-        if (items && items.length > 0) {
-          const it = items[0];
-          if (state.mode === 'videos' || it.media_type === 'video') {
-            openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, true, it.id);
-          } else {
-            openReader(it.source, it.source_id, true, it.id);
-          }
-        }
-
-      } catch (e) {
-
-        showToast('No se pudo abrir un elemento aleatorio', 'error');
-
-      }
-
-    }
-
     // Atajos gestionados por handleGlobalKeydown
 
     function escapeHtml(str) {
