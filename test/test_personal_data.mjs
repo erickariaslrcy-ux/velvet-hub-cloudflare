@@ -521,6 +521,7 @@ async function runTestSuite() {
   {
     // Simulación del comportamiento de montaje de vista de Bóveda
     const domViews = {
+      "home-view": { hidden: false },
       "main-content": { hidden: false },
       "filter-bar": { hidden: false },
       "infinite-scroll-container": { hidden: false },
@@ -528,6 +529,7 @@ async function runTestSuite() {
     };
 
     function simulateVaultMount() {
+      domViews["home-view"].hidden = true;
       domViews["main-content"].hidden = true;
       domViews["filter-bar"].hidden = true;
       domViews["infinite-scroll-container"].hidden = true;
@@ -535,6 +537,7 @@ async function runTestSuite() {
     }
 
     simulateVaultMount();
+    assert.equal(domViews["home-view"].hidden, true, "#home-view debe ocultarse en /boveda/*");
     assert.equal(domViews["main-content"].hidden, true, "#main-content debe ocultarse en /boveda/*");
     assert.equal(domViews["filter-bar"].hidden, true, "#filter-bar debe ocultarse en /boveda/*");
     assert.equal(domViews["infinite-scroll-container"].hidden, true, "Paginación del catálogo debe ocultarse en /boveda/*");

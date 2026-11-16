@@ -1443,7 +1443,7 @@
 
   <!-- ===================================================================== -->
 
-  <main id="home-view" class="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 pb-24 lg:pb-12 space-y-6">
+  <main id="home-view" class="velvet-view flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 pb-24 lg:pb-12 space-y-6">
 
     <!-- 1. HERO SPOTLIGHT CAROUSEL CINEMATOGRÁFICO (TOP 5 ESTRENOS) -->
 
@@ -4860,7 +4860,7 @@
       const route = e.detail;
       if (!route) return;
 
-      const mainContent = document.getElementById('main-content');
+      const mainContent = document.getElementById('home-view') || document.getElementById('main-content');
       const videoView = document.getElementById('video-view');
       const readerModal = document.getElementById('reader-modal');
       const vaultView = document.getElementById('view-vault');

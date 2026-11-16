@@ -158,7 +158,7 @@
       if (!root) return;
 
       // Ocultar explícitamente el catálogo principal, su paginación y barra de filtros para evitar fugas visuales
-      const mainContent = document.getElementById('main-content');
+      const mainContent = document.getElementById('home-view') || document.getElementById('main-content');
       if (mainContent) mainContent.classList.add('hidden');
       const filterBar = document.getElementById('filter-bar');
       if (filterBar) filterBar.classList.add('hidden');
