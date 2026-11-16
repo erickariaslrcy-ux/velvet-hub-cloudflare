@@ -1,0 +1,674 @@
+/**
+ * ============================================================================
+ * VELVET HUB - COMPONENTE DE PAGINACIÓN REDISEÑADO (v3.2)
+ * Paleta: Negro / Violeta / Rosa Neón
+ * Diseño: Píldora translúcida de escritorio + Hoja inferior (Bottom Sheet) Android
+ * Cero dependencias externas - 100% Accesible, fluido y optimizado
+ * ============================================================================
+ */
+
+/* ----------------------------------------------------------------------------
+ * 1. CONTENEDOR RAÍZ & ESTRUCTURA PRINCIPAL
+ * ------------------------------------------------------------------------- */
+#velvet-pagination-root {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 2.5rem 0 1.5rem 0;
+  padding: 0 0.75rem;
+  box-sizing: border-box;
+}
+
+#velvet-pagination-root.v-hidden {
+  display: none !important;
+}
+
+.v-pagination-bar {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(13, 6, 30, 0.88);
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  border-radius: 9999px;
+  padding: 0.375rem 0.625rem;
+  gap: 0.375rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 20px rgba(168, 85, 247, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.v-pagination-bar:hover {
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.5), 0 0 24px rgba(236, 72, 153, 0.18);
+}
+
+/* Estado de carga */
+.v-pagination-bar.is-loading {
+  opacity: 0.7;
+  pointer-events: none;
+  filter: saturate(0.85);
+}
+
+/* ----------------------------------------------------------------------------
+ * 2. BOTONES GENERALES DE PAGINACIÓN (DESKTOP & BASE)
+ * ------------------------------------------------------------------------- */
+.v-page-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: transparent;
+  color: #c4b5fd;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  box-sizing: border-box;
+}
+
+.v-page-btn:hover:not(:disabled):not(.is-active) {
+  background: rgba(168, 85, 247, 0.18);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.v-page-btn:active:not(:disabled):not(.is-active) {
+  transform: translateY(0) scale(0.96);
+  background: rgba(168, 85, 247, 0.28);
+}
+
+.v-page-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #0d061e, 0 0 0 4px #ec4899;
+}
+
+.v-page-btn:disabled,
+.v-page-btn[aria-disabled="true"] {
+  opacity: 0.28;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
+/* Botón Anterior / Siguiente */
+.v-page-nav-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  color: #e9d5ff;
+}
+
+.v-page-nav-btn:hover:not(:disabled) {
+  background: rgba(168, 85, 247, 0.25);
+  border-color: rgba(236, 72, 153, 0.4);
+  color: #ffffff;
+}
+
+/* Página Activa */
+.v-page-btn.is-active,
+.v-page-btn[aria-current="page"] {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  color: #ffffff;
+  font-weight: 900;
+  box-shadow: 0 0 16px rgba(236, 72, 153, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Puntos Suspensivos Interactivos */
+.v-page-ellipsis {
+  color: rgba(196, 181, 253, 0.6);
+  letter-spacing: 1px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.v-page-ellipsis:hover {
+  background: rgba(236, 72, 153, 0.18);
+  color: #ec4899;
+  transform: scale(1.08);
+}
+
+.v-page-numbers-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ----------------------------------------------------------------------------
+ * 3. SECCIÓN "IR A PÁGINA" INTEGRADA (DESKTOP)
+ * ------------------------------------------------------------------------- */
+.v-page-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(168, 85, 247, 0.25);
+  margin: 0 0.375rem;
+}
+
+.v-page-jump-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+.v-page-jump-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(196, 181, 253, 0.7);
+  white-space: nowrap;
+}
+
+.v-page-jump-input-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.v-page-jump-input {
+  width: 52px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  font-family: inherit;
+  text-align: center;
+  padding: 0 0.25rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: all 0.2s ease;
+  -moz-appearance: textfield;
+}
+
+.v-page-jump-input::-webkit-outer-spin-button,
+.v-page-jump-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.v-page-jump-input:focus {
+  border-color: #ec4899;
+  box-shadow: 0 0 10px rgba(236, 72, 153, 0.4);
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.v-page-jump-input.is-invalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5) !important;
+  animation: v-shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.v-page-jump-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #18091e;
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  z-index: 50;
+}
+
+.v-page-jump-error.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.v-page-jump-total {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(196, 181, 253, 0.7);
+  white-space: nowrap;
+}
+
+.v-page-jump-submit {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
+  color: #ffffff;
+  height: 32px;
+  padding: 0 0.75rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.35);
+  transition: all 0.2s ease;
+}
+
+.v-page-jump-submit:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.45);
+}
+
+.v-page-jump-submit:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.v-page-jump-submit:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #0d061e, 0 0 0 4px #ec4899;
+}
+
+/* ----------------------------------------------------------------------------
+ * 4. VISTA MÓVIL (< 768px): COMPACTA CON BOTÓN CENTRAL
+ * ------------------------------------------------------------------------- */
+.v-pagination-mobile {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.v-mobile-nav-btn {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.v-mobile-center-trigger {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  border-radius: 9999px;
+  height: 46px;
+  min-height: 46px;
+  padding: 0 1.25rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  flex: 1;
+  max-width: 260px;
+  transition: all 0.2s ease;
+  touch-action: manipulation;
+}
+
+.v-mobile-center-trigger:hover,
+.v-mobile-center-trigger:active {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: rgba(236, 72, 153, 0.5);
+}
+
+.v-mobile-center-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #0d061e, 0 0 0 4px #ec4899;
+}
+
+.v-mobile-cur {
+  color: #f472b6;
+  font-weight: 900;
+}
+
+.v-mobile-chevron {
+  font-size: 0.6875rem;
+  color: #c4b5fd;
+  transition: transform 0.25s ease;
+}
+
+.v-mobile-center-trigger[aria-expanded="true"] .v-mobile-chevron {
+  transform: rotate(180deg);
+}
+
+/* ----------------------------------------------------------------------------
+ * 5. HOJA INFERIOR (BOTTOM SHEET) PARA ANDROID / MÓVIL
+ * ------------------------------------------------------------------------- */
+.v-bottom-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  visibility: hidden;
+  opacity: 0;
+  transition: visibility 0.25s ease, opacity 0.25s ease;
+  touch-action: pan-down;
+}
+
+.v-bottom-sheet.is-open {
+  visibility: visible;
+  opacity: 1;
+}
+
+.v-bottom-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 2, 12, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.v-bottom-sheet-content {
+  position: relative;
+  background: #0d061e;
+  border-top: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 28px 28px 0 0;
+  padding: 0.75rem 1.25rem;
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 1.25rem));
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(168, 85, 247, 0.15);
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  max-width: 500px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.v-bottom-sheet.is-open .v-bottom-sheet-content {
+  transform: translateY(0);
+}
+
+.v-sheet-handle-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 0.25rem 0 0.75rem 0;
+  cursor: pointer;
+}
+
+.v-sheet-handle {
+  width: 44px;
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(196, 181, 253, 0.35);
+}
+
+.v-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.v-sheet-title {
+  font-size: 1.0625rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.v-sheet-close-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  color: #c4b5fd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.v-sheet-close-btn:active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.v-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.v-sheet-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.v-sheet-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+.v-sheet-input-group {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.v-sheet-input {
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 14px;
+  color: #ffffff;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  font-family: inherit;
+  padding: 0 4.5rem 0 1rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: all 0.2s ease;
+  -moz-appearance: textfield;
+}
+
+.v-sheet-input::-webkit-outer-spin-button,
+.v-sheet-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.v-sheet-input:focus {
+  border-color: #ec4899;
+  box-shadow: 0 0 14px rgba(236, 72, 153, 0.4);
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.v-sheet-input.is-invalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.5) !important;
+  animation: v-shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.v-sheet-input-total {
+  position: absolute;
+  right: 1rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: rgba(196, 181, 253, 0.6);
+  pointer-events: none;
+}
+
+.v-sheet-submit-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
+  color: #ffffff;
+  height: 48px;
+  min-height: 48px;
+  min-width: 68px;
+  padding: 0 1rem;
+  border-radius: 14px;
+  font-size: 0.875rem;
+  font-weight: 900;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  box-shadow: 0 4px 14px rgba(236, 72, 153, 0.4);
+  touch-action: manipulation;
+}
+
+.v-sheet-submit-btn:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+.v-sheet-error {
+  min-height: 18px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #f87171;
+  padding-left: 0.25rem;
+}
+
+.v-sheet-shortcuts-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(196, 181, 253, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.v-sheet-shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.v-sheet-shortcut-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e9d5ff;
+  height: 46px;
+  min-height: 46px;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+}
+
+.v-sheet-shortcut-btn:active:not(:disabled) {
+  background: rgba(168, 85, 247, 0.22);
+  border-color: rgba(236, 72, 153, 0.45);
+  transform: scale(0.98);
+}
+
+.v-sheet-shortcut-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------------------------
+ * 6. RESPONSIVE BREAKPOINTS (Desktop >= 768px vs Móvil < 768px)
+ * ------------------------------------------------------------------------- */
+@media (min-width: 768px) {
+  .v-pagination-desktop {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .v-pagination-mobile {
+    display: none !important;
+  }
+  .v-bottom-sheet {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .v-pagination-desktop {
+    display: none !important;
+  }
+  .v-pagination-mobile {
+    display: flex;
+  }
+  .v-pagination-bar {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 9999px;
+    padding: 0.375rem 0.5rem;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * 7. ANIMACIONES Y ACCESIBILIDAD PREFERENCIAS
+ * ------------------------------------------------------------------------- */
+@keyframes v-shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-3px, 0, 0); }
+  40%, 60% { transform: translate3d(3px, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-pagination-bar,
+  .v-page-btn,
+  .v-page-ellipsis,
+  .v-page-jump-input,
+  .v-page-jump-submit,
+  .v-mobile-center-trigger,
+  .v-bottom-sheet,
+  .v-bottom-sheet-content,
+  .v-sheet-input,
+  .v-sheet-submit-btn,
+  .v-sheet-shortcut-btn {
+    transition: none !important;
+    animation: none !important;
+  }
+}
