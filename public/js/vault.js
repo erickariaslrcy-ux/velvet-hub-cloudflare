@@ -176,18 +176,31 @@
       this.updateTabsUI(tab);
       this.updateCounters();
 
-      if (tab === 'favorites') {
-        if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
-          window.VelvetPersonalData.fetchFavorites(1, { filter: favFilterType, sort: favSortMode, search: favSearchQuery });
-        }
-        this.renderFavorites();
+      const multiselectBtn = document.getElementById('vault-multiselect-toggle-btn');
+      const headingEl = document.querySelector('#view-vault h1 span:last-child');
+      const subEl = document.querySelector('#view-vault p.text-lav\\/70');
+
+      if (tab === 'account') {
+        if (multiselectBtn) multiselectBtn.classList.add('hidden');
+        if (headingEl) headingEl.textContent = 'Mi Cuenta & Perfil VIP';
+        if (subEl) subEl.textContent = 'Gestiona tu perfil, avatar, seguridad y estado de membresía.';
+        this.renderAccount();
       } else if (tab === 'history') {
+        if (multiselectBtn) multiselectBtn.classList.add('hidden');
+        if (headingEl) headingEl.textContent = 'Mi Historial de Reproducción';
+        if (subEl) subEl.textContent = 'Continúa viendo tus videos, cómics y juegos desde donde los dejaste.';
         if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
           window.VelvetPersonalData.fetchHistory(1, { filter: historyFilterType, onlyUnfinished: historyOnlyUnfinished, search: historySearchQuery });
         }
         this.renderHistory();
-      } else if (tab === 'account') {
-        this.renderAccount();
+      } else {
+        if (multiselectBtn) multiselectBtn.classList.remove('hidden');
+        if (headingEl) headingEl.textContent = 'Mi Bóveda Personal';
+        if (subEl) subEl.textContent = 'Tus favoritos e historial, sincronizados permanentemente en la nube.';
+        if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
+          window.VelvetPersonalData.fetchFavorites(1, { filter: favFilterType, sort: favSortMode, search: favSearchQuery });
+        }
+        this.renderFavorites();
       }
     },
 
@@ -747,8 +760,22 @@
     // 3. RENDERIZADO DE DETALLES DE CUENTA (/cuenta)
     // =======================================================================
     renderAccount() {
-      const user = window.VelvetStore?.getCurrentUser();
+      const user = window.VelvetStore?.getCurrentUser() || window.VelvetPersonalData?.getCurrentUser();
       const prefs = window.VelvetStore?.getPreferences() || {};
+      const isAuth = !!(user && (user.id || user.email || user.username));
+
+      const guestCard = document.getElementById('vault-acc-guest-card');
+      const userCard = document.getElementById('vault-acc-user-card');
+
+      if (guestCard && userCard) {
+        if (!isAuth) {
+          guestCard.classList.remove('hidden');
+          userCard.classList.add('hidden');
+        } else {
+          guestCard.classList.add('hidden');
+          userCard.classList.remove('hidden');
+        }
+      }
 
       const usernameEl = document.getElementById('vault-acc-username');
       const emailEl = document.getElementById('vault-acc-email');
@@ -756,50 +783,52 @@
       const registeredEl = document.getElementById('vault-acc-created');
       const vipKeyEl = document.getElementById('vault-acc-key');
       const editUserInput = document.getElementById('profile-edit-username');
-      const avatarBox = document.getElementById('vault-profile-avatar-box');
-      const avatarIcon = document.getElementById('vault-profile-avatar-icon');
+      const avatarBox = document.getElementById('vault-acc-avatar-box') || document.getElementById('vault-profile-avatar-box');
+      const avatarSvg = document.getElementById('vault-acc-avatar-svg');
 
       const uname = user?.username || (user?.email ? user.email.split('@')[0] : 'Usuario VIP');
-      if (usernameEl) usernameEl.textContent = uname;
-      if (emailEl) emailEl.textContent = user?.email || 'usuario@velvet.local';
-      if (editUserInput && !editUserInput.value) editUserInput.value = uname;
+      if (usernameEl) usernameEl.textContent = isAuth ? uname : 'Invitado';
+      if (emailEl) emailEl.textContent = isAuth ? (user?.email || 'VIP Activo') : 'Sin iniciar sesión';
+      if (editUserInput && !editUserInput.value && isAuth) editUserInput.value = uname;
 
       const userAvatar = user?.avatar || 'crown';
       const userBg = user?.avatarBg || 'from-pink-600 to-purple-600';
       if (avatarBox) {
         avatarBox.className = `w-16 h-16 rounded-2xl bg-gradient-to-tr ${userBg} flex items-center justify-center text-2xl text-white font-black shadow-[0_0_20px_rgba(255,45,149,0.35)] shrink-0 transition-all`;
       }
-      if (avatarIcon) {
-        avatarIcon.className = `fa-solid fa-${userAvatar} text-amber-300`;
+      if (avatarSvg) {
+        avatarSvg.outerHTML = this.getAvatarSvg(userAvatar);
       }
 
-      // Actualizar contadores de estadísticas en tiempo real
-      const favsCount = window.VelvetPersonalData?.getFavorites()?.length || 0;
-      const histCount = window.VelvetPersonalData?.getHistory()?.length || 0;
+      // Actualizar contadores de estadísticas en tiempo real sin riesgo de excepciones
+      const favs = window.VelvetStore?.getFavorites?.() || window.VelvetPersonalData?.getFavorites?.() || [];
+      const hist = window.VelvetStore?.getHistory?.() || window.VelvetPersonalData?.getHistory?.() || [];
+      const saves = window.VelvetStore?.getGameSaves?.() || window.VelvetPersonalData?.getGameSaves?.() || [];
       const favEl = document.getElementById('vault-stats-favs');
       const histEl = document.getElementById('vault-stats-hist');
       const gamesEl = document.getElementById('vault-stats-games');
-      if (favEl) favEl.textContent = favsCount;
-      if (histEl) histEl.textContent = histCount;
-      if (gamesEl) {
-        const saves = window.VelvetPersonalData?.getGameSaves ? window.VelvetPersonalData.getGameSaves() : [];
-        gamesEl.textContent = Array.isArray(saves) ? saves.length : 0;
-      }
+      if (favEl) favEl.textContent = Array.isArray(favs) ? favs.length : 0;
+      if (histEl) histEl.textContent = Array.isArray(hist) ? hist.length : 0;
+      if (gamesEl) gamesEl.textContent = Array.isArray(saves) ? saves.length : 0;
+
       if (badgeEl) {
-        if (window.VelvetStore?.hasFullAccess()) {
+        if (window.VelvetStore?.hasFullAccess?.()) {
           badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40';
           badgeEl.textContent = user?.role === 'admin' ? 'ADMINISTRADOR' : 'MIEMBRO VIP ILIMITADO';
-        } else {
+        } else if (isAuth) {
           badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/70 border border-white/20';
-          badgeEl.textContent = 'CUENTA ESTÁNDAR';
+          badgeEl.textContent = 'CUENTA REGISTRADA';
+        } else {
+          badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/50 border border-white/10';
+          badgeEl.textContent = 'INVITADO';
         }
       }
       if (registeredEl) {
         const date = user?.created_at ? new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Activo recientemente';
-        registeredEl.textContent = date;
+        registeredEl.textContent = isAuth ? date : 'Navegación local';
       }
       if (vipKeyEl) {
-        vipKeyEl.textContent = user?.registered_with_key || 'Llave Maestra';
+        vipKeyEl.textContent = isAuth ? (user?.registered_with_key || 'VIP Permanente') : '---';
       }
 
       // Sincronizar switches de preferencias con los valores de VelvetStore
@@ -816,6 +845,24 @@
       if (prefMotion) prefMotion.checked = !!prefs.reduceMotion;
       if (prefDataSaver) prefDataSaver.checked = !!prefs.dataSaver;
       if (prefPauseHist) prefPauseHist.checked = !!prefs.pauseHistory;
+    },
+
+    getAvatarSvg(iconName) {
+      switch (iconName) {
+        case 'gem':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-purple-300 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 8.5l3.8 11.5h12.4L22 8.5 12 2zM5.5 8.7L12 4.3l6.5 4.4L12 20.3 5.5 8.7z"/></svg>';
+        case 'bolt':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-amber-400 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.08-.14L13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15L11 21z"/></svg>';
+        case 'fire':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-rose-400 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM12 20c-3.31 0-6-2.69-6-6 0-1.53.58-2.92 1.53-3.97.29 1.11 1.29 1.97 2.47 1.97 1.38 0 2.5-1.12 2.5-2.5 0-.46-.13-.88-.34-1.25.93.81 1.59 1.97 1.77 3.29.35-.38.57-.89.57-1.45 0-.32-.08-.63-.21-.9 1.94 1.41 3.19 3.65 3.19 6.21 0 3.31-2.69 6-6 6z"/></svg>';
+        case 'gamepad':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-emerald-400 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M15 7.5V2H9v5.5l3 3 3-3zM7.5 9H2v6h5.5l3-3-3-3zM9 16.5V22h6v-5.5l-3-3-3 3zm7.5-7.5l-3 3 3 3H22V9h-5.5z"/></svg>';
+        case 'heart':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-pink-500 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+        case 'crown':
+        default:
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-amber-300 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>';
+      }
     },
 
     // Handlers de cambio de preferencias

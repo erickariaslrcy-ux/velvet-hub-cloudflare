@@ -336,6 +336,10 @@
     // ------------------------------------------------------------------------
     // FAVORITOS: FUENTE DE VERDAD CON PAGINACIÓN REAL
     // ------------------------------------------------------------------------
+    getFavorites() {
+      return [...(_favState.items || [])];
+    },
+
     getFavoritesState() {
       return {
         items: [..._favState.items],
@@ -561,6 +565,20 @@
     // ------------------------------------------------------------------------
     // HISTORIAL Y PROGRESO: CONCURRENCIA Y THROTTLING
     // ------------------------------------------------------------------------
+    getHistory() {
+      return [...(_histState.items || [])];
+    },
+
+    getGameSaves() {
+      try {
+        const prefs = this.getPreferences() || {};
+        const savesMap = prefs.game_saves || {};
+        return Object.values(savesMap);
+      } catch (e) {
+        return [];
+      }
+    },
+
     getHistoryState() {
       return {
         items: [..._histState.items],
