@@ -2694,6 +2694,172 @@ export async function onRequest(context) {
   }
 
   // =========================================================================
+  // 12. GUARDADO Y SINCRONIZACIÓN DE JUEGOS EN LA NUBE (/api/user/game-saves)
+  // Arquitectura Cross-DB: Respaldo en DB1 (Cuentas) referenciando catálogo DB2
+  // =========================================================================
+  if (url.pathname === "/api/user/game-saves" || url.pathname.startsWith("/api/user/game-saves/")) {
+    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "No autenticado para sincronización en la nube", authenticated: false }), {
+        status: 401,
+        headers: getPersonalHeaders(origin)
+      });
+    }
+
+    const gameId = url.searchParams.get("game_id") || url.pathname.replace(/^\/api\/user\/game-saves\/?/, "").trim();
+
+    // --- GET /api/user/game-saves ---
+    if (method === "GET") {
+      let queryUrl = `${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${user.id}&order=updated_at.desc`;
+      if (gameId) {
+        queryUrl += `&game_id=eq.${encodeURIComponent(gameId)}`;
+      }
+
+      let savesRes = await fetch(queryUrl, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+
+      if (savesRes.ok) {
+        const rows = await savesRes.json().catch(() => []);
+        return new Response(JSON.stringify({ authenticated: true, saves: rows || [] }), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      // Fallback transparente a user_preferences si la tabla game_saves aún no fue migrada en DB1
+      const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data&limit=1`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      });
+      const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
+      const userPrefs = (prefData && prefData[0] && prefData[0].data) || {};
+      const gameSavesStore = userPrefs.game_saves || {};
+      let savesList = [];
+
+      if (gameId) {
+        const gameSlots = gameSavesStore[gameId] || {};
+        savesList = Object.values(gameSlots);
+      } else {
+        Object.keys(gameSavesStore).forEach(gId => {
+          savesList.push(...Object.values(gameSavesStore[gId] || {}));
+        });
+      }
+
+      return new Response(JSON.stringify({ authenticated: true, saves: savesList }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+
+    // --- POST /api/user/game-saves ---
+    if (method === "POST" || method === "PUT") {
+      if (!checkPersonalWriteRateLimit(user.id, 60)) {
+        return new Response(JSON.stringify({ error: "Límite de peticiones de guardado excedido" }), {
+          status: 429,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      const body = await context.request.json().catch(() => ({}));
+      const targetGameId = String(body.game_id || gameId || "").trim();
+      if (!targetGameId) {
+        return new Response(JSON.stringify({ error: "game_id requerido" }), {
+          status: 400,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      const slotName = String(body.slot_name || "auto").trim().slice(0, 32);
+      const saveData = String(body.save_data || "");
+      const gameTitle = String(body.game_title || "").slice(0, 200);
+      const coverUrl = String(body.cover_url || "").slice(0, 500);
+      const gameType = String(body.game_type || "html5").slice(0, 20);
+      const playTime = Math.max(0, parseInt(body.play_time || 0, 10));
+      const clientTimestamp = Date.now();
+      const nowIso = new Date().toISOString();
+
+      const savePayload = {
+        user_id: user.id,
+        game_id: targetGameId,
+        slot_name: slotName,
+        save_data: saveData,
+        game_title: gameTitle,
+        cover_url: coverUrl,
+        game_type: gameType,
+        play_time: playTime,
+        updated_at: nowIso,
+        client_timestamp: clientTimestamp
+      };
+
+      // Intentar guardar en tabla dedicada public.game_saves de DB1
+      const dbSaveRes = await fetch(`${SUPABASE_URL}/rest/v1/game_saves`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "resolution=merge-duplicates"
+        },
+        body: JSON.stringify(savePayload)
+      });
+
+      if (!dbSaveRes.ok) {
+        // Fallback a user_preferences en DB1
+        const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data&limit=1`, {
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        });
+        const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
+        const currentData = (prefData && prefData[0] && prefData[0].data) || {};
+        const gameSavesStore = currentData.game_saves || {};
+        gameSavesStore[targetGameId] = gameSavesStore[targetGameId] || {};
+        gameSavesStore[targetGameId][slotName] = savePayload;
+        currentData.game_saves = gameSavesStore;
+
+        await fetch(`${SUPABASE_URL}/rest/v1/user_preferences`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+            data: currentData,
+            version: 2,
+            updated_at: nowIso
+          })
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true, success: true, save: savePayload }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+
+    // --- DELETE /api/user/game-saves ---
+    if (method === "DELETE") {
+      const targetGameId = String(gameId || url.searchParams.get("game_id") || "").trim();
+      const slotName = url.searchParams.get("slot_name");
+
+      if (targetGameId) {
+        let delUrl = `${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${user.id}&game_id=eq.${encodeURIComponent(targetGameId)}`;
+        if (slotName) delUrl += `&slot_name=eq.${encodeURIComponent(slotName)}`;
+        await fetch(delUrl, {
+          method: "DELETE",
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true, success: true }), {
+        status: 200,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+  }
+
+  // =========================================================================
   // 9. TAGS POPULARES (/api/tags)
   // =========================================================================
   if (url.pathname === "/api/tags" && method === "GET") {

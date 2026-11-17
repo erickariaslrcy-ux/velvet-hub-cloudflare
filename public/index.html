@@ -49,7 +49,7 @@
 
   <!-- Tailwind CSS Engine for Dynamic JavaScript Components -->
   <!-- Emulador Flash Ruffle WebAssembly Oficial -->
-  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+  <script src="https://unpkg.com/@ruffle-rs/ruffle" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle';"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -2319,7 +2319,7 @@
                 <span id="video-player-source" class="px-2 py-0.5 rounded-md bg-white/[0.04] text-white/80 font-medium border border-white/10">Velvet VIP</span>
                 <span id="video-player-quality-badge" class="px-2 py-0.5 rounded-md bg-[#ff2d95]/15 text-[#ff2d95] font-semibold border border-[#ff2d95]/25">1080p</span>
                 <span id="video-meta-duration" class="text-white/60">HD</span>
-                <span id="video-meta-views" class="hidden text-white/50">&bull; <span></span></span>
+                <span id="video-meta-views" class="hidden text-white/50">&bull; </span>
                 <span class="text-white/30">&bull;</span>
                 <span class="text-white/40 text-[11px]">18 U.S.C. 2257</span>
               </div>
@@ -6114,23 +6114,109 @@
       }
     }
 
+    let _suspendedGame = null;
+    let _suspendedGameTargetUrl = '';
+
     function reloadCurrentGame() {
       if (!window._activeGame) return;
       const iframe = document.getElementById('game-iframe-player');
       const ruffle = document.getElementById('game-ruffle-player');
       
+      _suspendedGame = null;
+      _suspendedGameTargetUrl = '';
       if (iframe && !iframe.classList.contains('hidden')) {
-        const cur = iframe.src;
+        const cur = window._activeGameTargetUrl || iframe.src;
         iframe.src = '';
-        setTimeout(() => { iframe.src = cur; }, 100);
-        showToast('Juego reiniciado', 'info');
+        setTimeout(() => { 
+          iframe.src = cur; 
+          _suspendedGame = window._activeGame;
+          _suspendedGameTargetUrl = cur;
+        }, 150);
+        showToast('Juego reiniciado desde el inicio', 'info');
       } else if (ruffle && !ruffle.classList.contains('hidden')) {
-        openGameModal(window._activeGame);
+        openGameModal(window._activeGame, true);
         showToast('Emulador Flash reiniciado', 'info');
       }
     }
 
-    function openGameModal(game) {
+    async function syncGameSaveProgress(game, slotName = 'auto') {
+      if (!game) return;
+      const gameId = String(game.id || game.source_id || '');
+      if (!gameId) return;
+
+      const payload = {
+        game_id: gameId,
+        slot_name: slotName,
+        save_data: JSON.stringify({
+          active: true,
+          timestamp: Date.now(),
+          targetUrl: window._activeGameTargetUrl || ''
+        }),
+        game_title: game.title || 'Juego VIP',
+        cover_url: game.cover_url || game.thumbnail || '',
+        game_type: game.game_type || 'html5',
+        play_time: ((state.progress && state.progress[gameId] && state.progress[gameId].play_time) || 1)
+      };
+
+      if (state.currentUser || (typeof window.VelvetStore?.getState === 'function' && window.VelvetStore.getState()?.user)) {
+        try {
+          fetch('/api/user/game-saves', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).catch(() => {});
+        } catch (e) {}
+      }
+    }
+
+    function recordGamePlayHistory(game) {
+      if (!game) return;
+      const itemId = game.id || null;
+      const source = game.source || 'gamcore';
+      const sourceId = game.source_id || String(game.id || '');
+      const key = `${source}:${sourceId}`;
+
+      if (!Array.isArray(state.history)) state.history = [];
+      state.history = state.history.filter(h => {
+        if (itemId && h.id && Number(h.id) === Number(itemId)) return false;
+        return !(h.source === source && h.source_id === sourceId);
+      });
+
+      const histItem = {
+        id: itemId,
+        source: source,
+        source_id: sourceId,
+        title: game.title || 'Juego VIP',
+        cover_url: game.cover_url || game.thumbnail || '',
+        media_type: 'game',
+        game_type: game.game_type || 'html5',
+        engine: game.engine || 'Ren\'Py',
+        url: window._activeGameTargetUrl || '',
+        at: Date.now()
+      };
+      state.history.unshift(histItem);
+      if (state.history.length > 50) state.history.pop();
+
+      state.progress = state.progress || {};
+      const prevProg = state.progress[key] || (itemId ? state.progress[String(itemId)] : {}) || {};
+      const updatedProg = {
+        media_type: 'game',
+        source: source,
+        source_id: sourceId,
+        id: itemId,
+        played_at: Date.now(),
+        play_time: (prevProg.play_time || 0) + 1,
+        slot: 'auto'
+      };
+      state.progress[key] = updatedProg;
+      if (itemId) state.progress[String(itemId)] = updatedProg;
+
+      saveStorage();
+      renderContinueShelf();
+      syncGameSaveProgress(game, 'auto');
+    }
+
+    function openGameModal(game, forceReload = false) {
       if (!game) return;
       const modal = document.getElementById('game-modal');
       const title = document.getElementById('game-modal-title');
@@ -6152,6 +6238,10 @@
                       (game.artists && game.artists[0] === 'Flash') || 
                       (game.tags && game.tags.includes('Flash'));
       const engineName = isFlash ? 'Flash' : (game.engine || vs.engine || (game.artists && game.artists[0]) || 'Ren\'Py');
+
+      const isSameSuspendedGame = !forceReload && _suspendedGame && 
+        (String(_suspendedGame.id) === String(game.id) || 
+         (_suspendedGame.source_id && _suspendedGame.source_id === game.source_id));
 
       window._activeGame = game;
       window._activeGameTargetUrl = targetUrl;
@@ -6177,6 +6267,21 @@
           : 'px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0';
       }
       if (ext) ext.href = targetUrl || '#';
+
+      recordGamePlayHistory(game);
+
+      if (isSameSuspendedGame) {
+        // Quick Resume: Restaura visibilidad al instante en 0ms sin recargar WebAssembly
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+        handleGameMouseMove();
+        showToast('⚡ Partida reanudada al instante', 'success');
+        return;
+      }
+
+      _suspendedGame = game;
+      _suspendedGameTargetUrl = targetUrl;
 
       if (isFlash && targetUrl) {
         if (iframe) { 
@@ -6254,24 +6359,17 @@
     }
 
     function closeGameModal() {
-      window._activeGame = null;
-      window._activeGameTargetUrl = '';
       if (_hudTimeout) clearTimeout(_hudTimeout);
       const modal = document.getElementById('game-modal');
-      const iframe = document.getElementById('game-iframe-player');
-      const ruffleWrap = document.getElementById('game-ruffle-player');
       const backdrop = document.getElementById('game-ambient-backdrop');
 
-      if (iframe) { 
-        iframe.src = ''; 
-        iframe.classList.add('hidden'); 
-        iframe.style.display = 'none';
+      // Guardar partida activa para reanudación instantánea (Quick Resume)
+      if (window._activeGame) {
+        _suspendedGame = window._activeGame;
+        _suspendedGameTargetUrl = window._activeGameTargetUrl;
+        syncGameSaveProgress(window._activeGame, 'auto');
       }
-      if (ruffleWrap) { 
-        ruffleWrap.innerHTML = ''; 
-        ruffleWrap.classList.add('hidden'); 
-        ruffleWrap.style.display = 'none';
-      }
+
       if (backdrop) {
         backdrop.style.backgroundImage = 'none';
       }
@@ -6283,6 +6381,7 @@
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
+      showToast('Partida suspendida en segundo plano. Progreso a salvo.', 'info');
     }
 
     function toggleGameFullscreen() {
@@ -9287,7 +9386,15 @@
           readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-amber-500 via-pink-600 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
         } else {
           readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer'; readBtn.href = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : '#';
-          if (isVid) {
+          const isGame = (item.media_type === 'game') || (state.mode === 'games');
+          if (isGame) {
+            readBtn.innerHTML = '<i class="fa-solid fa-gamepad text-xs"></i> Jugar Ahora en HD';
+            readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
+            readBtn.onclick = () => {
+              if (item.id) setCachedItem(String(item.id), item);
+              openGameModal(item);
+            };
+          } else if (isVid) {
             readBtn.innerHTML = '<i class="fa-solid fa-play text-xs"></i> Ver Video en HD';
             readBtn.onclick = () => {
               if (item.id) setCachedItem(String(item.id), item);
@@ -9408,8 +9515,9 @@
 
       const isVideoMode = (state.mode === 'videos');
       const isGalleryMode = (state.mode === 'galleries');
-      if (titleEl) titleEl.textContent = isVideoMode ? 'Continuar Viendo' : (isGalleryMode ? 'Continuar Viendo Galerías' : 'Continuar Leyendo');
-      if (subtitleEl) subtitleEl.textContent = isVideoMode ? 'Reanuda tus videos donde los pausaste' : (isGalleryMode ? 'Reanuda tus galerías donde las dejaste' : 'Reanuda tus cómics donde los dejaste');
+      const isGameMode = (state.mode === 'games');
+      if (titleEl) titleEl.textContent = isGameMode ? 'Continuar Jugando' : (isVideoMode ? 'Continuar Viendo' : (isGalleryMode ? 'Continuar Viendo Galerías' : 'Continuar Leyendo'));
+      if (subtitleEl) subtitleEl.textContent = isGameMode ? 'Reanuda tus partidas justo donde las dejaste' : (isVideoMode ? 'Reanuda tus videos donde los pausaste' : (isGalleryMode ? 'Reanuda tus galerías donde las dejaste' : 'Reanuda tus cómics donde los dejaste'));
 
       let isPaused = false;
       try {
@@ -9429,12 +9537,15 @@
       const activeItems = (state.history || []).filter(h => {
         const isVid = (h.media_type === 'video');
         const isGal = (h.media_type === 'gallery');
-        if (isGalleryMode) {
+        const isGame = (h.media_type === 'game');
+        if (isGameMode) {
+          return isGame;
+        } else if (isGalleryMode) {
           if (!isGal) return false;
         } else if (isVideoMode) {
           if (!isVid) return false;
         } else {
-          if (isVid || isGal) return false;
+          if (isVid || isGal || isGame) return false;
         }
 
         const key = `${h.source}:${h.source_id}`;
@@ -9470,7 +9581,11 @@
         let pct = 0;
         let progressLabel = '';
 
-        if (isVid) {
+        const isGame = (h.media_type === 'game');
+        if (isGame) {
+          pct = 100;
+          progressLabel = p.play_time ? `${p.play_time}m jugados` : 'Partida activa';
+        } else if (isVid) {
           const dur = p.duration || p.total || 1;
           const cur = p.currentTime || p.page || 0;
           pct = Math.min(99, Math.round((cur / dur) * 100));
@@ -9517,11 +9632,11 @@
 
             <!-- Overlay con icono de acción -->
             <a href="${itemUrl}"
-               ${isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : ''}
+               ${isGame ? `onclick="event.preventDefault(); openGameModal(${escapeHtml(JSON.stringify(h))});"` : (isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : '')}
                class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                aria-label="Continuar ${escapeHtml(h.title || '')}">
-              <span class="w-10 h-10 rounded-full bg-pink-600/90 text-white flex items-center justify-center shadow-lg">
-                <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-xs"></i>
+              <span class="w-10 h-10 rounded-full ${isGame ? 'bg-emerald-600/90' : 'bg-pink-600/90'} text-white flex items-center justify-center shadow-lg">
+                <i class="fa-solid ${isGame ? 'fa-gamepad' : (isVid ? 'fa-play' : 'fa-book-open')} text-xs"></i>
               </span>
             </a>
           </div>
@@ -9546,11 +9661,11 @@
               </div>
             </div>
 
-            <!-- Botón Pequeño 'Continuar' -->
+            <!-- Botón Pequeño 'Continuar / Reanudar' -->
             <a href="${itemUrl}"
-               ${isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : ''}
-               class="mt-2 w-full py-1.5 px-2 rounded-lg bg-white/[0.06] hover:bg-gradient-to-r hover:from-pink-500 hover:to-purple-600 border border-white/10 hover:border-transparent text-white/90 hover:text-white text-[11px] font-black flex items-center justify-center gap-1.5 transition-all shadow-sm">
-              <i class="fa-solid ${isVid ? 'fa-play' : 'fa-book-open'} text-[10px]"></i>
+               ${isGame ? `onclick="event.preventDefault(); openGameModal(${escapeHtml(JSON.stringify(h))});"` : (isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : '')}
+               class="mt-2 w-full py-1.5 px-2 rounded-lg ${isGame ? 'bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300' : 'bg-white/[0.06] hover:bg-gradient-to-r hover:from-pink-500 hover:to-purple-600 text-white/90'} border border-white/10 hover:border-transparent hover:text-white text-[11px] font-black flex items-center justify-center gap-1.5 transition-all shadow-sm">
+              <i class="fa-solid ${isGame ? 'fa-gamepad' : (isVid ? 'fa-play' : 'fa-book-open')} text-[10px]"></i>
               <span>Continuar</span>
             </a>
           </div>
