@@ -113,11 +113,13 @@
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
-    if (_token) {
-      headers['Authorization'] = `Bearer ${_token}`;
+    const activeToken = _token || localStorage.getItem('velvet_token') || localStorage.getItem('velvet_auth_token');
+    if (activeToken) {
+      headers['Authorization'] = `Bearer ${activeToken}`;
     }
-    if (_refreshToken) {
-      headers['x-refresh-token'] = _refreshToken;
+    const activeRefresh = _refreshToken || localStorage.getItem('velvet_refresh_token');
+    if (activeRefresh) {
+      headers['x-refresh-token'] = activeRefresh;
     }
     return headers;
   }
@@ -168,7 +170,7 @@
     // ------------------------------------------------------------------------
     restoreSessionFromStorage() {
       try {
-        _token = localStorage.getItem('velvet_token') || null;
+        _token = localStorage.getItem('velvet_token') || localStorage.getItem('velvet_auth_token') || null;
         _refreshToken = localStorage.getItem('velvet_refresh_token') || null;
         const rawUser = localStorage.getItem('velvet_user') || localStorage.getItem('velvet_current_user');
         _currentUser = rawUser ? JSON.parse(rawUser) : null;

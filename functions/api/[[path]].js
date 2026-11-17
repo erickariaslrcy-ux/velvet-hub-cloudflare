@@ -2877,6 +2877,110 @@ export async function onRequest(context) {
     });
   }
 
+  // =========================================================================
+  // 13. PERFIL DE USUARIO Y CAMBIO DE CONTRASEÑA (/api/user/profile & /api/user/change-password)
+  // =========================================================================
+  if (url.pathname === "/api/user/profile" && (method === "POST" || method === "PUT")) {
+    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (!user || !token) {
+      return new Response(JSON.stringify({ error: "No autenticado" }), {
+        status: 401,
+        headers: getPersonalHeaders(origin)
+      });
+    }
+
+    const body = await context.request.json().catch(() => ({}));
+    const username = String(body.username || "").trim().slice(0, 50);
+    const avatar = String(body.avatar || "crown").slice(0, 30);
+    const avatarBg = String(body.avatarBg || "from-pink-600 to-purple-600").slice(0, 80);
+
+    const userMetadata = { ...(user.user_metadata || {}) };
+    if (username) userMetadata.username = username;
+    userMetadata.avatar = avatar;
+    userMetadata.avatarBg = avatarBg;
+
+    // Actualizar metadata en Supabase Auth
+    await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: "PUT",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ data: userMetadata })
+    });
+
+    // Actualizar username en profiles si existe la tabla
+    if (username) {
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ username, updated_at: new Date().toISOString() })
+      }).catch(() => {});
+    }
+
+    return new Response(JSON.stringify({
+      ok: true,
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: userMetadata.username || username || user.email.split("@")[0],
+        avatar: userMetadata.avatar,
+        avatarBg: userMetadata.avatarBg
+      }
+    }), {
+      status: 200,
+      headers: getPersonalHeaders(origin, newToken)
+    });
+  }
+
+  if (url.pathname === "/api/user/change-password" && method === "POST") {
+    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (!user || !token) {
+      return new Response(JSON.stringify({ error: "No autenticado" }), {
+        status: 401,
+        headers: getPersonalHeaders(origin)
+      });
+    }
+
+    const body = await context.request.json().catch(() => ({}));
+    const newPassword = String(body.new_password || "");
+    if (!newPassword || newPassword.length < 6) {
+      return new Response(JSON.stringify({ error: "La nueva contraseña debe tener al menos 6 caracteres" }), {
+        status: 400,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+
+    const upRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: "PUT",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ password: newPassword })
+    });
+
+    if (!upRes.ok) {
+      const upErr = await upRes.json().catch(() => ({}));
+      return new Response(JSON.stringify({ error: upErr.msg || upErr.message || "Error al actualizar contraseña" }), {
+        status: 400,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+
+    return new Response(JSON.stringify({ ok: true, success: true, message: "Contraseña actualizada exitosamente" }), {
+      status: 200,
+      headers: getPersonalHeaders(origin, newToken)
+    });
+  }
+
   // Ruta API no encontrada
   return new Response(JSON.stringify({ error: "Endpoint no encontrado en Velvet Cloudflare API", path: url.pathname }), {
     status: 404,

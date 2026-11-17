@@ -751,11 +751,40 @@
       const prefs = window.VelvetStore?.getPreferences() || {};
 
       const usernameEl = document.getElementById('vault-acc-username');
+      const emailEl = document.getElementById('vault-acc-email');
       const badgeEl = document.getElementById('vault-acc-badge');
       const registeredEl = document.getElementById('vault-acc-created');
       const vipKeyEl = document.getElementById('vault-acc-key');
+      const editUserInput = document.getElementById('profile-edit-username');
+      const avatarBox = document.getElementById('vault-profile-avatar-box');
+      const avatarIcon = document.getElementById('vault-profile-avatar-icon');
 
-      if (usernameEl) usernameEl.textContent = user?.username || 'Invitado VIP';
+      const uname = user?.username || (user?.email ? user.email.split('@')[0] : 'Usuario VIP');
+      if (usernameEl) usernameEl.textContent = uname;
+      if (emailEl) emailEl.textContent = user?.email || 'usuario@velvet.local';
+      if (editUserInput && !editUserInput.value) editUserInput.value = uname;
+
+      const userAvatar = user?.avatar || 'crown';
+      const userBg = user?.avatarBg || 'from-pink-600 to-purple-600';
+      if (avatarBox) {
+        avatarBox.className = `w-16 h-16 rounded-2xl bg-gradient-to-tr ${userBg} flex items-center justify-center text-2xl text-white font-black shadow-[0_0_20px_rgba(255,45,149,0.35)] shrink-0 transition-all`;
+      }
+      if (avatarIcon) {
+        avatarIcon.className = `fa-solid fa-${userAvatar} text-amber-300`;
+      }
+
+      // Actualizar contadores de estadísticas en tiempo real
+      const favsCount = window.VelvetPersonalData?.getFavorites()?.length || 0;
+      const histCount = window.VelvetPersonalData?.getHistory()?.length || 0;
+      const favEl = document.getElementById('vault-stats-favs');
+      const histEl = document.getElementById('vault-stats-hist');
+      const gamesEl = document.getElementById('vault-stats-games');
+      if (favEl) favEl.textContent = favsCount;
+      if (histEl) histEl.textContent = histCount;
+      if (gamesEl) {
+        const saves = window.VelvetPersonalData?.getGameSaves ? window.VelvetPersonalData.getGameSaves() : [];
+        gamesEl.textContent = Array.isArray(saves) ? saves.length : 0;
+      }
       if (badgeEl) {
         if (window.VelvetStore?.hasFullAccess()) {
           badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40';

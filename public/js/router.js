@@ -146,7 +146,7 @@
       if (path === '/boveda/historial') {
         return { name: 'vault', tab: 'history', canonical: '/boveda/historial' };
       }
-      if (path === '/cuenta') {
+      if (path === '/cuenta' || path === '/boveda/cuenta' || path === '/perfil' || path === '/boveda/perfil') {
         return { name: 'vault', tab: 'account', canonical: '/cuenta' };
       }
       if (path === '/acceso') {
