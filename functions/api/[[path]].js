@@ -2023,7 +2023,7 @@ export async function onRequest(context) {
   }
 
   // =========================================================================
-  // 7. AUTENTICACIÓN: REGISTRO (/api/auth/register)
+  // 7. AUTENTICACIÓN: REGISTRO EXCLUSIVO CON LLAVE VIP (/api/auth/register)
   // =========================================================================
   if (url.pathname === "/api/auth/register" && method === "POST") {
     try {
@@ -2031,6 +2031,7 @@ export async function onRequest(context) {
       const username = (body.username || "").trim();
       const email = (body.email || `${username}@velvet.local`).trim().toLowerCase();
       const password = body.password || "";
+      const access_key = String(body.access_key || "").trim().toUpperCase();
 
       if (!username || !password) {
         return new Response(JSON.stringify({ detail: "Nombre de usuario y contraseña requeridos" }), {
@@ -2039,20 +2040,88 @@ export async function onRequest(context) {
         });
       }
 
-      // Registro en Supabase
+      if (!access_key) {
+        return new Response(JSON.stringify({ detail: "Se requiere una Llave de Acceso VIP válida o ingresar con tu cuenta de Patreon." }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      // Validar Llave VIP:
+      // 1. Llaves maestras de sistema
+      // 2. Consulta en la tabla invite_keys de Supabase DB1
+      // 3. Patrones de llaves generadas (VELVET-, VIP-, PATREON-, CLIENTE-)
+      let keyValid = false;
+      let keyNote = "Llave VIP de Acceso";
+
+      const MASTER_KEYS = ["VELVET-VIP-2026", "VELVET-VIP-ACCESS", "MASTER-ADMIN", "VELVET-ADMIN-2026"];
+      if (MASTER_KEYS.includes(access_key)) {
+        keyValid = true;
+        keyNote = "Llave Maestra Velvet VIP";
+      } else {
+        try {
+          const keyCheckRes = await fetch(`${SUPABASE_URL}/rest/v1/invite_keys?code=eq.${encodeURIComponent(access_key)}&revoked=eq.false&select=*`, {
+            headers: {
+              "apikey": SUPABASE_ADMIN_KEY,
+              "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`
+            }
+          });
+          if (keyCheckRes.ok) {
+            const keysData = await keyCheckRes.json();
+            if (Array.isArray(keysData) && keysData.length > 0) {
+              const kObj = keysData[0];
+              if (!kObj.revoked) {
+                keyValid = true;
+                keyNote = kObj.note || "Llave VIP Invitación";
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Error consultando invite_keys:", e);
+        }
+
+        if (!keyValid && /^(VELVET|VIP|PATREON|CLIENTE)-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(access_key)) {
+          keyValid = true;
+          keyNote = `Llave VIP ${access_key.split('-')[0]}`;
+        }
+      }
+
+      if (!keyValid) {
+        return new Response(JSON.stringify({ detail: "Llave de acceso VIP no válida o revocada. Para acceder necesitas una llave VIP válida o tu cuenta de Patreon." }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      // Registro en Supabase Auth
       const regRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: "POST",
         headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, data: { username } })
+        body: JSON.stringify({ email, password, data: { username, registered_with_key: access_key, vip_status: "active" } })
       });
 
       const regData = await regRes.json();
       if (!regRes.ok || !regData.user) {
-        return new Response(JSON.stringify({ detail: regData?.msg || "Error al registrar" }), {
+        return new Response(JSON.stringify({ detail: regData?.msg || regData?.error_description || "Error al registrar cuenta en el sistema" }), {
           status: 400,
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
       }
+
+      // Marcar llave como utilizada en invite_keys si existe
+      fetch(`${SUPABASE_URL}/rest/v1/invite_keys?code=eq.${encodeURIComponent(access_key)}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": SUPABASE_ADMIN_KEY,
+          "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          used_by: regData.user.id,
+          used_email: email,
+          used_at: new Date().toISOString()
+        })
+      }).catch(() => {});
 
       // Iniciar sesión inmediatamente
       const authRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -2072,7 +2141,8 @@ export async function onRequest(context) {
           role: "member",
           tier: "Velvet VIP ($5.99)",
           tier_level: "pro",
-          is_pro: true
+          is_pro: true,
+          registered_with_key: access_key
         }
       };
 

@@ -52,7 +52,8 @@
   <script src="https://unpkg.com/@ruffle-rs/ruffle" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle';"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = {
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
@@ -93,6 +94,7 @@
         }
       }
     };
+    }
   </script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
@@ -11744,6 +11746,20 @@
 
       const password = pInput ? pInput.value : '';
 
+      if (!username || !password || !access_key) {
+
+        if (errBox && errText) {
+
+          errText.textContent = 'Por favor completa todos los campos, incluyendo tu Llave VIP.';
+
+          errBox.classList.remove('hidden');
+
+        }
+
+        return;
+
+      }
+
       if (!username || !password) {
 
         if (errBox && errText) {
@@ -12146,7 +12162,7 @@
       }
     }
 
-    function handleLogout() {
+    async function handleLogout() {
 
       try {
 
