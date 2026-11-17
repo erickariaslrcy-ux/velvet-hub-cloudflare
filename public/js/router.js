@@ -55,6 +55,8 @@
         return `/v/${idPart}-${slug}`;
       } else if (type === 'gallery') {
         return `/g/${idPart}-${slug}`;
+      } else if (type === 'game') {
+        return `/j/${idPart}-${slug}`;
       } else {
         if (action === 'read') {
           return `/c/${idPart}-${slug}/leer`;
@@ -100,6 +102,7 @@
         if (h === '#videos') return { name: 'catalog', mode: 'videos', canonical: '/videos' };
         if (h === '#comics') return { name: 'catalog', mode: 'comics', canonical: '/comics' };
         if (h === '#cosplay' || h === '#galleries') return { name: 'catalog', mode: 'galleries', canonical: '/cosplay' };
+        if (h === '#juegos' || h === '#games') return { name: 'catalog', mode: 'games', canonical: '/juegos' };
         if (h === '#vault' || h === '#favoritos') return { name: 'vault', tab: 'favorites', canonical: '/boveda/favoritos' };
         if (h === '#historial' || h === '#history') return { name: 'vault', tab: 'history', canonical: '/boveda/historial' };
         if (h === '#cuenta' || h === '#account') return { name: 'vault', tab: 'account', canonical: '/cuenta' };
@@ -117,6 +120,7 @@
       if (tabParam === 'videos' && path === '/') return { name: 'catalog', mode: 'videos', canonical: '/videos' };
       if (tabParam === 'comics' && path === '/') return { name: 'catalog', mode: 'comics', canonical: '/comics' };
       if (tabParam === 'galleries' && path === '/') return { name: 'catalog', mode: 'galleries', canonical: '/cosplay' };
+      if ((tabParam === 'juegos' || tabParam === 'games') && path === '/') return { name: 'catalog', mode: 'games', canonical: '/juegos' };
 
       // 3. Rutas canónicas del nuevo sistema
       if (path === '/' || path === '/index.html') {
@@ -130,6 +134,9 @@
       }
       if (path === '/cosplay') {
         return { name: 'catalog', mode: 'galleries', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/cosplay' };
+      }
+      if (path === '/juegos' || path === '/games') {
+        return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/juegos' };
       }
 
       // 4. Bóveda, Historial y Cuenta
@@ -207,6 +214,21 @@
         };
       }
 
+      // 8. Juego: /j/:slug o legada /juego/:id o /game/:id
+      const jMatch = path.match(/^\/j\/([^\/]+)$/) || path.match(/^\/(?:juego|game)\/([^\/]+)(?:\/(.+))?$/);
+      if (jMatch) {
+        const rawToken = jMatch[1];
+        const parsed = this.parseItemToken(rawToken);
+        return {
+          name: 'game',
+          rawToken,
+          id: parsed.id,
+          source: jMatch[2] ? decodeURIComponent(jMatch[1]) : (parsed.source || 'gamcore'),
+          sourceId: jMatch[2] ? decodeURIComponent(jMatch[2]) : (parsed.sourceId || parsed.id),
+          canonical: path
+        };
+      }
+
       // 404 Desconocido
       return { name: '404', path, canonical: path };
     },
@@ -268,6 +290,7 @@
         videos: 'Videos +18 Sin Censura — Velvet Hub',
         comics: 'Cómics +18 & Hentai VIP — Velvet Hub',
         galleries: 'Galerías Cosplay & Modelos VIP — Velvet Hub',
+        games: 'Juegos +18 & Hentai VIP — Velvet Hub',
         vault_favorites: 'Mi Bóveda: Favoritos — Velvet Hub',
         vault_history: 'Mi Bóveda: Historial — Velvet Hub',
         account: 'Mi Cuenta Velvet VIP — Velvet Hub',

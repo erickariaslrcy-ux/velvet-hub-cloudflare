@@ -432,6 +432,9 @@ export async function onRequest(context) {
   const SUPABASE_URL = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || "https://qnmcejlxoufheisgkuyo.supabase.co";
   const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   const SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const SUPABASE_URL_DB2 = env.SUPABASE_URL_DB2 || env.NEXT_PUBLIC_SUPABASE_URL_DB2 || "https://vtyleivfovkolpxjjkjs.supabase.co";
+  const SUPABASE_ANON_KEY_DB2 = env.SUPABASE_ANON_KEY_DB2 || env.NEXT_PUBLIC_SUPABASE_ANON_KEY_DB2 || "";
+  const SUPABASE_SERVICE_ROLE_KEY_DB2 = env.SUPABASE_SERVICE_ROLE_KEY_DB2 || "";
   const MEDIA_SECRET = env.MEDIA_SECRET || "velvet_master_media_hmac_secret_production_2026";
   _activeMediaSecret = MEDIA_SECRET;
 
@@ -906,8 +909,10 @@ export async function onRequest(context) {
     }
 
     try {
-      const spRes = await fetch(`${SUPABASE_URL}/rest/v1/items?${queryParam}&limit=1`, {
-        headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
+      const detailTargetUrl = (rawSource === "gamcore" ? SUPABASE_URL_DB2 : SUPABASE_URL);
+      const detailTargetKey = (rawSource === "gamcore" ? (SUPABASE_SERVICE_ROLE_KEY_DB2 || SUPABASE_ADMIN_KEY) : SUPABASE_ADMIN_KEY);
+      const spRes = await fetch(`${detailTargetUrl}/rest/v1/items?${queryParam}&limit=1`, {
+        headers: { "apikey": detailTargetKey, "Authorization": `Bearer ${detailTargetKey}` }
       });
 
       if (!spRes.ok) {
@@ -1351,7 +1356,7 @@ export async function onRequest(context) {
   // =========================================================================
   if (url.pathname === "/api/items" && (method === "GET" || method === "HEAD")) {
     const rawMediaType = (url.searchParams.get("media_type") || "comic").trim().toLowerCase();
-    const mediaType = ["comic", "video", "gallery", "cosplay"].includes(rawMediaType) ? rawMediaType : "comic";
+    const mediaType = ["comic", "video", "gallery", "cosplay", "game"].includes(rawMediaType) ? rawMediaType : "comic";
     const page = validatePage(url.searchParams.get("page"));
     const pageSize = validatePageSize(url.searchParams.get("page_size"), 24);
     const q = sanitizeSearchQuery(url.searchParams.get("q"));
@@ -1524,10 +1529,13 @@ export async function onRequest(context) {
       offset = (safePage - 1) * pageSize;
     }
 
-    const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists";
+    const isGameMedia = (mediaType === "game");
+    const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists,video_sources";
     let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
 
-    if (mediaType === "video") {
+    if (mediaType === "game") {
+      postgrestUrl = `${SUPABASE_URL_DB2}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}&media_type=eq.game`;
+    } else if (mediaType === "video") {
       postgrestUrl += "&media_type=eq.video";
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery&page_count=gt.0";
@@ -1588,10 +1596,11 @@ export async function onRequest(context) {
     try {
       // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
       const preferCount = (q || tag) ? "count=exact" : (env.POSTGREST_COUNT_MODE || "count=planned");
+      const activeQueryKey = isGameMedia ? (SUPABASE_ANON_KEY_DB2 || SUPABASE_SERVICE_ROLE_KEY_DB2) : SUPABASE_KEY;
       let spRes = await fetch(postgrestUrl, {
         headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "apikey": activeQueryKey,
+          "Authorization": `Bearer ${activeQueryKey}`,
           "Prefer": preferCount
         }
       });
@@ -1603,8 +1612,8 @@ export async function onRequest(context) {
           console.warn("[Velvet-Items] Timeout detectado en PostgREST count. Reintentando sin cabecera Prefer...");
           spRes = await fetch(postgrestUrl, {
             headers: {
-              "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${SUPABASE_KEY}`
+              "apikey": activeQueryKey,
+              "Authorization": `Bearer ${activeQueryKey}`
             }
           });
         }
@@ -1613,8 +1622,8 @@ export async function onRequest(context) {
           const pageOneUrl = postgrestUrl.replace(/offset=\d+/, 'offset=0');
           spRes = await fetch(pageOneUrl, {
             headers: {
-              "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${SUPABASE_KEY}`
+              "apikey": activeQueryKey,
+              "Authorization": `Bearer ${activeQueryKey}`
             }
           });
         }

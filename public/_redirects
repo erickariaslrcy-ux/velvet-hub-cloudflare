@@ -17,9 +17,11 @@
 /videos              /index.html        200
 /comics              /index.html        200
 /cosplay             /index.html        200
+/juegos              /index.html        200
 /v/*                 /index.html        200
 /c/*                 /index.html        200
 /g/*                 /index.html        200
+/j/*                 /index.html        200
 /boveda/favoritos    /index.html        200
 /boveda/historial    /index.html        200
 /boveda/*            /index.html        200

@@ -47,6 +47,7 @@
   <link rel="stylesheet" href="/css/pagination.css">
 
   <!-- Tailwind CSS Engine for Dynamic JavaScript Components -->
+  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -1192,6 +1193,15 @@
           <span>Modelos</span>
         </a>
 
+        <a
+          id="mode-btn-games"
+          href="/juegos"
+          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer"
+        >
+          <i class="fa-solid fa-gamepad text-xs text-emerald-400"></i>
+          <span>Juegos</span>
+        </a>
+
       </div>
 
       <!-- Barra de Búsqueda de Cómics y Videos Calientes -->
@@ -1362,6 +1372,7 @@
         <a href="/comics" id="mob-toggle-comics" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm">Cómics</a>
         <a href="/videos" id="mob-toggle-videos" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</a>
         <a href="/cosplay" id="mob-toggle-galleries" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Modelos</a>
+        <a href="/juegos" id="mob-toggle-games" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Juegos</a>
 
       </div>
 
@@ -3736,6 +3747,19 @@
 
     // =======================================================================
 
+        const GAME_CATEGORIES = [
+      { id: 'all', label: '🔥 Todos los Juegos', icon: 'fa-solid fa-gamepad text-emerald-400' },
+      { id: 'renpy', label: '📜 Ren\'Py & Novelas', icon: 'fa-solid fa-book text-pink-400' },
+      { id: 'flash', label: '⚡ Flash Clásicos', icon: 'fa-solid fa-bolt text-yellow-400' },
+      { id: '3d', label: '💎 3D CGI', icon: 'fa-solid fa-gem text-cyan-400' },
+      { id: 'harem', label: '👑 Harem', icon: 'fa-solid fa-crown text-amber-400' },
+      { id: 'rpg', label: '⚔️ RPG & Aventura', icon: 'fa-solid fa-shield text-indigo-400' },
+      { id: 'apk', label: '📱 APK Android', icon: 'fa-brands fa-android text-emerald-400' },
+      { id: 'parody', label: '🎭 Parodias Anime', icon: 'fa-solid fa-masks-theater text-rose-400' }
+    ];
+
+    const GAME_TRENDS = ['Ren\'Py', 'Flash', '3D', 'Visual Novels', 'Harem', 'Avatar', 'APK', 'RPG', 'Simulators'];
+
     const VIDEO_CATEGORIES = [
       { id: 'all', label: '🔥 Todos los Videos' },
       { id: 'pmv', label: '🎵 PMV & Edits' },
@@ -3801,6 +3825,10 @@
         if (btnGalleries) {
           btnGalleries.className = mode === 'galleries' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer';
         }
+        const btnGames = document.getElementById('mode-btn-games');
+        if (btnGames) {
+          btnGames.className = mode === 'games' ? 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25 cursor-pointer' : 'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer';
+        }
       }
 
       const mobComics = document.getElementById('mob-toggle-comics');
@@ -3811,6 +3839,10 @@
         mobVideos.className = mode === 'videos' ? 'px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm' : 'px-3 py-1 rounded-full text-[11px] font-bold text-white/70 hover:text-white';
         if (mobGalleries) {
           mobGalleries.className = mode === 'galleries' ? 'px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm' : 'px-3 py-1 rounded-full text-[11px] font-bold text-white/70 hover:text-white';
+        }
+        const mobGames = document.getElementById('mob-toggle-games');
+        if (mobGames) {
+          mobGames.className = mode === 'games' ? 'px-3 py-1 rounded-full text-[11px] font-black bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-sm' : 'px-3 py-1 rounded-full text-[11px] font-bold text-white/70 hover:text-white';
         }
       }
 
@@ -3845,6 +3877,9 @@
       if (mode === 'videos') {
         if (icon) icon.className = 'fa-solid fa-film text-white text-xl animate-pulse';
         if (text) text.textContent = 'Accediendo a Videos HD...';
+      } else if (mode === 'games') {
+        if (icon) icon.className = 'fa-solid fa-gamepad text-emerald-400 text-xl animate-pulse';
+        if (text) text.textContent = 'Accediendo a Juegos VIP...';
       } else if (mode === 'galleries') {
         if (icon) icon.className = 'fa-solid fa-camera-retro text-white text-xl animate-pulse';
         if (text) text.textContent = 'Accediendo a Cosplay & Modelos...';
@@ -3983,7 +4018,21 @@
       const heroBadge = document.getElementById("hero-format-badge");
       const readBtn = document.getElementById("hero-read-btn");
 
-      if (mode === "videos") {
+      if (mode === "games") {
+        if (sInput) sInput.placeholder = "Buscar juegos, novelas Ren'Py, Flash, tags...";
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-gamepad text-emerald-400"></i> Catálogo VIP de Juegos Porn & Hentai';
+        if (resCount) resCount.textContent = "Actualizando catálogo de juegos...";
+        if (badgeEl) badgeEl.textContent = "juegos listos para jugar";
+        if (heroTitle) heroTitle.textContent = "Avatar: Blood Legacy [Ch. 3.5]";
+        if (heroBadge) {
+          heroBadge.textContent = "JUEGO REN'PY HTML5";
+          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800";
+        }
+        if (readBtn) {
+          readBtn.innerHTML = '<i class="fa-solid fa-gamepad text-xs"></i> Jugar Ahora en HD';
+          readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-xs sm:text-sm shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
+        }
+      } else if (mode === "videos") {
         if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición';
         if (resCount) resCount.textContent = "Actualizando videos en streaming...";
         if (badgeEl) badgeEl.textContent = "videos en streaming directo";
@@ -4061,7 +4110,9 @@
       container.innerHTML = '';
 
       let cats = [];
-      if (state.mode === 'galleries') {
+      if (state.mode === 'games') {
+        cats = GAME_CATEGORIES;
+      } else if (state.mode === 'galleries') {
         cats = GALLERY_CATEGORIES;
       } else if (state.mode === 'comics') {
         cats = COMIC_CATEGORIES;
@@ -5552,7 +5603,23 @@
       const totalItemsCount = data.total || (data.total_pages ? data.total_pages * state.pageSize : (state.catalogCache ? state.catalogCache.length : 100));
       const currentLoadedCount = state.catalogCache ? state.catalogCache.length : data.items.length;
 
-      if (state.mode === 'galleries') {
+      if (state.mode === 'games') {
+        if (resCount) resCount.textContent = `${currentLoadedCount} Juegos VIP Listos`;
+        const gBadge = document.getElementById('grid-status-badge');
+        if (gBadge) gBadge.textContent = `${currentLoadedCount} juegos listos para jugar`;
+        if (titleSec) {
+          if (state.query) {
+            titleSec.innerHTML = `<i class="fa-solid fa-gamepad text-emerald-400"></i> Juegos encontrados para: "${escapeHtml(state.query)}"`;
+          } else if (state.category && state.category !== 'all') {
+            const catObj = GAME_CATEGORIES.find(c => c.id === state.category);
+            const catLabel = catObj ? catObj.label.replace(/^[^\w\s]+/, '').trim() : state.category.toUpperCase();
+            titleSec.innerHTML = `<i class="fa-solid fa-gamepad text-emerald-400"></i> Juegos: ${catLabel}`;
+          } else {
+            titleSec.innerHTML = `<i class="fa-solid fa-gamepad text-emerald-400"></i> Catálogo VIP de Juegos Porn & Hentai`;
+          }
+        }
+        renderGameGrid(itemsToRender, append);
+      } else if (state.mode === 'galleries') {
         if (resCount) resCount.textContent = `${currentLoadedCount} Galerías VIP Listas`;
         const badgeEl = document.getElementById('grid-status-badge');
         if (badgeEl) badgeEl.textContent = `${currentLoadedCount} sets en ultra alta definición`;
@@ -5671,7 +5738,57 @@
           live: 'true'
         });
 
-        if (state.mode === 'videos') {
+        if (state.mode === 'games') {
+          // Carga ultra veloz desde el dataset bundle o API
+          try {
+            if (!window._cachedGamesData) {
+              const gRes = await fetch('/data/games.json', { signal });
+              if (gRes.ok) {
+                window._cachedGamesData = await gRes.json();
+              }
+            }
+            if (window._cachedGamesData) {
+              let gList = window._cachedGamesData;
+              const gQ = (state.query || '').toLowerCase().trim();
+              const gCat = state.category || 'all';
+
+              if (gCat !== 'all') {
+                if (gCat === 'renpy') gList = gList.filter(x => (x.engine||'').toLowerCase().includes('ren') || (x.tags||[]).some(t => t.toLowerCase().includes('ren')));
+                else if (gCat === 'flash') gList = gList.filter(x => x.game_type === 'flash' || (x.engine||'').toLowerCase().includes('flash'));
+                else if (gCat === '3d') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('3d')));
+                else if (gCat === 'harem') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('harem')));
+                else if (gCat === 'rpg') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('rpg') || t.toLowerCase().includes('adventure')));
+                else if (gCat === 'apk') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('apk')));
+                else if (gCat === 'parody') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('parod')));
+              }
+
+              if (gQ) {
+                gList = gList.filter(x => x.title.toLowerCase().includes(gQ) || (x.tags||[]).some(t => t.toLowerCase().includes(gQ)) || (x.engine||'').toLowerCase().includes(gQ));
+              }
+
+              const p = Math.max(1, state.page || 1);
+              const sz = state.pageSize || 24;
+              const paged = gList.slice((p - 1) * sz, p * sz);
+
+              const feedPayload = {
+                items: paged,
+                total: gList.length,
+                page: p,
+                page_size: sz,
+                total_pages: Math.ceil(gList.length / sz)
+              };
+
+              state.isLoading = false;
+              renderFeedData(feedPayload, append);
+              renderPaginationControls(feedPayload.page, feedPayload.total_pages, feedPayload.total);
+              hidePortalTransition();
+              return;
+            }
+          } catch (e) {
+            console.warn("Fallo carga local de juegos, usando fallback API:", e);
+          }
+          params.append('media_type', 'game');
+        } else if (state.mode === 'videos') {
           params.append('media_type', 'video');
           if (state.feedSeed) params.append('seed', String(state.feedSeed));
           if (state.category && state.category !== 'all') {
@@ -5781,6 +5898,179 @@
     // RENDERIZADO DE GRILLA DE GALERÍAS / COSPLAYERS (CARA 2)
 
     // =======================================================================
+
+    
+    // =====================================================================
+    // PORTAL DE JUEGOS: RENDER GRID & REPRODUCTOR INTEGRADO
+    // =====================================================================
+    function renderGameGrid(items, append = false) {
+      const grid = document.getElementById('comics-grid');
+      if (!grid) return;
+      if (!append) {
+        grid.innerHTML = '';
+        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 sm:gap-6';
+      }
+
+      const existingCards = new Set(
+        Array.from(grid.querySelectorAll('[data-card-id]')).map(el => el.getAttribute('data-card-id'))
+      );
+
+      const frag = document.createDocumentFragment();
+
+      items.forEach((it, idx) => {
+        const cardId = String(it.id || `${it.source}_${it.source_id}`);
+        if (existingCards.has(cardId)) return;
+        existingCards.add(cardId);
+
+        const card = document.createElement('div');
+        card.setAttribute('data-card-id', cardId);
+        card.setAttribute('aria-label', it.title || 'Juego');
+        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
+        card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-emerald-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(16,185,129,0.25)] transition-all duration-300 cursor-pointer relative';
+        
+        card.onclick = (e) => {
+          if (e.target.closest('.card-fav-btn')) return;
+          openGameModal(it);
+        };
+
+        const isFlash = (it.game_type === 'flash') || (it.engine && it.engine.toLowerCase().includes('flash'));
+        const engineLabel = isFlash ? 'Flash' : (it.engine || 'Ren\'Py');
+        const badge = (it.badges && it.badges.length) ? it.badges[0] : (isFlash ? 'RUFFLE' : 'HTML5');
+        const plays = it.plays ? (it.plays > 1000 ? `${(it.plays/1000).toFixed(1)}K` : it.plays) : '9.5K';
+        const rating = it.rating ? `★ ${it.rating}%` : '★ 88%';
+
+        card.innerHTML = `
+          <div class="relative aspect-[16/11] w-full overflow-hidden select-none bg-[#100922]">
+            <img
+              src="${it.cover_url || ''}"
+              alt="${escapeHtml(it.title)}"
+              loading="${idx < 6 ? 'eager' : 'lazy'}"
+              class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
+              onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'140\'><rect fill=\'%23120826\' width=\'200\' height=\'140\'/></svg>'"
+            />
+            <div class="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors pointer-events-none"></div>
+
+            <!-- Boton de Play Hover -->
+            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
+              <div class="w-12 h-12 rounded-full bg-emerald-500/90 text-white flex items-center justify-center shadow-lg transform scale-80 group-hover:scale-100 transition-transform duration-300">
+                <i class="fa-solid fa-gamepad text-sm"></i>
+              </div>
+            </div>
+
+            <!-- Badge Superior Izquierda -->
+            <span class="absolute top-2 left-2 ${isFlash ? 'bg-amber-500/90 text-black border-amber-400/50' : 'bg-emerald-500/90 text-white border-emerald-400/50'} border px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow-md">
+              ${badge}
+            </span>
+
+            <!-- Badge Motor Superior Derecha -->
+            <span class="absolute top-2 right-2 bg-black/80 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">
+              ${engineLabel}
+            </span>
+
+            <!-- Rating Inferior Derecha -->
+            <span class="absolute bottom-2 right-2 bg-black/80 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md text-[10px] font-black tabular-nums backdrop-blur-sm">
+              ${rating}
+            </span>
+          </div>
+
+          <div class="p-3 flex-1 flex flex-col justify-between">
+            <div>
+              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug" title="${escapeHtml(it.title)}">
+                ${escapeHtml(it.title)}
+              </h4>
+              <div class="flex items-center gap-2 text-[11px] text-purple-300/70 pt-1.5">
+                <span class="font-semibold text-emerald-300/80">👁 ${plays}</span>
+                <span>&bull;</span>
+                <span class="truncate">${(it.tags || []).slice(0, 2).join(' · ')}</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        frag.appendChild(card);
+      });
+
+      grid.appendChild(frag);
+      grid.classList.remove('hidden');
+    }
+
+    function openGameModal(game) {
+      if (!game) return;
+      const modal = document.getElementById('game-modal');
+      const title = document.getElementById('game-modal-title');
+      const badge = document.getElementById('game-modal-badge');
+      const ext = document.getElementById('game-modal-ext');
+      const iframe = document.getElementById('game-iframe-player');
+      const ruffleWrap = document.getElementById('game-ruffle-player');
+
+      if (!modal) return;
+
+      const isFlash = (game.game_type === 'flash') || (game.engine && game.engine.toLowerCase().includes('flash'));
+      const targetUrl = game.embed_url || game.swf_url;
+
+      if (title) title.textContent = game.title || 'Juego VIP';
+      if (badge) {
+        badge.textContent = isFlash ? 'FLASH (RUFFLE)' : (game.engine || 'REN\'PY');
+        badge.className = isFlash
+          ? 'px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0'
+          : 'px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0';
+      }
+      if (ext) ext.href = targetUrl || '#';
+
+      if (isFlash && targetUrl) {
+        if (iframe) { iframe.src = ''; iframe.classList.add('hidden'); }
+        if (ruffleWrap) {
+          ruffleWrap.classList.remove('hidden');
+          ruffleWrap.classList.add('flex');
+          ruffleWrap.innerHTML = '';
+          try {
+            const ruffle = window.RufflePlayer ? window.RufflePlayer.newest() : null;
+            if (ruffle) {
+              const player = ruffle.createPlayer();
+              player.style.width = '100%';
+              player.style.height = '100%';
+              ruffleWrap.appendChild(player);
+              player.load(targetUrl);
+            } else {
+              ruffleWrap.innerHTML = `<div class="text-center p-8 text-white"><p class="mb-4">Cargando emulador Ruffle...</p><a href="${targetUrl}" target="_blank" class="px-4 py-2 bg-emerald-500 text-white rounded-lg">Abrir SWF Directo</a></div>`;
+            }
+          } catch(e) {
+            console.error("Error iniciando Ruffle:", e);
+          }
+        }
+      } else {
+        if (ruffleWrap) { ruffleWrap.innerHTML = ''; ruffleWrap.classList.add('hidden'); }
+        if (iframe) {
+          iframe.classList.remove('hidden');
+          iframe.src = targetUrl || '';
+        }
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeGameModal() {
+      const modal = document.getElementById('game-modal');
+      const iframe = document.getElementById('game-iframe-player');
+      const ruffleWrap = document.getElementById('game-ruffle-player');
+
+      if (iframe) { iframe.src = ''; iframe.classList.add('hidden'); }
+      if (ruffleWrap) { ruffleWrap.innerHTML = ''; ruffleWrap.classList.add('hidden'); }
+      if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+      document.body.style.overflow = '';
+    }
+
+    function toggleGameFullscreen() {
+      const container = document.getElementById('game-player-container');
+      if (!container) return;
+      if (!document.fullscreenElement) {
+        container.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
 
     function renderGalleryGrid(items, append = false) {
       const grid = document.getElementById('comics-grid');
@@ -12778,6 +13068,34 @@
         </a>
       </div>
       <p class="text-[10px] text-lav/40 mt-5">18 U.S.C. 2257 Record-Keeping Requirements Compliance</p>
+    </div>
+  </div>
+
+
+  <!-- Modal Reproductor de Juegos VIP con Iframe y Ruffle WebAssembly -->
+  <div id="game-modal" class="hidden fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex-col select-none">
+    <div class="h-14 bg-[#120826] border-b border-white/10 px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <span id="game-modal-badge" class="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">REN'PY</span>
+        <h3 id="game-modal-title" class="text-sm sm:text-base font-bold text-white truncate">Cargando juego...</h3>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <a id="game-modal-ext" href="#" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-up-right-from-square text-xs"></i>
+          <span class="hidden sm:inline">Nueva Pestaña</span>
+        </a>
+        <button id="game-modal-fullscreen" onclick="toggleGameFullscreen()" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-expand text-xs"></i>
+          <span class="hidden sm:inline">Pantalla Completa</span>
+        </button>
+        <button onclick="closeGameModal()" class="w-8 h-8 rounded-lg bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white flex items-center justify-center font-bold text-sm shadow-md transition-all">
+          ✕
+        </button>
+      </div>
+    </div>
+    <div id="game-player-container" class="flex-1 w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
+      <iframe id="game-iframe-player" allowfullscreen allow="autoplay; fullscreen; gamepad" class="w-full h-full border-none hidden"></iframe>
+      <div id="game-ruffle-player" class="w-full h-full hidden items-center justify-center bg-black"></div>
     </div>
   </div>
 
