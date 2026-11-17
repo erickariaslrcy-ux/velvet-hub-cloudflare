@@ -47,7 +47,17 @@
   <link rel="stylesheet" href="/css/pagination.css">
 
   <!-- Tailwind CSS Engine for Dynamic JavaScript Components -->
-  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+  <!-- Emulador Ruffle Flash Oficial Gamcore -->
+  <script>
+    window.RufflePlayer = window.RufflePlayer || {};
+    window.RufflePlayer.config = {
+      "polyfills": false,
+      "autoplay": "on",
+      "unmuteOverlay": "hidden",
+      "letterbox": "on"
+    };
+  </script>
+  <script src="https://fgn.cdn.serverable.com/common/flashes/js/ruffle260515/ruffle.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -6033,26 +6043,55 @@
         if (ruffleWrap) {
           ruffleWrap.classList.remove('hidden');
           ruffleWrap.classList.add('flex');
-          ruffleWrap.innerHTML = '';
-          try {
-            const ruffle = window.RufflePlayer ? window.RufflePlayer.newest() : null;
-            if (ruffle) {
-              const player = ruffle.createPlayer();
-              player.style.width = '100%';
-              player.style.height = '100%';
-              ruffleWrap.appendChild(player);
-              player.load(targetUrl);
-            } else {
-              ruffleWrap.innerHTML = `
-                <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4">
-                  <i class="fa-solid fa-gamepad text-5xl text-emerald-400 animate-pulse"></i>
-                  <p class="text-sm font-semibold">Cargando emulador Ruffle Flash...</p>
-                  <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Abrir Archivo SWF Directo</a>
-                </div>
-              `;
+          ruffleWrap.innerHTML = `
+            <div id="ruffle-active-loader" class="text-center p-8 text-white flex flex-col items-center justify-center gap-4">
+              <i class="fa-solid fa-gamepad text-5xl text-emerald-400 animate-pulse"></i>
+              <p class="text-sm font-semibold">Cargando emulador Flash...</p>
+            </div>
+          `;
+
+          const startRuffle = () => {
+            try {
+              const rf = (window.RufflePlayer && typeof window.RufflePlayer.newest === 'function')
+                ? window.RufflePlayer.newest()
+                : null;
+              if (rf) {
+                ruffleWrap.innerHTML = '';
+                const player = rf.createPlayer();
+                player.style.width = '100%';
+                player.style.height = '100%';
+                ruffleWrap.appendChild(player);
+                player.load({
+                  url: targetUrl,
+                  allowScriptAccess: true,
+                  autoplay: 'on',
+                  letterbox: 'on'
+                });
+                return true;
+              }
+            } catch (err) {
+              console.error("Error iniciando Ruffle:", err);
             }
-          } catch(e) {
-            console.error("Error iniciando Ruffle:", e);
+            return false;
+          };
+
+          if (!startRuffle()) {
+            let tries = 0;
+            const rInterval = setInterval(() => {
+              tries++;
+              if (startRuffle() || tries > 40) {
+                clearInterval(rInterval);
+                if (tries > 40 && !document.querySelector('#game-ruffle-player ruffle-player')) {
+                  ruffleWrap.innerHTML = `
+                    <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4 max-w-md">
+                      <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-400"></i>
+                      <p class="text-sm font-bold">No se pudo cargar el emulador de Flash automáticamente.</p>
+                      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Descargar / Abrir Archivo SWF</a>
+                    </div>
+                  `;
+                }
+              }
+            }, 100);
           }
         }
       } else {
