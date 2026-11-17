@@ -210,6 +210,8 @@ function isSafeUpstreamUrl(urlStr) {
       "doujins.com",
       "alotporn.com",
       "porntubeai.com",
+      "gamcore.com",
+      "serverable.com",
       "supabase.co",
       "supabase.in",
       "morbohub.pages.dev",
@@ -656,6 +658,8 @@ export async function onRequest(context) {
         spoofedReferer = "https://www.alotporn.com/";
       } else if (targetMediaUrl.includes("pornhd")) {
         spoofedReferer = "https://pornhd.pet/";
+      } else if (targetMediaUrl.includes("gamcore") || targetMediaUrl.includes("serverable")) {
+        spoofedReferer = "https://gamcore.com/";
       } else {
         try {
           spoofedReferer = new URL(targetMediaUrl).origin + "/";

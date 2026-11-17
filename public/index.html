@@ -5935,17 +5935,21 @@
           openGameModal(it);
         };
 
-        const isFlash = (it.game_type === 'flash') || (it.engine && it.engine.toLowerCase().includes('flash'));
-        const engineLabel = isFlash ? 'Flash' : (it.engine || 'Ren\'Py');
-        const badge = (it.badges && it.badges.length) ? it.badges[0] : (isFlash ? 'RUFFLE' : 'HTML5');
-        const plays = it.plays ? (it.plays > 1000 ? `${(it.plays/1000).toFixed(1)}K` : it.plays) : '9.5K';
-        const rating = it.rating ? `★ ${it.rating}%` : '★ 88%';
+        const vs = (it.video_sources && it.video_sources[0]) || {};
+        const isFlash = (it.game_type === 'flash') || (vs.game_type === 'flash') || (vs.format === 'swf') || (it.engine && it.engine.toLowerCase().includes('flash')) || (vs.engine && vs.engine.toLowerCase().includes('flash')) || (it.artists && it.artists[0] === 'Flash') || (it.tags && it.tags.includes('Flash'));
+        const engineLabel = isFlash ? 'Flash' : (it.engine || vs.engine || (it.artists && it.artists[0]) || 'Ren\'Py');
+        const badge = (it.badges && it.badges.length) ? it.badges[0] : ((vs.badges && vs.badges.length) ? vs.badges[0] : (isFlash ? 'RUFFLE' : 'HTML5'));
+        const rawPlays = it.plays || vs.plays || 0;
+        const plays = rawPlays ? (rawPlays > 1000 ? `${(rawPlays/1000).toFixed(1)}K` : rawPlays) : '9.5K';
+        const rawRating = it.rating || vs.rating || 0;
+        const rating = rawRating ? `★ ${rawRating}%` : '★ 88%';
 
         card.innerHTML = `
           <div class="relative aspect-[16/11] w-full overflow-hidden select-none bg-[#100922]">
             <img
               src="${it.cover_url || ''}"
               alt="${escapeHtml(it.title)}"
+              referrerpolicy="no-referrer"
               loading="${idx < 6 ? 'eager' : 'lazy'}"
               class="w-full h-full object-cover group-hover:scale-105 transition-all duration-500"
               onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'140\'><rect fill=\'%23120826\' width=\'200\' height=\'140\'/></svg>'"
@@ -6007,12 +6011,17 @@
 
       if (!modal) return;
 
-      const isFlash = (game.game_type === 'flash') || (game.engine && game.engine.toLowerCase().includes('flash'));
-      const targetUrl = game.embed_url || game.swf_url;
+      const vs = (game.video_sources && game.video_sources[0]) || {};
+      const isFlash = (game.game_type === 'flash') || (vs.game_type === 'flash') || (vs.format === 'swf') || (game.engine && game.engine.toLowerCase().includes('flash')) || (vs.engine && vs.engine.toLowerCase().includes('flash')) || (game.artists && game.artists[0] === 'Flash') || (game.tags && game.tags.includes('Flash'));
+      let targetUrl = game.embed_url || game.swf_url || vs.embed_url || vs.swf_url || '';
+      if (targetUrl) {
+        targetUrl = targetUrl.replace(/https?:\/\/[a-zA-Z0-9_\-\.]*fgn\.cdn\.serverable\.com/, 'https://fgn.cdn.serverable.com');
+      }
+      const engineName = isFlash ? 'Flash' : (game.engine || vs.engine || (game.artists && game.artists[0]) || 'Ren\'Py');
 
       if (title) title.textContent = game.title || 'Juego VIP';
       if (badge) {
-        badge.textContent = isFlash ? 'FLASH (RUFFLE)' : (game.engine || 'REN\'PY');
+        badge.textContent = isFlash ? 'FLASH (RUFFLE)' : engineName.toUpperCase();
         badge.className = isFlash
           ? 'px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0'
           : 'px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0';
@@ -6034,7 +6043,13 @@
               ruffleWrap.appendChild(player);
               player.load(targetUrl);
             } else {
-              ruffleWrap.innerHTML = `<div class="text-center p-8 text-white"><p class="mb-4">Cargando emulador Ruffle...</p><a href="${targetUrl}" target="_blank" class="px-4 py-2 bg-emerald-500 text-white rounded-lg">Abrir SWF Directo</a></div>`;
+              ruffleWrap.innerHTML = `
+                <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4">
+                  <i class="fa-solid fa-gamepad text-5xl text-emerald-400 animate-pulse"></i>
+                  <p class="text-sm font-semibold">Cargando emulador Ruffle Flash...</p>
+                  <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Abrir Archivo SWF Directo</a>
+                </div>
+              `;
             }
           } catch(e) {
             console.error("Error iniciando Ruffle:", e);
