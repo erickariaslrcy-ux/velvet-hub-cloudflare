@@ -1596,7 +1596,7 @@ export async function onRequest(context) {
     try {
       // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
       const preferCount = (q || tag) ? "count=exact" : (env.POSTGREST_COUNT_MODE || "count=planned");
-      const activeQueryKey = isGameMedia ? (SUPABASE_ANON_KEY_DB2 || SUPABASE_SERVICE_ROLE_KEY_DB2) : SUPABASE_KEY;
+      const activeQueryKey = isGameMedia ? (SUPABASE_SERVICE_ROLE_KEY_DB2 || SUPABASE_ANON_KEY_DB2 || SUPABASE_KEY) : SUPABASE_KEY;
       let spRes = await fetch(postgrestUrl, {
         headers: {
           "apikey": activeQueryKey,

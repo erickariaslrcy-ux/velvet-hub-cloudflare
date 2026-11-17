@@ -5779,12 +5779,14 @@
               };
 
               state.isLoading = false;
+              _isLoadingFeed = false;
               renderFeedData(feedPayload, append);
               renderPaginationControls(feedPayload.page, feedPayload.total_pages, feedPayload.total);
               hidePortalTransition();
               return;
             }
           } catch (e) {
+            if (e && e.name === 'AbortError') return;
             console.warn("Fallo carga local de juegos, usando fallback API:", e);
           }
           params.append('media_type', 'game');
