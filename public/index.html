@@ -6042,6 +6042,94 @@
       grid.classList.remove('hidden');
     }
 
+    window._activeGame = null;
+    window._activeGameTargetUrl = '';
+    let _gameAspectRatioMode = '16-9';
+    let _hudTimeout = null;
+
+    function handleGameMouseMove() {
+      const hud = document.getElementById('game-modal-hud');
+      if (!hud) return;
+      hud.style.opacity = '1';
+      hud.style.transform = 'translateY(0)';
+      if (_hudTimeout) clearTimeout(_hudTimeout);
+      _hudTimeout = setTimeout(() => {
+        const modal = document.getElementById('game-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+          hud.style.opacity = '0.2';
+        }
+      }, 3500);
+    }
+
+    function isCurrentGameFavorited(item) {
+      if (!item || !state.favorites) return false;
+      const itemId = item.id || null;
+      return state.favorites.some(f => {
+        if (itemId && f.id && Number(f.id) === Number(itemId)) return true;
+        return f.source === item.source && String(f.source_id) === String(item.source_id);
+      });
+    }
+
+    function updateGameFavIcon() {
+      const icon = document.getElementById('game-modal-fav-icon');
+      if (!icon) return;
+      const isFav = isCurrentGameFavorited(window._activeGame);
+      if (isFav) {
+        icon.className = 'fa-solid fa-heart text-pink-500';
+      } else {
+        icon.className = 'fa-regular fa-heart text-lav/80';
+      }
+    }
+
+    function toggleCurrentGameFavorite() {
+      if (!window._activeGame) return;
+      toggleFavorite(window._activeGame);
+      setTimeout(updateGameFavIcon, 100);
+    }
+
+    function toggleGameAspectRatio() {
+      const iframe = document.getElementById('game-iframe-player');
+      const ruffle = document.getElementById('game-ruffle-player');
+      const label = document.getElementById('game-ratio-label');
+      const targets = [iframe, ruffle].filter(Boolean);
+
+      if (_gameAspectRatioMode === '16-9') {
+        _gameAspectRatioMode = 'fill';
+        if (label) label.textContent = 'FILL';
+        targets.forEach(el => {
+          el.style.maxWidth = '100%';
+          el.style.maxHeight = '100%';
+          el.style.aspectRatio = 'auto';
+        });
+        showToast('Pantalla expandida al 100% (Fill)', 'info');
+      } else {
+        _gameAspectRatioMode = '16-9';
+        if (label) label.textContent = '16:9';
+        targets.forEach(el => {
+          el.style.maxWidth = 'calc(100vh * (16 / 9))';
+          el.style.maxHeight = 'calc(100vw * (9 / 16))';
+          el.style.aspectRatio = '16 / 9';
+        });
+        showToast('Ajuste cinemático 16:9 con Ambilight', 'info');
+      }
+    }
+
+    function reloadCurrentGame() {
+      if (!window._activeGame) return;
+      const iframe = document.getElementById('game-iframe-player');
+      const ruffle = document.getElementById('game-ruffle-player');
+      
+      if (iframe && !iframe.classList.contains('hidden')) {
+        const cur = iframe.src;
+        iframe.src = '';
+        setTimeout(() => { iframe.src = cur; }, 100);
+        showToast('Juego reiniciado', 'info');
+      } else if (ruffle && !ruffle.classList.contains('hidden')) {
+        openGameModal(window._activeGame);
+        showToast('Emulador Flash reiniciado', 'info');
+      }
+    }
+
     function openGameModal(game) {
       if (!game) return;
       const modal = document.getElementById('game-modal');
@@ -6065,12 +6153,28 @@
                       (game.tags && game.tags.includes('Flash'));
       const engineName = isFlash ? 'Flash' : (game.engine || vs.engine || (game.artists && game.artists[0]) || 'Ren\'Py');
 
+      window._activeGame = game;
+      window._activeGameTargetUrl = targetUrl;
+      updateGameFavIcon();
+
+      const backdrop = document.getElementById('game-ambient-backdrop');
+      if (backdrop) {
+        const coverImg = game.cover_url || game.thumbnail || '';
+        if (coverImg) {
+          backdrop.style.backgroundImage = `url('${coverImg}')`;
+          backdrop.style.opacity = '0.35';
+        } else {
+          backdrop.style.backgroundImage = 'none';
+          backdrop.style.opacity = '0';
+        }
+      }
+
       if (title) title.textContent = game.title || 'Juego VIP';
       if (badge) {
         badge.textContent = isFlash ? 'FLASH (RUFFLE)' : engineName.toUpperCase();
         badge.className = isFlash
-          ? 'px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0'
-          : 'px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0';
+          ? 'px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0'
+          : 'px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0';
       }
       if (ext) ext.href = targetUrl || '#';
 
@@ -6122,7 +6226,7 @@
                     <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4 max-w-md">
                       <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-400"></i>
                       <p class="text-sm font-bold">No se pudo cargar el emulador de Flash automáticamente.</p>
-                      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Descargar / Abrir Archivo SWF</a>
+                      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Abrir Archivo SWF</a>
                     </div>
                   `;
                 }
@@ -6146,12 +6250,17 @@
       modal.classList.remove('hidden');
       modal.classList.add('flex');
       document.body.style.overflow = 'hidden';
+      handleGameMouseMove();
     }
 
     function closeGameModal() {
+      window._activeGame = null;
+      window._activeGameTargetUrl = '';
+      if (_hudTimeout) clearTimeout(_hudTimeout);
       const modal = document.getElementById('game-modal');
       const iframe = document.getElementById('game-iframe-player');
       const ruffleWrap = document.getElementById('game-ruffle-player');
+      const backdrop = document.getElementById('game-ambient-backdrop');
 
       if (iframe) { 
         iframe.src = ''; 
@@ -6162,6 +6271,9 @@
         ruffleWrap.innerHTML = ''; 
         ruffleWrap.classList.add('hidden'); 
         ruffleWrap.style.display = 'none';
+      }
+      if (backdrop) {
+        backdrop.style.backgroundImage = 'none';
       }
       if (modal) { 
         modal.classList.add('hidden'); 
@@ -6174,14 +6286,45 @@
     }
 
     function toggleGameFullscreen() {
-      const container = document.getElementById('game-player-container');
-      if (!container) return;
+      const modal = document.getElementById('game-modal');
+      const icon = document.getElementById('game-fullscreen-icon');
+      if (!modal) return;
+      
       if (!document.fullscreenElement) {
-        container.requestFullscreen().catch(() => {});
+        modal.requestFullscreen().then(() => {
+          if (icon) icon.className = 'fa-solid fa-compress';
+        }).catch(err => {
+          console.warn("Fullscreen error:", err);
+        });
       } else {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().then(() => {
+          if (icon) icon.className = 'fa-solid fa-expand';
+        }).catch(() => {});
       }
     }
+
+    document.addEventListener('keydown', (e) => {
+      const modal = document.getElementById('game-modal');
+      if (!modal || modal.classList.contains('hidden')) return;
+      if (e.key === 'Escape') {
+        closeGameModal();
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+          toggleGameFullscreen();
+        }
+      } else if (e.key === 'r' || e.key === 'R') {
+        if (!['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+          reloadCurrentGame();
+        }
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      const icon = document.getElementById('game-fullscreen-icon');
+      if (icon) {
+        icon.className = document.fullscreenElement ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+      }
+    });
 
     function renderGalleryGrid(items, append = false) {
       const grid = document.getElementById('comics-grid');
@@ -13183,30 +13326,64 @@
   </div>
 
 
-  <!-- Modal Reproductor de Juegos VIP con Iframe y Ruffle WebAssembly -->
-  <div id="game-modal" class="hidden fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex-col select-none">
-    <div class="h-14 bg-[#120826] border-b border-white/10 px-4 sm:px-6 flex items-center justify-between gap-4 shrink-0">
-      <div class="flex items-center gap-3 min-w-0">
-        <span id="game-modal-badge" class="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">REN'PY</span>
-        <h3 id="game-modal-title" class="text-sm sm:text-base font-bold text-white truncate">Cargando juego...</h3>
+  <!-- Modal Reproductor de Juegos VIP con Iframe, Ruffle, Ambient Glow y HUD Cinemático -->
+  <div id="game-modal" class="hidden fixed inset-0 z-50 bg-[#06030c] flex-col select-none overflow-hidden" onmousemove="handleGameMouseMove()">
+    <!-- Ambient Glow Dinámico de Fondo (Efecto Cine Ambilight) -->
+    <div id="game-ambient-backdrop" class="absolute inset-0 pointer-events-none opacity-30 filter blur-3xl scale-125 transition-all duration-1000 bg-cover bg-center"></div>
+
+    <!-- HUD Flotante Superior Estilo Consola VIP -->
+    <header id="game-modal-hud" class="absolute top-3 left-3 right-3 sm:left-6 sm:right-6 z-30 flex items-center justify-between gap-3 pointer-events-none transition-all duration-300" onmouseenter="_hudTimeout && clearTimeout(_hudTimeout); this.style.opacity = '1';" onmouseleave="handleGameMouseMove()">
+      <!-- Info del Juego (Izquierda) -->
+      <div class="pointer-events-auto flex items-center gap-2.5 sm:gap-3 bg-[#130924]/85 backdrop-blur-xl border border-white/15 px-3.5 py-2 rounded-2xl shadow-2xl max-w-[65%] sm:max-w-[50%]">
+        <span id="game-modal-badge" class="px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">HTML5</span>
+        <h3 id="game-modal-title" class="text-xs sm:text-sm font-bold text-white truncate" title="Cargando...">Cargando juego...</h3>
       </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <a id="game-modal-ext" href="#" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center gap-1.5">
-          <i class="fa-solid fa-up-right-from-square text-xs"></i>
-          <span class="hidden sm:inline">Nueva Pestaña</span>
+
+      <!-- Barra de Acciones y Controles (Derecha) -->
+      <div class="pointer-events-auto flex items-center gap-1.5 sm:gap-2 bg-[#130924]/85 backdrop-blur-xl border border-white/15 p-1.5 sm:p-2 rounded-2xl shadow-2xl">
+        <!-- Indicador de Partidas Guardadas -->
+        <div id="game-save-hint" class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold cursor-help" title="💾 Auto-guardado local: Tus partidas se guardan en tu navegador. Usa el menú SAVE del juego para guardar avances.">
+          <i class="fa-solid fa-floppy-disk text-xs"></i>
+          <span>Auto-Save</span>
+        </div>
+
+        <!-- Botón Reiniciar -->
+        <button id="game-modal-reload" onclick="reloadCurrentGame()" title="Reiniciar juego" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/5 hover:bg-white/15 text-lav/80 hover:text-white flex items-center justify-center transition-all text-xs">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+
+        <!-- Botón Bóveda / Favoritos -->
+        <button id="game-modal-fav" onclick="toggleCurrentGameFavorite()" title="Guardar en Mi Bóveda" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/5 hover:bg-pink-500/20 text-lav/80 hover:text-pink-400 flex items-center justify-center transition-all text-xs">
+          <i id="game-modal-fav-icon" class="fa-regular fa-heart"></i>
+        </button>
+
+        <!-- Botón Ajuste de Relación de Aspecto (16:9 / Fill) -->
+        <button id="game-modal-ratio" onclick="toggleGameAspectRatio()" title="Ajuste de pantalla (16:9 / Expandir)" class="px-2.5 h-8 sm:h-9 rounded-xl bg-white/5 hover:bg-white/15 text-lav/80 hover:text-white hidden sm:flex items-center gap-1.5 transition-all text-xs font-bold">
+          <i class="fa-solid fa-film text-xs"></i>
+          <span id="game-ratio-label">16:9</span>
+        </button>
+
+        <!-- Botón Abrir en Nueva Pestaña -->
+        <a id="game-modal-ext" href="#" target="_blank" rel="noopener noreferrer" title="Abrir en pestaña completa" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/5 hover:bg-white/15 text-lav/80 hover:text-white flex items-center justify-center transition-all text-xs">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
         </a>
-        <button id="game-modal-fullscreen" onclick="toggleGameFullscreen()" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center gap-1.5">
-          <i class="fa-solid fa-expand text-xs"></i>
-          <span class="hidden sm:inline">Pantalla Completa</span>
+
+        <!-- Botón Pantalla Completa Real -->
+        <button id="game-modal-fullscreen" onclick="toggleGameFullscreen()" title="Pantalla Completa (F)" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/5 hover:bg-white/15 text-lav/80 hover:text-white flex items-center justify-center transition-all text-xs">
+          <i id="game-fullscreen-icon" class="fa-solid fa-expand"></i>
         </button>
-        <button onclick="closeGameModal()" class="w-8 h-8 rounded-lg bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white flex items-center justify-center font-bold text-sm shadow-md transition-all">
-          ✕
+
+        <!-- Botón Cerrar Visor -->
+        <button onclick="closeGameModal()" title="Cerrar (Esc)" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90 text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-pink-500/25 transition-all">
+          <i class="fa-solid fa-xmark text-sm"></i>
         </button>
       </div>
-    </div>
-    <div id="game-player-container" class="flex-1 w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
-      <iframe id="game-iframe-player" allowfullscreen allow="autoplay; fullscreen; gamepad" class="w-full h-full border-none hidden"></iframe>
-      <div id="game-ruffle-player" class="w-full h-full hidden items-center justify-center bg-black"></div>
+    </header>
+
+    <!-- Contenedor del Escenario de Juego con Aspect Ratio 16:9 Cinemático -->
+    <div id="game-player-container" class="relative w-full h-full flex items-center justify-center overflow-hidden z-10 p-0">
+      <iframe id="game-iframe-player" allowfullscreen allow="autoplay; fullscreen; gamepad; clipboard-write; cross-origin-isolated" class="border-none hidden z-10 transition-all duration-300 shadow-2xl" style="width: 100%; height: 100%; max-width: calc(100vh * (16 / 9)); max-height: calc(100vw * (9 / 16)); aspect-ratio: 16 / 9;"></iframe>
+      <div id="game-ruffle-player" class="hidden items-center justify-center z-10 transition-all duration-300 shadow-2xl" style="width: 100%; height: 100%; max-width: calc(100vh * (16 / 9)); max-height: calc(100vw * (9 / 16)); aspect-ratio: 16 / 9;"></div>
     </div>
   </div>
 
