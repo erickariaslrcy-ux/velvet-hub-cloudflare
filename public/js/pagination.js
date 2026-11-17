@@ -230,9 +230,13 @@
     // Evitar recarga si ya estamos en esa página
     if (targetPage === state.currentPage && !fromHistory) return;
 
-    // Prevenir doble clic / toque simultáneo
-    if (state.isPaginating) return;
-    if (typeof window !== 'undefined' && window._isLoadingFeed) return;
+    // Cancelar peticiones previas si el usuario cambia de página para evitar bloqueos
+    if (typeof window !== 'undefined' && window._catalogAbortController) {
+      try {
+        window._catalogAbortController.abort();
+      } catch (e) {}
+      window._isLoadingFeed = false;
+    }
 
     state.isPaginating = true;
     state.currentPage = targetPage;
@@ -240,13 +244,6 @@
     // Sincronizar con el estado global de la aplicación si existe
     if (typeof window !== 'undefined' && window.state) {
       window.state.page = targetPage;
-    }
-
-    // Cancelar peticiones activas previas con AbortController existente
-    if (typeof window !== 'undefined' && window._catalogAbortController) {
-      try {
-        window._catalogAbortController.abort();
-      } catch (e) {}
     }
 
     // Actualizar URL

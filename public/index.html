@@ -5839,13 +5839,11 @@
 
     // CARGA EN TIEMPO REAL DIRECTO CON CACHE LOCAL INSTANTÁNEO (0ms)
     async function fetchLiveFeed(skipCache = false) {
-      if (_isLoadingFeed) return;
-      _isLoadingFeed = true;
-
       if (_catalogAbortController) {
         try { _catalogAbortController.abort(); } catch (e) {}
       }
       _catalogAbortController = new AbortController();
+      _isLoadingFeed = true;
       const signal = _catalogAbortController.signal;
 
       if (typeof getAdaptivePageSize === 'function') {
@@ -6026,6 +6024,9 @@
       } finally {
         _isLoadingFeed = false;
         hidePortalTransition();
+        if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
+          window.VelvetPagination.resetLoadingState();
+        }
       }
     }
 
@@ -12043,7 +12044,6 @@
 
     }
 
-    async 
     let _selectedAvatar = 'crown';
     let _selectedAvatarBg = 'from-pink-600 to-purple-600';
 
@@ -13406,7 +13406,12 @@
       // Semilla fresca de amplio rango (1 a 50,000) que salta a páginas profundas al azar (ej. pág 334 o 391)
       state.feedSeed = Math.floor(Math.random() * 50000) + 1;
       state.videoSeed = state.feedSeed;
+      state.sort = 'random';
       state.page = 1;
+      _isLoadingFeed = false;
+      if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
+        window.VelvetPagination.resetLoadingState();
+      }
       CLIENT_CACHE.clear();
       try {
         Object.keys(sessionStorage).forEach(k => {
@@ -13672,6 +13677,14 @@
         if (typeof fetchLiveFeed === 'function') fetchLiveFeed(true);
       }
     });
+
+  
+    // Exponer funciones globales de paginación y aleatoriedad
+    window.fetchLiveFeed = fetchLiveFeed;
+    window.shuffleCurrentFeed = shuffleCurrentFeed;
+    window.fetchRandom = fetchRandom;
+    window.jumpToPage = jumpToPage;
+    window.renderPaginationControls = renderPaginationControls;
 
   </script>
 
