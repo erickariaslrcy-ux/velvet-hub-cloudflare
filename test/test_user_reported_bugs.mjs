@@ -77,4 +77,23 @@ assert.ok(
   'El backend DEBE preservar los filtros de categoría si un offset profundo excede el rango (416)'
 );
 
+// [5] REPORTE 5: Juegos & Videos - "Al Azar" dinámico y sincronización de paginación
+console.log('\n[5] Verificando soporte de Al Azar y Paginación en Juegos y Videos...');
+assert.ok(
+  indexHtml.includes("state.sort === 'random' || state.sort === 'shuffle'"),
+  'index.html DEBE ordenar aleatoriamente el catálogo de juegos con semilla fresca cuando sort es random'
+);
+assert.ok(
+  indexHtml.includes("renderFeedData(feedPayload, false);"),
+  'index.html DEBE pasar false en renderFeedData para juegos sin lanzar ReferenceError de variable append inexistente'
+);
+assert.ok(
+  indexHtml.includes("path === '/juegos' || path === '/games'"),
+  'index.html DEBE reconocer /juegos y /games en DOMContentLoaded sin degradar al modo anterior'
+);
+assert.ok(
+  apiJs.includes("fetchPmvPage = ((randomBasePage + (page - 1) * 3) % 2500) + 1;"),
+  'El backend DEBE saltar a páginas dinámicas de PMVHaven al pedir sort=random en videos'
+);
+
 console.log('\n✅ TODOS LOS PUNTOS REPORTADOS POR EL USUARIO HAN SIDO VERIFICADOS Y BLINDADOS.');

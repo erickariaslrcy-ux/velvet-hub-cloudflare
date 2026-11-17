@@ -4720,11 +4720,13 @@
         state.mode = 'videos';
       } else if (path === '/cosplay' || path === '/modelos' || path.startsWith('/cosplay/') || path.startsWith('/modelos/')) {
         state.mode = 'galleries';
-      } else if (tabParam === 'videos' || tabParam === 'comics' || tabParam === 'galleries') {
-        state.mode = tabParam;
+      } else if (path === '/juegos' || path === '/games' || path.startsWith('/juegos/') || path.startsWith('/games/')) {
+        state.mode = 'games';
+      } else if (tabParam === 'videos' || tabParam === 'comics' || tabParam === 'galleries' || tabParam === 'games' || tabParam === 'juegos') {
+        state.mode = (tabParam === 'games' || tabParam === 'juegos') ? 'games' : tabParam;
       } else {
         const savedMode = localStorage.getItem('velvet_mode');
-        if (savedMode === 'videos' || savedMode === 'comics' || savedMode === 'galleries') {
+        if (savedMode === 'videos' || savedMode === 'comics' || savedMode === 'galleries' || savedMode === 'games') {
           state.mode = savedMode;
         }
       }
@@ -5175,10 +5177,13 @@
         if (mobNav) mobNav.classList.remove('hidden');
 
         const targetMode = route.mode || 'comics';
+        const targetPage = route.page || 1;
         if (targetMode !== state.mode) {
-          setPortalMode(targetMode, true);
-        }
-        if (route.category && route.category !== state.category) {
+          setPortalMode(targetMode, true, { page: targetPage });
+        } else if (targetPage !== state.page) {
+          state.page = targetPage;
+          fetchLiveFeed(true);
+        } else if (route.category && route.category !== state.category) {
           state.category = route.category;
           fetchLiveFeed(true);
         } else if (route.query && route.query !== state.query) {
@@ -5920,7 +5925,14 @@
                 gList = gList.filter(x => x.title.toLowerCase().includes(gQ) || (x.tags||[]).some(t => t.toLowerCase().includes(gQ)) || (x.engine||'').toLowerCase().includes(gQ));
               }
 
-              if (state.sort === 'popular' || state.sort === 'plays' || !state.sort) {
+              if (state.sort === 'random' || state.sort === 'shuffle') {
+                const seed = state.feedSeed || Math.floor(Math.random() * 50000) + 1;
+                gList = [...gList].sort((a, b) => {
+                  const hA = ((Number(a.id || 1) * 7919) ^ seed) % 10007;
+                  const hB = ((Number(b.id || 1) * 7919) ^ seed) % 10007;
+                  return hA - hB;
+                });
+              } else if (state.sort === 'popular' || state.sort === 'plays' || !state.sort) {
                 gList = [...gList].sort((a, b) => (b.plays || 0) - (a.plays || 0));
               } else if (state.sort === 'rating') {
                 gList = [...gList].sort((a, b) => (b.rating || 0) - (a.rating || 0));
@@ -5942,7 +5954,7 @@
 
               state.isLoading = false;
               _isLoadingFeed = false;
-              renderFeedData(feedPayload, append);
+              renderFeedData(feedPayload, false);
               renderPaginationControls(feedPayload.page, feedPayload.total_pages, feedPayload.total);
               hidePortalTransition();
               return;
@@ -9476,9 +9488,13 @@
         }
       }
 
+      const isGame = (item.media_type === 'game') || (state.mode === 'games');
       const heroBadge = document.getElementById('hero-format-badge');
       if (heroBadge) {
-        if (isVid) {
+        if (isGame) {
+          heroBadge.textContent = "JUEGO HTML5 & REN'PY";
+          heroBadge.className = 'px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 shadow-sm';
+        } else if (isVid) {
           heroBadge.textContent = 'VIDEO STREAMING 1080P';
           heroBadge.className = 'px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 shadow-sm';
         } else {
@@ -9489,7 +9505,10 @@
 
       const viewsBadge = document.getElementById('hero-views-badge');
       if (viewsBadge) {
-        if (isVid) {
+        if (isGame) {
+          const plays = (item.plays) ? (item.plays > 1000 ? `${(item.plays/1000).toFixed(1)}K` : item.plays) : '9.5K';
+          viewsBadge.innerHTML = `<i class="fa-solid fa-gamepad text-emerald-400 mr-1"></i>9.9 · <i class="fa-solid fa-play ml-1 mr-0.5 text-emerald-300"></i>${plays} Jugadas`;
+        } else if (isVid) {
           const views = (item.extra && item.extra.views) ? `${item.extra.views} Vistas` : '120K Vistas';
           viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-eye ml-1 mr-0.5 text-pink-400"></i>${views}`;
         } else {

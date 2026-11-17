@@ -1371,7 +1371,7 @@ export async function onRequest(context) {
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
     const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam}:${sort}`;
-    const l1Catalog = getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
+    const l1Catalog = (sort === "random" && seedParam === 0) ? null : getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
     if (l1Catalog) {
       return new Response(method === "HEAD" ? null : l1Catalog, {
         status: 200,
@@ -1411,7 +1411,14 @@ export async function onRequest(context) {
       else if (sort === "views") pmvSort = "views";
       else if (sort === "rating") pmvSort = "rating";
 
-      let pmvApiUrl = `https://pmvhaven.com/api/videos?page=${page}&limit=${pageSize}&sort=${pmvSort}`;
+      let fetchPmvPage = page;
+      if ((sort === "random" || seedParam > 0) && !q && (!category || category === "all")) {
+        const seedVal = seedParam > 0 ? seedParam : (Math.floor(Math.random() * 50000) + 1);
+        const randomBasePage = ((seedVal * 137) % 2500) + 1;
+        fetchPmvPage = ((randomBasePage + (page - 1) * 3) % 2500) + 1;
+      }
+
+      let pmvApiUrl = `https://pmvhaven.com/api/videos?page=${fetchPmvPage}&limit=${pageSize}&sort=${pmvSort}`;
       if (category && category !== "all") {
         pmvApiUrl += `&tag=${encodeURIComponent(category)}`;
       } else if (q) {
@@ -1429,7 +1436,17 @@ export async function onRequest(context) {
 
         if (pmvRes.ok) {
           const pmvData = await pmvRes.json();
-          const vList = pmvData.videos || [];
+          let vList = pmvData.videos || [];
+
+          if ((sort === "random" || seedParam > 0) && vList.length > 1) {
+            const seedVal = seedParam > 0 ? seedParam : (Math.floor(Math.random() * 50000) + 1);
+            vList = [...vList].sort((a, b) => {
+              const hA = (((a.durationSeconds || a.views || 1) * 7919) ^ seedVal) % 10007;
+              const hB = (((b.durationSeconds || b.views || 1) * 7919) ^ seedVal) % 10007;
+              return hA - hB;
+            });
+          }
+
           const items = await Promise.all(vList.map(async v => {
             const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
             const rawVideo = v.videoUrl || "";
@@ -1469,14 +1486,17 @@ export async function onRequest(context) {
           const responsePayload = {
             items,
             total: totalVideos,
-            page: parseInt(pmvData.pagination?.page || page, 10),
+            page: page,
             page_size: pageSize,
             total_pages: totalPages,
-            live: true
+            live: true,
+            seed: seedParam || undefined
           };
 
           const jsonStr = JSON.stringify(responsePayload);
-          setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+          if (sort !== "random" || seedParam > 0) {
+            setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+          }
 
           return new Response(jsonStr, {
             status: 200,
