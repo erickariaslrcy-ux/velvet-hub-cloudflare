@@ -9,11 +9,11 @@
 # - connect-src 'self' blob: https://*.supabase.co https://pmvhaven.com: API Supabase, streaming HLS y analítica Cloudflare.
 /*
   X-Content-Type-Options: nosniff
-  X-Frame-Options: DENY
-  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: https://*.supabase.co https://pmvhaven.com https://cloudflareinsights.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
+  Content-Security-Policy: default-src 'self' blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://unpkg.com https://*.serverable.com; worker-src 'self' blob:; child-src 'self' blob: https://*.serverable.com https://*.gamcore.com; frame-src 'self' blob: https://*.serverable.com https://*.gamcore.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https://*.supabase.co https://pmvhaven.com https://cloudflareinsights.com https://unpkg.com https://*.serverable.com https://*.gamcore.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
 
 # Rutas Privadas del Usuario (No indexar en buscadores, sin almacenamiento en proxy)
 /boveda/*

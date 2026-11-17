@@ -5,6 +5,7 @@
 <head>
 
   <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 
@@ -47,17 +48,8 @@
   <link rel="stylesheet" href="/css/pagination.css">
 
   <!-- Tailwind CSS Engine for Dynamic JavaScript Components -->
-  <!-- Emulador Ruffle Flash Oficial Gamcore -->
-  <script>
-    window.RufflePlayer = window.RufflePlayer || {};
-    window.RufflePlayer.config = {
-      "polyfills": false,
-      "autoplay": "on",
-      "unmuteOverlay": "hidden",
-      "letterbox": "on"
-    };
-  </script>
-  <script src="https://fgn.cdn.serverable.com/common/flashes/js/ruffle260515/ruffle.js"></script>
+  <!-- Emulador Flash Ruffle WebAssembly Oficial -->
+  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -125,6 +117,20 @@
     .contain-paint { contain: layout paint style; }
     .translate-z-0 { transform: translateZ(0); }
     .content-visibility-auto { content-visibility: auto; }
+
+    #game-ruffle-player {
+      width: 100%;
+      height: 100%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+    }
+    #game-ruffle-player ruffle-player {
+      width: 100% !important;
+      height: 100% !important;
+      display: block !important;
+    }
     
     #video-top-header {
       position: sticky;
@@ -4536,6 +4542,16 @@
 
       initAuth();
 
+      // Pre-cargar dataset de juegos en background sin bloquear rendering
+      setTimeout(() => {
+        if (!window._cachedGamesData) {
+          fetch('/data/games.json')
+            .then(res => res.ok ? res.json() : null)
+            .then(d => { if (d) window._cachedGamesData = d; })
+            .catch(() => {});
+        }
+      }, 1200);
+
       // Comprobar parámetros de URL o rutas directas
 
       const path = window.location.pathname;
@@ -5776,6 +5792,14 @@
                 gList = gList.filter(x => x.title.toLowerCase().includes(gQ) || (x.tags||[]).some(t => t.toLowerCase().includes(gQ)) || (x.engine||'').toLowerCase().includes(gQ));
               }
 
+              if (state.sort === 'popular' || state.sort === 'plays' || !state.sort) {
+                gList = [...gList].sort((a, b) => (b.plays || 0) - (a.plays || 0));
+              } else if (state.sort === 'rating') {
+                gList = [...gList].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+              } else if (state.sort === 'newest') {
+                gList = [...gList].sort((a, b) => (a.id || 0) - (b.id || 0));
+              }
+
               const p = Math.max(1, state.page || 1);
               const sz = state.pageSize || 24;
               const paged = gList.slice((p - 1) * sz, p * sz);
@@ -5946,7 +5970,15 @@
         };
 
         const vs = (it.video_sources && it.video_sources[0]) || {};
-        const isFlash = (it.game_type === 'flash') || (vs.game_type === 'flash') || (vs.format === 'swf') || (it.engine && it.engine.toLowerCase().includes('flash')) || (vs.engine && vs.engine.toLowerCase().includes('flash')) || (it.artists && it.artists[0] === 'Flash') || (it.tags && it.tags.includes('Flash'));
+        const targetUrl = it.embed_url || it.swf_url || vs.embed_url || vs.swf_url || '';
+        const isFlash = (it.game_type === 'flash') || 
+                        (vs.game_type === 'flash') || 
+                        (vs.format === 'swf') || 
+                        (targetUrl && targetUrl.toLowerCase().includes('.swf')) ||
+                        (it.engine && it.engine.toLowerCase().includes('flash')) || 
+                        (vs.engine && vs.engine.toLowerCase().includes('flash')) || 
+                        (it.artists && it.artists[0] === 'Flash') || 
+                        (it.tags && it.tags.includes('Flash'));
         const engineLabel = isFlash ? 'Flash' : (it.engine || vs.engine || (it.artists && it.artists[0]) || 'Ren\'Py');
         const badge = (it.badges && it.badges.length) ? it.badges[0] : ((vs.badges && vs.badges.length) ? vs.badges[0] : (isFlash ? 'RUFFLE' : 'HTML5'));
         const rawPlays = it.plays || vs.plays || 0;
@@ -5957,7 +5989,7 @@
         card.innerHTML = `
           <div class="relative aspect-[16/11] w-full overflow-hidden select-none bg-[#100922]">
             <img
-              src="${it.cover_url || ''}"
+              src="${it.cover_url || it.thumbnail || ''}"
               alt="${escapeHtml(it.title)}"
               referrerpolicy="no-referrer"
               loading="${idx < 6 ? 'eager' : 'lazy'}"
@@ -6022,11 +6054,15 @@
       if (!modal) return;
 
       const vs = (game.video_sources && game.video_sources[0]) || {};
-      const isFlash = (game.game_type === 'flash') || (vs.game_type === 'flash') || (vs.format === 'swf') || (game.engine && game.engine.toLowerCase().includes('flash')) || (vs.engine && vs.engine.toLowerCase().includes('flash')) || (game.artists && game.artists[0] === 'Flash') || (game.tags && game.tags.includes('Flash'));
-      let targetUrl = game.embed_url || game.swf_url || vs.embed_url || vs.swf_url || '';
-      if (targetUrl) {
-        targetUrl = targetUrl.replace(/https?:\/\/[a-zA-Z0-9_\-\.]*fgn\.cdn\.serverable\.com/, 'https://fgn.cdn.serverable.com');
-      }
+      const targetUrl = game.embed_url || game.swf_url || vs.embed_url || vs.swf_url || '';
+      const isFlash = (game.game_type === 'flash') || 
+                      (vs.game_type === 'flash') || 
+                      (vs.format === 'swf') || 
+                      (targetUrl && targetUrl.toLowerCase().includes('.swf')) ||
+                      (game.engine && game.engine.toLowerCase().includes('flash')) || 
+                      (vs.engine && vs.engine.toLowerCase().includes('flash')) || 
+                      (game.artists && game.artists[0] === 'Flash') || 
+                      (game.tags && game.tags.includes('Flash'));
       const engineName = isFlash ? 'Flash' : (game.engine || vs.engine || (game.artists && game.artists[0]) || 'Ren\'Py');
 
       if (title) title.textContent = game.title || 'Juego VIP';
@@ -6039,10 +6075,15 @@
       if (ext) ext.href = targetUrl || '#';
 
       if (isFlash && targetUrl) {
-        if (iframe) { iframe.src = ''; iframe.classList.add('hidden'); }
+        if (iframe) { 
+          iframe.src = ''; 
+          iframe.classList.add('hidden'); 
+          iframe.style.display = 'none';
+        }
         if (ruffleWrap) {
           ruffleWrap.classList.remove('hidden');
           ruffleWrap.classList.add('flex');
+          ruffleWrap.style.display = 'flex';
           ruffleWrap.innerHTML = `
             <div id="ruffle-active-loader" class="text-center p-8 text-white flex flex-col items-center justify-center gap-4">
               <i class="fa-solid fa-gamepad text-5xl text-emerald-400 animate-pulse"></i>
@@ -6050,24 +6091,19 @@
             </div>
           `;
 
-          const startRuffle = () => {
+          const launchRuffle = () => {
             try {
-              const rf = (window.RufflePlayer && typeof window.RufflePlayer.newest === 'function')
-                ? window.RufflePlayer.newest()
-                : null;
-              if (rf) {
-                ruffleWrap.innerHTML = '';
-                const player = rf.createPlayer();
-                player.style.width = '100%';
-                player.style.height = '100%';
-                ruffleWrap.appendChild(player);
-                player.load({
-                  url: targetUrl,
-                  allowScriptAccess: true,
-                  autoplay: 'on',
-                  letterbox: 'on'
-                });
-                return true;
+              if (window.RufflePlayer && typeof window.RufflePlayer.newest === 'function') {
+                const ruffle = window.RufflePlayer.newest();
+                if (ruffle) {
+                  ruffleWrap.innerHTML = '';
+                  const player = ruffle.createPlayer();
+                  player.style.width = '100%';
+                  player.style.height = '100%';
+                  ruffleWrap.appendChild(player);
+                  player.load(targetUrl);
+                  return true;
+                }
               }
             } catch (err) {
               console.error("Error iniciando Ruffle:", err);
@@ -6075,13 +6111,13 @@
             return false;
           };
 
-          if (!startRuffle()) {
+          if (!launchRuffle()) {
             let tries = 0;
             const rInterval = setInterval(() => {
               tries++;
-              if (startRuffle() || tries > 40) {
+              if (launchRuffle() || tries > 40) {
                 clearInterval(rInterval);
-                if (tries > 40 && !document.querySelector('#game-ruffle-player ruffle-player')) {
+                if (tries > 40 && !ruffleWrap.querySelector('ruffle-player')) {
                   ruffleWrap.innerHTML = `
                     <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4 max-w-md">
                       <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-400"></i>
@@ -6095,9 +6131,14 @@
           }
         }
       } else {
-        if (ruffleWrap) { ruffleWrap.innerHTML = ''; ruffleWrap.classList.add('hidden'); }
+        if (ruffleWrap) { 
+          ruffleWrap.innerHTML = ''; 
+          ruffleWrap.classList.add('hidden'); 
+          ruffleWrap.style.display = 'none';
+        }
         if (iframe) {
           iframe.classList.remove('hidden');
+          iframe.style.display = 'block';
           iframe.src = targetUrl || '';
         }
       }
@@ -6112,10 +6153,24 @@
       const iframe = document.getElementById('game-iframe-player');
       const ruffleWrap = document.getElementById('game-ruffle-player');
 
-      if (iframe) { iframe.src = ''; iframe.classList.add('hidden'); }
-      if (ruffleWrap) { ruffleWrap.innerHTML = ''; ruffleWrap.classList.add('hidden'); }
-      if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+      if (iframe) { 
+        iframe.src = ''; 
+        iframe.classList.add('hidden'); 
+        iframe.style.display = 'none';
+      }
+      if (ruffleWrap) { 
+        ruffleWrap.innerHTML = ''; 
+        ruffleWrap.classList.add('hidden'); 
+        ruffleWrap.style.display = 'none';
+      }
+      if (modal) { 
+        modal.classList.add('hidden'); 
+        modal.classList.remove('flex'); 
+      }
       document.body.style.overflow = '';
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
     }
 
     function toggleGameFullscreen() {

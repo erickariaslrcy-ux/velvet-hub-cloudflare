@@ -98,7 +98,7 @@ const nextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; media-src 'self' blob: https:; connect-src 'self' https://*.supabase.co https:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
+              "default-src 'self' blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://unpkg.com https://*.serverable.com; worker-src 'self' blob:; child-src 'self' blob: https://*.serverable.com https://*.gamcore.com; frame-src 'self' blob: https://*.serverable.com https://*.gamcore.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; media-src 'self' blob: https:; connect-src 'self' blob: data: https://*.supabase.co https://pmvhaven.com https://unpkg.com https://*.serverable.com https://*.gamcore.com https:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';",
           },
         ],
       },

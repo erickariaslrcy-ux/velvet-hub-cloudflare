@@ -1655,24 +1655,33 @@ export async function onRequest(context) {
 
       let rawItems = await spRes.json();
       const items = await Promise.all((rawItems || []).map(async it => {
-        const coverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
+        const isGame = it.media_type === "game";
+        const coverToken = (!isGame && it.cover_url) ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
         const videoSources = await Promise.all((it.video_sources || []).map(async vs => ({
           ...vs,
           url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
         })));
+        const firstVs = (it.video_sources && it.video_sources[0]) || {};
         return {
           id: it.id,
           source: it.source || "velvet",
           source_id: it.source_id ? String(it.source_id) : String(it.id),
           title: it.title,
-          cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+          cover_url: isGame ? (it.cover_url || "") : (coverToken ? `/api/media?t=${coverToken}` : ""),
           media_type: it.media_type,
           tags: it.tags || [],
           artists: it.artists || [],
           url: "", // Ocultar URL original
           page_count: it.page_count || 0,
           video_sources: videoSources,
-          has_cover: !!it.cover_url
+          has_cover: !!it.cover_url,
+          embed_url: firstVs.embed_url || "",
+          swf_url: firstVs.swf_url || "",
+          game_type: firstVs.game_type || (firstVs.swf_url ? "flash" : "html5"),
+          engine: firstVs.engine || (it.artists && it.artists[0]) || "",
+          plays: firstVs.plays || 0,
+          rating: firstVs.rating || 0,
+          badges: firstVs.badges || []
         };
       }));
 
