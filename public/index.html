@@ -98,11 +98,11 @@
   </script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
-  <script defer src="/js/personal-data.js?v=3.2.0"></script>
-  <script defer src="/js/store.js?v=3.2.0"></script>
-  <script defer src="/js/router.js?v=3.2.0"></script>
-  <script defer src="/js/vault.js?v=3.2.0"></script>
-  <script defer src="/js/pagination.js?v=3.2.0"></script>
+  <script defer src="/js/personal-data.js?v=3.2.1"></script>
+  <script defer src="/js/store.js?v=3.2.1"></script>
+  <script defer src="/js/router.js?v=3.2.1"></script>
+  <script defer src="/js/vault.js?v=3.2.1"></script>
+  <script defer src="/js/pagination.js?v=3.2.1"></script>
 
   <style>
     /* =======================================================================
@@ -5855,6 +5855,74 @@
         state.pageSize = getAdaptivePageSize();
       }
 
+      // Para juegos, procesar inmediatamente desde el dataset bundle local en memoria (0ms, sin peticiones de red cruzadas)
+      if (state.mode === 'games') {
+        try {
+          if (!window._cachedGamesData) {
+            const gRes = await fetch('/data/games.json', { signal });
+            if (gRes.ok) {
+              window._cachedGamesData = await gRes.json();
+            }
+          }
+          if (window._cachedGamesData) {
+            let gList = window._cachedGamesData;
+            const gQ = (state.query || '').toLowerCase().trim();
+            const gCat = state.category || 'all';
+
+            if (gCat !== 'all') {
+              if (gCat === 'renpy') gList = gList.filter(x => (x.engine||'').toLowerCase().includes('ren') || (x.tags||[]).some(t => t.toLowerCase().includes('ren')));
+              else if (gCat === 'flash') gList = gList.filter(x => x.game_type === 'flash' || (x.engine||'').toLowerCase().includes('flash'));
+              else if (gCat === '3d') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('3d')));
+              else if (gCat === 'harem') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('harem')));
+              else if (gCat === 'rpg') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('rpg') || t.toLowerCase().includes('adventure')));
+              else if (gCat === 'apk') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('apk')));
+              else if (gCat === 'parody') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('parod')));
+            }
+
+            if (gQ) {
+              gList = gList.filter(x => x.title.toLowerCase().includes(gQ) || (x.tags||[]).some(t => t.toLowerCase().includes(gQ)) || (x.engine||'').toLowerCase().includes(gQ));
+            }
+
+            if (state.sort === 'random' || state.sort === 'shuffle') {
+              const seed = state.feedSeed || Math.floor(Math.random() * 50000) + 1;
+              gList = [...gList].sort((a, b) => {
+                const hA = ((Number(a.id || 1) * 7919) ^ seed) % 10007;
+                const hB = ((Number(b.id || 1) * 7919) ^ seed) % 10007;
+                return hA - hB;
+              });
+            } else if (state.sort === 'popular' || state.sort === 'plays' || !state.sort) {
+              gList = [...gList].sort((a, b) => (b.plays || 0) - (a.plays || 0));
+            } else if (state.sort === 'rating') {
+              gList = [...gList].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            } else if (state.sort === 'newest') {
+              gList = [...gList].sort((a, b) => (a.id || 0) - (b.id || 0));
+            }
+
+            const p = Math.max(1, state.page || 1);
+            const sz = state.pageSize || 24;
+            const paged = gList.slice((p - 1) * sz, p * sz);
+
+            const feedPayload = {
+              items: paged,
+              total: gList.length,
+              page: p,
+              page_size: sz,
+              total_pages: Math.ceil(gList.length / sz)
+            };
+
+            state.isLoading = false;
+            _isLoadingFeed = false;
+            renderFeedData(feedPayload, false);
+            renderPaginationControls(feedPayload.page, feedPayload.total_pages, feedPayload.total);
+            hidePortalTransition();
+            return;
+          }
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+          console.warn("Fallo carga local de juegos:", e);
+        }
+      }
+
       const cacheKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
 
       // 1. Si existe en Cache del Cliente en memoria, renderizar inmediatamente (0ms)
@@ -5897,74 +5965,7 @@
           live: 'true'
         });
 
-        if (state.mode === 'games') {
-          // Carga ultra veloz desde el dataset bundle o API
-          try {
-            if (!window._cachedGamesData) {
-              const gRes = await fetch('/data/games.json', { signal });
-              if (gRes.ok) {
-                window._cachedGamesData = await gRes.json();
-              }
-            }
-            if (window._cachedGamesData) {
-              let gList = window._cachedGamesData;
-              const gQ = (state.query || '').toLowerCase().trim();
-              const gCat = state.category || 'all';
-
-              if (gCat !== 'all') {
-                if (gCat === 'renpy') gList = gList.filter(x => (x.engine||'').toLowerCase().includes('ren') || (x.tags||[]).some(t => t.toLowerCase().includes('ren')));
-                else if (gCat === 'flash') gList = gList.filter(x => x.game_type === 'flash' || (x.engine||'').toLowerCase().includes('flash'));
-                else if (gCat === '3d') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('3d')));
-                else if (gCat === 'harem') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('harem')));
-                else if (gCat === 'rpg') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('rpg') || t.toLowerCase().includes('adventure')));
-                else if (gCat === 'apk') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('apk')));
-                else if (gCat === 'parody') gList = gList.filter(x => (x.tags||[]).some(t => t.toLowerCase().includes('parod')));
-              }
-
-              if (gQ) {
-                gList = gList.filter(x => x.title.toLowerCase().includes(gQ) || (x.tags||[]).some(t => t.toLowerCase().includes(gQ)) || (x.engine||'').toLowerCase().includes(gQ));
-              }
-
-              if (state.sort === 'random' || state.sort === 'shuffle') {
-                const seed = state.feedSeed || Math.floor(Math.random() * 50000) + 1;
-                gList = [...gList].sort((a, b) => {
-                  const hA = ((Number(a.id || 1) * 7919) ^ seed) % 10007;
-                  const hB = ((Number(b.id || 1) * 7919) ^ seed) % 10007;
-                  return hA - hB;
-                });
-              } else if (state.sort === 'popular' || state.sort === 'plays' || !state.sort) {
-                gList = [...gList].sort((a, b) => (b.plays || 0) - (a.plays || 0));
-              } else if (state.sort === 'rating') {
-                gList = [...gList].sort((a, b) => (b.rating || 0) - (a.rating || 0));
-              } else if (state.sort === 'newest') {
-                gList = [...gList].sort((a, b) => (a.id || 0) - (b.id || 0));
-              }
-
-              const p = Math.max(1, state.page || 1);
-              const sz = state.pageSize || 24;
-              const paged = gList.slice((p - 1) * sz, p * sz);
-
-              const feedPayload = {
-                items: paged,
-                total: gList.length,
-                page: p,
-                page_size: sz,
-                total_pages: Math.ceil(gList.length / sz)
-              };
-
-              state.isLoading = false;
-              _isLoadingFeed = false;
-              renderFeedData(feedPayload, false);
-              renderPaginationControls(feedPayload.page, feedPayload.total_pages, feedPayload.total);
-              hidePortalTransition();
-              return;
-            }
-          } catch (e) {
-            if (e && e.name === 'AbortError') return;
-            console.warn("Fallo carga local de juegos, usando fallback API:", e);
-          }
-          params.append('media_type', 'game');
-        } else if (state.mode === 'videos') {
+        if (state.mode === 'videos') {
           params.append('media_type', 'video');
           if (state.feedSeed) params.append('seed', String(state.feedSeed));
           if (state.category && state.category !== 'all') {

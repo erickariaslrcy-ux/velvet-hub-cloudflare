@@ -738,6 +738,11 @@
 
         // Construir parámetros replicando el estado actual de filtros
         const curState = window.state || {};
+        if (curState.mode === 'games') {
+          // El dataset completo de juegos ya reside en la memoria local del cliente (_cachedGamesData)
+          return;
+        }
+
         const params = new URLSearchParams({
           page: nextPage,
           page_size: curState.pageSize || 12,
@@ -747,6 +752,7 @@
 
         if (curState.mode === 'videos') params.append('media_type', 'video');
         else if (curState.mode === 'galleries') params.append('media_type', 'gallery');
+        else if (curState.mode === 'games') params.append('media_type', 'game');
         else params.append('media_type', 'comic');
 
         if (curState.feedSeed) params.append('seed', String(curState.feedSeed));
