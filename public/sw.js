@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Fixes)
-const CACHE_VERSION = 'v12-velvet-turbo-fix';
+const CACHE_VERSION = 'v12-velvet-turbo-v13';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;

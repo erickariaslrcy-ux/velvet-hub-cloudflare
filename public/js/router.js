@@ -93,7 +93,8 @@
     // 2. PARSER DE RUTAS
     // =======================================================================
     parsePath(pathname, search = '', hash = '') {
-      let path = pathname || window.location.pathname;
+      let rawPath = pathname || window.location.pathname || '/';
+      let path = rawPath.replace(/\/+$/, '') || '/';
       let s = search || window.location.search;
       let h = hash || window.location.hash;
 
@@ -117,10 +118,10 @@
       if (path === '/historial') {
         return { name: 'vault', tab: 'history', canonical: '/boveda/historial' };
       }
-      if (tabParam === 'videos' && path === '/') return { name: 'catalog', mode: 'videos', canonical: '/videos' };
-      if (tabParam === 'comics' && path === '/') return { name: 'catalog', mode: 'comics', canonical: '/comics' };
-      if (tabParam === 'galleries' && path === '/') return { name: 'catalog', mode: 'galleries', canonical: '/cosplay' };
-      if ((tabParam === 'juegos' || tabParam === 'games') && path === '/') return { name: 'catalog', mode: 'games', canonical: '/juegos' };
+      if (tabParam === 'videos' && (path === '/' || path === '/videos')) return { name: 'catalog', mode: 'videos', canonical: '/videos' };
+      if (tabParam === 'comics' && (path === '/' || path === '/comics')) return { name: 'catalog', mode: 'comics', canonical: '/comics' };
+      if (tabParam === 'galleries' && (path === '/' || path === '/cosplay')) return { name: 'catalog', mode: 'galleries', canonical: '/cosplay' };
+      if ((tabParam === 'juegos' || tabParam === 'games')) return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/juegos' };
 
       // 3. Rutas canónicas del nuevo sistema
       if (path === '/' || path === '/index.html') {
