@@ -3007,7 +3007,7 @@
 
             <i class="fa-solid fa-user absolute left-3.5 top-3 text-purple-400 text-xs"></i>
 
-            <input type="text" id="login-input-username" placeholder="tu@correo.com o usuario" autocomplete="username" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-purple-400/40 focus:outline-none focus:border-pink-500 transition-colors">
+            <input type="text" id="login-input-username" placeholder="tu@correo.com o usuario" autocomplete="username" onkeydown="if(event.key==='Enter')submitLogin()" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-purple-400/40 focus:outline-none focus:border-pink-500 transition-colors">
 
           </div>
 
@@ -3021,7 +3021,7 @@
 
             <i class="fa-solid fa-lock absolute left-3.5 top-3 text-purple-400 text-xs"></i>
 
-            <input type="password" id="login-input-password" placeholder="••••••••" autocomplete="current-password" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-purple-400/40 focus:outline-none focus:border-pink-500 transition-colors">
+            <input type="password" id="login-input-password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-purple-400/40 focus:outline-none focus:border-pink-500 transition-colors">
 
           </div>
 
@@ -11767,25 +11767,11 @@
 
       const password = pInput ? pInput.value : '';
 
-      if (!username || !password || !access_key) {
-
-        if (errBox && errText) {
-
-          errText.textContent = 'Por favor completa todos los campos, incluyendo tu Llave VIP.';
-
-          errBox.classList.remove('hidden');
-
-        }
-
-        return;
-
-      }
-
       if (!username || !password) {
 
         if (errBox && errText) {
 
-          errText.textContent = 'Por favor ingresa usuario y contraseña.';
+          errText.textContent = 'Por favor ingresa usuario o correo y contraseña.';
 
           errBox.classList.remove('hidden');
 

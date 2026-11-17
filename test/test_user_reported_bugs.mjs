@@ -96,4 +96,17 @@ assert.ok(
   'El backend DEBE saltar a páginas dinámicas de PMVHaven al pedir sort=random en videos'
 );
 
+// [6] REPORTE 6: Autenticación - submitLogin no debe requerir ni romper por access_key inexistente
+console.log('\n[6] Verificando integridad de inicio de sesión (submitLogin)...');
+const submitLoginMatch = indexHtml.match(/async function submitLogin\(\)\s*\{([\s\S]*?)\n\s*async function submitRegister/);
+assert.ok(submitLoginMatch, 'submitLogin debe estar definido en index.html');
+assert.ok(
+  !submitLoginMatch[1].includes('access_key'),
+  'submitLogin NO DEBE hacer referencia a access_key para evitar ReferenceError'
+);
+assert.ok(
+  submitLoginMatch[1].includes("fetch('/api/auth/login'"),
+  'submitLogin debe enviar petición a /api/auth/login'
+);
+
 console.log('\n✅ TODOS LOS PUNTOS REPORTADOS POR EL USUARIO HAN SIDO VERIFICADOS Y BLINDADOS.');
