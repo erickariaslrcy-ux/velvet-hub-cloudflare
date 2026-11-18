@@ -479,7 +479,16 @@
         const res = await fetch('/api/user/favorites', {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ id: itemId })
+          body: JSON.stringify({
+            id: itemId,
+            item_id: itemId,
+            source: item.source || '',
+            source_id: item.source_id || '',
+            title: item.title || '',
+            cover_url: item.cover_url || '',
+            url: item.url || '',
+            media_type: item.media_type || 'video'
+          })
         });
         if (!res.ok) {
           throw new Error('No se pudo guardar el favorito');

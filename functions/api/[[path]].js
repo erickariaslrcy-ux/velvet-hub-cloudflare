@@ -2263,8 +2263,23 @@ export async function onRequest(context) {
         };
       }));
 
-      const totalPages = Math.max(1, Math.ceil(total / pageSize));
-      return new Response(JSON.stringify({ items, total, page, pageSize, totalPages }), {
+      // Fusionar favoritos personalizados de metadata si existen
+      const userMetaFavs = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
+      let finalItems = [...items];
+      if (userMetaFavs.length > 0) {
+        const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id)));
+        for (const cf of userMetaFavs) {
+          const k = (cf.source && cf.source_id) ? `${cf.source}:${cf.source_id}` : String(cf.id);
+          if (!seen.has(k)) {
+            seen.add(k);
+            finalItems.push(cf);
+          }
+        }
+      }
+
+      const finalTotal = Math.max(total, finalItems.length);
+      const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
+      return new Response(JSON.stringify({ items: finalItems, total: finalTotal, page, pageSize, totalPages }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });
@@ -2300,7 +2315,37 @@ export async function onRequest(context) {
               body: JSON.stringify(rows)
             }).catch(() => {});
           }
-          return new Response(JSON.stringify({ ok: true, synced: validIds.length }), {
+
+          // Guardar también cualquier ítem con ID no entero o externo en custom_favorites
+          const customItems = body.items.filter((it) => {
+            const num = parseInt(it.id || it.item_id, 10);
+            return !Number.isInteger(num) || num <= 0 || isNaN(num);
+          });
+          if (customItems.length > 0) {
+            const currentMeta = user.user_metadata || {};
+            const existingCustom = Array.isArray(currentMeta.custom_favorites) ? [...currentMeta.custom_favorites] : [];
+            for (const ci of customItems.slice(0, 50)) {
+              const k = (ci.source && ci.source_id) ? `${ci.source}:${ci.source_id}` : String(ci.id || "");
+              if (!existingCustom.some(ex => ((ex.source && ex.source_id) ? `${ex.source}:${ex.source_id}` : String(ex.id)) === k)) {
+                existingCustom.unshift({
+                  id: ci.id || ci.source_id || `custom_${Date.now()}`,
+                  item_id: ci.id || ci.source_id,
+                  source: ci.source || "external",
+                  source_id: String(ci.source_id || ci.id || ""),
+                  title: ci.title || "Contenido guardado",
+                  cover_url: ci.cover_url || "/velvet_logo.png",
+                  url: ci.url || "",
+                  media_type: ci.media_type || "video",
+                  created_at: ci.created_at || new Date().toISOString(),
+                  available: true
+                });
+              }
+            }
+            if (existingCustom.length > 100) existingCustom.length = 100;
+            await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: existingCustom }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+          }
+
+          return new Response(JSON.stringify({ ok: true, synced: validIds.length + customItems.length }), {
             status: 200,
             headers: getPersonalHeaders(origin, newToken)
           });
@@ -2315,6 +2360,16 @@ export async function onRequest(context) {
               headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
           }
+          // Limpiar también de custom_favorites
+          const currentMeta = user.user_metadata || {};
+          if (Array.isArray(currentMeta.custom_favorites)) {
+            const updatedCustom = currentMeta.custom_favorites.filter(cf =>
+              String(cf.id) !== String(body.id) && String(cf.source_id) !== String(body.source_id || body.id)
+            );
+            if (updatedCustom.length !== currentMeta.custom_favorites.length) {
+              await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: updatedCustom }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+            }
+          }
           return new Response(JSON.stringify({ ok: true, removed: true }), {
             status: 200,
             headers: getPersonalHeaders(origin, newToken)
@@ -2322,27 +2377,80 @@ export async function onRequest(context) {
         }
 
         // Caso C: Agregar favorito individual (idempotente con ignore-duplicates)
-        const targetItemId = parseInt(body.id || body.item_id, 10);
-        if (!Number.isInteger(targetItemId) || targetItemId <= 0) {
-          return new Response(JSON.stringify({ error: "item_id entero requerido" }), {
-            status: 400,
+        let targetItemId = parseInt(body.id || body.item_id, 10);
+
+        // Si no es un entero directo pero tiene source y source_id, intentar resolverlo desde la tabla items
+        if ((!Number.isInteger(targetItemId) || targetItemId <= 0 || isNaN(targetItemId)) && body.source && body.source_id) {
+          try {
+            const lookupRes = await fetch(`${SUPABASE_URL}/rest/v1/items?source=eq.${encodeURIComponent(body.source)}&source_id=eq.${encodeURIComponent(body.source_id)}&select=id&limit=1`, {
+              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+            });
+            if (lookupRes.ok) {
+              const rows = await lookupRes.json();
+              if (rows && rows.length > 0 && rows[0].id) {
+                targetItemId = rows[0].id;
+              }
+            }
+          } catch (e) {}
+        }
+
+        // Si tenemos un item_id entero válido para la tabla SQL
+        if (Number.isInteger(targetItemId) && targetItemId > 0) {
+          await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+            method: "POST",
+            headers: {
+              "apikey": SUPABASE_KEY,
+              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json",
+              "Prefer": "resolution=ignore-duplicates"
+            },
+            body: JSON.stringify({ user_id: user.id, item_id: targetItemId })
+          });
+
+          return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
+            status: 200,
             headers: getPersonalHeaders(origin, newToken)
           });
         }
 
-        await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
-          method: "POST",
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${SUPABASE_KEY}`,
-            "Content-Type": "application/json",
-            "Prefer": "resolution=ignore-duplicates"
-          },
-          body: JSON.stringify({ user_id: user.id, item_id: targetItemId })
-        });
+        // Si es un contenido dinámico/externo (ej: pmvhaven, juegos u otros sin registro SQL)
+        if (body.source || body.source_id || body.title || body.id) {
+          const currentMeta = user.user_metadata || {};
+          const customFavs = Array.isArray(currentMeta.custom_favorites) ? [...currentMeta.custom_favorites] : [];
+          const customEntry = {
+            id: body.id || body.source_id || `custom_${Date.now()}`,
+            item_id: body.id || body.source_id,
+            source: body.source || "external",
+            source_id: String(body.source_id || body.id || ""),
+            title: body.title || "Contenido guardado",
+            cover_url: body.cover_url || "/velvet_logo.png",
+            url: body.url || "",
+            media_type: body.media_type || "video",
+            created_at: new Date().toISOString(),
+            available: true
+          };
 
-        return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
-          status: 200,
+          const existingIdx = customFavs.findIndex(cf =>
+            (cf.source === customEntry.source && String(cf.source_id) === String(customEntry.source_id)) ||
+            (cf.id && String(cf.id) === String(customEntry.id))
+          );
+          if (existingIdx >= 0) {
+            customFavs[existingIdx] = { ...customFavs[existingIdx], ...customEntry };
+          } else {
+            customFavs.unshift(customEntry);
+          }
+
+          if (customFavs.length > 100) customFavs.length = 100;
+          await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: customFavs }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+
+          return new Response(JSON.stringify({ ok: true, success: true, item_id: customEntry.id, is_custom: true }), {
+            status: 200,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
+
+        return new Response(JSON.stringify({ error: "Datos de ítem incompletos para favorito" }), {
+          status: 400,
           headers: getPersonalHeaders(origin, newToken)
         });
       } catch (err) {
@@ -2362,26 +2470,38 @@ export async function onRequest(context) {
         });
       }
 
+      const parts = url.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
+      const secondLastPart = parts.length >= 4 ? parts[parts.length - 2] : null;
+
       let targetId = parseInt(url.searchParams.get("id") || url.searchParams.get("item_id"), 10);
       if (!targetId || isNaN(targetId)) {
-        const parts = url.pathname.split("/").filter(Boolean);
-        const lastPart = parts[parts.length - 1];
         if (/^\d+$/.test(lastPart)) targetId = parseInt(lastPart, 10);
       }
 
-      if (!Number.isInteger(targetId) || targetId <= 0) {
-        return new Response(JSON.stringify({ error: "id numérico válido requerido" }), {
-          status: 400,
-          headers: getPersonalHeaders(origin, newToken)
+      // Si tenemos un targetId entero válido, borrar de SQL
+      if (Number.isInteger(targetId) && targetId > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
+          method: "DELETE",
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
         });
       }
 
-      await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
-        method: "DELETE",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-      });
+      // Remover también de custom_favorites en metadata si existe
+      const currentMeta = user.user_metadata || {};
+      if (Array.isArray(currentMeta.custom_favorites) && currentMeta.custom_favorites.length > 0) {
+        const updatedCustom = currentMeta.custom_favorites.filter(cf => {
+          if (targetId && String(cf.id) === String(targetId)) return false;
+          if (lastPart && (String(cf.id) === String(lastPart) || String(cf.source_id) === String(lastPart))) return false;
+          if (secondLastPart && cf.source === secondLastPart && String(cf.source_id) === String(lastPart)) return false;
+          return true;
+        });
+        if (updatedCustom.length !== currentMeta.custom_favorites.length) {
+          await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: updatedCustom }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+        }
+      }
 
-      return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId }), {
+      return new Response(JSON.stringify({ ok: true, success: true, deleted: lastPart || targetId }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });

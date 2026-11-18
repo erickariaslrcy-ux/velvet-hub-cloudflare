@@ -53,11 +53,11 @@
   <script defer src="https://cdn.tailwindcss.com"></script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
-  <script defer src="/js/personal-data.js?v=3.2.2"></script>
-  <script defer src="/js/store.js?v=3.2.2"></script>
-  <script defer src="/js/router.js?v=3.2.2"></script>
-  <script defer src="/js/vault.js?v=3.2.2"></script>
-  <script defer src="/js/pagination.js?v=3.2.2"></script>
+  <script defer src="/js/personal-data.js?v=3.2.3"></script>
+  <script defer src="/js/store.js?v=3.2.3"></script>
+  <script defer src="/js/router.js?v=3.2.3"></script>
+  <script defer src="/js/vault.js?v=3.2.3"></script>
+  <script defer src="/js/pagination.js?v=3.2.3"></script>
 
   <style>
     /* =======================================================================
@@ -2254,7 +2254,7 @@
           </button>
 
           <!-- Favorito / Bóveda -->
-          <button id="video-player-fav-btn" data-action="video-fav-toggle" onclick="toggleCurrentVideoFavorite()" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-[#ff2d95] flex items-center justify-center border border-white/[0.1] hover:border-[#ff2d95]/40 transition-all cursor-pointer" title="Guardar en Mi Bóveda">
+          <button id="video-player-fav-btn" onclick="toggleCurrentVideoFavorite(event)" class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white/70 hover:text-[#ff2d95] flex items-center justify-center border border-white/[0.1] hover:border-[#ff2d95]/40 transition-all cursor-pointer" title="Guardar en Mi Bóveda">
             <i class="fa-regular fa-heart text-xs" id="video-player-fav-icon"></i>
           </button>
         </div>
@@ -2580,7 +2580,7 @@
 
       <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
-        <button id="reader-fav-btn" data-action="reader-fav-toggle" onclick="toggleCurrentItemFavorite()" aria-label="Guardar en favoritos" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Guardar">
+        <button id="reader-fav-btn" onclick="toggleCurrentItemFavorite(event)" aria-label="Guardar en favoritos" class="w-9 h-9 rounded-xl bg-glass hover:bg-hot/20 text-lav flex items-center justify-center transition-colors border border-neon/30" title="Guardar">
 
           <i class="fa-regular fa-heart" id="reader-fav-icon"></i>
 
@@ -8606,9 +8606,19 @@
       icon.className = isFav ? 'fa-solid fa-heart text-[#ff2d95]' : 'fa-regular fa-heart text-white/70';
     }
 
-    function toggleCurrentVideoFavorite() {
+    let _favVideoDebounce = 0;
+    function toggleCurrentVideoFavorite(event) {
+      if (event) {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+      }
+      const now = Date.now();
+      if (now - _favVideoDebounce < 350) return;
+      _favVideoDebounce = now;
+
       if (!state.currentVideo) return;
-      toggleFavorite(state.currentVideo);
+      toggleFavorite(state.currentVideo, event);
       updateVideoFavIcon();
     }
 
@@ -11332,8 +11342,18 @@
       });
     }
 
-    function toggleCurrentItemFavorite() {
-      if (state.currentItem) toggleFavorite(state.currentItem);
+    let _favItemDebounce = 0;
+    function toggleCurrentItemFavorite(event) {
+      if (event) {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+      }
+      const now = Date.now();
+      if (now - _favItemDebounce < 350) return;
+      _favItemDebounce = now;
+
+      if (state.currentItem) toggleFavorite(state.currentItem, event);
     }
 
     function isWatchlisted(source, sourceId, itemId = null) {
@@ -11530,33 +11550,32 @@
       try {
         const resp = await fetch('/api/user/favorites', { headers: authHeaders(), credentials: 'include' });
         if (resp.ok) {
-          const cloudFavs = await resp.json();
-          if (Array.isArray(cloudFavs)) {
-            if (cloudFavs.length > 0) {
-              const favMap = new Map();
-              cloudFavs.forEach(f => {
-                if (!f) return;
-                const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-                favMap.set(k, f);
-              });
-              (state.favorites || []).forEach(f => {
-                if (!f) return;
-                const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
-                if (!favMap.has(k)) favMap.set(k, f);
-              });
-              state.favorites = Array.from(favMap.values());
-            } else if (state.favorites && state.favorites.length > 0) {
-              fetch('/api/user/favorites/sync', {
-                method: 'POST',
-                headers: authHeaders(),
-                body: JSON.stringify({ items: state.favorites })
-              }).catch(() => {});
-            }
-            saveStorage();
-            updateVaultFavCountBadge();
-            renderVaultFavoritesPro();
-            updateAllFeedFavoriteIcons();
+          const rawFavs = await resp.json();
+          const cloudFavs = Array.isArray(rawFavs) ? rawFavs : (Array.isArray(rawFavs?.items) ? rawFavs.items : []);
+          if (cloudFavs.length > 0) {
+            const favMap = new Map();
+            cloudFavs.forEach(f => {
+              if (!f) return;
+              const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
+              favMap.set(k, f);
+            });
+            (state.favorites || []).forEach(f => {
+              if (!f) return;
+              const k = f.id ? String(f.id) : `${f.source}:${f.source_id}`;
+              if (!favMap.has(k)) favMap.set(k, f);
+            });
+            state.favorites = Array.from(favMap.values());
+          } else if (state.favorites && state.favorites.length > 0) {
+            fetch('/api/user/favorites/sync', {
+              method: 'POST',
+              headers: authHeaders(),
+              body: JSON.stringify({ items: state.favorites })
+            }).catch(() => {});
           }
+          saveStorage();
+          updateVaultFavCountBadge();
+          renderVaultFavoritesPro();
+          updateAllFeedFavoriteIcons();
         }
       } catch (e) {
         console.warn('[FAVORITOS] Error cargando favoritos de la nube:', e);
@@ -11568,8 +11587,9 @@
       try {
         const resp = await fetch('/api/user/history', { headers: authHeaders() });
         if (resp.ok) {
-          const cloudHist = await resp.json();
-          if (Array.isArray(cloudHist)) {
+          const rawHist = await resp.json();
+          const cloudHist = Array.isArray(rawHist) ? rawHist : (Array.isArray(rawHist?.items) ? rawHist.items : []);
+          if (cloudHist.length > 0) {
             const histMap = new Map();
             // Fusión inteligente de historial entre dispositivos
             (state.history || []).forEach(h => {
@@ -11578,6 +11598,32 @@
               histMap.set(k, h);
             });
             cloudHist.forEach(h => {
+              if (!h) return;
+              const k = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
+              const localH = histMap.get(k);
+              if (!localH || (h.at || 0) >= (localH.at || 0)) {
+                histMap.set(k, h);
+              }
+            });
+            state.history = Array.from(histMap.values())
+              .sort((a, b) => (b.at || 0) - (a.at || 0))
+              .slice(0, 50);
+
+            const progHeader = resp.headers.get('X-Velvet-Progress');
+            if (progHeader) {
+              try {
+                const progMap = JSON.parse(progHeader);
+                state.progress = { ...state.progress, ...progMap };
+              } catch(e) {}
+            }
+            saveStorage();
+            renderContinueShelf();
+          }
+        }
+      } catch (e) {
+        console.warn('[HISTORIAL] Error cargando historial de la nube:', e);
+      }
+    }
               if (!h) return;
               const k = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
               const localH = histMap.get(k);
@@ -13584,7 +13630,8 @@
       else if (act === 'reader-close') {
         if (typeof closeReader === 'function') closeReader();
       } else if (act === 'reader-fav-toggle') {
-        if (typeof toggleCurrentItemFavorite === 'function') toggleCurrentItemFavorite();
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (typeof toggleCurrentItemFavorite === 'function') toggleCurrentItemFavorite(e);
       } else if (act === 'reader-mode-toggle') {
         if (typeof toggleReaderMode === 'function') toggleReaderMode();
       } else if (act === 'reader-autoscroll-toggle') {
@@ -13613,7 +13660,8 @@
       } else if (act === 'video-share') {
         if (typeof copyCurrentVideoUrl === 'function') copyCurrentVideoUrl();
       } else if (act === 'video-fav-toggle') {
-        if (typeof toggleCurrentVideoFavorite === 'function') toggleCurrentVideoFavorite();
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        if (typeof toggleCurrentVideoFavorite === 'function') toggleCurrentVideoFavorite(e);
       }
 
       // 5. Modales y Verificación de Edad
