@@ -53,11 +53,11 @@
   <script defer src="https://cdn.tailwindcss.com"></script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
-  <script defer src="/js/personal-data.js?v=3.2.3"></script>
-  <script defer src="/js/store.js?v=3.2.3"></script>
-  <script defer src="/js/router.js?v=3.2.3"></script>
-  <script defer src="/js/vault.js?v=3.2.3"></script>
-  <script defer src="/js/pagination.js?v=3.2.3"></script>
+  <script defer src="/js/personal-data.js?v=3.2.4"></script>
+  <script defer src="/js/store.js?v=3.2.4"></script>
+  <script defer src="/js/router.js?v=3.2.4"></script>
+  <script defer src="/js/vault.js?v=3.2.4"></script>
+  <script defer src="/js/pagination.js?v=3.2.4"></script>
 
   <style>
     /* =======================================================================
@@ -11598,32 +11598,6 @@
               histMap.set(k, h);
             });
             cloudHist.forEach(h => {
-              if (!h) return;
-              const k = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
-              const localH = histMap.get(k);
-              if (!localH || (h.at || 0) >= (localH.at || 0)) {
-                histMap.set(k, h);
-              }
-            });
-            state.history = Array.from(histMap.values())
-              .sort((a, b) => (b.at || 0) - (a.at || 0))
-              .slice(0, 50);
-
-            const progHeader = resp.headers.get('X-Velvet-Progress');
-            if (progHeader) {
-              try {
-                const progMap = JSON.parse(progHeader);
-                state.progress = { ...state.progress, ...progMap };
-              } catch(e) {}
-            }
-            saveStorage();
-            renderContinueShelf();
-          }
-        }
-      } catch (e) {
-        console.warn('[HISTORIAL] Error cargando historial de la nube:', e);
-      }
-    }
               if (!h) return;
               const k = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
               const localH = histMap.get(k);
