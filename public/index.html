@@ -44,8 +44,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css';">
 
   <!-- High-Performance Static Design System (Compiled Tailwind CSS) -->
-  <link rel="stylesheet" href="/css/tailwind.css?v=3.2.2">
-  <link rel="stylesheet" href="/css/pagination.css?v=3.2.2">
+  <link rel="stylesheet" href="/css/tailwind.css?v=3.3.0">
+  <link rel="stylesheet" href="/css/pagination.css?v=3.3.0">
 
   <!-- Emulador Flash Ruffle WebAssembly Oficial -->
   <script src="https://unpkg.com/@ruffle-rs/ruffle" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle';"></script>
@@ -1804,11 +1804,11 @@
             <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
               Toca el icono del corazón en cualquier video, cómic o galería para guardarlo aquí y acceder sin conexión o desde cualquier dispositivo.
             </p>
-            <div class="flex items-center gap-3">
-              <a href="/videos" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full max-w-sm">
+              <a href="/videos" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold active:scale-95 transition-transform shadow-md min-h-[44px] inline-flex items-center justify-center">
                 Explorar Videos
               </a>
-              <a href="/comics" class="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-lav hover:text-white text-xs font-bold transition-all border border-white/10">
+              <a href="/comics" class="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-lav hover:text-white text-xs font-bold transition-all border border-white/10 min-h-[44px] inline-flex items-center justify-center">
                 Ver Cómics
               </a>
             </div>
@@ -1839,19 +1839,19 @@
               </label>
 
               <!-- Menú de Borrado por Rangos -->
-              <div class="relative group">
-                <button type="button" class="px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
+              <details class="relative">
+                <summary class="list-none px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer min-h-[44px]">
                   <i class="fa-solid fa-trash-can text-[11px]"></i>
                   <span>Borrar Historial</span>
                   <i class="fa-solid fa-chevron-down text-[9px] ml-1"></i>
-                </button>
-                <div class="hidden group-hover:flex flex-col absolute right-0 top-full mt-1.5 w-48 rounded-2xl bg-[#0b0416] border border-purple-500/40 shadow-2xl p-1.5 z-30 text-xs">
-                  <button onclick="window.VelvetVault?.clearHistoryByRange('today')" class="w-full text-left px-3 py-2 rounded-xl text-lav hover:text-white hover:bg-white/[0.06] cursor-pointer">Borrar el de Hoy</button>
-                  <button onclick="window.VelvetVault?.clearHistoryByRange('week')" class="w-full text-left px-3 py-2 rounded-xl text-lav hover:text-white hover:bg-white/[0.06] cursor-pointer">Últimos 7 días</button>
+                </summary>
+                <div class="flex flex-col absolute right-0 top-full mt-1.5 w-52 rounded-2xl bg-[#0b0416] border border-purple-500/40 shadow-2xl p-1.5 z-30 text-xs">
+                  <button type="button" onclick="window.VelvetVault?.clearHistoryByRange('today')" class="w-full text-left px-3 py-2.5 rounded-xl text-lav hover:text-white hover:bg-white/[0.06] cursor-pointer min-h-[44px]">Borrar el de Hoy</button>
+                  <button type="button" onclick="window.VelvetVault?.clearHistoryByRange('week')" class="w-full text-left px-3 py-2.5 rounded-xl text-lav hover:text-white hover:bg-white/[0.06] cursor-pointer min-h-[44px]">Últimos 7 días</button>
                   <div class="h-px bg-white/10 my-1"></div>
-                  <button onclick="window.VelvetVault?.clearHistoryByRange('all')" class="w-full text-left px-3 py-2 rounded-xl text-rose-300 hover:text-rose-100 hover:bg-rose-950/60 font-bold cursor-pointer">Borrar Todo</button>
+                  <button type="button" onclick="window.VelvetVault?.clearHistoryByRange('all')" class="w-full text-left px-3 py-2.5 rounded-xl text-rose-300 hover:text-rose-100 hover:bg-rose-950/60 font-bold cursor-pointer min-h-[44px]">Borrar Todo</button>
                 </div>
-              </div>
+              </details>
             </div>
           </div>
 
@@ -1869,7 +1869,7 @@
             <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
               Los videos y cómics que comiences a disfrutar se registrarán aquí automáticamente para que continúes justo donde lo dejaste.
             </p>
-            <a href="/" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md">
+            <a href="/" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold active:scale-95 transition-transform shadow-md min-h-[44px] inline-flex items-center justify-center">
               Comenzar a Explorar
             </a>
           </div>
@@ -1896,7 +1896,7 @@
             <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
                 type="button"
-                onclick="openLoginModal()"
+                onclick="if (window.openAuthModal) window.openAuthModal('login')"
                 class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 via-magenta to-neon hover:opacity-90 text-white font-black text-xs uppercase tracking-wider shadow-hot-glow hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-2"
               >
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
@@ -1904,7 +1904,7 @@
               </button>
               <button
                 type="button"
-                onclick="openRegisterModal()"
+                onclick="if (window.openAuthModal) window.openAuthModal('register')"
                 class="px-6 py-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/20 hover:border-pink-500/50 text-white font-extrabold text-xs uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-2"
               >
                 <svg class="w-4 h-4 text-pink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
@@ -4909,16 +4909,10 @@
 
     const RESPONSIVE_CARD_SIZES = '(max-width: 640px) 190px, (max-width: 1024px) 260px, 360px';
 
-    function getResponsiveSrcSet(url, referer) {
-      if (!url || typeof url !== 'string' || url.startsWith('data:')) return '';
-      const isSlow = (typeof navigator !== 'undefined' && navigator.connection &&
-        (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
-      const base = getStealthImageUrl(url, referer);
-      const clean = base.replace(/&w=\d+/g, '').replace(/&q=\d+/g, '').replace(/&fmt=\w+/g, '');
-      if (isSlow) {
-        return `${clean}&w=180&q=50&fmt=auto 180w, ${clean}&w=240&q=50&fmt=auto 240w`;
-      }
-      return `${clean}&w=240&q=70&fmt=auto 240w, ${clean}&w=360&q=70&fmt=auto 360w, ${clean}&w=480&q=75&fmt=auto 480w`;
+    function getResponsiveSrcSet() {
+      // Una sola URL por tarjeta. El srcset de 2-3 anchos disparaba varias
+      // peticiones /api/media por cada portada (y el service worker las repetía).
+      return '';
     }
 
     // Lazy loader con cola de concurrencia, priorización y cancelación con AbortController
@@ -5481,6 +5475,8 @@
     let _isLoadingMore = false;
     let _isLoadingFeed = false;
     let _catalogAbortController = null;
+    let _feedLockKey = '';
+    let _feedLockAt = 0;
     let _feedObserver = null;
 
     function updateInfiniteScrollUI(currentPage, totalPages, loadedCount, totalCount) {
@@ -5588,21 +5584,17 @@
           const params = new URLSearchParams({
             page: nextPage,
             page_size: state.pageSize,
-            sort: state.sort,
-            live: 'true'
+            sort: state.sort
           });
 
           if (state.mode === 'videos') {
             params.append('media_type', 'video');
-            if (state.feedSeed) params.append('seed', String(state.feedSeed));
             if (state.category && state.category !== 'all') params.append('category', state.category);
           } else if (state.mode === 'galleries') {
             params.append('media_type', 'gallery');
-            if (state.feedSeed) params.append('seed', String(state.feedSeed));
             if (state.category && state.category !== 'all') params.append('category', state.category);
           } else {
             params.append('media_type', 'comic');
-            if (state.feedSeed) params.append('seed', String(state.feedSeed));
             if (state.category && state.category !== 'all') params.append('category', state.category);
           }
           if (state.tag) params.append('tag', state.tag);
@@ -5832,6 +5824,13 @@
 
     // CARGA EN TIEMPO REAL DIRECTO CON CACHE LOCAL INSTANTÁNEO (0ms)
     async function fetchLiveFeed(skipCache = false) {
+      const requestKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}`;
+      if (!skipCache && _feedLockKey === requestKey && (Date.now() - _feedLockAt) < 4000) {
+        return;
+      }
+      _feedLockKey = requestKey;
+      _feedLockAt = Date.now();
+
       if (_catalogAbortController) {
         try { _catalogAbortController.abort(); } catch (e) {}
       }
@@ -5949,25 +5948,21 @@
         const params = new URLSearchParams({
           page: state.page,
           page_size: state.pageSize,
-          sort: state.sort,
-          live: 'true'
+          sort: state.sort
         });
 
         if (state.mode === 'videos') {
           params.append('media_type', 'video');
-          if (state.feedSeed) params.append('seed', String(state.feedSeed));
           if (state.category && state.category !== 'all') {
             params.append('category', state.category);
           }
         } else if (state.mode === 'galleries') {
           params.append('media_type', 'gallery');
-          if (state.feedSeed) params.append('seed', String(state.feedSeed));
           if (state.category && state.category !== 'all') {
             params.append('category', state.category);
           }
         } else {
           params.append('media_type', 'comic');
-          if (state.feedSeed) params.append('seed', String(state.feedSeed));
           if (state.category && state.category !== 'all') {
             params.append('category', state.category);
           }
@@ -8724,7 +8719,7 @@
             }
           })
           .catch(() => {});
-      }, 150);
+      }, 450);
     }
 
     function cancelVideoPrefetch() {
@@ -8838,7 +8833,7 @@
       if (recs.length === 0) {
         try {
           const recSeed = (parseInt(String(currentId).replace(/\D/g, ''), 10) % 8) + 1 || 1;
-          const resp = await fetch(`/api/items?media_type=video&page=1&page_size=24&seed=${recSeed}&live=true`, { credentials: 'omit' });
+          const resp = await fetch('/api/items?media_type=video&page=1&page_size=12&sort=recent', { credentials: 'omit' });
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.items && data.items.length > 0) {
@@ -10616,7 +10611,7 @@
       }
       const isSlowConn = (typeof navigator !== 'undefined' && navigator.connection &&
         (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
-      const prefetchMargin = isSlowConn ? '800px 0px 800px 0px' : '1500px 0px 1500px 0px';
+      const prefetchMargin = isSlowConn ? '240px 0px 240px 0px' : '480px 0px 480px 0px';
       window._readerPrefetchObserver = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {

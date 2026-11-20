@@ -280,8 +280,8 @@
             <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
               Tus favoritos e historial se sincronizan permanentemente en la nube para acceder desde tu PC, teléfono o tableta sin perder ningún progreso.
             </p>
-            <div class="flex items-center gap-3">
-              <button type="button" onclick="if(window.openAuthModal) window.openAuthModal('login');" class="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md cursor-pointer min-h-[44px]">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full max-w-sm">
+              <button type="button" onclick="if(window.openAuthModal) window.openAuthModal('login');" class="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold active:scale-95 transition-transform shadow-md cursor-pointer min-h-[44px]">
                 Iniciar Sesión / Registrarse
               </button>
             </div>
@@ -357,11 +357,11 @@
             <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
               Toca el icono del corazón en cualquier video, cómic o galería para guardarlo aquí y acceder sin conexión o desde cualquier dispositivo.
             </p>
-            <div class="flex items-center gap-3">
-              <a href="/videos" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold hover:scale-105 transition-transform shadow-md min-h-[44px] flex items-center">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full max-w-sm">
+              <a href="/videos" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold active:scale-95 transition-transform shadow-md min-h-[44px] flex items-center justify-center">
                 Explorar Videos
               </a>
-              <a href="/comics" class="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-lav hover:text-white text-xs font-bold transition-all border border-white/10 min-h-[44px] flex items-center">
+              <a href="/comics" class="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-lav hover:text-white text-xs font-bold transition-all border border-white/10 min-h-[44px] flex items-center justify-center">
                 Ver Cómics
               </a>
             </div>

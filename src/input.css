@@ -13,3 +13,77 @@
   background-color: rgba(10, 6, 16, 0.98) !important;
 }
 
+/* Pulido táctil y de cuenta: PC y Android */
+:focus-visible {
+  outline: 2px solid #ec4899;
+  outline-offset: 2px;
+}
+
+button,
+.v-page-btn,
+.v-page-jump-submit,
+.v-sheet-submit-btn,
+.v-sheet-shortcut-btn,
+#mobile-navbar a,
+#mobile-navbar button,
+#view-vault button,
+#view-vault a {
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  #mobile-navbar a,
+  #mobile-navbar button,
+  #view-vault button,
+  #view-vault a,
+  .v-page-btn,
+  .v-mobile-nav-btn,
+  .v-mobile-center-trigger,
+  .v-sheet-submit-btn,
+  .v-sheet-shortcut-btn {
+    min-height: 44px;
+  }
+
+  #view-vault input,
+  #view-vault select,
+  #view-vault textarea,
+  #auth-modal input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  #vault-favorites-empty .flex,
+  #vault-history-empty .flex {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+}
+
+#view-vault {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+#vault-favorites-list a,
+#vault-history-list a,
+#vault-history-list article {
+  border-radius: 1.15rem;
+}
+
+#vault-acc-user-card,
+#vault-acc-guest-card {
+  border-radius: 1.5rem;
+}
+
+#view-vault button:active,
+#mobile-navbar a:active,
+.v-page-btn:active {
+  transform: scale(0.97);
+}
+
+#comics-grid a,
+#comics-grid article {
+  content-visibility: auto;
+  contain-intrinsic-size: 240px 360px;
+}
+

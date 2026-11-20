@@ -746,8 +746,7 @@
         const params = new URLSearchParams({
           page: nextPage,
           page_size: curState.pageSize || 12,
-          sort: curState.sort || 'recent',
-          live: 'true'
+          sort: curState.sort || 'recent'
         });
 
         if (curState.mode === 'videos') params.append('media_type', 'video');
@@ -755,7 +754,6 @@
         else if (curState.mode === 'games') params.append('media_type', 'game');
         else params.append('media_type', 'comic');
 
-        if (curState.feedSeed) params.append('seed', String(curState.feedSeed));
         if (curState.category && curState.category !== 'all') params.append('category', curState.category);
         if (curState.tag) params.append('tag', curState.tag);
         if (curState.query) params.append('q', curState.query);

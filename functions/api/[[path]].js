@@ -492,7 +492,11 @@ async function updateSupabaseUserMetadata(userId, newMetadata, sbUrl, sbKey) {
   }
 }
 
-const updateUserMetadata = updateSupabaseUserMetadata;
+async function updateUserMetadata() {
+  // Los favoritos viven en public.favorites (RLS por auth.uid()).
+  // Escribirlos en user_metadata hincha el JWT y tira la sesión al rotar el token.
+  return false;
+}
 
 // Helper para sincronizar tabla SQL favorites si el ítem tiene ID numérico
 async function syncSqlFavorite(userId, itemId, isAdd, sbUrl, sbKey) {
@@ -1149,7 +1153,7 @@ export async function onRequest(context) {
             const r1 = await fetch(`https://cdn.imagedeliveries.com/${sid}/thumbnails/1.webp`, { method: "HEAD" }).catch(() => null);
             if (r1 && r1.ok) {
               let low = 1;
-              let high = 60;
+              let high = 24;
               let detected = 1;
               while (low <= high) {
                 const mid = Math.floor((low + high) / 2);
@@ -1465,8 +1469,9 @@ export async function onRequest(context) {
     const sort = validateSort(url.searchParams.get("sort"));
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
-    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam}:${sort}`;
-    const l1Catalog = (sort === "random" && seedParam === 0) ? null : getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
+    const catalogSlot = Math.floor(Date.now() / (3 * 60 * 60 * 1000));
+    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam || catalogSlot}:${sort}`;
+    const l1Catalog = getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
     if (l1Catalog) {
       return new Response(method === "HEAD" ? null : l1Catalog, {
         status: 200,
@@ -1589,11 +1594,9 @@ export async function onRequest(context) {
           };
 
           const jsonStr = JSON.stringify(responsePayload);
-          if (sort !== "random" || seedParam > 0) {
-            setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
-          }
+          setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
 
-          return new Response(jsonStr, {
+          const pmvResponse = new Response(jsonStr, {
             status: 200,
             headers: {
               "Content-Type": "application/json; charset=utf-8",
@@ -1601,6 +1604,10 @@ export async function onRequest(context) {
               ...getCorsHeaders(origin)
             }
           });
+          if (cache) {
+            try { context.waitUntil(cache.put(cacheKey, pmvResponse.clone())); } catch (e) {}
+          }
+          return pmvResponse;
         }
       } catch (pmvErr) {
         console.error("PMVHaven API error:", pmvErr);
@@ -1658,7 +1665,7 @@ export async function onRequest(context) {
       postgrestUrl += "&media_type=eq.video";
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery&page_count=gt.0";
-      const allowLeak = (Math.random() < 0.002) || (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
+      const allowLeak = (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
       if (!allowLeak) {
         postgrestUrl += "&source=neq.leakgallery";
       }
@@ -1709,19 +1716,28 @@ export async function onRequest(context) {
       postgrestUrl += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
     }
 
+    // OFFSET profundo obliga a Postgres a recorrer miles de filas (~4s).
+    // A partir de la página 11 se salta con id=lte, que usa el índice primario.
+    if (offset > 240) {
+      const cursorId = Math.max(1, estimatedTotal - offset);
+      postgrestUrl = postgrestUrl.replace(/offset=\d+/, "offset=0");
+      postgrestUrl += `&id=lte.${cursorId}`;
+    }
+
     // Orden por defecto indexado por clave primaria
     postgrestUrl += "&order=id.desc";
 
     try {
       // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
-      const preferCount = (q || tag) ? "count=exact" : (env.POSTGREST_COUNT_MODE || "count=planned");
+      const preferCount = (q || tag) ? "count=exact" : "";
       const activeQueryKey = isGameMedia ? (SUPABASE_SERVICE_ROLE_KEY_DB2 || SUPABASE_ANON_KEY_DB2 || SUPABASE_KEY) : SUPABASE_KEY;
+      const catalogHeaders = {
+        "apikey": activeQueryKey,
+        "Authorization": `Bearer ${activeQueryKey}`,
+        ...(preferCount ? { "Prefer": preferCount } : {})
+      };
       let spRes = await fetch(postgrestUrl, {
-        headers: {
-          "apikey": activeQueryKey,
-          "Authorization": `Bearer ${activeQueryKey}`,
-          "Prefer": preferCount
-        }
+        headers: catalogHeaders
       });
 
       // Blindaje contra timeout: Si PostgREST se demora o devuelve 57014 (statement timeout), reintentar sin Prefer count
@@ -2221,7 +2237,10 @@ export async function onRequest(context) {
       let keyValid = false;
       let keyNote = "Llave VIP de Acceso";
 
-      const MASTER_KEYS = ["VELVET-VIP-2026", "VELVET-VIP-ACCESS", "MASTER-ADMIN", "VELVET-ADMIN-2026"];
+      const MASTER_KEYS = String(env.MASTER_INVITE_KEYS || "")
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
       if (MASTER_KEYS.includes(access_key)) {
         keyValid = true;
         keyNote = "Llave Maestra Velvet VIP";
