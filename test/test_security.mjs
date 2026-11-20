@@ -19,7 +19,8 @@ const FORBIDDEN_PATTERNS = [
   /velvet_ultra_stealth_secret_key_2026/,
   /0gJLjj89ySdbwdCHgGvPnPLbrPGBouKCe2yH5u4mBnDk0BMbe21AcQ7cwVtK5Cbu/,
   /A4GVPPsrInVVr1vEjAyFyD8eOLzt0qFqqae2-TCDepH-aX1aKLFD0B_wTN33YLtd/,
-  /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+/ // Raw JWT service_role
+  /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+/, // Raw JWT service_role
+  /velvet_master_media_hmac_secret_production_2026/
 ];
 
 for (const file of filesToCheck) {

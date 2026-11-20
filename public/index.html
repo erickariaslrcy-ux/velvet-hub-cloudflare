@@ -53,11 +53,11 @@
   <script defer src="https://cdn.tailwindcss.com"></script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
-  <script defer src="/js/personal-data.js?v=3.2.4"></script>
-  <script defer src="/js/store.js?v=3.2.4"></script>
-  <script defer src="/js/router.js?v=3.2.4"></script>
-  <script defer src="/js/vault.js?v=3.2.4"></script>
-  <script defer src="/js/pagination.js?v=3.2.4"></script>
+  <script defer src="/js/personal-data.js?v=3.3.0"></script>
+  <script defer src="/js/store.js?v=3.3.0"></script>
+  <script defer src="/js/router.js?v=3.3.0"></script>
+  <script defer src="/js/vault.js?v=3.3.0"></script>
+  <script defer src="/js/pagination.js?v=3.3.0"></script>
 
   <style>
     /* =======================================================================
@@ -5288,7 +5288,6 @@
         if (oled === 'true') enableOled(true);
 
         // Rotación dinámica cada 3 horas automática para mantener el catálogo vivo
-        state.catalogMode = 'dynamic';
         const currentSlot = Math.floor(Date.now() / (3 * 3600 * 1000));
         const storedSlot = parseInt(localStorage.getItem('velvet_last_rot_slot') || '0', 10);
         if (storedSlot !== currentSlot) {
@@ -5300,7 +5299,6 @@
           state.feedSeed = getRotatingSeed();
           state.videoSeed = state.feedSeed;
         }
-        state.sort = 'random';
       } catch (e) {
         state.user = { name: 'Invitado', avatar: '🔑', avatarBg: 'from-purple-900 to-slate-900', isVip: false };
       }
@@ -11406,9 +11404,15 @@
     let currentAdminKeyFilter = 'all';
 
     function getAuthToken() {
-
-      return localStorage.getItem('velvet_auth_token');
-
+      try {
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.getAuthToken === 'function') {
+          const live = window.VelvetPersonalData.getAuthToken();
+          if (live) return live;
+        }
+        return localStorage.getItem('velvet_auth_token') || localStorage.getItem('velvet_token');
+      } catch (e) {
+        return null;
+      }
     }
 
     function authHeaders() {
@@ -11417,49 +11421,87 @@
         'x-velvet-client': 'velvet-web-client-v2'
       };
       const token = getAuthToken();
-      if (token) {
+      if (token && token !== 'velvet_token') {
         headers['Authorization'] = `Bearer ${token}`;
-      }
-      const refToken = localStorage.getItem('velvet_refresh_token');
-      if (refToken) {
-        headers['x-refresh-token'] = refToken;
-      }
-      const deviceToken = localStorage.getItem('velvet_device_token');
-      if (deviceToken) {
-        headers['x-device-token'] = deviceToken;
       }
       return headers;
     }
 
-    async function initAuth() {
-      const token = getAuthToken();
+    function rememberSession(user, token, refreshToken, expiresAt, deviceToken) {
+      const cleanUser = user && typeof user === 'object' ? { ...user } : null;
+      if (cleanUser) {
+        delete cleanUser.token;
+        delete cleanUser.new_token;
+        delete cleanUser.refresh_token;
+        delete cleanUser.new_refresh_token;
+        delete cleanUser.expires_at;
+        delete cleanUser.detail;
+      }
+      try {
+        if (window.VelvetStore && typeof window.VelvetStore.setCurrentUser === 'function') {
+          window.VelvetStore.setCurrentUser(cleanUser, token || null, refreshToken || null, deviceToken || null, expiresAt || null);
+        } else if (window.VelvetPersonalData && typeof window.VelvetPersonalData.setSession === 'function') {
+          window.VelvetPersonalData.setSession(cleanUser, token || null, refreshToken || null, expiresAt || null, deviceToken || null);
+        }
+      } catch (e) {
+        console.warn('[AUTH] No se pudo persistir la sesión', e);
+      }
+      if (cleanUser && cleanUser.id) state.currentUser = cleanUser;
+      return cleanUser;
+    }
 
-      if (!token) {
-        // Si no hay token en localStorage, intentar ver si existen cookies de sesión
+    function dropSession() {
+      try {
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.clearSession === 'function') {
+          window.VelvetPersonalData.clearSession();
+        } else if (window.VelvetStore && typeof window.VelvetStore.setCurrentUser === 'function') {
+          window.VelvetStore.setCurrentUser(null);
+        }
+      } catch (e) {}
+      state.currentUser = null;
+    }
+
+    async function initAuth(attempt = 0) {
+      try {
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.restoreSessionFromStorage === 'function') {
+          window.VelvetPersonalData.restoreSessionFromStorage();
+          const cached = window.VelvetPersonalData.getCurrentUser();
+          if (cached && cached.id) state.currentUser = cached;
+        }
+      } catch (e) {}
+      updateUserUI();
+
+      try {
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.ensureFreshAccessToken === 'function') {
+          await window.VelvetPersonalData.ensureFreshAccessToken();
+          const refreshedUser = window.VelvetPersonalData.getCurrentUser();
+          if (refreshedUser && refreshedUser.id) state.currentUser = refreshedUser;
+        }
+      } catch (e) {}
+
+      const token = getAuthToken();
+      let refreshStored = null;
+      try { refreshStored = localStorage.getItem('velvet_refresh_token'); } catch (e) {}
+      const stillAuthed = !!(state.currentUser && state.currentUser.id && (token || refreshStored));
+
+      if (!token && !stillAuthed) {
         try {
-          const cookieResp = await fetch('/api/auth/me', { headers: authHeaders(), credentials: 'include' });
+          const cookieResp = await fetch('/api/auth/me', { credentials: 'include', headers: { 'Accept': 'application/json' } });
+          if (cookieResp.status === 503) {
+            updateUserUI();
+            return;
+          }
           if (cookieResp.ok) {
-            const userWithCookie = await cookieResp.json();
-            if (userWithCookie.new_token) {
-              localStorage.setItem('velvet_auth_token', userWithCookie.new_token);
-            }
-            if (userWithCookie.new_refresh_token) {
-              localStorage.setItem('velvet_refresh_token', userWithCookie.new_refresh_token);
-            }
-            if (userWithCookie.device_token) {
-              localStorage.setItem('velvet_device_token', userWithCookie.device_token);
-            }
-            localStorage.setItem('velvet_current_user', JSON.stringify(userWithCookie));
-            state.currentUser = userWithCookie;
+            const data = await cookieResp.json();
+            rememberSession(data.user || data, data.token || data.new_token, data.refresh_token || data.new_refresh_token, data.expires_at, data.device_token);
             loadStorage();
             updateUserUI();
             await loadCloudFavorites();
             await loadCloudHistory();
             return;
           }
-        } catch(e) {}
+        } catch (e) {}
 
-        // Usuario realmente no logueado
         state.currentUser = null;
         loadStorage();
         renderContinueShelf();
@@ -11471,70 +11513,47 @@
       try {
         const resp = await fetch('/api/auth/me', { headers: authHeaders(), credentials: 'include' });
 
-        if (!resp.ok) {
-          // Solo si recibimos 401 Unauthorized intentamos autorefresh antes de cerrar sesión
-          if (resp.status === 401) {
-            const refToken = localStorage.getItem('velvet_refresh_token');
-            if (refToken) {
-              try {
-                const refResp = await fetch('/api/auth/refresh', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
-                  body: JSON.stringify({ refresh_token: refToken })
-                });
-                if (refResp.ok) {
-                  const refData = await refResp.json();
-                  if (refData.token) {
-                    localStorage.setItem('velvet_auth_token', refData.token);
-                    if (refData.refresh_token) localStorage.setItem('velvet_refresh_token', refData.refresh_token);
-                    if (refData.user) {
-                      localStorage.setItem('velvet_current_user', JSON.stringify(refData.user));
-                      state.currentUser = refData.user;
-                    }
-                    return await initAuth();
-                  }
-                }
-              } catch(e) {}
-            }
+        if (resp.status === 503) {
+          console.warn('[AUTH] Servicio de sesión no disponible, se conserva la sesión local');
+          updateUserUI();
+          return;
+        }
 
-            // Si el refresh también falló o expiró: limpiar sesión
-            localStorage.removeItem('velvet_auth_token');
-            localStorage.removeItem('velvet_refresh_token');
-            localStorage.removeItem('velvet_current_user');
-            state.currentUser = null;
+        if (resp.status === 401 && attempt < 1) {
+          let refreshed = null;
+          if (window.VelvetPersonalData && typeof window.VelvetPersonalData.refreshSession === 'function') {
+            refreshed = await window.VelvetPersonalData.refreshSession();
+          }
+          if (refreshed) {
+            const nextUser = window.VelvetPersonalData.getCurrentUser();
+            if (nextUser && nextUser.id) state.currentUser = nextUser;
+            return initAuth(attempt + 1);
+          }
+          if (refreshed === false) {
+            dropSession();
             loadStorage();
             renderContinueShelf();
             updateVaultCounts();
             updateUserUI();
             return;
-          } else {
-            // Error de red, 429 temporal o error 500: mantener la sesión que ya tenemos en caché
-            console.warn('[AUTH] Error verificando sesión en servidor (' + resp.status + '), manteniendo sesión local');
-            return;
           }
+          console.warn('[AUTH] No se pudo renovar la sesión por un fallo de red. Se conserva la sesión local.');
+          updateUserUI();
+          return;
         }
 
-        const user = await resp.json();
-        if (user.new_token) {
-          localStorage.setItem('velvet_auth_token', user.new_token);
+        if (!resp.ok) {
+          console.warn('[AUTH] Error verificando sesión en servidor (' + resp.status + '), manteniendo sesión local');
+          updateUserUI();
+          return;
         }
-        if (user.new_refresh_token) {
-          localStorage.setItem('velvet_refresh_token', user.new_refresh_token);
-        }
-        if (user.device_token) {
-          localStorage.setItem('velvet_device_token', user.device_token);
-        }
-        localStorage.setItem('velvet_current_user', JSON.stringify(user));
-        state.currentUser = user;
+
+        const data = await resp.json();
+        rememberSession(data.user || data, data.token || data.new_token, data.refresh_token || data.new_refresh_token, data.expires_at, data.device_token);
         loadStorage();
         renderContinueShelf();
         updateUserUI();
-
-        // Cargar favoritos del usuario desde el servidor
         await loadCloudFavorites();
-
-        // Cargar historial del usuario desde el servidor
         await loadCloudHistory();
 
         if (state.catalogCache && state.catalogCache.length > 0) {
@@ -11542,6 +11561,7 @@
         }
       } catch (e) {
         console.warn('[AUTH] Error verificando sesión:', e);
+        updateUserUI();
       }
     }
 
@@ -11585,7 +11605,7 @@
     async function loadCloudHistory() {
       if (!state.currentUser) return;
       try {
-        const resp = await fetch('/api/user/history', { headers: authHeaders() });
+        const resp = await fetch('/api/user/history', { headers: authHeaders(), credentials: 'include' });
         if (resp.ok) {
           const rawHist = await resp.json();
           const cloudHist = Array.isArray(rawHist) ? rawHist : (Array.isArray(rawHist?.items) ? rawHist.items : []);
@@ -11800,6 +11820,7 @@
           method: 'POST',
 
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
 
           body: JSON.stringify({ username, password })
 
@@ -11821,25 +11842,7 @@
           return;
         }
 
-        // Guardar token JWT unificado en todos los módulos
-        localStorage.setItem('velvet_auth_token', data.token);
-        localStorage.setItem('velvet_token', data.token);
-        if (data.refresh_token) {
-          localStorage.setItem('velvet_refresh_token', data.refresh_token);
-        }
-        if (data.device_token) {
-          localStorage.setItem('velvet_device_token', data.device_token);
-        }
-        localStorage.setItem('velvet_current_user', JSON.stringify(data.user));
-        localStorage.setItem('velvet_user', JSON.stringify(data.user));
-
-        state.currentUser = data.user;
-        if (window.VelvetPersonalData) {
-          window.VelvetPersonalData.setSession(data.user, data.token, data.refresh_token);
-        }
-        if (window.VelvetStore) {
-          window.VelvetStore.setSession(data.user, data.token);
-        }
+        rememberSession(data.user, data.token, data.refresh_token, data.expires_at, data.device_token);
         loadStorage();
         loadCloudFavorites();
         updateUserUI();
@@ -11971,6 +11974,8 @@
 
           headers: { 'Content-Type': 'application/json' },
 
+          credentials: 'include',
+
           body: JSON.stringify({ username, password, access_key })
 
         });
@@ -11993,25 +11998,7 @@
 
         }
 
-        // Registro exitoso: Guardar tokens unificados en todos los módulos
-        localStorage.setItem('velvet_auth_token', data.token);
-        localStorage.setItem('velvet_token', data.token);
-        if (data.refresh_token) {
-          localStorage.setItem('velvet_refresh_token', data.refresh_token);
-        }
-        if (data.device_token) {
-          localStorage.setItem('velvet_device_token', data.device_token);
-        }
-        localStorage.setItem('velvet_current_user', JSON.stringify(data.user));
-        localStorage.setItem('velvet_user', JSON.stringify(data.user));
-
-        state.currentUser = data.user;
-        if (window.VelvetPersonalData) {
-          window.VelvetPersonalData.setSession(data.user, data.token, data.refresh_token);
-        }
-        if (window.VelvetStore) {
-          window.VelvetStore.setSession(data.user, data.token);
-        }
+        rememberSession(data.user, data.token, data.refresh_token, data.expires_at, data.device_token);
         loadStorage();
         updateUserUI();
         renderContinueShelf();
@@ -12192,19 +12179,11 @@
 
       try {
 
-        await fetch('/api/auth/logout', { method: 'POST', headers: authHeaders() });
+        await fetch('/api/auth/logout', { method: 'POST', headers: authHeaders(), credentials: 'include' });
 
       } catch (e) {}
 
-      localStorage.removeItem('velvet_auth_token');
-      localStorage.removeItem('velvet_token');
-      localStorage.removeItem('velvet_refresh_token');
-      localStorage.removeItem('velvet_current_user');
-      localStorage.removeItem('velvet_user');
-      if (window.VelvetPersonalData) window.VelvetPersonalData.setSession(null, null, null);
-      if (window.VelvetStore) window.VelvetStore.setSession(null, null);
-
-      state.currentUser = null;
+      dropSession();
       loadStorage();
       renderContinueShelf();
       updateVaultCounts();

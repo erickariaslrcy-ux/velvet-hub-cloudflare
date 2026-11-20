@@ -39,6 +39,9 @@
   let _currentUser = null;
   let _token = null;
   let _refreshToken = null;
+  let _expiresAt = null;
+  let _deviceToken = null;
+  let _refreshFlight = null;
 
   // Estado de Favoritos
   const _favState = {
@@ -108,20 +111,128 @@
     } catch (e) {}
   }
 
+  function safeGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function purgeBulkyLocalKeys() {
+    try {
+      const drop = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        if (k.startsWith('vcache_') || k.startsWith('velvet_backup_pre_migration_')) drop.push(k);
+      }
+      drop.forEach((k) => localStorage.removeItem(k));
+    } catch (e) {}
+  }
+
+  function safeSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      purgeBulkyLocalKeys();
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e2) {
+        return false;
+      }
+    }
+  }
+
+  function safeRemove(key) {
+    try { localStorage.removeItem(key); } catch (e) {}
+  }
+
+  function readJwtExpMs(token) {
+    try {
+      if (!token || token.indexOf('.') === -1) return null;
+      const part = token.split('.')[1];
+      const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+      const json = JSON.parse(atob(padded));
+      return json && json.exp ? json.exp * 1000 : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function normalizeExpiry(expiresAt, token) {
+    const n = Number(expiresAt);
+    if (Number.isFinite(n) && n > 0) {
+      return n > 1e12 ? n : n * 1000;
+    }
+    return readJwtExpMs(token);
+  }
+
+  // El refresh token NO viaja en cada petición: reutilizarlo en paralelo
+  // revoca toda la familia de sesión en Supabase (refresh token rotation).
   function getAuthHeaders() {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
-    const activeToken = _token || localStorage.getItem('velvet_token') || localStorage.getItem('velvet_auth_token');
+    const activeToken = currentAccessToken();
     if (activeToken) {
       headers['Authorization'] = `Bearer ${activeToken}`;
     }
-    const activeRefresh = _refreshToken || localStorage.getItem('velvet_refresh_token');
-    if (activeRefresh) {
-      headers['x-refresh-token'] = activeRefresh;
-    }
     return headers;
+  }
+
+  function currentAccessToken() {
+    const stored = safeGet('velvet_auth_token') || safeGet('velvet_token');
+    const storedOk = stored && stored !== 'velvet_token' && stored !== 'null' && stored !== 'undefined' ? stored : null;
+    const memOk = _token && _token !== 'velvet_token' && _token !== 'null' && _token !== 'undefined' ? _token : null;
+    if (!memOk) {
+      _token = storedOk;
+      return storedOk;
+    }
+    if (!storedOk || memOk === storedOk) return memOk;
+    const memExp = readJwtExpMs(memOk) || 0;
+    const stExp = readJwtExpMs(storedOk) || 0;
+    const best = stExp >= memExp ? storedOk : memOk;
+    _token = best;
+    return best;
+  }
+
+  function accessNeedsRefresh(token) {
+    if (!token) return true;
+    const exp = normalizeExpiry(_expiresAt, token);
+    if (!exp) return false;
+    return Date.now() > (exp - 60000);
+  }
+
+  function clearSessionKeys() {
+    [
+      'velvet_token',
+      'velvet_auth_token',
+      'velvet_refresh_token',
+      'velvet_user',
+      'velvet_current_user',
+      'velvet_expires_at',
+      'velvet_device_token'
+    ].forEach(safeRemove);
+    try {
+      document.cookie = 'velvet_auth_active=; max-age=0; path=/; SameSite=Lax';
+    } catch (e) {}
+  }
+
+  function writeSessionKeys(user, token, refreshToken, expiresAt, deviceToken) {
+    const userJson = JSON.stringify(user);
+    safeSet('velvet_user', userJson);
+    safeSet('velvet_current_user', userJson);
+    if (token) {
+      safeSet('velvet_token', token);
+      safeSet('velvet_auth_token', token);
+    }
+    if (refreshToken) safeSet('velvet_refresh_token', refreshToken);
+    if (expiresAt) safeSet('velvet_expires_at', String(expiresAt));
+    if (deviceToken) safeSet('velvet_device_token', deviceToken);
+    try {
+      document.cookie = 'velvet_auth_active=1; max-age=2592000; path=/; SameSite=Lax';
+    } catch (e) {}
   }
 
   // --------------------------------------------------------------------------
@@ -144,7 +255,8 @@
 
       // Sincronizar cambios de sesión entre pestañas vía storage event
       window.addEventListener('storage', (e) => {
-        if (e.key === 'velvet_token' || e.key === 'velvet_user') {
+        if (!e.key || e.key.indexOf('velvet_') !== 0) return;
+        if (e.key === 'velvet_token' || e.key === 'velvet_auth_token' || e.key === 'velvet_user' || e.key === 'velvet_current_user' || e.key === 'velvet_refresh_token' || e.key === 'velvet_expires_at') {
           const prevUserId = _currentUser?.id;
           this.restoreSessionFromStorage();
           const nextUserId = _currentUser?.id;
@@ -153,6 +265,9 @@
           }
         }
       });
+
+      // Renovar el access token antes de que otras vistas disparen peticiones en paralelo
+      this.ensureFreshAccessToken().catch(() => {});
 
       // Flujo de guardado pendiente antes de cerrar la ventana
       window.addEventListener('beforeunload', () => {
@@ -170,45 +285,65 @@
     // ------------------------------------------------------------------------
     restoreSessionFromStorage() {
       try {
-        _token = localStorage.getItem('velvet_token') || localStorage.getItem('velvet_auth_token') || null;
-        _refreshToken = localStorage.getItem('velvet_refresh_token') || null;
-        const rawUser = localStorage.getItem('velvet_user') || localStorage.getItem('velvet_current_user');
+        const storedToken = safeGet('velvet_auth_token') || safeGet('velvet_token');
+        _token = storedToken && storedToken !== 'velvet_token' && storedToken !== 'null' && storedToken !== 'undefined' ? storedToken : null;
+        _refreshToken = safeGet('velvet_refresh_token') || null;
+        if (_refreshToken === 'null' || _refreshToken === 'undefined') _refreshToken = null;
+        _deviceToken = safeGet('velvet_device_token') || null;
+        const rawExp = safeGet('velvet_expires_at');
+        _expiresAt = rawExp ? normalizeExpiry(rawExp, _token) : readJwtExpMs(_token);
+        const rawUser = safeGet('velvet_current_user') || safeGet('velvet_user');
         _currentUser = rawUser ? JSON.parse(rawUser) : null;
+        if (_currentUser && !_currentUser.id) _currentUser = null;
       } catch (e) {
         _currentUser = null;
         _token = null;
         _refreshToken = null;
+        _expiresAt = null;
+        _deviceToken = null;
       }
     },
 
-    setSession(user, token = null, refreshToken = null) {
-      const prevId = _currentUser?.id;
-      _currentUser = user || null;
-      _token = token || _token;
-      _refreshToken = refreshToken || _refreshToken;
+    setSession(user, token = null, refreshToken = null, expiresAt = null, deviceToken = null) {
+      if (!user) {
+        this.clearSession();
+        return null;
+      }
 
-      try {
-        if (_currentUser) {
-          localStorage.setItem('velvet_user', JSON.stringify(_currentUser));
-          localStorage.setItem('velvet_current_user', JSON.stringify(_currentUser));
-          if (_token) localStorage.setItem('velvet_token', _token);
-          if (_refreshToken) localStorage.setItem('velvet_refresh_token', _refreshToken);
-        } else {
-          localStorage.removeItem('velvet_user');
-          localStorage.removeItem('velvet_current_user');
-          localStorage.removeItem('velvet_token');
-          localStorage.removeItem('velvet_refresh_token');
-        }
-      } catch (e) {}
+      const prevId = _currentUser?.id || null;
+      _currentUser = user;
+      if (token && token !== 'velvet_token' && token !== 'null' && token !== 'undefined') {
+        _token = token;
+      }
+      if (refreshToken && refreshToken !== 'null' && refreshToken !== 'undefined') {
+        _refreshToken = refreshToken;
+      }
+      if (deviceToken) _deviceToken = deviceToken;
+      const normalizedExp = normalizeExpiry(expiresAt, _token);
+      if (normalizedExp) _expiresAt = normalizedExp;
 
-      if (_currentUser && _currentUser.id !== prevId) {
+      writeSessionKeys(_currentUser, _token, _refreshToken, _expiresAt, _deviceToken);
+
+      if (String(prevId || '') !== String(_currentUser.id || '')) {
         this.handleSessionSwitched();
         this.migrateLocalDataToServer();
-      } else if (!_currentUser) {
-        this.handleSessionSwitched();
       }
 
       window.dispatchEvent(new CustomEvent('velvet:auth-changed', { detail: { user: _currentUser } }));
+      window.dispatchEvent(new CustomEvent('velvet:session-ready', { detail: { user: _currentUser } }));
+      return _currentUser;
+    },
+
+    clearSession() {
+      const hadUser = !!_currentUser;
+      _currentUser = null;
+      _token = null;
+      _refreshToken = null;
+      _expiresAt = null;
+      _deviceToken = null;
+      clearSessionKeys();
+      if (hadUser) this.handleSessionSwitched();
+      window.dispatchEvent(new CustomEvent('velvet:auth-changed', { detail: { user: null } }));
     },
 
     handleSessionSwitched() {
@@ -246,11 +381,79 @@
     },
 
     getAuthToken() {
-      return _token;
+      return currentAccessToken();
     },
 
     isAuthenticated() {
-      return !!(_currentUser && _currentUser.id);
+      const token = currentAccessToken();
+      const refresh = _refreshToken || safeGet('velvet_refresh_token');
+      return !!(_currentUser && _currentUser.id && (token || refresh));
+    },
+
+    async refreshSession() {
+      if (_refreshFlight) return _refreshFlight;
+      const refreshToken = _refreshToken || safeGet('velvet_refresh_token');
+      _refreshFlight = (async () => {
+        try {
+          const res = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {})
+          });
+          let data = {};
+          try { data = await res.json(); } catch (e) {}
+          if (res.status === 401 || res.status === 400) return false;
+          if (!res.ok || !data || !data.token) return null;
+          const nextUser = data.user || _currentUser;
+          if (!nextUser || !nextUser.id) return false;
+          this.setSession(
+            nextUser,
+            data.token,
+            data.refresh_token || refreshToken,
+            data.expires_at,
+            data.device_token || _deviceToken
+          );
+          return true;
+        } catch (e) {
+          return null;
+        } finally {
+          _refreshFlight = null;
+        }
+      })();
+      return _refreshFlight;
+    },
+
+    async ensureFreshAccessToken() {
+      const token = currentAccessToken();
+      const refresh = _refreshToken || safeGet('velvet_refresh_token');
+      if (token && !accessNeedsRefresh(token)) return true;
+      if (!refresh) return !!token;
+      const result = await this.refreshSession();
+      if (result === false) {
+        this.clearSession();
+        return false;
+      }
+      return !!currentAccessToken();
+    },
+
+    async fetchAuthed(url, options = {}) {
+      await this.ensureFreshAccessToken();
+      const buildHeaders = () => {
+        const headers = { ...getAuthHeaders(), ...(options.headers || {}) };
+        delete headers['x-refresh-token'];
+        return headers;
+      };
+      let res = await fetch(url, { ...options, headers: buildHeaders(), credentials: 'include' });
+      if (res.status === 401 && this.isAuthenticated()) {
+        const ok = await this.refreshSession();
+        if (ok) {
+          res = await fetch(url, { ...options, headers: buildHeaders(), credentials: 'include' });
+        } else if (ok === false) {
+          this.clearSession();
+        }
+      }
+      return res;
     },
 
     // ------------------------------------------------------------------------
@@ -278,9 +481,7 @@
     async fetchPreferences() {
       if (!this.isAuthenticated()) return _preferences;
       try {
-        const res = await fetch('/api/user/preferences', {
-          headers: getAuthHeaders()
-        });
+        const res = await this.fetchAuthed('/api/user/preferences');
         if (res.ok) {
           const json = await res.json();
           if (json && json.data) {
@@ -305,9 +506,8 @@
 
       if (this.isAuthenticated()) {
         try {
-          await fetch('/api/user/preferences', {
+          await this.fetchAuthed('/api/user/preferences', {
             method: 'PUT',
-            headers: getAuthHeaders(),
             body: JSON.stringify({ data: _preferences, version: DEFAULT_PREFERENCES.version })
           });
         } catch (e) {}
@@ -395,8 +595,7 @@
           queryParams.set('type', _favState.filter);
         }
 
-        const res = await fetch(`/api/user/favorites?${queryParams.toString()}`, {
-          headers: getAuthHeaders(),
+        const res = await this.fetchAuthed(`/api/user/favorites?${queryParams.toString()}`, {
           signal: _favState.controller.signal
         });
 
@@ -476,9 +675,8 @@
       }
 
       try {
-        const res = await fetch('/api/user/favorites', {
+        const res = await this.fetchAuthed('/api/user/favorites', {
           method: 'POST',
-          headers: getAuthHeaders(),
           body: JSON.stringify({
             id: itemId,
             item_id: itemId,
@@ -523,9 +721,8 @@
       }
 
       try {
-        const res = await fetch(`/api/user/favorites?id=${encodeURIComponent(itemId)}`, {
-          method: 'DELETE',
-          headers: getAuthHeaders()
+        const res = await this.fetchAuthed(`/api/user/favorites?id=${encodeURIComponent(itemId)}`, {
+          method: 'DELETE'
         });
         if (!res.ok) {
           throw new Error('Fallo al eliminar');
@@ -558,9 +755,8 @@
 
       // Eliminar en paralelo
       await Promise.all(itemIds.map(id => {
-        return fetch(`/api/user/favorites?id=${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-          headers: getAuthHeaders()
+        return this.fetchAuthed(`/api/user/favorites?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE'
         }).catch(() => {});
       }));
     },
@@ -641,8 +837,7 @@
           queryParams.set('type', _histState.filter);
         }
 
-        const res = await fetch(`/api/user/history?${queryParams.toString()}`, {
-          headers: getAuthHeaders(),
+        const res = await this.fetchAuthed(`/api/user/history?${queryParams.toString()}`, {
           signal: _histState.controller.signal
         });
 
@@ -746,9 +941,8 @@
       _progressThrottle.set(sId, now);
 
       // Envío asíncrono seguro
-      fetch('/api/user/history', {
+      this.fetchAuthed('/api/user/history', {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: JSON.stringify({
           item_id: itemId,
           media_type: newEntry.media_type,
@@ -778,17 +972,13 @@
           client_timestamp: Date.now()
         });
 
-        if (navigator.sendBeacon) {
-          const blob = new Blob([payload], { type: 'application/json' });
-          navigator.sendBeacon('/api/user/history', blob);
-        } else {
-          fetch('/api/user/history', {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: payload,
-            keepalive: true
-          }).catch(() => {});
-        }
+        fetch('/api/user/history', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: payload,
+          keepalive: true,
+          credentials: 'include'
+        }).catch(() => {});
       } catch (e) {}
     },
 
@@ -809,9 +999,8 @@
       }
 
       try {
-        await fetch(`/api/user/history?id=${encodeURIComponent(itemId)}`, {
-          method: 'DELETE',
-          headers: getAuthHeaders()
+        await this.fetchAuthed(`/api/user/history?id=${encodeURIComponent(itemId)}`, {
+          method: 'DELETE'
         });
       } catch (e) {}
     },
@@ -833,9 +1022,8 @@
       }
 
       try {
-        await fetch('/api/user/history?clear=all', {
-          method: 'DELETE',
-          headers: getAuthHeaders()
+        await this.fetchAuthed('/api/user/history?clear=all', {
+          method: 'DELETE'
         });
       } catch (e) {}
     },
@@ -894,17 +1082,15 @@
 
         // 3. Enviar a Supabase mediante endpoints batch
         if (legacyFavs.length > 0) {
-          await fetch('/api/user/favorites', {
+          await this.fetchAuthed('/api/user/favorites', {
             method: 'POST',
-            headers: getAuthHeaders(),
             body: JSON.stringify({ items: legacyFavs })
           }).catch(() => {});
         }
 
         if (legacyHist.length > 0) {
-          await fetch('/api/user/history', {
+          await this.fetchAuthed('/api/user/history', {
             method: 'POST',
-            headers: getAuthHeaders(),
             body: JSON.stringify({ items: legacyHist })
           }).catch(() => {});
         }

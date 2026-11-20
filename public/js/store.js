@@ -201,30 +201,51 @@
       }
     },
 
-    setCurrentUser(user, token = null, refreshToken = null, deviceToken = null) {
-      if (window.VelvetPersonalData) {
-        window.VelvetPersonalData.setSession(user, token, refreshToken);
+    // Alias usado por el login/registro/logout del shell. Antes no existía y
+    // el inicio de sesión abortaba con TypeError después de guardar el token.
+    setSession(user, token = null, refreshToken = null, expiresAt = null, deviceToken = null) {
+      return this.setCurrentUser(user, token, refreshToken, deviceToken, expiresAt);
+    },
+
+    setCurrentUser(user, token = null, refreshToken = null, deviceToken = null, expiresAt = null) {
+      if (window.VelvetPersonalData && typeof window.VelvetPersonalData.setSession === 'function') {
+        return window.VelvetPersonalData.setSession(user, token, refreshToken, expiresAt, deviceToken);
       }
       try {
         if (user) {
-          localStorage.setItem(USER_KEY, JSON.stringify(user));
-          if (token) localStorage.setItem(TOKEN_KEY, token);
+          const userJson = JSON.stringify(user);
+          localStorage.setItem(USER_KEY, userJson);
+          localStorage.setItem('velvet_current_user', userJson);
+          if (token && token !== 'velvet_token') {
+            localStorage.setItem(TOKEN_KEY, token);
+            localStorage.setItem('velvet_auth_token', token);
+          }
           if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
           if (deviceToken) localStorage.setItem(DEVICE_KEY, deviceToken);
+          if (expiresAt) localStorage.setItem('velvet_expires_at', String(expiresAt));
           setCookie('velvet_auth_active', '1', 2592000);
         } else {
           localStorage.removeItem(USER_KEY);
+          localStorage.removeItem('velvet_current_user');
           localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem('velvet_auth_token');
           localStorage.removeItem(REFRESH_KEY);
+          localStorage.removeItem('velvet_expires_at');
+          localStorage.removeItem(DEVICE_KEY);
           deleteCookie('velvet_auth_active');
         }
-        window.dispatchEvent(new CustomEvent('velvet:auth-changed', { detail: { user } }));
+        window.dispatchEvent(new CustomEvent('velvet:auth-changed', { detail: { user: user || null } }));
       } catch (e) {}
+      return user || null;
     },
 
     getAuthToken() {
       try {
-        return localStorage.getItem(TOKEN_KEY);
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.getAuthToken === 'function') {
+          const live = window.VelvetPersonalData.getAuthToken();
+          if (live) return live;
+        }
+        return localStorage.getItem('velvet_auth_token') || localStorage.getItem(TOKEN_KEY);
       } catch (e) {
         return null;
       }
