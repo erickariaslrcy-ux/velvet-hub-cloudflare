@@ -105,6 +105,30 @@ button,
   min-width: 0;
 }
 
+#category-chips-scroll {
+  scroll-padding-inline: 0.75rem;
+}
+
+@media (max-width: 767px) {
+  #filter-random-btn {
+    display: none !important;
+  }
+
+  #category-chips-scroll {
+    padding-right: 2rem;
+  }
+
+  #sort-menu-btn {
+    min-width: 2.75rem;
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
+  }
+
+  #category-chips .cat-chip {
+    margin-right: 0;
+  }
+}
+
 #mobile-navbar a.mob-tab {
   color: rgba(196, 181, 253, 0.72);
   font-weight: 600;

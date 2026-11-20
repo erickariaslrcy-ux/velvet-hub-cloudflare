@@ -241,6 +241,102 @@ function isSafeUpstreamUrl(urlStr) {
   }
 }
 
+function normalizeUpstreamUrl(raw) {
+  let u = String(raw || "").trim().replace(/&amp;/g, "&");
+  if (!u) return "";
+  if (u.startsWith("//")) u = "https:" + u;
+  if (!/^https?:\/\//i.test(u)) return "";
+  try {
+    const parsed = new URL(u);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    if (!parsed.hostname) return "";
+    return parsed.href;
+  } catch (e) {
+    return u;
+  }
+}
+
+function inferUpstreamReferer(targetMediaUrl, payloadReferer) {
+  const given = String(payloadReferer || "").trim();
+  if (given) return given;
+  const target = String(targetMediaUrl || "");
+  if (target.includes("buondua") || target.includes("imagedeliveries")) return "https://buondua.com/";
+  if (target.includes("xasiat") || target.includes("xascdn")) return "https://xasiat.com/";
+  if (target.includes("4khd")) return "https://4khd.com/";
+  if (target.includes("hentaipaw")) return "https://hentaipaw.com/";
+  if (target.includes("pmvhaven") || target.includes("ovh.net")) return "https://pmvhaven.com/";
+  if (target.includes("pornone")) return "https://pornone.com/";
+  if (target.includes("redporn")) return "https://redporn.porn/";
+  if (target.includes("anyporn")) return "https://anyporn.com/";
+  if (target.includes("damplips")) return "https://www.damplips.com/";
+  if (target.includes("alotporn")) return "https://www.alotporn.com/";
+  if (target.includes("pornhd")) return "https://pornhd.pet/";
+  if (target.includes("gamcore") || target.includes("serverable")) return "https://gamcore.com/";
+  if (target.includes("artgravia")) return "https://artgravia.com/";
+  if (target.includes("pixibb")) return "https://pixibb.com/";
+  try {
+    return new URL(target).origin + "/";
+  } catch (e) {
+    return target;
+  }
+}
+
+function refererOrigin(referer) {
+  try {
+    return new URL(referer).origin;
+  } catch (e) {
+    return "";
+  }
+}
+
+// Image Resizing de Cloudflare pide el origen por su cuenta y no reenvía
+// Referer. Los CDN de galerías (buondua, 4khd, xasiat, imagedeliveries)
+// contestan 403 y la tarjeta cae en el placeholder de Play.
+function hostRejectsImageResize(targetUrl) {
+  return /buondua|imagedeliveries|xasiat|xascdn|4khd|artgravia|pixibb|leakgallery/i.test(String(targetUrl || ""));
+}
+
+function alternateCoverUrls(coverUrl) {
+  const primary = normalizeUpstreamUrl(coverUrl);
+  if (!primary) return [];
+  const out = [];
+  const add = (candidate) => {
+    const n = normalizeUpstreamUrl(candidate);
+    if (!n || n === primary || out.indexOf(n) !== -1) return;
+    out.push(n);
+  };
+  add(primary.replace(/-\d{2,4}x\d{2,4}(?=\.(?:jpe?g|png|webp|gif)(?:\?|#|$))/i, ""));
+  add(primary.replace(/\/thumb\.(jpe?g|png|webp|gif)(?=\?|#|$)/i, "/1.$1"));
+  add(primary.replace(/\/thumbnails\/(?:cover|thumb|0)\.(webp|jpe?g|png)(?=\?|#|$)/i, "/thumbnails/1.$1"));
+  if (/buondua/i.test(primary) && /\.gif(?=\?|#|$)/i.test(primary)) {
+    add(primary.replace(/\.gif(?=\?|#|$)/i, ".jpeg"));
+  }
+  return out.slice(0, 2);
+}
+
+function upstreamLooksLikeImage(res) {
+  if (!res || !res.ok) return false;
+  const ctype = (res.headers.get("content-type") || "").toLowerCase();
+  if (ctype.includes("text/html") || ctype.includes("application/json") || ctype.includes("text/plain")) return false;
+  return ctype.includes("image/") || ctype.includes("octet-stream") || ctype === "";
+}
+
+async function maskCoverFields(rawCover, secret) {
+  const primary = normalizeUpstreamUrl(rawCover);
+  if (!primary || !secret) return { cover_url: "", cover_fallback: "" };
+  const token = await encodeMediaToken(primary, inferUpstreamReferer(primary, ""), secret);
+  let cover_fallback = "";
+  const alts = alternateCoverUrls(primary);
+  if (alts[0]) {
+    const altToken = await encodeMediaToken(alts[0], inferUpstreamReferer(alts[0], ""), secret);
+    if (altToken) cover_fallback = `/api/media?t=${altToken}`;
+  }
+  return {
+    cover_url: token ? `/api/media?t=${token}` : "",
+    cover_fallback
+  };
+}
+
 // =============================================================================
 // VALIDACIÓN Y SANITIZACIÓN DEFENSIVA DE ENTRADAS
 // =============================================================================
@@ -1386,53 +1482,21 @@ export async function onRequest(context) {
       } catch (e) {}
     }
 
-    // Inferencia de Referer para anti-hotlink
-    let spoofedReferer = payload.r || "";
-    if (!spoofedReferer) {
-      if (targetMediaUrl.includes("buondua") || targetMediaUrl.includes("imagedeliveries")) {
-        spoofedReferer = "https://buondua.com/";
-      } else if (targetMediaUrl.includes("xasiat") || targetMediaUrl.includes("xascdn")) {
-        spoofedReferer = "https://xasiat.com/";
-      } else if (targetMediaUrl.includes("4khd")) {
-        spoofedReferer = "https://4khd.com/";
-      } else if (targetMediaUrl.includes("hentaipaw")) {
-        spoofedReferer = "https://hentaipaw.com/";
-      } else if (targetMediaUrl.includes("pmvhaven") || targetMediaUrl.includes("ovh.net")) {
-        spoofedReferer = "https://pmvhaven.com/";
-      } else if (targetMediaUrl.includes("pornone")) {
-        spoofedReferer = "https://pornone.com/";
-      } else if (targetMediaUrl.includes("redporn")) {
-        spoofedReferer = "https://redporn.porn/";
-      } else if (targetMediaUrl.includes("anyporn")) {
-        spoofedReferer = "https://anyporn.com/";
-      } else if (targetMediaUrl.includes("damplips")) {
-        spoofedReferer = "https://www.damplips.com/";
-      } else if (targetMediaUrl.includes("alotporn")) {
-        spoofedReferer = "https://www.alotporn.com/";
-      } else if (targetMediaUrl.includes("pornhd")) {
-        spoofedReferer = "https://pornhd.pet/";
-      } else if (targetMediaUrl.includes("gamcore") || targetMediaUrl.includes("serverable")) {
-        spoofedReferer = "https://gamcore.com/";
-      } else {
-        try {
-          spoofedReferer = new URL(targetMediaUrl).origin + "/";
-        } catch (e) {
-          spoofedReferer = targetMediaUrl;
-        }
-      }
-    }
-
-    const upstreamReqHeaders = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-      "Referer": spoofedReferer,
-      "Accept": "*/*",
-      "Accept-Encoding": "identity",
-    };
-
+    const spoofedReferer = inferUpstreamReferer(targetMediaUrl, payload.r || "");
     const clientRange = context.request.headers.get("Range");
-    if (clientRange) {
-      upstreamReqHeaders["Range"] = clientRange;
-    }
+
+    const buildUpstreamHeaders = (currentReferer, includeRange) => {
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Referer": currentReferer || spoofedReferer,
+        "Accept": isVideo ? "*/*" : "image/avif,image/webp,image/apng,image/jpeg,image/png,*/*;q=0.8",
+        "Accept-Encoding": "identity"
+      };
+      const originHeader = refererOrigin(currentReferer || spoofedReferer);
+      if (originHeader) headers["Origin"] = originHeader;
+      if (includeRange && clientRange) headers["Range"] = clientRange;
+      return headers;
+    };
 
     try {
       let imageTransform = null;
@@ -1445,23 +1509,61 @@ export async function onRequest(context) {
         };
       }
 
-      const upstream = await fetch(targetMediaUrl, {
-        method,
-        headers: upstreamReqHeaders,
-        redirect: "follow",
-        cf: isVideo
-          ? undefined
-          : {
+      const fetchImage = async (withResize) => {
+        let current = targetMediaUrl;
+        let last = null;
+        for (let hop = 0; hop < 4; hop++) {
+          last = await fetch(current, {
+            method: method === "HEAD" ? "HEAD" : "GET",
+            headers: buildUpstreamHeaders(spoofedReferer, false),
+            redirect: "manual",
+            cf: {
               cacheEverything: true,
               cacheTtl: 31536000,
-              ...(imageTransform ? { image: imageTransform } : {})
-            },
-      });
+              ...(withResize && hop === 0 && imageTransform ? { image: imageTransform } : {})
+            }
+          });
+          if (last.status >= 300 && last.status < 400) {
+            const loc = last.headers.get("location");
+            if (!loc) return last;
+            let next = "";
+            try { next = new URL(loc, current).href; } catch (e) { return last; }
+            if (!isSafeUpstreamUrl(next)) return last;
+            current = next;
+            continue;
+          }
+          return last;
+        }
+        return last;
+      };
 
-      // Si el origen upstream bloqueó la IP del servidor con 403/401/503 (ej. WAF/anti-bot en Buondua),
-      // redirigir con 307 al navegador residencial del cliente para descarga directa limpia
-      if (!upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
-        return Response.redirect(targetMediaUrl, 307);
+      let upstream;
+      if (isVideo) {
+        upstream = await fetch(targetMediaUrl, {
+          method,
+          headers: buildUpstreamHeaders(spoofedReferer, true),
+          redirect: "follow"
+        });
+        if (!upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
+          return Response.redirect(targetMediaUrl, 307);
+        }
+      } else {
+        const skipResize = hostRejectsImageResize(targetMediaUrl);
+        upstream = await fetchImage(!!imageTransform && !skipResize);
+        if (imageTransform && !upstreamLooksLikeImage(upstream)) {
+          upstream = await fetchImage(false);
+        }
+        if (!upstreamLooksLikeImage(upstream)) {
+          return new Response("Imagen no disponible", {
+            status: 502,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8",
+              "Cache-Control": "no-store",
+              "X-Velvet-Media": "upstream-rejected",
+              ...getCorsHeaders(origin)
+            }
+          });
+        }
       }
 
       const respHeaders = new Headers();
@@ -2240,9 +2342,10 @@ export async function onRequest(context) {
       }
     }
     if (mediaType === "video" && preferLivePmv && !freshShuffle) {
+      // sort=random de PMVHaven devuelve otra tanda en cada request.
+      // La ventana de 3 h permuta la página y orderCatalogForSlot fija el orden.
       let pmvSort = "recent";
-      if (sort === "random") pmvSort = "random";
-      else if (sort === "views") pmvSort = "views";
+      if (sort === "views") pmvSort = "views";
       else if (sort === "rating") pmvSort = "rating";
 
       let fetchPmvPage = page;
@@ -2646,7 +2749,9 @@ export async function onRequest(context) {
       }
       const items = await Promise.all((rawItems || []).map(async it => {
         const isGame = it.media_type === "game";
-        const coverToken = (!isGame && it.cover_url) ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
+        const maskedCover = isGame
+          ? { cover_url: it.cover_url || "", cover_fallback: "" }
+          : await maskCoverFields(it.cover_url, MEDIA_SECRET);
         const videoSources = await Promise.all((it.video_sources || []).map(async vs => ({
           ...vs,
           url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
@@ -2657,7 +2762,8 @@ export async function onRequest(context) {
           source: it.source || "velvet",
           source_id: it.source_id ? String(it.source_id) : String(it.id),
           title: it.title,
-          cover_url: isGame ? (it.cover_url || "") : (coverToken ? `/api/media?t=${coverToken}` : ""),
+          cover_url: maskedCover.cover_url,
+          cover_fallback: maskedCover.cover_fallback,
           media_type: it.media_type,
           tags: it.tags || [],
           artists: it.artists || [],

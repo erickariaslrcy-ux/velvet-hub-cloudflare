@@ -507,7 +507,8 @@
       
       // Si la URL inicial contenía hash o query legada, normalizarla sin recargar
       if (initialRoute.canonical && initialRoute.canonical !== window.location.pathname) {
-        window.history.replaceState({ url: initialRoute.canonical, route: initialRoute }, '', initialRoute.canonical);
+        const next = initialRoute.canonical + window.location.search + window.location.hash;
+        window.history.replaceState({ url: next, route: initialRoute }, '', next);
       }
 
       this.executeRoute(initialRoute, false);
