@@ -314,6 +314,94 @@ function alternateCoverUrls(coverUrl) {
   return out.slice(0, 2);
 }
 
+function hostnameEndsWith(hostname, suffix) {
+  const host = String(hostname || "").toLowerCase();
+  const tail = String(suffix || "").toLowerCase();
+  return !!tail && (host === tail || host.endsWith("." + tail));
+}
+
+// www.xasiat.com/get_image/.../sources/{carpeta}/{album}/... responde 403
+// (challenge de Cloudflare) al worker. La portada del álbum en xascdn no.
+function xasiatAlbumPreview(targetUrl) {
+  const raw = String(targetUrl || "");
+  if (!/xasiat\.com/i.test(raw)) return "";
+  const match = raw.match(/\/sources\/(\d+)\/(\d+)\//i);
+  if (!match) return "";
+  return `https://pic.xascdn.li/contents/albums/preview/380x507/${match[1]}/${match[2]}/preview.jpg`;
+}
+
+// cdn.buondua.com/{host-real}/ruta también cae en el challenge. El archivo
+// está en el host que va embebido en la ruta (pok.misskon.com, etc.).
+function unwrapBuonduaEmbed(targetUrl) {
+  const match = String(targetUrl || "").match(/^https?:\/\/cdn\.buondua\.com\/([a-z0-9.-]+\.[a-z]{2,})(\/[^?#]*)/i);
+  if (!match) return "";
+  const embedded = match[1].toLowerCase();
+  if (hostnameEndsWith(embedded, "buondua.com")) return "";
+  return `https://${embedded}${match[2]}`;
+}
+
+// i2.buondua.com y pic.4khd.com bloquean al worker o redirigen fuera de la
+// lista. Photon (i0.wp.com) sí entrega esos archivos.
+function photonCoverUrl(targetUrl) {
+  let parsed;
+  try { parsed = new URL(String(targetUrl || "")); } catch (e) { return ""; }
+  const host = parsed.hostname.toLowerCase();
+  if (!hostnameEndsWith(host, "buondua.com") && !hostnameEndsWith(host, "4khd.com")) return "";
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+  return `https://i0.wp.com/${host}${parsed.pathname}?w=480&ssl=1`;
+}
+
+function galleryFetchPlan(targetUrl) {
+  const primary = normalizeUpstreamUrl(targetUrl);
+  if (!primary) return [];
+  const ordered = [];
+  const add = (candidate) => {
+    const next = normalizeUpstreamUrl(candidate);
+    if (!next || ordered.indexOf(next) !== -1) return;
+    ordered.push(next);
+  };
+  add(xasiatAlbumPreview(primary));
+  add(unwrapBuonduaEmbed(primary));
+  let host = "";
+  try { host = new URL(primary).hostname.toLowerCase(); } catch (e) { host = ""; }
+  if (hostnameEndsWith(host, "buondua.com")) add(photonCoverUrl(primary));
+  add(primary);
+  if (hostnameEndsWith(host, "4khd.com")) add(photonCoverUrl(primary));
+  return ordered;
+}
+
+function isGalleryFallbackUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "pic.xascdn.li" && parsed.pathname.includes("/contents/albums/preview/")) return true;
+    if (host === "pok.misskon.com" && parsed.pathname.startsWith("/images/")) return true;
+    if (host === "i0.wp.com") {
+      const embedded = parsed.pathname.replace(/^\//, "").split("/")[0].toLowerCase();
+      return hostnameEndsWith(embedded, "buondua.com") || hostnameEndsWith(embedded, "4khd.com");
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+function isFollowableMediaRedirect(nextUrl, fromUrl) {
+  if (isSafeUpstreamUrl(nextUrl) || isGalleryFallbackUrl(nextUrl)) return true;
+  try {
+    const nextHost = new URL(nextUrl).hostname.toLowerCase();
+    const fromHost = new URL(fromUrl).hostname.toLowerCase();
+    const googleCdn = hostnameEndsWith(nextHost, "googleusercontent.com") || hostnameEndsWith(nextHost, "ggpht.com");
+    const fromGallery = hostnameEndsWith(fromHost, "4khd.com")
+      || hostnameEndsWith(fromHost, "googleusercontent.com")
+      || hostnameEndsWith(fromHost, "ggpht.com");
+    return googleCdn && fromGallery;
+  } catch (e) {
+    return false;
+  }
+}
+
 function upstreamLooksLikeImage(res) {
   if (!res || !res.ok) return false;
   const ctype = (res.headers.get("content-type") || "").toLowerCase();
@@ -1509,8 +1597,11 @@ export async function onRequest(context) {
         };
       }
 
-      const fetchImage = async (withResize) => {
-        let current = targetMediaUrl;
+      const fetchCandidate = async (candidateUrl, withResize) => {
+        if (!isSafeUpstreamUrl(candidateUrl) && !isGalleryFallbackUrl(candidateUrl)) {
+          return new Response("blocked", { status: 403, headers: { "content-type": "text/plain" } });
+        }
+        let current = candidateUrl;
         let last = null;
         for (let hop = 0; hop < 4; hop++) {
           last = await fetch(current, {
@@ -1528,7 +1619,7 @@ export async function onRequest(context) {
             if (!loc) return last;
             let next = "";
             try { next = new URL(loc, current).href; } catch (e) { return last; }
-            if (!isSafeUpstreamUrl(next)) return last;
+            if (!isFollowableMediaRedirect(next, current)) return last;
             current = next;
             continue;
           }
@@ -1538,6 +1629,7 @@ export async function onRequest(context) {
       };
 
       let upstream;
+      let servedFrom = "";
       if (isVideo) {
         upstream = await fetch(targetMediaUrl, {
           method,
@@ -1548,10 +1640,24 @@ export async function onRequest(context) {
           return Response.redirect(targetMediaUrl, 307);
         }
       } else {
-        const skipResize = hostRejectsImageResize(targetMediaUrl);
-        upstream = await fetchImage(!!imageTransform && !skipResize);
-        if (imageTransform && !upstreamLooksLikeImage(upstream)) {
-          upstream = await fetchImage(false);
+        const plan = galleryFetchPlan(targetMediaUrl);
+        const primaryUrl = normalizeUpstreamUrl(targetMediaUrl);
+        upstream = null;
+        for (let i = 0; i < plan.length; i++) {
+          const candidate = plan[i];
+          const canResize = candidate === primaryUrl && !!imageTransform && !hostRejectsImageResize(candidate);
+          try {
+            upstream = await fetchCandidate(candidate, canResize);
+            if (canResize && !upstreamLooksLikeImage(upstream)) {
+              upstream = await fetchCandidate(candidate, false);
+            }
+          } catch (candidateErr) {
+            upstream = null;
+          }
+          if (upstreamLooksLikeImage(upstream)) {
+            servedFrom = candidate;
+            break;
+          }
         }
         if (!upstreamLooksLikeImage(upstream)) {
           return new Response("Imagen no disponible", {
@@ -1571,6 +1677,9 @@ export async function onRequest(context) {
       respHeaders.set("Access-Control-Allow-Origin", "*");
       respHeaders.set("X-Powered-By", "Velvet-Media-Engine/3.0");
       respHeaders.set("Server", "Velvet-Cloud");
+      if (!isVideo && servedFrom && servedFrom !== normalizeUpstreamUrl(targetMediaUrl)) {
+        respHeaders.set("X-Velvet-Media", "mirror");
+      }
 
       if (isVideo) {
         respHeaders.set("Accept-Ranges", "bytes");
