@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v12-velvet-turbo-v16-ready';
+const CACHE_VERSION = 'v13-session-persist';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -148,7 +148,10 @@ self.addEventListener('fetch', (event) => {
       caches.open(IMAGE_CACHE).then(async (cache) => {
         const cached = await cache.match(req);
 
-        // Disparar revalidación o fetch con timeout de 8 segundos
+        // Cache-first: una portada ya vista no vuelve a salir a la red.
+        // Antes cada imagen cacheada disparaba otra petición en segundo plano.
+        if (cached) return cached;
+
         const fetchPromise = (async () => {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), 8000);
@@ -168,12 +171,6 @@ self.addEventListener('fetch', (event) => {
             return null;
           }
         })();
-
-        // Si ya está en caché, responder de inmediato (< 5ms) y revalidar en segundo plano
-        if (cached) {
-          event.waitUntil(fetchPromise);
-          return cached;
-        }
 
         // Si es la primera vez, esperar la red con fallback SVG de marca si falla
         const netRes = await fetchPromise;

@@ -269,8 +269,8 @@ assert.ok(
 
 // Service Worker v12
 assert.ok(
-  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign"),
-  "sw.js debe tener la versión de caché actualizada a v12"
+  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign") || swJs.includes("v13-session-persist"),
+  "sw.js debe tener la versión de caché actualizada"
 );
 assert.ok(
   swJs.includes("/favicon.ico") && swJs.includes("/icon-192.png"),

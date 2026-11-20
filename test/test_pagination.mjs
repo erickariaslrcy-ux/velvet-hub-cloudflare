@@ -71,8 +71,8 @@ assert.ok(
   "sw.js NO debe cachear /api/items en API_CACHE con SWR"
 );
 assert.ok(
-  swCode.includes("v12-velvet-turbo") || swCode.includes("v12-velvet-redesign"),
-  "sw.js debe tener la versión de caché actualizada a v12"
+  swCode.includes("v12-velvet-turbo") || swCode.includes("v12-velvet-redesign") || swCode.includes("v13-session-persist"),
+  "sw.js debe tener la versión de caché actualizada"
 );
 assert.ok(
   swCode.includes("/css/pagination.css") && swCode.includes("/js/pagination.js"),

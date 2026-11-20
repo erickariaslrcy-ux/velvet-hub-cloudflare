@@ -424,13 +424,9 @@
         }
       });
 
-      document.addEventListener('touchstart', (e) => {
-        const link = e.target.closest('a[href]');
-        if (link) {
-          const href = link.getAttribute('href');
-          if (href) prefetch(href);
-        }
-      }, { passive: true });
+      // En el móvil, touchstart se dispara al hacer scroll sobre una tarjeta.
+      // Precargar el detalle ahí multiplicaba /api/items por cada dedo. El hover
+      // de escritorio (más arriba) sigue precargando una sola ficha.
     },
 
     // =======================================================================

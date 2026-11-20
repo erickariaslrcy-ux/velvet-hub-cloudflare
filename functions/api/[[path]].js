@@ -264,13 +264,23 @@ function validatePageSize(pageSizeInput, defaultSize = 24) {
 // =============================================================================
 // CABECERAS CORS ESTRICTAS (SIN WILDCARD CUANDO HAY CREDENCIALES)
 // =============================================================================
+function isAllowedOrigin(origin) {
+  if (!origin || origin === "*") return false;
+  try {
+    const u = new URL(origin);
+    const host = u.hostname;
+    if (u.protocol === "http:" && (host === "localhost" || host === "127.0.0.1")) return true;
+    if (u.protocol !== "https:") return false;
+    if (host === "morbohub.com" || host === "www.morbohub.com" || host === "morbohub.pages.dev") return true;
+    if (host.endsWith(".morbohub.pages.dev")) return true;
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
 function getCorsHeaders(origin = "") {
-  const allowed = origin && (
-    origin.endsWith(".pages.dev") ||
-    origin.includes("morbohub") ||
-    origin.includes("localhost") ||
-    origin.includes("127.0.0.1")
-  );
+  const allowed = isAllowedOrigin(origin);
   const allowOrigin = allowed ? origin : (origin || "https://morbohub.pages.dev");
   const headers = {
     "Access-Control-Allow-Origin": allowOrigin,
@@ -331,52 +341,135 @@ function checkPersonalWriteRateLimit(userId, maxPerMin = 60) {
   return true;
 }
 
-// Helper para resolver usuario autenticado via Bearer Token o auto-refresh con x-refresh-token
+function readRequestCookie(request, name) {
+  const raw = request.headers.get("cookie") || "";
+  for (const part of raw.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === name) {
+      const value = part.slice(idx + 1).trim();
+      try { return decodeURIComponent(value); } catch (e) { return value; }
+    }
+  }
+  return null;
+}
+
+function requestIsSecure(request) {
+  try { return new URL(request.url).protocol === "https:"; } catch (e) { return true; }
+}
+
+function buildSessionCookies(request, accessToken, refreshToken, expiresAtSec) {
+  const secure = requestIsSecure(request);
+  const cookies = [];
+  const nowSec = Math.floor(Date.now() / 1000);
+  const accessTtl = expiresAtSec && Number(expiresAtSec) > nowSec
+    ? Math.max(60, Number(expiresAtSec) - nowSec)
+    : 3600;
+  // Las cookies HttpOnly son el respaldo cuando localStorage falla o se fragmenta.
+  // No se escriben si el JWT no cabe: una cookie rechazada no debe tumbar el login.
+  if (accessToken && accessToken.length > 20 && accessToken.length < 3200) {
+    cookies.push(sessionCookie("velvet_access", accessToken, accessTtl, secure));
+  }
+  if (refreshToken && refreshToken.length > 10 && refreshToken.length < 3200) {
+    cookies.push(sessionCookie("velvet_refresh", refreshToken, 60 * 60 * 24 * 30, secure));
+  }
+  return cookies;
+}
+
+function clearSessionCookies(request) {
+  const secure = requestIsSecure(request);
+  return [
+    sessionCookie("velvet_access", "", 0, secure),
+    sessionCookie("velvet_refresh", "", 0, secure)
+  ];
+}
+
+function sessionCookie(name, value, maxAge, secure) {
+  const parts = [
+    `${name}=${encodeURIComponent(value || "")}`,
+    `Max-Age=${Math.max(0, maxAge | 0)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax"
+  ];
+  if (secure) parts.push("Secure");
+  return parts.join("; ");
+}
+
+function withSessionCookies(response, cookies) {
+  if (!cookies || cookies.length === 0) return response;
+  const headers = new Headers(response.headers);
+  for (const cookie of cookies) headers.append("Set-Cookie", cookie);
+  return new Response(response.body, { status: response.status, headers });
+}
+
+// Un solo canje por refresh token dentro del isolate. Dos peticiones paralelas
+// con el mismo token no deben pegarle dos veces a Supabase: la segunda reutilización
+// revoca la familia de sesión completa.
+const REFRESH_FLIGHTS = new Map();
+async function exchangeRefreshToken(refreshToken, sbUrl, sbKey) {
+  if (!refreshToken || refreshToken === "null" || refreshToken === "undefined") return null;
+  const existing = REFRESH_FLIGHTS.get(refreshToken);
+  if (existing) return existing;
+  const job = (async () => {
+    const refRes = await fetch(`${sbUrl}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { "apikey": sbKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    const refData = await refRes.json().catch(() => ({}));
+    if (!refRes.ok || !refData || !refData.access_token) {
+      return { ok: false, status: refRes.status || 401, data: refData || {} };
+    }
+    return { ok: true, status: 200, data: refData };
+  })();
+  REFRESH_FLIGHTS.set(refreshToken, job);
+  try {
+    const result = await job;
+    if (!result || !result.ok) REFRESH_FLIGHTS.delete(refreshToken);
+    return result;
+  } finally {
+    const timer = setTimeout(() => REFRESH_FLIGHTS.delete(refreshToken), 20000);
+    if (timer && typeof timer.unref === "function") timer.unref();
+  }
+}
+
+function sanitizeAuthAlias(input) {
+  return String(input || "").toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 64);
+}
+
+// Resuelve la sesión SIN consumir el refresh token. El canje vive solo en /api/auth/refresh
+// para que las peticiones paralelas de favoritos/historial no revoquen la sesión.
 async function resolveAuthUser(request, sbUrl, sbKey) {
   const activeUrl = sbUrl || _activeSupabaseUrl || (typeof SUPABASE_URL !== "undefined" ? SUPABASE_URL : "");
   const activeKey = sbKey || _activeSupabaseKey || (typeof SUPABASE_KEY !== "undefined" ? SUPABASE_KEY : "");
   const authHeader = request.headers.get("authorization") || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const refreshToken = request.headers.get("x-refresh-token") || null;
-
-  // 1. Intentar validar access_token con Supabase Auth
-  if (token && token !== "velvet_token" && token !== "null" && token !== "undefined") {
-    try {
-      const userRes = await fetch(`${activeUrl}/auth/v1/user`, {
-        headers: { "apikey": activeKey, "Authorization": `Bearer ${token}` }
-      });
-      if (userRes.ok) {
-        const user = await userRes.json();
-        if (user && user.id) {
-          return { user, token, newToken: null, newRefreshToken: null };
-        }
-      }
-    } catch (e) {}
+  let token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  if (!token || token === "velvet_token" || token === "null" || token === "undefined") {
+    token = readRequestCookie(request, "velvet_access") || "";
+  }
+  if (!token || token === "velvet_token" || token === "null" || token === "undefined") {
+    return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
   }
 
-  // 2. Si el token expiró o falló pero se envió x-refresh-token, autorenovar sesión silenciosamente
-  if (refreshToken && refreshToken !== "null" && refreshToken !== "undefined") {
-    try {
-      const refRes = await fetch(`${activeUrl}/auth/v1/token?grant_type=refresh_token`, {
-        method: "POST",
-        headers: { "apikey": activeKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken })
-      });
-      if (refRes.ok) {
-        const refData = await refRes.json();
-        if (refData && refData.user && refData.access_token) {
-          return {
-            user: refData.user,
-            token: refData.access_token,
-            newToken: refData.access_token,
-            newRefreshToken: refData.refresh_token || refreshToken
-          };
-        }
+  try {
+    const userRes = await fetch(`${activeUrl}/auth/v1/user`, {
+      headers: { "apikey": activeKey, "Authorization": `Bearer ${token}` }
+    });
+    if (userRes.ok) {
+      const user = await userRes.json();
+      if (user && user.id) {
+        return { user, token, newToken: null, newRefreshToken: null, unavailable: false };
       }
-    } catch (e) {}
+    }
+    if (userRes.status >= 500) {
+      return { user: null, token, newToken: null, newRefreshToken: null, unavailable: true };
+    }
+  } catch (e) {
+    return { user: null, token, newToken: null, newRefreshToken: null, unavailable: true };
   }
 
-  return { user: null, token: null, newToken: null, newRefreshToken: null };
+  return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
 }
 
 // Helper para guardar user_metadata en Supabase de forma atómica e infalible
@@ -397,6 +490,12 @@ async function updateSupabaseUserMetadata(userId, newMetadata, sbUrl, sbKey) {
   } catch (e) {
     return false;
   }
+}
+
+async function updateUserMetadata() {
+  // Los favoritos viven en public.favorites (RLS por auth.uid()).
+  // Escribirlos en user_metadata hincha el JWT y tira la sesión al rotar el token.
+  return false;
 }
 
 // Helper para sincronizar tabla SQL favorites si el ítem tiene ID numérico
@@ -437,7 +536,7 @@ export async function onRequest(context) {
   const SUPABASE_URL_DB2 = env.SUPABASE_URL_DB2 || env.NEXT_PUBLIC_SUPABASE_URL_DB2 || "https://vtyleivfovkolpxjjkjs.supabase.co";
   const SUPABASE_ANON_KEY_DB2 = env.SUPABASE_ANON_KEY_DB2 || env.NEXT_PUBLIC_SUPABASE_ANON_KEY_DB2 || "";
   const SUPABASE_SERVICE_ROLE_KEY_DB2 = env.SUPABASE_SERVICE_ROLE_KEY_DB2 || "";
-  const MEDIA_SECRET = env.MEDIA_SECRET || "velvet_master_media_hmac_secret_production_2026";
+  const MEDIA_SECRET = env.MEDIA_SECRET || "";
   _activeMediaSecret = MEDIA_SECRET;
 
   // Verificación defensiva de arranque de variables de entorno (CERO valores expuestos)
@@ -1054,7 +1153,7 @@ export async function onRequest(context) {
             const r1 = await fetch(`https://cdn.imagedeliveries.com/${sid}/thumbnails/1.webp`, { method: "HEAD" }).catch(() => null);
             if (r1 && r1.ok) {
               let low = 1;
-              let high = 60;
+              let high = 24;
               let detected = 1;
               while (low <= high) {
                 const mid = Math.floor((low + high) / 2);
@@ -1370,8 +1469,9 @@ export async function onRequest(context) {
     const sort = validateSort(url.searchParams.get("sort"));
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
-    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam}:${sort}`;
-    const l1Catalog = (sort === "random" && seedParam === 0) ? null : getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
+    const catalogSlot = Math.floor(Date.now() / (3 * 60 * 60 * 1000));
+    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam || catalogSlot}:${sort}`;
+    const l1Catalog = getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
     if (l1Catalog) {
       return new Response(method === "HEAD" ? null : l1Catalog, {
         status: 200,
@@ -1494,11 +1594,9 @@ export async function onRequest(context) {
           };
 
           const jsonStr = JSON.stringify(responsePayload);
-          if (sort !== "random" || seedParam > 0) {
-            setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
-          }
+          setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
 
-          return new Response(jsonStr, {
+          const pmvResponse = new Response(jsonStr, {
             status: 200,
             headers: {
               "Content-Type": "application/json; charset=utf-8",
@@ -1506,6 +1604,10 @@ export async function onRequest(context) {
               ...getCorsHeaders(origin)
             }
           });
+          if (cache) {
+            try { context.waitUntil(cache.put(cacheKey, pmvResponse.clone())); } catch (e) {}
+          }
+          return pmvResponse;
         }
       } catch (pmvErr) {
         console.error("PMVHaven API error:", pmvErr);
@@ -1563,7 +1665,7 @@ export async function onRequest(context) {
       postgrestUrl += "&media_type=eq.video";
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       postgrestUrl += "&media_type=eq.gallery&page_count=gt.0";
-      const allowLeak = (Math.random() < 0.002) || (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
+      const allowLeak = (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
       if (!allowLeak) {
         postgrestUrl += "&source=neq.leakgallery";
       }
@@ -1614,19 +1716,28 @@ export async function onRequest(context) {
       postgrestUrl += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
     }
 
+    // OFFSET profundo obliga a Postgres a recorrer miles de filas (~4s).
+    // A partir de la página 11 se salta con id=lte, que usa el índice primario.
+    if (offset > 240) {
+      const cursorId = Math.max(1, estimatedTotal - offset);
+      postgrestUrl = postgrestUrl.replace(/offset=\d+/, "offset=0");
+      postgrestUrl += `&id=lte.${cursorId}`;
+    }
+
     // Orden por defecto indexado por clave primaria
     postgrestUrl += "&order=id.desc";
 
     try {
       // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
-      const preferCount = (q || tag) ? "count=exact" : (env.POSTGREST_COUNT_MODE || "count=planned");
+      const preferCount = (q || tag) ? "count=exact" : "";
       const activeQueryKey = isGameMedia ? (SUPABASE_SERVICE_ROLE_KEY_DB2 || SUPABASE_ANON_KEY_DB2 || SUPABASE_KEY) : SUPABASE_KEY;
+      const catalogHeaders = {
+        "apikey": activeQueryKey,
+        "Authorization": `Bearer ${activeQueryKey}`,
+        ...(preferCount ? { "Prefer": preferCount } : {})
+      };
       let spRes = await fetch(postgrestUrl, {
-        headers: {
-          "apikey": activeQueryKey,
-          "Authorization": `Bearer ${activeQueryKey}`,
-          "Prefer": preferCount
-        }
+        headers: catalogHeaders
       });
 
       // Blindaje contra timeout: Si PostgREST se demora o devuelve 57014 (statement timeout), reintentar sin Prefer count
@@ -1843,20 +1954,29 @@ export async function onRequest(context) {
 
       let email = rawUser.toLowerCase();
       if (!email.includes("@")) {
+        const alias = sanitizeAuthAlias(email);
         const master = "erickariaslrcy@gmail.com";
-        if (email === "admin" || email === "erick" || email === "master") {
+        if (alias === "admin" || alias === "erick" || alias === "master") {
           email = master;
-        } else {
-          // Resolver alias desde profiles
-          const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=email&or=(email.ilike.*${email}@*,email.ilike.*${email}*)&limit=1`, {
-            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        } else if (!alias) {
+          return new Response(JSON.stringify({ detail: "Usuario no válido" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
           });
-          const profData = await profRes.json();
-          if (profData && profData.length > 0) {
+        } else if (SUPABASE_SERVICE_ROLE_KEY) {
+          // La política RLS de profiles solo deja leer el perfil propio. El alias
+          // se resuelve con la service role y un filtro ya saneado (sin metacaracteres PostgREST).
+          const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=email&or=(email.ilike.*${alias}@*,email.ilike.*${alias}*)&limit=1`, {
+            headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` }
+          });
+          const profData = await profRes.json().catch(() => []);
+          if (profData && profData.length > 0 && profData[0].email) {
             email = profData[0].email;
           } else {
-            email = `${email}@velvet.local`;
+            email = `${alias}@velvet.local`;
           }
+        } else {
+          email = `${alias}@velvet.local`;
         }
       }
 
@@ -1877,10 +1997,10 @@ export async function onRequest(context) {
       }
 
       // Obtener perfil y rol admin
-      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${authData.user.id}&select=is_admin&limit=1`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(authData.user.id)}&select=is_admin&limit=1`, {
+        headers: { "apikey": SUPABASE_ANON_KEY || SUPABASE_KEY, "Authorization": `Bearer ${authData.access_token}` }
       });
-      const profs = await profRes.json();
+      const profs = await profRes.json().catch(() => []);
       const isAdmin = profs && profs[0] && profs[0].is_admin;
       const role = isAdmin ? "admin" : "member";
       const meta = authData.user.user_metadata || {};
@@ -1902,10 +2022,18 @@ export async function onRequest(context) {
         }
       };
 
-      return new Response(JSON.stringify(respData), {
+      const loginResponse = new Response(JSON.stringify(respData), {
         status: 200,
-        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+          ...getCorsHeaders(origin)
+        }
       });
+      return withSessionCookies(
+        loginResponse,
+        buildSessionCookies(context.request, authData.access_token, authData.refresh_token, authData.expires_at)
+      );
     } catch (err) {
       return new Response(JSON.stringify({ detail: err.message || "Error al procesar login" }), {
         status: 500,
@@ -1918,24 +2046,39 @@ export async function onRequest(context) {
   // 6. AUTENTICACIÓN: VERIFICAR SESIÓN (/api/auth/me)
   // =========================================================================
   if (url.pathname === "/api/auth/me" && method === "GET") {
-    const { user, newToken, newRefreshToken } = await resolveAuthUser(context.request);
+    const { user, token, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+
+    if (unavailable) {
+      return new Response(JSON.stringify({ detail: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
 
     if (!user) {
       return new Response(JSON.stringify({ detail: "No autenticado" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
       });
     }
 
     try {
-      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=is_admin&limit=1`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=is_admin&limit=1`, {
+        headers: { "apikey": SUPABASE_ANON_KEY || SUPABASE_KEY, "Authorization": `Bearer ${token}` }
       });
       const profs = await profRes.json().catch(() => []);
       const isAdmin = profs && profs[0] && profs[0].is_admin;
       const role = isAdmin ? "admin" : "member";
       const meta = user.user_metadata || {};
       const displayName = meta.username || meta.full_name || meta.display_name || user.email?.split("@")[0] || "Usuario VIP";
+      let expiresAt = null;
+      try {
+        const part = token.split(".")[1];
+        if (part) {
+          const payload = JSON.parse(fromBase64Url(part));
+          if (payload && payload.exp) expiresAt = payload.exp;
+        }
+      } catch (e) {}
 
       const respData = {
         id: user.id,
@@ -1945,20 +2088,19 @@ export async function onRequest(context) {
         tier: isAdmin ? "Dueño" : "Velvet VIP ($5.99)",
         tier_level: "pro",
         is_pro: true,
-        max_devices: 10
+        max_devices: 10,
+        token,
+        expires_at: expiresAt
       };
 
-      if (newToken) respData.new_token = newToken;
-      if (newRefreshToken) respData.new_refresh_token = newRefreshToken;
-
-      const headers = { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) };
-      if (newToken) headers["x-new-token"] = newToken;
-
-      return new Response(JSON.stringify(respData), { status: 200, headers });
+      return new Response(JSON.stringify(respData), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
     } catch (err) {
       return new Response(JSON.stringify({ detail: "Error de sesión" }), {
         status: 500,
-        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
       });
     }
   }
@@ -1968,37 +2110,42 @@ export async function onRequest(context) {
   // =========================================================================
   if (url.pathname === "/api/auth/refresh" && method === "POST") {
     try {
+      const originHeader = context.request.headers.get("origin");
+      if (originHeader && !isAllowedOrigin(originHeader)) {
+        return new Response(JSON.stringify({ detail: "Origen no permitido" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      }
+
       const body = await context.request.json().catch(() => ({}));
       const refreshToken =
         body.refresh_token ||
         context.request.headers.get("x-refresh-token") ||
+        readRequestCookie(context.request, "velvet_refresh") ||
         null;
 
       if (!refreshToken) {
         return new Response(JSON.stringify({ detail: "Token de actualización no provisto" }), {
           status: 400,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
         });
       }
 
-      const refRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method: "POST",
-        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken })
-      });
-
-      const refData = await refRes.json();
-      if (!refRes.ok || !refData.access_token) {
-        return new Response(JSON.stringify({ detail: refData?.error_description || "Sesión expirada" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      const exchanged = await exchangeRefreshToken(refreshToken, SUPABASE_URL, SUPABASE_KEY);
+      const refData = exchanged && exchanged.data ? exchanged.data : {};
+      if (!exchanged || !exchanged.ok || !refData.access_token) {
+        const status = exchanged && exchanged.status >= 500 ? 503 : 401;
+        return new Response(JSON.stringify({ detail: refData?.error_description || refData?.msg || "Sesión expirada" }), {
+          status,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
         });
       }
 
       const user = refData.user;
       const meta = user?.user_metadata || {};
-      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}&select=is_admin&limit=1`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=is_admin&limit=1`, {
+        headers: { "apikey": SUPABASE_ANON_KEY || SUPABASE_KEY, "Authorization": `Bearer ${refData.access_token}` }
       });
       const profs = await profRes.json().catch(() => []);
       const isAdmin = profs && profs[0] && profs[0].is_admin;
@@ -2020,14 +2167,22 @@ export async function onRequest(context) {
         }
       };
 
-      return new Response(JSON.stringify(respData), {
+      const refreshResponse = new Response(JSON.stringify(respData), {
         status: 200,
-        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+          ...getCorsHeaders(origin)
+        }
       });
+      return withSessionCookies(
+        refreshResponse,
+        buildSessionCookies(context.request, refData.access_token, refData.refresh_token, refData.expires_at)
+      );
     } catch (err) {
       return new Response(JSON.stringify({ detail: err.message || "Error al refrescar sesión" }), {
         status: 500,
-        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
       });
     }
   }
@@ -2036,10 +2191,18 @@ export async function onRequest(context) {
   // 6.2 AUTENTICACIÓN: CERRAR SESIÓN (/api/auth/logout)
   // =========================================================================
   if (url.pathname === "/api/auth/logout" && method === "POST") {
-    return new Response(JSON.stringify({ success: true }), {
+    const { token } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (token) {
+      fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+      }).catch(() => {});
+    }
+    const logoutResponse = new Response(JSON.stringify({ success: true }), {
       status: 200,
-      headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
     });
+    return withSessionCookies(logoutResponse, clearSessionCookies(context.request));
   }
 
   // =========================================================================
@@ -2074,7 +2237,10 @@ export async function onRequest(context) {
       let keyValid = false;
       let keyNote = "Llave VIP de Acceso";
 
-      const MASTER_KEYS = ["VELVET-VIP-2026", "VELVET-VIP-ACCESS", "MASTER-ADMIN", "VELVET-ADMIN-2026"];
+      const MASTER_KEYS = String(env.MASTER_INVITE_KEYS || "")
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
       if (MASTER_KEYS.includes(access_key)) {
         keyValid = true;
         keyNote = "Llave Maestra Velvet VIP";
@@ -2149,11 +2315,20 @@ export async function onRequest(context) {
         headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
         body: JSON.stringify({ email, password })
       });
-      const authData = await authRes.json();
+      const authData = await authRes.json().catch(() => ({}));
+      if (!authRes.ok || !authData.access_token || !authData.user) {
+        return new Response(JSON.stringify({
+          detail: "La cuenta se creó, pero no se pudo abrir la sesión. Entra con tu usuario y contraseña."
+        }), {
+          status: 401,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      }
 
       const respData = {
-        token: authData?.access_token || "velvet_token",
-        refresh_token: authData?.refresh_token || null,
+        token: authData.access_token,
+        refresh_token: authData.refresh_token || null,
+        expires_at: authData.expires_at || null,
         user: {
           id: regData.user.id,
           username,
@@ -2166,10 +2341,18 @@ export async function onRequest(context) {
         }
       };
 
-      return new Response(JSON.stringify(respData), {
+      const registerResponse = new Response(JSON.stringify(respData), {
         status: 200,
-        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+          ...getCorsHeaders(origin)
+        }
       });
+      return withSessionCookies(
+        registerResponse,
+        buildSessionCookies(context.request, authData.access_token, authData.refresh_token, authData.expires_at)
+      );
     } catch (err) {
       return new Response(JSON.stringify({ detail: err.message }), {
         status: 500,
@@ -2202,7 +2385,13 @@ export async function onRequest(context) {
     url.pathname.startsWith("/api/user/favorites/");
 
   if (isFavoritesRoute) {
-    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable) {
+      return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: getPersonalHeaders(origin)
+      });
+    }
     if (!user) {
       return new Response(JSON.stringify({ error: "No autenticado" }), {
         status: 401,
@@ -2226,7 +2415,7 @@ export async function onRequest(context) {
       const favRes = await fetch(favQueryUrl, {
         headers: {
           "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
           "Prefer": "count=exact",
           "Range": `${offset}-${to}`
         }
@@ -2308,7 +2497,7 @@ export async function onRequest(context) {
               method: "POST",
               headers: {
                 "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${SUPABASE_KEY}`,
+                "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
                 "Content-Type": "application/json",
                 "Prefer": "resolution=ignore-duplicates"
               },
@@ -2357,7 +2546,7 @@ export async function onRequest(context) {
           if (Number.isInteger(removeId) && removeId > 0) {
             await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${removeId}`, {
               method: "DELETE",
-              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
             });
           }
           // Limpiar también de custom_favorites
@@ -2383,7 +2572,7 @@ export async function onRequest(context) {
         if ((!Number.isInteger(targetItemId) || targetItemId <= 0 || isNaN(targetItemId)) && body.source && body.source_id) {
           try {
             const lookupRes = await fetch(`${SUPABASE_URL}/rest/v1/items?source=eq.${encodeURIComponent(body.source)}&source_id=eq.${encodeURIComponent(body.source_id)}&select=id&limit=1`, {
-              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
             });
             if (lookupRes.ok) {
               const rows = await lookupRes.json();
@@ -2400,7 +2589,7 @@ export async function onRequest(context) {
             method: "POST",
             headers: {
               "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
               "Content-Type": "application/json",
               "Prefer": "resolution=ignore-duplicates"
             },
@@ -2483,7 +2672,7 @@ export async function onRequest(context) {
       if (Number.isInteger(targetId) && targetId > 0) {
         await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
           method: "DELETE",
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
         });
       }
 
@@ -2519,7 +2708,13 @@ export async function onRequest(context) {
     url.pathname.startsWith("/api/history/");
 
   if (isHistoryRoute) {
-    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable) {
+      return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: getPersonalHeaders(origin)
+      });
+    }
     if (!user) {
       return new Response(JSON.stringify({ error: "No autenticado" }), {
         status: 401,
@@ -2543,7 +2738,7 @@ export async function onRequest(context) {
       const histRes = await fetch(histQueryUrl, {
         headers: {
           "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
           "Prefer": "count=exact",
           "Range": `${offset}-${to}`
         }
@@ -2638,7 +2833,7 @@ export async function onRequest(context) {
                 method: "POST",
                 headers: {
                   "apikey": SUPABASE_KEY,
-                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
                   "Content-Type": "application/json",
                   "Prefer": "resolution=merge-duplicates"
                 },
@@ -2700,7 +2895,7 @@ export async function onRequest(context) {
             method: "POST",
             headers: {
               "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${SUPABASE_KEY}`,
+              "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
               "Content-Type": "application/json",
               "Prefer": "resolution=merge-duplicates"
             },
@@ -2742,7 +2937,7 @@ export async function onRequest(context) {
       if (isClearAll) {
         await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}`, {
           method: "DELETE",
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
         });
         return new Response(JSON.stringify({ ok: true, cleared: true }), {
           status: 200,
@@ -2766,7 +2961,7 @@ export async function onRequest(context) {
 
       await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
         method: "DELETE",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
       });
 
       return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId }), {
@@ -2781,7 +2976,13 @@ export async function onRequest(context) {
   // Persistencia segura en tabla user_preferences (aislada de profiles)
   // =========================================================================
   if (url.pathname === "/api/user/preferences") {
-    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable) {
+      return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: getPersonalHeaders(origin)
+      });
+    }
     if (!user) {
       return new Response(JSON.stringify({ error: "No autenticado" }), {
         status: 401,
@@ -2791,7 +2992,7 @@ export async function onRequest(context) {
 
     if (method === "GET") {
       const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data,version,updated_at&limit=1`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
       });
       const prefRows = prefRes.ok ? await prefRes.json().catch(() => []) : [];
       if (prefRows && prefRows.length > 0 && prefRows[0]) {
@@ -2829,7 +3030,7 @@ export async function onRequest(context) {
         method: "POST",
         headers: {
           "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
           "Content-Type": "application/json",
           "Prefer": "resolution=merge-duplicates"
         },
@@ -2863,13 +3064,13 @@ export async function onRequest(context) {
     try {
       const [favRes, histRes, prefRes] = await Promise.all([
         fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id`, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
         }),
         fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id`, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
         }),
         fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=updated_at&limit=1`, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
         })
       ]);
 
@@ -2908,7 +3109,13 @@ export async function onRequest(context) {
   // Arquitectura Cross-DB: Respaldo en DB1 (Cuentas) referenciando catálogo DB2
   // =========================================================================
   if (url.pathname === "/api/user/game-saves" || url.pathname.startsWith("/api/user/game-saves/")) {
-    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable) {
+      return new Response(JSON.stringify({ error: "Servicio de sesión no disponible", authenticated: false }), {
+        status: 503,
+        headers: getPersonalHeaders(origin)
+      });
+    }
     if (!user) {
       return new Response(JSON.stringify({ error: "No autenticado para sincronización en la nube", authenticated: false }), {
         status: 401,
@@ -2926,7 +3133,7 @@ export async function onRequest(context) {
       }
 
       let savesRes = await fetch(queryUrl, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
       });
 
       if (savesRes.ok) {
@@ -2939,7 +3146,7 @@ export async function onRequest(context) {
 
       // Fallback transparente a user_preferences si la tabla game_saves aún no fue migrada en DB1
       const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data&limit=1`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
       });
       const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
       const userPrefs = (prefData && prefData[0] && prefData[0].data) || {};
@@ -3006,7 +3213,7 @@ export async function onRequest(context) {
         method: "POST",
         headers: {
           "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
           "Content-Type": "application/json",
           "Prefer": "resolution=merge-duplicates"
         },
@@ -3016,7 +3223,7 @@ export async function onRequest(context) {
       if (!dbSaveRes.ok) {
         // Fallback a user_preferences en DB1
         const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data&limit=1`, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
         });
         const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
         const currentData = (prefData && prefData[0] && prefData[0].data) || {};
@@ -3029,7 +3236,7 @@ export async function onRequest(context) {
           method: "POST",
           headers: {
             "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${SUPABASE_KEY}`,
+            "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
             "Content-Type": "application/json",
             "Prefer": "resolution=merge-duplicates"
           },
@@ -3058,7 +3265,7 @@ export async function onRequest(context) {
         if (slotName) delUrl += `&slot_name=eq.${encodeURIComponent(slotName)}`;
         await fetch(delUrl, {
           method: "DELETE",
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
         });
       }
 
@@ -3091,7 +3298,13 @@ export async function onRequest(context) {
   // 13. PERFIL DE USUARIO Y CAMBIO DE CONTRASEÑA (/api/user/profile & /api/user/change-password)
   // =========================================================================
   if (url.pathname === "/api/user/profile" && (method === "POST" || method === "PUT")) {
-    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable) {
+      return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: getPersonalHeaders(origin)
+      });
+    }
     if (!user || !token) {
       return new Response(JSON.stringify({ error: "No autenticado" }), {
         status: 401,
@@ -3126,7 +3339,7 @@ export async function onRequest(context) {
         method: "PATCH",
         headers: {
           "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ username, updated_at: new Date().toISOString() })
@@ -3150,7 +3363,13 @@ export async function onRequest(context) {
   }
 
   if (url.pathname === "/api/user/change-password" && method === "POST") {
-    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable) {
+      return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: getPersonalHeaders(origin)
+      });
+    }
     if (!user || !token) {
       return new Response(JSON.stringify({ error: "No autenticado" }), {
         status: 401,
