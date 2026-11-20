@@ -269,7 +269,7 @@ assert.ok(
 
 // Service Worker v12
 assert.ok(
-  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign") || swJs.includes("v13-session-persist"),
+  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign") || swJs.includes("v13-session-persist") || swJs.includes("v14-stable-media"),
   "sw.js debe tener la versión de caché actualizada"
 );
 assert.ok(
