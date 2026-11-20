@@ -100,5 +100,15 @@ assert.ok(!indexHtml.includes("Accediendo a"));
 assert.ok(!indexHtml.includes("Portal de Cosplay"));
 assert.ok(!indexHtml.includes("Páginas al azar"));
 assert.ok(!indexHtml.includes('onclick="shuffleCurrentFeed()"'));
+assert.ok(indexHtml.includes('id="reader-stage-title"'));
+assert.ok(indexHtml.includes("function applyReaderCopy"));
+assert.ok(indexHtml.includes("Galería completada"));
+assert.ok(indexHtml.includes("Pase automático"));
+assert.ok(indexHtml.includes("¡Has completado este cómic!"));
+assert.ok(!indexHtml.includes("4.8k"));
+assert.ok(!indexHtml.includes("2.3k"));
+assert.ok(!indexHtml.includes('id="reader-zoom-btn-bottom"'));
+assert.ok(indexHtml.includes("toggleReaderZoomLevel({ x: touch.clientX, y: touch.clientY })"));
+assert.ok(indexHtml.includes("setReaderZoom(2, focal"));
 
 console.log("✓ El token impide el audio fantasma y el frame del video anterior.");
