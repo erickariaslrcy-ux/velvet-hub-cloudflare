@@ -112,6 +112,20 @@
       will-change: auto;
     }
 
+    #video-player-loader {
+      z-index: 40;
+      pointer-events: auto;
+    }
+    #video-player-loader.hidden {
+      pointer-events: none;
+    }
+    #video-controls-bar.video-controls-locked,
+    #video-center-play-btn.video-controls-locked {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
     #video-sidebar-column {
       z-index: 10;
       position: relative;
@@ -1227,9 +1241,9 @@
 
         <button
           id="random-btn"
+          type="button"
           data-action="fetch-random"
-          onclick="shuffleCurrentFeed()"
-          title="Descubrir videos y mangas al azar"
+          title="Otra selección"
           class="flex h-8 sm:h-9 px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] hover:opacity-90 text-white text-[11px] sm:text-xs font-bold items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-hot-glow active:scale-95 cursor-pointer shrink-0"
         >
           <i class="fa-solid fa-dice text-xs sm:text-sm"></i>
@@ -1403,28 +1417,6 @@
 
     </div>
 
-  </div>
-
-  <!-- ===================================================================== -->
-  <!-- VELVET PORTAL TRANSITION CURTAIN (CAMBIO DE PANTALLAS ULTRA-SUAVE) -->
-  <!-- ===================================================================== -->
-  <div id="portal-transition-curtain"
-       class="fixed inset-0 z-40 pointer-events-none opacity-0 transition-opacity duration-300 flex items-center justify-center bg-[#06020c]/80 backdrop-blur-md"
-       aria-hidden="true">
-    <div id="portal-transition-card"
-         class="flex flex-col items-center gap-3.5 p-6 rounded-3xl bg-[#120726]/95 border border-pink-500/30 shadow-[0_0_50px_rgba(236,72,153,0.25)] scale-95 transition-all duration-300 transform select-none">
-      <div class="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 via-magenta to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
-        <i id="portal-transition-icon" class="fa-solid fa-book-open text-white text-xl animate-pulse"></i>
-        <div class="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 opacity-40 blur-sm -z-10 animate-pulse"></div>
-      </div>
-      <div class="text-center space-y-1">
-        <p id="portal-transition-text" class="text-sm font-black text-white tracking-wide">Accediendo a Cómics VIP...</p>
-        <p class="text-[11px] text-lav/60">Cargando el catálogo</p>
-      </div>
-      <div class="w-40 h-1.5 rounded-full bg-white/10 overflow-hidden relative">
-        <div class="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-400 to-pink-500 animate-pulse"></div>
-      </div>
-    </div>
   </div>
 
   <!-- ===================================================================== -->
@@ -2303,11 +2295,10 @@
               ></video>
 
               <!-- Logo Loader de Carga / Buffering con Pulso Neón -->
-              <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0610]/95 z-30 pointer-events-none transition-opacity duration-300">
+              <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0610] z-40 transition-opacity duration-300">
                 <div class="relative w-24 h-24 flex items-center justify-center">
-                  <img src="/velvet_logo.png" alt="Velvet Hub" class="w-16 h-16 object-contain relative z-10 animate-velvet-breathe select-none" />
+                  <img src="/velvet_logo.png" alt="" class="w-16 h-16 object-contain relative z-10 animate-velvet-breathe select-none" />
                 </div>
-                <span class="mt-2 text-xs font-medium tracking-wider text-white/70">Cargando experiencia...</span>
               </div>
 
               <!-- Indicador Buffering Sutil / No Invasivo -->
@@ -2319,7 +2310,7 @@
               </div>
 
               <!-- Botón Central de Play Grande (Pausado) -->
-              <div id="video-center-play-btn" class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
+              <div id="video-center-play-btn" class="video-controls-locked absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
                 <button type="button" data-action="video-play-toggle" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/85 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_30px_rgba(255,45,149,0.35)] hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
                   <i class="fa-solid fa-play ml-1 drop-shadow"></i>
                 </button>
@@ -2363,7 +2354,7 @@
               </div>
 
               <!-- BARRA DE CONTROLES FLOTANTE CON AUTO-HIDE A 2.5s -->
-              <div id="video-controls-bar" class="absolute bottom-0 inset-x-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-10 pb-2 px-3 sm:px-5 flex flex-col gap-2 transition-all duration-300 opacity-100" onclick="event.stopPropagation()">
+              <div id="video-controls-bar" class="video-controls-locked absolute bottom-0 inset-x-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-10 pb-2 px-3 sm:px-5 flex flex-col gap-2 transition-all duration-300 opacity-100" onclick="event.stopPropagation()">
                 <!-- SCRUB BAR -->
                 <div id="video-scrub-container" class="relative w-full h-6 group/scrub flex items-center cursor-pointer select-none touch-none" onclick="event.stopPropagation()">
                   <div class="w-full h-1 group-hover/scrub:h-2 rounded-full bg-white/20 relative overflow-hidden transition-all duration-150">
@@ -2446,9 +2437,7 @@
                 <span id="video-player-source" class="px-2 py-0.5 rounded-md bg-white/[0.04] text-white/80 font-medium border border-white/10">Velvet VIP</span>
                 <span id="video-player-quality-badge" class="px-2 py-0.5 rounded-md bg-[#ff2d95]/15 text-[#ff2d95] font-semibold border border-[#ff2d95]/25">1080p</span>
                 <span id="video-meta-duration" class="text-white/60">HD</span>
-                <span id="video-meta-views" class="hidden text-white/50">&bull; </span>
-                <span class="text-white/30">&bull;</span>
-                <span class="text-white/40 text-[11px]">18 U.S.C. 2257</span>
+                <span id="video-meta-views" class="hidden text-white/50"></span>
               </div>
             </div>
 
@@ -2719,13 +2708,13 @@
 
         <div class="flex items-center justify-center gap-3">
 
-          <button onclick="showToast('¡Gracias por tu valoración!', 'success')" class="px-4 py-2 rounded-xl bg-pitch/80 border border-hot/30 text-xs font-bold text-hot hover:bg-hot/20 transition-colors">
+          <button type="button" class="px-4 py-2 rounded-xl bg-pitch/80 border border-hot/30 text-xs font-bold text-hot">
 
             🔥 Caliente (4.8k)
 
           </button>
 
-          <button onclick="showToast('¡Añadido a tus favoritos!', 'success')" class="px-4 py-2 rounded-xl bg-pitch/80 border border-neon/30 text-xs font-bold text-neon hover:bg-neon/20 transition-colors">
+          <button type="button" class="px-4 py-2 rounded-xl bg-pitch/80 border border-neon/30 text-xs font-bold text-neon">
 
             ❤️ Me encantó (2.3k)
 
@@ -3721,6 +3710,7 @@
 
   <!-- ===================================================================== -->
 
+  <script src="/js/video-session.js?v=3.5.0"></script>
   <script>
 
     // =======================================================================
@@ -4012,70 +4002,10 @@
       }
     }
 
-    let _portalTransitionTimer = null;
-    let _portalTransitionStart = 0;
-
-    function showPortalTransition(mode) {
-      const curtain = document.getElementById('portal-transition-curtain');
-      const card = document.getElementById('portal-transition-card');
-      const icon = document.getElementById('portal-transition-icon');
-      const text = document.getElementById('portal-transition-text');
-      if (!curtain) return;
-
-      _portalTransitionStart = Date.now();
-      if (_portalTransitionTimer) {
-        clearTimeout(_portalTransitionTimer);
-        _portalTransitionTimer = null;
-      }
-
-      if (mode === 'videos') {
-        if (icon) icon.className = 'fa-solid fa-film text-white text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Videos HD...';
-      } else if (mode === 'games') {
-        if (icon) icon.className = 'fa-solid fa-gamepad text-emerald-400 text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Juegos VIP...';
-      } else if (mode === 'galleries') {
-        if (icon) icon.className = 'fa-solid fa-camera-retro text-white text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Cosplay & Modelos...';
-      } else {
-        if (icon) icon.className = 'fa-solid fa-book-open text-white text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Cómics VIP...';
-      }
-
-      curtain.classList.remove('pointer-events-none', 'opacity-0');
-      curtain.classList.add('opacity-100');
-      if (card) {
-        card.classList.remove('scale-95');
-        card.classList.add('scale-100');
-      }
-    }
-
-    function hidePortalTransition() {
-      const curtain = document.getElementById('portal-transition-curtain');
-      const card = document.getElementById('portal-transition-card');
-      if (!curtain || curtain.classList.contains('opacity-0')) return;
-
-      const elapsed = Date.now() - _portalTransitionStart;
-      const minDuration = 280;
-      const remaining = Math.max(0, minDuration - elapsed);
-
-      if (_portalTransitionTimer) clearTimeout(_portalTransitionTimer);
-      _portalTransitionTimer = setTimeout(() => {
-        curtain.classList.remove('opacity-100');
-        curtain.classList.add('opacity-0', 'pointer-events-none');
-        if (card) {
-          card.classList.remove('scale-100');
-          card.classList.add('scale-95');
-        }
-      }, remaining);
-    }
+    function showPortalTransition() {}
+    function hidePortalTransition() {}
 
     function setPortalMode(mode, isUserClick = false, options = {}) {
-      if (isUserClick || options.animate) {
-        showPortalTransition(mode);
-      }
-
-      console.log('%c🔄 [VELVET HUB] Cambiando Portal a Modo: ' + mode.toUpperCase(), 'color: #a855f7; font-weight: bold; font-size: 13px;');
 
       const videoView = document.getElementById('video-view');
 
@@ -4174,7 +4104,7 @@
 
       if (mode === "games") {
         if (sInput) sInput.placeholder = "Buscar juegos, novelas Ren'Py, Flash, tags...";
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-gamepad text-emerald-400"></i> Catálogo VIP de Juegos Porn & Hentai';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-gamepad text-emerald-400"></i> Juegos';
         if (resCount) resCount.textContent = "Actualizando catálogo de juegos...";
         if (badgeEl) badgeEl.textContent = "juegos listos para jugar";
         if (heroTitle) heroTitle.textContent = "Avatar: Blood Legacy [Ch. 3.5]";
@@ -4187,7 +4117,7 @@
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-xs sm:text-sm shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
         }
       } else if (mode === "videos") {
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-film text-hot"></i> Videos';
         if (resCount) resCount.textContent = "Actualizando videos en streaming...";
         if (badgeEl) badgeEl.textContent = "videos en streaming directo";
         if (heroTitle) heroTitle.textContent = "Cargando video destacado...";
@@ -4200,7 +4130,7 @@
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
         }
       } else if (mode === "galleries") {
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Sets Exclusivos de Cosplay & Modelos';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-camera-retro text-hot"></i> Modelos';
         if (resCount) resCount.textContent = "Actualizando galerías VIP...";
         if (badgeEl) badgeEl.textContent = "sets";
         if (heroTitle) heroTitle.textContent = "Cargando galería destacada...";
@@ -4213,7 +4143,7 @@
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
         }
       } else {
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Últimas Novedades Calientes';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-book-open text-hot"></i> Cómics';
         if (resCount) resCount.textContent = "Actualizando catálogo...";
         if (badgeEl) badgeEl.textContent = "historias listas para leer";
         if (heroTitle) heroTitle.textContent = "Cargando cómic destacado...";
@@ -4252,10 +4182,6 @@
       renderContinueShelf();
       fetchLiveFeed();
       initInfiniteScrollObserver();
-
-      if (isUserClick) {
-        showToast(mode === 'videos' ? '🎬 Portal de Videos Porno Activado' : (mode === 'galleries' ? '📸 Portal de Cosplay & Modelos Activado' : '📖 Portal de Cómics & Imágenes Activado'), 'info');
-      }
     }
 
     function renderCategoryChips() {
@@ -4697,7 +4623,7 @@
       const urlParams = new URLSearchParams(window.location.search);
 
       if (urlParams.get('patreon_login') === 'success') {
-        showToast('¡Bienvenido! Sesión iniciada con Patreon exitosamente.', 'success');
+        showToast('Sesión iniciada', 'success');
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (urlParams.get('auth_error')) {
         const errorMsg = urlParams.get('msg') || 'No se pudo iniciar sesión con Patreon.';
@@ -5140,7 +5066,7 @@
         if (res.ok && data.user) {
           window.VelvetStore?.setCurrentUser(data.user, data.token, data.refresh_token, data.device_token);
           state.currentUser = data.user;
-          showToast('¡Llave VIP activada exitosamente!', 'success');
+          showToast('Llave activada', 'success');
           window.VelvetVault?.renderAccount();
         } else {
           showToast(data.error || 'Llave inválida o ya canjeada', 'error');
@@ -5494,7 +5420,6 @@
 
         if (readerOledBtn) readerOledBtn.classList.add('border-gold', 'text-gold');
 
-        showToast('Modo Oscuro Puro OLED Activado (#000000)', 'info');
 
       } else {
 
@@ -5648,14 +5573,6 @@
         }
 
         if (data && data.items && data.items.length > 0) {
-          // Transición suave: desvanecer la grilla actual para no cambiar de golpe (200ms)
-          if (grid) {
-            grid.style.transition = 'opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)';
-            grid.style.opacity = '0';
-            grid.style.transform = 'translateY(-10px) scale(0.99)';
-            await new Promise(r => setTimeout(r, 200));
-          }
-
           state.page = nextPage;
           if (data.total_pages) state.totalPages = data.total_pages;
 
@@ -5678,7 +5595,7 @@
       } catch (err) {
         if (err.name === 'AbortError') return;
         console.error('[PAGE TRANSITION ERROR]:', err);
-        showToast('Reintentando sincronización de catálogo...', 'info');
+        showToast('No se pudo cambiar de página', 'error');
       } finally {
         _isLoadingMore = false;
         if (spinner) spinner.classList.add('hidden');
@@ -5829,7 +5746,7 @@
             const catLabel = catObj ? catObj.label.replace(/^[^\w\s]+/, '').trim() : state.category.toUpperCase();
             titleSec.innerHTML = `<i class="fa-solid fa-play text-hot"></i> Videos: ${catLabel}`;
           } else {
-            titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición`;
+            titleSec.innerHTML = `<i class="fa-solid fa-film text-hot"></i> Videos`;
           }
         }
         renderVideoGrid(itemsToRender, append);
@@ -6303,7 +6220,6 @@
           el.style.maxHeight = '100%';
           el.style.aspectRatio = 'auto';
         });
-        showToast('Pantalla expandida al 100% (Fill)', 'info');
       } else {
         _gameAspectRatioMode = '16-9';
         if (label) label.textContent = '16:9';
@@ -6312,7 +6228,6 @@
           el.style.maxHeight = 'calc(100vw * (9 / 16))';
           el.style.aspectRatio = '16 / 9';
         });
-        showToast('Ajuste cinemático 16:9 con Ambilight', 'info');
       }
     }
 
@@ -6334,10 +6249,10 @@
           _suspendedGame = window._activeGame;
           _suspendedGameTargetUrl = cur;
         }, 150);
-        showToast('Juego reiniciado desde el inicio', 'info');
+        showToast('Juego reiniciado', 'info');
       } else if (ruffle && !ruffle.classList.contains('hidden')) {
         openGameModal(window._activeGame, true);
-        showToast('Emulador Flash reiniciado', 'info');
+        showToast('Flash reiniciado', 'info');
       }
     }
 
@@ -6478,7 +6393,7 @@
         modal.classList.add('flex');
         document.body.style.overflow = 'hidden';
         handleGameMouseMove();
-        showToast('⚡ Partida reanudada al instante', 'success');
+        showToast('Partida reanudada', 'success');
         return;
       }
 
@@ -6583,7 +6498,7 @@
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
-      showToast('Partida suspendida en segundo plano. Progreso a salvo.', 'info');
+      showToast('Partida guardada', 'info');
     }
 
     function toggleGameFullscreen() {
@@ -6904,7 +6819,6 @@
       retry: "Reintentar Conexión",
       switchServer: "Cambiar Servidor",
       playingNow: "Reproduciendo ahora",
-      compliance2257: "18 U.S.C. 2257",
       sourceUnavailable: "El servidor de origen no respondió a tiempo. Tus preferencias se mantienen intactas."
     };
 
@@ -6933,6 +6847,97 @@
 
     let hlsInstance = null;
     let videoFailoverAttempts = 0;
+    const videoGuard = window.VelvetVideoSession
+      ? window.VelvetVideoSession.createVideoLoadGuard()
+      : { start() { return { token: 1, signal: null }; }, stop() { return 0; }, current() { return 1; }, matches() { return true; } };
+    let videoLoadToken = 0;
+    let videoControlsLocked = true;
+
+    function videoEventIsCurrent(player) {
+      return !!(player && videoGuard.matches(player._loadToken));
+    }
+
+    function hardResetVideoElement(player) {
+      if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (e) {}
+        hlsInstance = null;
+      }
+      if (videoWatchdogTimer) {
+        clearTimeout(videoWatchdogTimer);
+        videoWatchdogTimer = null;
+      }
+      if (window.VelvetVideoSession) {
+        window.VelvetVideoSession.teardownVideoElement(player);
+      } else if (player) {
+        try { player.pause(); } catch (e) {}
+        try { player.removeAttribute('src'); } catch (e) {}
+        try { player.src = ''; } catch (e) {}
+        try { player.poster = ''; } catch (e) {}
+        try { player.load(); } catch (e) {}
+      }
+      if (player) {
+        player._loadToken = 0;
+        player._currentVs = null;
+      }
+    }
+
+    function resetVideoTimeChrome() {
+      const cur = document.getElementById('video-time-current');
+      const dur = document.getElementById('video-time-duration');
+      const meta = document.getElementById('video-meta-duration');
+      const prog = document.getElementById('video-progress-bar');
+      const buf = document.getElementById('video-buffer-bar');
+      const pin = document.getElementById('video-scrubber-pin');
+      if (cur) cur.textContent = '00:00';
+      if (dur) dur.textContent = '00:00';
+      if (meta) meta.textContent = '';
+      if (prog) prog.style.width = '0%';
+      if (buf) buf.style.width = '0%';
+      if (pin) pin.style.left = '0%';
+    }
+
+    function lockVideoControls() {
+      videoControlsLocked = true;
+      const bar = document.getElementById('video-controls-bar');
+      const center = document.getElementById('video-center-play-btn');
+      const loader = document.getElementById('video-player-loader');
+      if (bar) {
+        bar.classList.add('video-controls-locked');
+        bar.setAttribute('aria-hidden', 'true');
+        bar.querySelectorAll('button, input').forEach((el) => { el.disabled = true; });
+      }
+      if (center) {
+        center.classList.add('video-controls-locked');
+        const btn = center.querySelector('button');
+        if (btn) btn.disabled = true;
+      }
+      if (loader) {
+        loader.classList.remove('hidden', 'opacity-0');
+        loader.setAttribute('aria-hidden', 'false');
+      }
+    }
+
+    function unlockVideoControls() {
+      const player = document.getElementById('html5-video-player');
+      if (!player || player.readyState < 2 || player.paused || !videoEventIsCurrent(player)) return;
+      videoControlsLocked = false;
+      const bar = document.getElementById('video-controls-bar');
+      const center = document.getElementById('video-center-play-btn');
+      const loader = document.getElementById('video-player-loader');
+      if (bar) {
+        bar.classList.remove('video-controls-locked');
+        bar.removeAttribute('aria-hidden');
+        bar.querySelectorAll('button, input').forEach((el) => { el.disabled = false; });
+      }
+      if (center) {
+        center.classList.remove('video-controls-locked');
+        const btn = center.querySelector('button');
+        if (btn) btn.disabled = false;
+      }
+      if (loader) loader.classList.add('hidden');
+      const buffSpinner = document.getElementById('video-buffering-spinner');
+      if (buffSpinner) buffSpinner.classList.add('hidden');
+    }
     const MAX_FAILOVER_ATTEMPTS = 3;
 
     // --- Dynamic Favicon Loader Pulse Engine ---
@@ -7345,6 +7350,7 @@
       };
 
       player.onloadedmetadata = () => {
+        if (!videoEventIsCurrent(player)) return;
         if (videoWatchdogTimer) {
           clearTimeout(videoWatchdogTimer);
           videoWatchdogTimer = null;
@@ -7369,24 +7375,19 @@
           }
         }
 
-        if (loader) loader.classList.add('hidden');
-        if (buffSpinner) buffSpinner.classList.add('hidden');
-        finishNavProgress();
-        stopFaviconPulse();
-
-        if (videoPendingSeekTime !== null && videoPendingSeekTime > 0) {
+        if (videoPendingSeekTime !== null && videoPendingSeekTime > 0 && videoEventIsCurrent(player)) {
           player.currentTime = videoPendingSeekTime;
           videoPendingSeekTime = null;
         }
-
-        player.play().catch(e => {
-          const centerPlay = document.getElementById('video-center-play-btn');
-          if (centerPlay) centerPlay.classList.remove('hidden');
-          showControls();
-        });
       };
 
       player.onplay = () => {
+        if (!videoEventIsCurrent(player)) {
+          try { player.pause(); } catch (e) {}
+          return;
+        }
+        if (player.readyState >= 2) unlockVideoControls();
+        if (videoControlsLocked) return;
         if (playIcon) playIcon.className = 'fa-solid fa-pause';
         const centerPlay = document.getElementById('video-center-play-btn');
         if (centerPlay) centerPlay.classList.add('hidden');
@@ -7421,6 +7422,11 @@
       };
 
       player.onplaying = () => {
+        if (!videoEventIsCurrent(player) || player.readyState < 2) {
+          try { player.pause(); } catch (e) {}
+          return;
+        }
+        unlockVideoControls();
         startFrameRateWatchdog();
 
         if (videoWatchdogTimer) {
@@ -7436,14 +7442,11 @@
       };
 
       player.oncanplay = () => {
-        if (videoWatchdogTimer) {
+        if (!videoEventIsCurrent(player)) return;
+        if (videoWatchdogTimer && player.readyState >= 2 && !player.paused) {
           clearTimeout(videoWatchdogTimer);
           videoWatchdogTimer = null;
         }
-        if (loader) loader.classList.add('hidden');
-        if (buffSpinner) buffSpinner.classList.add('hidden');
-        finishNavProgress();
-        stopFaviconPulse();
       };
 
       player.onerror = (e) => {
@@ -7475,6 +7478,7 @@
       };
 
       stage.onclick = (e) => {
+        if (videoControlsLocked) return;
         if (e.target.closest('#video-controls-bar') || e.target.closest('#video-quality-menu') || e.target.closest('#video-speed-menu') || e.target.closest('#video-center-play-btn')) {
           return;
         }
@@ -7505,6 +7509,7 @@
         };
 
         scrubContainer.onpointerdown = (e) => {
+          if (videoControlsLocked) return;
           e.stopPropagation();
           isScrubbing = true;
           videoIsSeeking = true;
@@ -7591,6 +7596,7 @@
 
     // Auto-hide controls con timer exacto de 2.5s
     function showControls() {
+      if (videoControlsLocked) return;
       const controlsBar = document.getElementById('video-controls-bar');
       const stage = document.getElementById('video-stage');
       const player = document.getElementById('html5-video-player');
@@ -7683,8 +7689,9 @@
 
     function toggleVideoPlay(e) {
       if (e && e.stopPropagation) e.stopPropagation();
+      if (videoControlsLocked) return;
       const player = document.getElementById('html5-video-player');
-      if (!player) return;
+      if (!player || !videoEventIsCurrent(player)) return;
 
       if (player.paused) {
         player.play().catch(e => {
@@ -8137,9 +8144,10 @@
     }
 
     // Manejo de Failover Automático con Reintentos Exponenciales (1s, 2s, 4s)
-    function handleVideoPlaybackFailover() {
+    function handleVideoPlaybackFailover(loadToken = videoLoadToken) {
       const player = document.getElementById('html5-video-player');
       const allSources = (state.currentVideo && state.currentVideo.video_sources) || [];
+      if (!videoGuard.matches(loadToken)) return;
 
       if (videoFailoverAttempts < MAX_FAILOVER_ATTEMPTS) {
         videoFailoverAttempts++;
@@ -8148,15 +8156,21 @@
         showVideoHud('fa-rotate', `Reintentando en ${backoffMs/1000}s...`);
 
         setTimeout(() => {
+          if (!videoGuard.matches(loadToken)) return;
           if (allSources.length > 1) {
             const nextSrc = allSources[videoFailoverAttempts % allSources.length];
-            playVideoSource(nextSrc, null, true);
-          } else if (player && player._currentVs) {
+            playVideoSource(nextSrc, null, true, loadToken);
+          } else if (player && player._currentVs && videoGuard.matches(loadToken)) {
             const ref = state.currentVideo?.url || '';
             const proxyUrl = getStealthStreamUrl(player._currentVs.url, ref);
+            player._loadToken = loadToken;
             player.src = proxyUrl;
             player.load();
-            player.play().catch(() => {});
+            player.play().then(() => {
+              if (!videoGuard.matches(loadToken)) {
+                try { player.pause(); } catch (e) {}
+              }
+            }).catch(() => {});
           }
         }, backoffMs);
         return;
@@ -8208,6 +8222,16 @@
         return;
       }
 
+      const player = document.getElementById('html5-video-player');
+      if (player && player.currentTime > 0 && state.currentVideo && Number.isFinite(player.duration)) {
+        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
+      }
+      const ticket = videoGuard.start();
+      videoLoadToken = ticket.token;
+      hardResetVideoElement(player);
+      lockVideoControls();
+      resetVideoTimeChrome();
+
       startNavProgress();
       startFaviconPulse();
 
@@ -8215,7 +8239,6 @@
       if (prevBanner) prevBanner.classList.add('hidden');
       const view = document.getElementById('video-view');
       const homeView = document.getElementById('home-view');
-      const player = document.getElementById('html5-video-player');
       const titleEl = document.getElementById('video-player-title');
       const srcBadge = document.getElementById('video-player-source');
       const loader = document.getElementById('video-player-loader');
@@ -8234,20 +8257,9 @@
 
       stopHeroAutoPlay();
       view.classList.remove('hidden');
-      loader.classList.remove('hidden');
+      if (loader) loader.classList.remove('hidden');
       videoFailoverAttempts = 0;
-
-      if (hlsInstance) {
-        try { hlsInstance.destroy(); } catch(e) {}
-        hlsInstance = null;
-      }
-
-      if (player && player.duration && state.currentVideo) {
-        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
-      }
-
-      player.pause();
-      player.removeAttribute('src');
+      lockVideoControls();
 
       titleEl.textContent = initialTitle || 'Cargando video...';
       player.loop = false;
@@ -8291,23 +8303,28 @@
           history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cachedVid.title, canonicalUrl);
           document.title = `${cachedVid.title} — VELVET HUB`;
         }
+        if (!videoGuard.matches(ticket.token)) return;
         setupVideoQualityButtons(cachedVid.video_sources);
-        playVideoSource(cachedVid.video_sources[0]);
+        playVideoSource(cachedVid.video_sources[0], null, false, ticket.token);
         renderVideoRecommendations();
         return;
       }
 
       try {
         let detailUrl = (itemId || (source === 'id' && sourceId)) ? `/api/items/id/${itemId || sourceId}` : `/api/items/${source}/${encodeURIComponent(sourceId)}`;
-        let resp = await fetch(detailUrl);
+        let resp = await fetch(detailUrl, { signal: ticket.signal });
+        if (!videoGuard.matches(ticket.token)) return;
         if (!resp.ok && source && sourceId && source !== 'id') {
-          resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`);
+          resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`, { signal: ticket.signal });
         }
+        if (!videoGuard.matches(ticket.token)) return;
         if (!resp.ok && itemId && /^[a-f0-9]{24}$/i.test(itemId)) {
-          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`);
+          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`, { signal: ticket.signal });
         }
+        if (!videoGuard.matches(ticket.token)) return;
         if (!resp.ok) throw new Error('No se pudo obtener el detalle del video');
         const item = await resp.json();
+        if (!videoGuard.matches(ticket.token)) return;
 
         state.currentVideo = item;
         state.currentVideo.media_type = 'video';
@@ -8352,25 +8369,33 @@
           }
         });
 
+        if (!videoGuard.matches(ticket.token)) return;
         setupVideoQualityButtons(sources);
-        playVideoSource(sources[0]);
+        playVideoSource(sources[0], null, false, ticket.token);
         renderVideoRecommendations();
 
       } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        if (!videoGuard.matches(ticket.token)) return;
         console.error('Error al abrir video:', err);
         loader.classList.add('hidden');
         showVideoUnavailableState(state.currentVideo || { source, sourceId }, 'Error al conectar con la fuente de video.');
       }
     }
 
-    function playVideoSource(vs, clickedBtn = null, preserveTime = false) {
+    function playVideoSource(vs, clickedBtn = null, preserveTime = false, loadToken = videoLoadToken) {
       const player = document.getElementById('html5-video-player');
       const loader = document.getElementById('video-player-loader');
       const qualityBadge = document.getElementById('video-player-quality-badge');
       const qualityLabel = document.getElementById('video-quality-label');
       const buffSpinner = document.getElementById('video-buffering-spinner');
 
-      if (!player) return;
+      if (!player || !vs || !vs.url) return;
+      if (!videoGuard.matches(loadToken)) return;
+      if (!preserveTime) {
+        lockVideoControls();
+        resetVideoTimeChrome();
+      }
 
       if (!player._lastWorkingVs && player._currentVs) {
         player._lastWorkingVs = player._currentVs;
@@ -8427,9 +8452,6 @@
           clearTimeout(videoWatchdogTimer);
           videoWatchdogTimer = null;
         }
-        if (loader) loader.classList.add('hidden');
-        if (buffSpinner) buffSpinner.classList.add('hidden');
-        stopFaviconPulse();
       };
 
       if (hlsInstance) {
@@ -8457,12 +8479,13 @@
 
       // Watchdog Inteligente (8 segundos sin respuesta)
       videoWatchdogTimer = setTimeout(() => {
-        if (player.readyState >= 2 || !player.paused) {
+        if (!videoGuard.matches(loadToken)) return;
+        if (player.readyState >= 2 && !player.paused) {
           clearVideoWatchdog();
           return;
         }
         console.warn('⚡ [WATCHDOG] Tiempo de respuesta excedido (8s). Ejecutando failover suave...');
-        handleVideoPlaybackFailover();
+        handleVideoPlaybackFailover(loadToken);
       }, 8000);
 
       const isHls = (vs.format && (vs.format.toLowerCase() === 'hls' || vs.format.toLowerCase() === 'm3u8')) ||
@@ -8470,9 +8493,12 @@
         vs.url.includes('/master.m3u8') ||
         vs.url.includes('/playlist.m3u8');
 
+      if (!videoGuard.matches(loadToken)) return;
       player._currentVs = vs;
+      player._loadToken = loadToken;
 
       const applySeekSafely = () => {
+        if (!videoGuard.matches(loadToken)) return;
         if (videoPendingSeekTime !== null && videoPendingSeekTime > 0) {
           try {
             player.currentTime = videoPendingSeekTime;
@@ -8481,11 +8507,24 @@
         }
       };
 
+      const startPlayback = () => {
+        if (!videoGuard.matches(loadToken) || player._loadToken !== loadToken) return;
+        player.play().then(() => {
+          if (!videoGuard.matches(loadToken)) {
+            try { player.pause(); } catch (e) {}
+            return;
+          }
+          player._lastWorkingVs = vs;
+        }).catch(() => {});
+      };
+
       if (isHls && !player.canPlayType('application/vnd.apple.mpegurl')) {
         ensureHlsLoaded().then((Hls) => {
+          if (!videoGuard.matches(loadToken)) return;
           if (!Hls || !Hls.isSupported()) {
+            player._loadToken = loadToken;
             player.src = streamUrl;
-            player.play().catch(() => {});
+            startPlayback();
             return;
           }
           if (hlsInstance) {
@@ -8506,41 +8545,49 @@
         hlsInstance.attachMedia(player);
 
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (!videoGuard.matches(loadToken)) {
+            try { hlsInstance && hlsInstance.destroy(); } catch (e) {}
+            return;
+          }
           clearVideoWatchdog();
           applySeekSafely();
-          player.play().then(() => {
-            player._lastWorkingVs = vs;
-          }).catch(() => {});
+          startPlayback();
         });
 
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+          if (!videoGuard.matches(loadToken)) return;
           if (data.fatal) {
             console.warn('[HLS FATAL ERROR]', data);
             clearVideoWatchdog();
-            handleVideoPlaybackFailover();
+            handleVideoPlaybackFailover(loadToken);
           }
         });
       });
     } else {
+        if (!videoGuard.matches(loadToken)) return;
         player.pause();
         player.removeAttribute('src');
         player.preload = 'auto';
+        player._loadToken = loadToken;
         player.src = streamUrl;
         player.load();
 
         const onReadyToPlay = () => {
+          if (!videoGuard.matches(loadToken) || player._loadToken !== loadToken) {
+            player.removeEventListener('canplay', onReadyToPlay);
+            player.removeEventListener('loadeddata', onReadyToPlay);
+            return;
+          }
+          if (player.readyState < 2) return;
           player.removeEventListener('canplay', onReadyToPlay);
           player.removeEventListener('loadeddata', onReadyToPlay);
           clearVideoWatchdog();
           applySeekSafely();
-          player.play().then(() => {
-            player._lastWorkingVs = vs;
-          }).catch(() => {});
+          startPlayback();
         };
 
         player.addEventListener('canplay', onReadyToPlay);
         player.addEventListener('loadeddata', onReadyToPlay);
-        player.play().catch(() => {});
       }
     }
 
@@ -8592,6 +8639,14 @@
     }
 
     function closeVideoPlayer(pushRoute = true) {
+      videoLoadToken = videoGuard.stop();
+      const player = document.getElementById('html5-video-player');
+      if (player && player.currentTime > 0 && state.currentVideo && Number.isFinite(player.duration)) {
+        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
+      }
+      hardResetVideoElement(player);
+      lockVideoControls();
+      resetVideoTimeChrome();
       stopFrameRateWatchdog();
 
       if (!cinemaLightsOn) toggleCinemaLights();
@@ -8604,26 +8659,6 @@
       if (state.continueShelfDirty) {
         state.continueShelfDirty = false;
         renderContinueShelf();
-      }
-
-      const player = document.getElementById('html5-video-player');
-      if (videoWatchdogTimer) {
-        clearTimeout(videoWatchdogTimer);
-        videoWatchdogTimer = null;
-      }
-
-      if (hlsInstance) {
-        try { hlsInstance.destroy(); } catch(e) {}
-        hlsInstance = null;
-      }
-
-      if (player && player.duration && state.currentVideo) {
-        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
-      }
-
-      if (player) {
-        player.pause();
-        player.removeAttribute('src');
       }
 
       if (pushRoute && window.history.length > 1 && window.history.state && (window.history.state.fromApp || window.history.state.type)) {
@@ -10037,7 +10072,7 @@
       const _rBody = document.getElementById('reader-body');
       if (_rBody) _rBody.scrollTop = 0;
 
-      titleEl.textContent = 'Cargando páginas en alta definición...';
+      titleEl.textContent = 'Cargando...';
 
       metaEl.textContent = '';
 
@@ -12017,7 +12052,7 @@
         }
 
         closeAuthModal();
-        showToast(`¡Bienvenido de nuevo, ${data.user.username}!`, 'success');
+        showToast('Sesión iniciada', 'success');
 
         // Sincronización en segundo plano de sesión
         initAuth().catch(() => {});
@@ -12165,7 +12200,7 @@
 
         closeAuthModal();
 
-        showToast(`¡Cuenta VIP activada exitosamente! Bienvenido, ${data.user.username}`, 'success');
+        showToast('Cuenta lista', 'success');
 
       } catch (err) {
 
@@ -12248,7 +12283,7 @@
         if (!res.ok) {
           showToast(data.error || 'Error al guardar perfil', 'error');
         } else {
-          showToast('Perfil actualizado correctamente', 'success');
+          showToast('Perfil guardado', 'success');
           if (state.currentUser) {
             state.currentUser.username = data.user.username;
             state.currentUser.avatar = data.user.avatar;
@@ -12302,7 +12337,7 @@
         if (!res.ok) {
           showToast(data.error || 'Error al cambiar contraseña', 'error');
         } else {
-          showToast('Contraseña actualizada con éxito', 'success');
+          showToast('Contraseña actualizada', 'success');
           if (p1) p1.value = '';
           if (p2) p2.value = '';
         }
@@ -12348,7 +12383,7 @@
 
       if (adminBtn) adminBtn.classList.add('hidden');
 
-      showToast('Sesión cerrada correctamente', 'info');
+      showToast('Sesión cerrada', 'info');
       fetchLiveFeed(true);
 
     }
@@ -12571,7 +12606,7 @@
       saveStorage();
       renderVaultHistoryPro();
       renderContinueShelf();
-      showToast('Elemento eliminado del historial', 'info');
+      showToast('Quitado del historial', 'info');
 
       if (state.currentUser) {
         try {
@@ -12635,7 +12670,7 @@
           await fetch(deleteUrl, { method: 'DELETE', headers: authHeaders() });
         } catch (e) {}
       }
-      showToast('Eliminado de Mi Bóveda', 'info');
+      showToast('Quitado de tu bóveda', 'info');
     }
 
     async function handleClearCloudHistory() {
@@ -12650,7 +12685,7 @@
           await fetch('/api/user/history', { method: 'DELETE', headers: authHeaders() });
         } catch (e) {}
       }
-      showToast('Historial borrado por completo', 'info');
+      showToast('Historial borrado', 'info');
     }
 
     async function toggleFavorite(item, event) {
@@ -12670,7 +12705,7 @@
 
       if (isFav) {
         state.favorites.splice(idx, 1);
-        showToast('Eliminado de Mi Bóveda', 'info');
+        showToast('Quitado de tu bóveda', 'info');
 
         if (state.currentUser) {
           try {
@@ -12692,7 +12727,7 @@
           created_at: new Date().toISOString()
         };
         state.favorites.unshift(favEntry);
-        showToast('Guardado en Mi Bóveda ❤️', 'success');
+        showToast('Guardado en tu bóveda', 'success');
 
         if (state.currentUser) {
           try {
@@ -13012,7 +13047,7 @@
 
           }
 
-          showToast(`¡Se generaron ${data.count} llaves VIP listas para entregar!`, 'success');
+          showToast(`${data.count} llaves generadas`, 'success');
 
           loadAdminStats();
 
@@ -13392,12 +13427,10 @@
         state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
         state.sort = 'random';
-        showToast('🎲 Modo Aleatorio activado: las páginas rotan y mezclan contenido', 'info');
       } else {
         state.feedSeed = 0;
         state.videoSeed = 0;
         state.sort = 'recent';
-        showToast('📌 Modo Estático activado: páginas fijas y cronológicas por fecha', 'info');
       }
       updateCatalogModeUI();
       state.page = 1;
@@ -13577,10 +13610,7 @@
       } else {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-      setTimeout(() => {
-        if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
-      }, 700);
-      showToast('🎲 ¡Páginas al azar cargadas con nuevo contenido variado!', 'info');
+      if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
     }
 
     function shuffleVideoFeed() {
