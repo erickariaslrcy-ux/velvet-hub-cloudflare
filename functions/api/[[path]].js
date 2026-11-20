@@ -293,10 +293,134 @@ function catalogIdCursor({ minId, maxId, page, pageSize, seed, random }) {
   return hi - step;
 }
 
-function catalogEdgeCacheUrl(requestUrl) {
+// Ventana global de 3 horas. La semilla ES el número de ventana:
+// Math.floor(Date.now() / (3 * 3600 * 1000)). Todos los usuarios comparten
+// la misma semilla, así el edge cache sigue siendo válido dentro de la ventana.
+const ROTATION_WINDOW_MS = 3 * 3600 * 1000;
+
+function rotationSlot(nowMs) {
+  const now = Number(nowMs);
+  const t = Number.isFinite(now) && now > 0 ? now : Date.now();
+  return Math.floor(t / ROTATION_WINDOW_MS);
+}
+
+function rotationCacheSeconds(nowMs) {
+  const now = Number(nowMs) || Date.now();
+  const remain = ROTATION_WINDOW_MS - (now % ROTATION_WINDOW_MS);
+  return Math.max(60, Math.min(3 * 3600, Math.ceil(remain / 1000)));
+}
+
+function gcdInt(a, b) {
+  let x = Math.abs(a | 0);
+  let y = Math.abs(b | 0);
+  while (y) {
+    const t = y;
+    y = x % y;
+    x = t;
+  }
+  return x || 1;
+}
+
+// Permutación biyectiva: cada página cae en un índice distinto y el
+// índice cambia al cambiar la ventana de 3 horas.
+function permutePageIndex(pageIndex, pageCount, seed) {
+  const n = Math.max(1, pageCount | 0);
+  let i = Number(pageIndex) || 0;
+  i = ((i % n) + n) % n;
+  if (n === 1) return 0;
+  const s = Math.abs(Number(seed) || 1);
+  let mul = (s % n) | 1;
+  if (mul % 2 === 0) mul += 1;
+  if (mul >= n) mul = (mul % n) || 1;
+  let guard = 0;
+  while (gcdInt(mul, n) !== 1 && guard < n + 3) {
+    mul += 2;
+    if (mul >= n) mul = (mul % n) || 1;
+    if (mul % 2 === 0) mul += 1;
+    if (mul >= n) mul = 1;
+    guard += 1;
+  }
+  const add = s % n;
+  return ((mul * i) + add) % n;
+}
+
+function catalogPageOffset(page, pageSize, totalItems, seed, random) {
+  const size = Math.max(1, Number(pageSize) || 24);
+  const total = Math.max(0, Number(totalItems) || 0);
+  const totalPages = Math.max(1, Math.ceil(total / size) || 1);
+  const safePage = Math.max(1, Number(page) || 1);
+  const logical = (safePage - 1) % totalPages;
+  const index = random ? permutePageIndex(logical, totalPages, seed) : logical;
+  return { offset: index * size, index, totalPages, pageSize: size, page: safePage };
+}
+
+function sliceCatalogIds(idsDesc, page, pageSize, seed, random) {
+  const ids = Array.isArray(idsDesc) ? idsDesc : [];
+  const plan = catalogPageOffset(page, pageSize, ids.length, seed, random);
+  return {
+    ids: ids.slice(plan.offset, plan.offset + plan.pageSize),
+    total: ids.length,
+    ...plan
+  };
+}
+
+function mediaTypeSalt(mediaType) {
+  const s = String(mediaType || "comic");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) + s.charCodeAt(i)) >>> 0;
+  return (h % 997) + 1;
+}
+
+// Orden determinista de un catálogo completo (juegos en memoria y pruebas
+// de cómic, vídeo, galería y juego). Cambia al cambiar la ventana de 3 h.
+function stableItemRank(value) {
+  const n = Number(value);
+  if (Number.isFinite(n) && n !== 0) return Math.abs(n);
+  const s = String(value || "");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) + s.charCodeAt(i)) >>> 0;
+  return h || 1;
+}
+
+function orderCatalogForSlot(items, slot, mediaType) {
+  const seed = Math.abs(Number(slot) || 1);
+  const salt = mediaTypeSalt(mediaType);
+  const list = Array.isArray(items) ? items.slice() : [];
+  list.sort((a, b) => {
+    const idA = stableItemRank(a && a.id);
+    const idB = stableItemRank(b && b.id);
+    const mix = (id, slot) => {
+      let x = (id ^ Math.imul(slot, 0x9e3779b1) ^ Math.imul(salt, 0x85ebca6b)) >>> 0;
+      x = Math.imul(x ^ (x >>> 16), 0x7feb352d) >>> 0;
+      x = Math.imul(x ^ (x >>> 15), 0x846ca68b) >>> 0;
+      return (x ^ (x >>> 16)) >>> 0;
+    };
+    const hA = mix(idA || 1, seed);
+    const hB = mix(idB || 1, seed);
+    return hA - hB || (idA - idB);
+  });
+  return list;
+}
+
+function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "2");
+  u.searchParams.set("cv", "3");
+  if (slot !== undefined && slot !== null && slot !== "") {
+    u.searchParams.set("rot", String(slot));
+  }
   return u.toString();
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const part = String(token || "").split(".")[1];
+    if (!part) return null;
+    const payload = JSON.parse(fromBase64Url(part));
+    if (!payload || typeof payload !== "object") return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
 }
 
 function isDeadUpstreamError(status, detail) {
@@ -339,11 +463,7 @@ function buildGameCatalogPage(games, opts) {
     });
   }
   if (sort === "random") {
-    list.sort((a, b) => {
-      const hA = ((Number(a.id) || 1) * 7919) ^ seed;
-      const hB = ((Number(b.id) || 1) * 7919) ^ seed;
-      return (hA % 10007) - (hB % 10007) || (Number(a.id) || 0) - (Number(b.id) || 0);
-    });
+    list = orderCatalogForSlot(list, seed, "game");
   } else if (sort === "views" || sort === "popular") {
     list.sort((a, b) => (b.plays || 0) - (a.plays || 0) || (Number(b.id) || 0) - (Number(a.id) || 0));
   } else if (sort === "rating") {
@@ -659,23 +779,52 @@ async function resolveAuthUser(request, sbUrl, sbKey) {
     return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
   }
 
+  let upstreamStatus = 0;
   try {
     const userRes = await fetch(`${activeUrl}/auth/v1/user`, {
       headers: { "apikey": activeKey, "Authorization": `Bearer ${token}` }
     });
+    upstreamStatus = userRes.status || 0;
     if (userRes.ok) {
       const user = await userRes.json();
       if (user && user.id) {
         return { user, token, newToken: null, newRefreshToken: null, unavailable: false };
       }
     }
-    if (userRes.status >= 500) {
-      return { user: null, token, newToken: null, newRefreshToken: null, unavailable: true };
+    // 401/403: token inválido o caducado. El cliente refresca. No es un 503.
+    if (userRes.status === 401 || userRes.status === 403) {
+      return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
     }
   } catch (e) {
-    return { user: null, token, newToken: null, newRefreshToken: null, unavailable: true };
+    upstreamStatus = 503;
   }
 
+  // GoTrue caído o inalcanzable no debe vaciar la bóveda si el JWT sigue vigente.
+  // PostgREST valida el mismo token con RLS (auth.uid()).
+  const payload = decodeJwtPayload(token);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (payload && payload.sub && payload.exp && Number(payload.exp) <= nowSec) {
+    return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
+  }
+  if (payload && payload.sub) {
+    return {
+      user: {
+        id: payload.sub,
+        email: payload.email || "",
+        user_metadata: payload.user_metadata || {},
+        role: payload.role || "authenticated"
+      },
+      token,
+      newToken: null,
+      newRefreshToken: null,
+      unavailable: false,
+      degraded: true
+    };
+  }
+
+  if (upstreamStatus >= 500 || upstreamStatus === 0) {
+    return { user: null, token, newToken: null, newRefreshToken: null, unavailable: true };
+  }
   return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
 }
 
@@ -1704,30 +1853,40 @@ export async function onRequest(context) {
     const category = sanitizeSlug(url.searchParams.get("category"));
     const tag = sanitizeSlug(url.searchParams.get("tag"));
     const seedParam = Math.max(0, Math.min(1000000, parseInt(url.searchParams.get("seed") || "0", 10) || 0));
+    const shuffleParam = Math.max(0, Math.min(1000000, parseInt(url.searchParams.get("shuffle") || "0", 10) || 0));
     const sort = validateSort(url.searchParams.get("sort"));
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
-    const catalogSlot = Math.floor(Date.now() / (3 * 60 * 60 * 1000));
-    const isolateCatalogKey = `v2:${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam || catalogSlot}:${sort}`;
-    const l1Catalog = getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
+    // Semilla compartida: Math.floor(Date.now() / (3 * 3600 * 1000))
+    const catalogSlot = Math.floor(Date.now() / (3 * 3600 * 1000));
+    const freshSeed = shuffleParam || seedParam;
+    const freshShuffle = url.searchParams.get("fresh") === "1" && freshSeed > 0;
+    const rotationSeed = freshShuffle ? freshSeed : catalogSlot;
+    const rotTtl = rotationCacheSeconds(Date.now());
+    const catalogCacheControl = q
+      ? "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400"
+      : `public, max-age=${Math.min(1800, rotTtl)}, s-maxage=${rotTtl}, stale-while-revalidate=60`;
+    const isolateCatalogKey = `v3:${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${rotationSeed}:${sort}`;
+    const l1Catalog = !freshShuffle ? getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000) : null;
     if (l1Catalog) {
       return new Response(method === "HEAD" ? null : l1Catalog, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": q ? "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400" : "public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800",
+          "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
           "X-Cloudflare-RAM-Cache": "HIT",
           "X-Cloudflare-Edge-Cache": "HIT",
+          "X-Velvet-Rotation": String(catalogSlot),
           ...getCorsHeaders(origin)
         }
       });
     }
 
     // Cache L2 de Borde Cloudflare para catálogo público.
-    // cv=2 descarta respuestas vacías cacheadas con el cursor de id roto.
+    // cv=3 + rot=<ventana de 3 h> descarta respuestas de la ventana anterior.
     const cache = typeof caches !== "undefined" ? caches.default : null;
-    const cacheKey = new Request(catalogEdgeCacheUrl(url), { method: "GET" });
-    if (cache) {
+    const cacheKey = new Request(catalogEdgeCacheUrl(url, freshShuffle ? `fresh-${rotationSeed}` : catalogSlot), { method: "GET" });
+    if (cache && !freshShuffle) {
       try {
         const cached = await cache.match(cacheKey);
         if (cached) {
@@ -1751,10 +1910,14 @@ export async function onRequest(context) {
       else if (sort === "rating") pmvSort = "rating";
 
       let fetchPmvPage = page;
-      if ((sort === "random" || seedParam > 0) && !q && (!category || category === "all")) {
-        const seedVal = seedParam > 0 ? seedParam : (((catalogSlot * 7919) % 50000) + 1);
+      if ((sort === "random" || freshShuffle) && !q && (!category || category === "all")) {
+        const seedVal = freshShuffle ? freshSeed : catalogSlot;
         const randomBasePage = ((seedVal * 137) % 2500) + 1;
         fetchPmvPage = ((randomBasePage + (page - 1) * 3) % 2500) + 1;
+        // La fórmula anterior puede repetir página cuando PMV recorta el rango.
+        // La permutación biyectiva deja la 494 y la 495 en páginas distintas
+        // y cambia toda la categoría al cambiar la ventana de 3 horas.
+        fetchPmvPage = permutePageIndex(Math.max(0, page - 1), 2500, seedVal) + 1;
       }
 
       let pmvApiUrl = `https://pmvhaven.com/api/videos?page=${fetchPmvPage}&limit=${pageSize}&sort=${pmvSort}`;
@@ -1778,13 +1941,12 @@ export async function onRequest(context) {
           const pmvData = await pmvRes.json();
           let vList = pmvData.videos || [];
 
-          if ((sort === "random" || seedParam > 0) && vList.length > 1) {
-            const seedVal = seedParam > 0 ? seedParam : (((catalogSlot * 7919) % 50000) + 1);
-            vList = [...vList].sort((a, b) => {
-              const hA = (((a.durationSeconds || a.views || 1) * 7919) ^ seedVal) % 10007;
-              const hB = (((b.durationSeconds || b.views || 1) * 7919) ^ seedVal) % 10007;
-              return hA - hB;
-            });
+          if ((sort === "random" || freshShuffle) && !q && vList.length > 1) {
+            vList = orderCatalogForSlot(
+              vList.map((v) => ({ ...v, id: v._id || v.id })),
+              freshShuffle ? freshSeed : catalogSlot,
+              "video"
+            );
           }
 
           const items = await Promise.all(vList.map(async v => {
@@ -1840,11 +2002,12 @@ export async function onRequest(context) {
             status: 200,
             headers: {
               "Content-Type": "application/json; charset=utf-8",
-              "Cache-Control": "public, max-age=1800, s-maxage=86400, stale-while-revalidate=86400",
+              "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
+              "X-Velvet-Rotation": String(catalogSlot),
               ...getCorsHeaders(origin)
             }
           });
-          if (cache) {
+          if (cache && !freshShuffle) {
             try { context.waitUntil(cache.put(cacheKey, pmvResponse.clone())); } catch (e) {}
           }
           return pmvResponse;
@@ -1865,7 +2028,8 @@ export async function onRequest(context) {
 
     // Modo aleatorio y rotación cada 3 horas SOLO si sort=random o viene seed Y no hay búsqueda, categoría ni tag
     const isRandomMode = (sort === "random" || seedParam > 0) && !q && !tag && (!category || category === "all");
-    const effectiveSeed = seedParam > 0 ? seedParam : (((catalogSlot * 7919) % 50000) + 1);
+    const rotateCatalog = (sort === "random" || freshShuffle) && !q && !tag && (!category || category === "all");
+    const effectiveSeed = freshShuffle ? freshSeed : (rotateCatalog ? catalogSlot : (((catalogSlot * 7919) % 50000) + 1));
 
     // Juegos: el proyecto Supabase DB2 (vtyleivfovkolpxjjkjs) ya no resuelve (Cloudflare 1016).
     // El catálogo real está en /data/games.json. Un fallo de origen NUNCA debe ser HTTP 500.
@@ -1895,11 +2059,12 @@ export async function onRequest(context) {
           status: 200,
           headers: {
             "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": "public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800",
+            "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
+            "X-Velvet-Rotation": String(catalogSlot),
             ...getCorsHeaders(origin)
           }
         });
-        if (cache) {
+        if (cache && !freshShuffle) {
           try { context.waitUntil(cache.put(cacheKey, gameResp.clone())); } catch (e) {}
         }
         return gameResp;
@@ -1982,31 +2147,38 @@ export async function onRequest(context) {
       filterQuery += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
     }
 
-    // Las primeras páginas usan OFFSET (barato y sin huecos). A partir de la
-    // página cuyo offset pasa de 240, y en sort=random, se salta con id=lte
-    // sobre el rango REAL de ids. El conteo estimado no es un id: en galerías
-    // vale ~18260 y las filas viven cerca de 398000, así que el cursor viejo
-    // devolvía cero resultados.
-    let minId = 0;
-    let maxId = 0;
+    // Cada página es un tramo distinto del conjunto FILTRADO (no del espacio
+    // de ids). Un cursor id=lte a 24 o 7919 ids de distancia caía en el mismo
+    // hueco y la 494 y la 495 devolvían las mismas filas. La rotación de 3 h
+    // permuta el índice de página, pero sigue siendo biyectiva.
+    const pagePlan = catalogPageOffset(
+      safePage,
+      pageSize,
+      Math.max(pageSize, estimatedTotal),
+      rotateCatalog ? catalogSlot : 1,
+      rotateCatalog
+    );
+    let offset = pagePlan.offset;
     let cursorId = null;
-    let offset = isRandomMode ? 0 : (safePage - 1) * pageSize;
-    const needsKeyset = isRandomMode || offset > 240;
-    if (needsKeyset) {
-      const bounds = await fetchIdBounds(SUPABASE_URL, SUPABASE_KEY, filterQuery);
-      if (bounds) {
-        minId = bounds.minId;
-        maxId = bounds.maxId;
-        cursorId = catalogIdCursor({
-          minId,
-          maxId,
-          page: safePage,
-          pageSize,
-          seed: effectiveSeed,
-          random: isRandomMode
-        });
-        offset = 0;
-      } else if (offset > 240) {
+    if (offset > 240) {
+      const boundaryKey = `boundary:v3:${filterQuery}:${offset}`;
+      const cachedBoundary = getIsolateCache(ISOLATE_CATALOG_CACHE, boundaryKey, 1800000);
+      let boundaryId = cachedBoundary && cachedBoundary.id ? Number(cachedBoundary.id) : 0;
+      if (!boundaryId) {
+        try {
+          const probeUrl = `${SUPABASE_URL}/rest/v1/items?select=id&limit=1&offset=${offset}&order=id.desc&${filterQuery}`;
+          const probeRes = await fetch(probeUrl, {
+            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+          });
+          if (probeRes.ok) {
+            const probeRows = await probeRes.json().catch(() => []);
+            boundaryId = probeRows && probeRows[0] ? Number(probeRows[0].id) : 0;
+            if (boundaryId) setIsolateCache(ISOLATE_CATALOG_CACHE, boundaryKey, { id: boundaryId });
+          }
+        } catch (probeErr) {}
+      }
+      if (boundaryId) {
+        cursorId = boundaryId;
         offset = 0;
       }
     }
@@ -2045,8 +2217,10 @@ export async function onRequest(context) {
             }
           });
         }
-        if (!spRes.ok) {
-          // Si el offset profundo sigue fallando por timeout o rango excedido (ej. 416), reintentar en página 1 preservando filtros
+        if (!spRes.ok && spRes.status === 416 && offset > 0) {
+          // Solo un 416 (offset pasado del final) puede caer a offset 0, y
+          // únicamente para no perder los filtros. Una página profunda que
+          // sí existe no se sustituye por la página 1.
           const pageOneUrl = postgrestUrl.replace(/offset=\d+/, 'offset=0');
           spRes = await fetch(pageOneUrl, {
             headers: {
@@ -2078,28 +2252,31 @@ export async function onRequest(context) {
       }
 
       let rawItems = await spRes.json();
-      if (cursorId && Array.isArray(rawItems) && rawItems.length < pageSize && maxId) {
-        const seen = new Set(rawItems.map(it => it.id));
-        const wrapUrl = postgrestUrl
-          .replace(/&id=lte\.\d+/, `&id=lte.${maxId}`)
-          .replace(/limit=\d+/, `limit=${pageSize}`);
-        try {
-          const wrapRes = await fetch(wrapUrl, {
-            headers: { "apikey": activeQueryKey, "Authorization": `Bearer ${activeQueryKey}` }
-          });
-          if (wrapRes.ok) {
-            const extra = await wrapRes.json();
-            if (Array.isArray(extra)) {
-              for (const it of extra) {
-                if (!seen.has(it.id)) {
-                  rawItems.push(it);
-                  seen.add(it.id);
-                  if (rawItems.length >= pageSize) break;
+      if (cursorId && Array.isArray(rawItems) && rawItems.length > 0 && rawItems.length < pageSize) {
+        const lastId = Number(rawItems[rawItems.length - 1].id) || 0;
+        if (lastId > 1) {
+          const moreUrl = postgrestUrl
+            .replace(/&id=lte\.\d+/, `&id=lt.${lastId}`)
+            .replace(/offset=\d+/, "offset=0")
+            .replace(/limit=\d+/, `limit=${pageSize - rawItems.length}`);
+          try {
+            const moreRes = await fetch(moreUrl, {
+              headers: { "apikey": activeQueryKey, "Authorization": `Bearer ${activeQueryKey}` }
+            });
+            if (moreRes.ok) {
+              const extra = await moreRes.json();
+              const seen = new Set(rawItems.map((it) => it.id));
+              if (Array.isArray(extra)) {
+                for (const it of extra) {
+                  if (!seen.has(it.id)) {
+                    rawItems.push(it);
+                    seen.add(it.id);
+                  }
                 }
               }
             }
-          }
-        } catch (wrapErr) {}
+          } catch (moreErr) {}
+        }
       }
       const items = await Promise.all((rawItems || []).map(async it => {
         const isGame = it.media_type === "game";
@@ -2140,7 +2317,8 @@ export async function onRequest(context) {
         page: safePage,
         page_size: pageSize,
         total_pages: totalPages,
-        live: false
+        live: false,
+        rotation: catalogSlot
       };
 
       const jsonStr = JSON.stringify(responsePayload);
@@ -2150,12 +2328,13 @@ export async function onRequest(context) {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": q ? "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400" : "public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800",
+          "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
+          "X-Velvet-Rotation": String(catalogSlot),
           ...getCorsHeaders(origin)
         }
       });
 
-      if (cache) {
+      if (cache && !freshShuffle) {
         try {
           context.waitUntil(cache.put(cacheKey, resp.clone()));
         } catch (e) {}
@@ -2721,73 +2900,111 @@ export async function onRequest(context) {
       const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") || String(PERSONAL_PAGE_SIZE), 10)));
       const offset = (page - 1) * pageSize;
       const to = offset + pageSize - 1;
+      const authHeaders = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
+        "Prefer": "count=exact",
+        "Range": `${offset}-${to}`
+      };
 
-      let favQueryUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,url,page_count,video_sources,status)&order=created_at.desc,item_id.desc`;
-      const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
-      if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
-        favQueryUrl += `&items.media_type=eq.${typeFilter}`;
-      }
-
-      const favRes = await fetch(favQueryUrl, {
-        headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-          "Prefer": "count=exact",
-          "Range": `${offset}-${to}`
+      try {
+        let favQueryUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,url,page_count,video_sources,status)&order=created_at.desc,item_id.desc`;
+        const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
+        if (typeFilter && ["comic", "video", "gallery", "game"].includes(typeFilter)) {
+          favQueryUrl += `&items.media_type=eq.${typeFilter}`;
         }
-      });
 
-      let total = 0;
-      const cr = favRes.headers.get("content-range") || "";
-      const slashIdx = cr.indexOf("/");
-      if (slashIdx !== -1) {
-        const totalPart = cr.substring(slashIdx + 1);
-        if (totalPart && totalPart !== "*") {
-          total = parseInt(totalPart, 10) || 0;
+        let favRes = await fetch(favQueryUrl, { headers: authHeaders });
+        // El embed items(...) falla si la FK no está cacheada. Reintento plano.
+        if (!favRes.ok) {
+          const plainUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at&order=created_at.desc,item_id.desc`;
+          favRes = await fetch(plainUrl, { headers: authHeaders });
         }
-      }
 
-      const rawRows = favRes.ok ? await favRes.json().catch(() => []) : [];
-      const items = await Promise.all((rawRows || []).map(async (r) => {
-        const it = r.items || {};
-        const isAvailable = it && it.id && it.status !== "blocked";
-        const coverUrl = it.cover_url || "";
-        const maskedCover = coverUrl ? await encodeToken(coverUrl, it.url || "") : "";
-        return {
-          id: it.id || r.item_id,
-          item_id: r.item_id,
-          title: isAvailable ? (it.title || "Sin título") : "Contenido no disponible",
-          cover_url: maskedCover ? `/api/media?t=${maskedCover}` : (it.cover_url || "/velvet_logo.png"),
-          media_type: it.media_type || "comic",
-          source: it.source || "",
-          source_id: it.source_id || "",
-          url: isAvailable ? (it.url || "") : "",
-          page_count: it.page_count || 0,
-          created_at: r.created_at,
-          available: isAvailable
-        };
-      }));
+        if (!favRes.ok) {
+          return new Response(JSON.stringify({
+            items: [],
+            total: 0,
+            page,
+            pageSize,
+            totalPages: 1,
+            degraded: true,
+            error: "No se pudo leer la bóveda"
+          }), {
+            status: 200,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
 
-      // Fusionar favoritos personalizados de metadata si existen
-      const userMetaFavs = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
-      let finalItems = [...items];
-      if (userMetaFavs.length > 0) {
-        const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id)));
-        for (const cf of userMetaFavs) {
-          const k = (cf.source && cf.source_id) ? `${cf.source}:${cf.source_id}` : String(cf.id);
-          if (!seen.has(k)) {
-            seen.add(k);
-            finalItems.push(cf);
+        let total = 0;
+        const cr = favRes.headers.get("content-range") || "";
+        const slashIdx = cr.indexOf("/");
+        if (slashIdx !== -1) {
+          const totalPart = cr.substring(slashIdx + 1);
+          if (totalPart && totalPart !== "*") {
+            total = parseInt(totalPart, 10) || 0;
           }
         }
-      }
 
-      const finalTotal = Math.max(total, finalItems.length);
-      const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
-      return new Response(JSON.stringify({ items: finalItems, total: finalTotal, page, pageSize, totalPages }), {
-        status: 200,
-        headers: getPersonalHeaders(origin, newToken)
-      });
+        const rawRows = await favRes.json().catch(() => []);
+        const items = await Promise.all((rawRows || []).map(async (r) => {
+          const it = r.items || {};
+          const isAvailable = !it.id || it.status !== "blocked";
+          const coverUrl = it.cover_url || "";
+          let maskedCover = "";
+          try {
+            maskedCover = coverUrl ? await encodeToken(coverUrl, it.url || "") : "";
+          } catch (e) {
+            maskedCover = "";
+          }
+          return {
+            id: it.id || r.item_id,
+            item_id: r.item_id,
+            title: isAvailable ? (it.title || "Guardado") : "Contenido no disponible",
+            cover_url: maskedCover ? `/api/media?t=${maskedCover}` : (it.cover_url || "/velvet_logo.png"),
+            media_type: it.media_type || "comic",
+            source: it.source || "",
+            source_id: it.source_id || "",
+            url: isAvailable ? (it.url || "") : "",
+            page_count: it.page_count || 0,
+            created_at: r.created_at,
+            available: isAvailable
+          };
+        }));
+
+        const userMetaFavs = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
+        let finalItems = [...items];
+        if (userMetaFavs.length > 0) {
+          const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id)));
+          for (const cf of userMetaFavs) {
+            const k = (cf.source && cf.source_id) ? `${cf.source}:${cf.source_id}` : String(cf.id);
+            if (!seen.has(k)) {
+              seen.add(k);
+              finalItems.push(cf);
+            }
+          }
+        }
+
+        const finalTotal = Math.max(total, finalItems.length);
+        const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
+        return new Response(JSON.stringify({ items: finalItems, total: finalTotal, page, pageSize, totalPages }), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      } catch (favErr) {
+        return new Response(JSON.stringify({
+          items: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 1,
+          degraded: true,
+          error: "No se pudo leer la bóveda"
+        }), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
     }
 
     // --- POST FAVORITOS (Agregar o Sincronización Idempotente) ---

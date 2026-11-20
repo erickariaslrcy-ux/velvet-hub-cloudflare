@@ -1122,7 +1122,7 @@
 
         </div>
 
-        <div class="flex items-center gap-1 sm:gap-1.5">
+        <div id="brand-wordmark" class="flex items-center gap-1 sm:gap-1.5">
 
           <span class="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-1 sm:gap-1.5 font-sans">
 
@@ -1191,7 +1191,7 @@
 
       <!-- Barra de Búsqueda de Cómics y Videos Calientes -->
 
-      <div class="flex-1 min-w-[150px] sm:min-w-[220px] max-w-lg mx-2 sm:mx-4">
+      <div class="flex-1 min-w-0 sm:min-w-[220px] max-w-lg mx-1 sm:mx-4">
 
         <form id="search-form" onsubmit="handleSearch(event)" class="relative w-full">
 
@@ -1233,7 +1233,7 @@
           class="flex h-8 sm:h-9 px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] hover:opacity-90 text-white text-[11px] sm:text-xs font-bold items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-hot-glow active:scale-95 cursor-pointer shrink-0"
         >
           <i class="fa-solid fa-dice text-xs sm:text-sm"></i>
-          <span>Al Azar</span>
+          <span class="random-label">Al Azar</span>
         </button>
 
         <!-- Botón Perfil / Mi Bóveda -->
@@ -1244,11 +1244,17 @@
 
             id="user-profile-btn"
 
+            type="button"
+
             data-action="user-button"
 
-            onclick="handleUserButtonClick()"
+            aria-haspopup="menu"
 
-            class="flex items-center justify-center gap-1.5 h-9 px-2.5 sm:px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-xs font-bold text-white transition-all cursor-pointer"
+            aria-expanded="false"
+
+            aria-controls="user-dropdown-menu"
+
+            class="flex items-center justify-center gap-1.5 h-9 px-2 sm:px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-xs font-bold text-white transition-all cursor-pointer"
 
           >
 
@@ -1288,7 +1294,7 @@
 
               <i class="fa-solid fa-heart text-pink-500 text-sm"></i>
 
-              <span>Mi Bóveda</span>
+              <span>Mi Bóveda / Favoritos</span>
 
               <span id="dropdown-fav-count" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-purple-950 border border-purple-500/30 font-mono">0</span>
 
@@ -1306,7 +1312,7 @@
 
               <i class="fa-solid fa-id-badge text-indigo-400 text-sm"></i>
 
-              <span>Detalles de Cuenta</span>
+              <span>Detalles de Cuenta / Configuración</span>
 
             </a>
 
@@ -1352,7 +1358,7 @@
 
       <!-- Switch de Modo Móvil Compacto (solo teléfonos) -->
 
-      <div class="flex sm:hidden items-center p-0.5 rounded-xl bg-black/60 border border-purple-500/30 shrink-0">
+      <div id="mob-mode-switch" class="hidden" hidden aria-hidden="true">
 
         <a href="/comics" id="mob-toggle-comics" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm">Cómics</a>
         <a href="/videos" id="mob-toggle-videos" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</a>
@@ -1413,7 +1419,7 @@
       </div>
       <div class="text-center space-y-1">
         <p id="portal-transition-text" class="text-sm font-black text-white tracking-wide">Accediendo a Cómics VIP...</p>
-        <p class="text-[11px] text-lav/60">Cargando catálogo en alta definición</p>
+        <p class="text-[11px] text-lav/60">Cargando el catálogo</p>
       </div>
       <div class="w-40 h-1.5 rounded-full bg-white/10 overflow-hidden relative">
         <div class="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-400 to-pink-500 animate-pulse"></div>
@@ -1427,7 +1433,7 @@
 
   <!-- ===================================================================== -->
 
-  <main id="home-view" class="velvet-view flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 pb-24 lg:pb-12 space-y-6">
+  <main id="home-view" class="velvet-view catalog-tight max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-2 space-y-3">
 
     <!-- 1. HERO SPOTLIGHT CAROUSEL CINEMATOGRÁFICO (TOP 5 ESTRENOS) -->
 
@@ -1599,14 +1605,14 @@
     </div>
 
     <!-- Flujo Ultra-Liviano & Paginación Velvet Android (Cero Saturación de Memoria) -->
-    <div id="infinite-scroll-container" class="mt-8 flex flex-col items-center justify-center gap-4 select-none pb-16 px-3">
+    <div id="infinite-scroll-container" class="mt-2 flex flex-col items-center justify-center gap-2 select-none pb-1 px-1">
       <!-- Sentinel invisible para auto-carga suave al llegar al fondo -->
       <div id="feed-sentinel" class="w-full h-4"></div>
 
       <!-- Spinner animado de carga en segundo plano -->
       <div id="infinite-loading-spinner" class="hidden flex items-center gap-3 px-6 py-3 rounded-2xl bg-[#0d0720]/95 border border-neon/40 text-ink shadow-[0_0_25px_rgba(236,72,153,0.3)] backdrop-blur-md">
         <div class="w-5 h-5 border-2 border-hot/30 border-t-hot rounded-full animate-spin"></div>
-        <span class="text-xs font-black text-lav">Cargando siguiente página en alta definición...</span>
+        <span class="text-xs font-black text-lav">Cargando la siguiente página...</span>
       </div>
 
       <!-- Barra de Paginación Rediseñada Velvet Pro -->
@@ -1632,7 +1638,7 @@
           <span>Mi Bóveda Personal</span>
         </h1>
         <p class="text-xs sm:text-sm text-lav/70 mt-1">
-          Tus favoritos e historial, sincronizados permanentemente en la nube.
+          Tus favoritos e historial, en tu cuenta.
         </p>
       </div>
 
@@ -1922,9 +1928,9 @@
                 <i id="vault-acc-avatar-icon" class="fa-solid fa-crown text-amber-300 hidden"></i>
               </div>
               <div>
-                <div class="flex items-center gap-2.5">
+                <div class="flex flex-wrap items-center gap-2">
                   <h3 id="vault-acc-username" class="text-base sm:text-lg font-black text-white">Mi Perfil</h3>
-                  <span id="vault-acc-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">MIEMBRO VIP</span>
+                  <span id="vault-acc-badge" class="whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">MIEMBRO VIP</span>
                 </div>
                 <p id="vault-acc-email" class="text-xs text-lav/70 mt-0.5">tu@correo.com</p>
                 <p id="vault-acc-created" class="text-[11px] text-lav/50 mt-0.5">Activo recientemente</p>
@@ -2177,28 +2183,28 @@
 
     <div class="grid grid-cols-5 h-14 sm:h-16 w-full max-w-md mx-auto px-1">
 
-      <a href="/" id="tab-btn-home" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-bold text-lav/70 hover:text-white transition-all">
+      <a href="/" id="tab-btn-home" data-nav="home" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
         <i class="fa-solid fa-house text-sm sm:text-base"></i>
         <span>Inicio</span>
       </a>
 
-      <a href="/videos" id="tab-btn-videos" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
-        <i class="fa-solid fa-film text-sm sm:text-base text-pink-400"></i>
+      <a href="/videos" id="tab-btn-videos" data-nav="videos" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-film text-sm sm:text-base"></i>
         <span>Videos</span>
       </a>
 
-      <a href="/comics" id="tab-btn-comics" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-black text-pink-400 transition-all">
-        <i class="fa-solid fa-book-open text-sm sm:text-base text-purple-400"></i>
+      <a href="/comics" id="tab-btn-comics" data-nav="comics" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-book-open text-sm sm:text-base"></i>
         <span>Cómics</span>
       </a>
 
-      <a href="/boveda/favoritos" id="tab-btn-vault" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
-        <i class="fa-solid fa-heart text-sm sm:text-base text-pink-500"></i>
+      <a href="/boveda/favoritos" id="tab-btn-vault" data-nav="vault" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-heart text-sm sm:text-base"></i>
         <span>Bóveda</span>
       </a>
 
-      <a href="/cuenta" id="tab-btn-account" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
-        <i class="fa-solid fa-circle-user text-sm sm:text-base text-indigo-400"></i>
+      <a href="/cuenta" id="tab-btn-account" data-nav="account" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-circle-user text-sm sm:text-base"></i>
         <span>Cuenta</span>
       </a>
 
@@ -2641,7 +2647,7 @@
 
         <div class="w-14 h-14 border-4 border-hot/20 border-t-hot rounded-full animate-spin shadow-hot-glow"></div>
 
-        <p class="text-ink text-sm sm:text-base font-bold tracking-wide">Cargando páginas en alta definición...</p>
+        <p class="text-ink text-sm sm:text-base font-bold tracking-wide">Cargando páginas...</p>
 
         <span class="text-xs text-lav/60">Sin censura ni publicidad invasiva</span>
 
@@ -3138,7 +3144,7 @@
 
             <h3 class="text-base font-black text-white">Mi Bóveda Personal</h3>
 
-            <p class="text-[11px] text-purple-300/70">Tus favoritos e historial sincronizados permanentemente en la nube</p>
+            <p class="text-[11px] text-purple-300/70">Favoritos e historial de tu cuenta</p>
 
           </div>
 
@@ -3688,10 +3694,26 @@
 
   <!-- Footer Comercial Discreto -->
 
-  <footer class="bg-obsidian border-t border-neon/15 pt-6 pb-24 lg:pb-6 text-center text-xs text-lav/50 block">
-    <p>Velvet Hub &copy; 2026 &bull; Plataforma Privada &bull; Todos los derechos reservados a sus respectivos autores.</p>
-    <p class="text-[10px] text-lav/40 font-mono mt-1">v3.1.0 (v11-velvet-turbo) &bull; Cloudflare Pages Native</p>
+  <footer id="site-footer" class="bg-obsidian border-t border-white/10 pt-3 text-center text-xs text-lav/60 block">
+    <p>Velvet Hub &copy; 2026</p>
+    <nav class="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 px-3 text-[11px]" aria-label="Información legal">
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="disclaimer">Descargo de responsabilidad</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="dmca">DMCA / Retiro de contenido</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="terms">Términos de uso</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="privacy">Privacidad</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="adult">Solo +18</button>
+    </nav>
   </footer>
+
+  <div id="legal-modal" class="hidden fixed inset-0 z-[80] bg-black/80 flex items-end sm:items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="legal-modal-title">
+    <div class="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl bg-[#120726] border border-purple-500/30 p-5 shadow-2xl">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <h2 id="legal-modal-title" class="text-base font-black text-white">Aviso</h2>
+        <button type="button" data-action="close-legal" class="w-8 h-8 rounded-lg bg-white/10 text-white" aria-label="Cerrar">×</button>
+      </div>
+      <div id="legal-modal-body" class="text-sm text-purple-100/80 leading-relaxed space-y-3"></div>
+    </div>
+  </div>
 
   <!-- ===================================================================== -->
 
@@ -3753,19 +3775,7 @@
     })();
 
     function getRotatingSeed() {
-      const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
-      const currentSlot = Math.floor(Date.now() / THREE_HOURS_MS);
-      let userSalt = 1;
-      try {
-        userSalt = parseInt(localStorage.getItem('velvet_user_rot_salt') || '0', 10);
-        if (!userSalt) {
-          userSalt = Math.floor(Math.random() * 50000) + 1;
-          localStorage.setItem('velvet_user_rot_salt', String(userSalt));
-        }
-      } catch (e) {
-        userSalt = 1234;
-      }
-      return ((currentSlot * 7919 + userSalt) % 50000) + 1;
+      return Math.floor(Date.now() / (3 * 3600 * 1000));
     }
 
     // =======================================================================
@@ -4094,7 +4104,7 @@
       if (options.sort) {
         state.sort = options.sort;
         if (state.sort === 'random') {
-          if (!state.feedSeed) state.feedSeed = Math.floor(Math.random() * 500) + 1;
+          if (!state.feedSeed) state.feedSeed = getRotatingSeed();
           state.videoSeed = state.feedSeed;
         } else {
           state.feedSeed = 0;
@@ -4102,7 +4112,7 @@
         }
       } else if (isUserClick) {
         if (state.catalogMode === 'dynamic') {
-          state.feedSeed = Math.floor(Math.random() * 500) + 1;
+          state.feedSeed = getRotatingSeed();
           state.videoSeed = state.feedSeed;
           state.sort = 'random';
         } else {
@@ -4192,7 +4202,7 @@
       } else if (mode === "galleries") {
         if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Sets Exclusivos de Cosplay & Modelos';
         if (resCount) resCount.textContent = "Actualizando galerías VIP...";
-        if (badgeEl) badgeEl.textContent = "sets en ultra alta definición";
+        if (badgeEl) badgeEl.textContent = "sets";
         if (heroTitle) heroTitle.textContent = "Cargando galería destacada...";
         if (heroBadge) {
           heroBadge.textContent = "GALERÍA VIP 4K";
@@ -4407,7 +4417,7 @@
       if (sortId === 'random') {
         state.catalogMode = 'dynamic';
         state.sort = 'random';
-        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
       } else {
         state.catalogMode = 'static';
@@ -4623,12 +4633,12 @@
 
       const title = (item.title || '').toLowerCase();
 
-      if (item.media_type === 'video' || state.mode === 'videos') {
-        return 'Producción erótica en streaming de ultra alta definición sin censura. Disfruta de las mejores escenas y actuaciones exclusivas con máxima velocidad y nitidez.';
+        if (item.media_type === 'video' || state.mode === 'videos') {
+        return 'Video en streaming. El archivo está en un servidor externo.';
       }
 
       if (item.media_type === 'gallery' || (item.tags && item.tags.some(t => String(t).toLowerCase().includes('cosplay')))) {
-        return 'Exclusiva sesión fotográfica en ultra alta definición sin censura. Disfruta de la galería completa de la modelo con capturas profesionales en máxima resolución.';
+        return 'Galería de fotos. Las imágenes se sirven desde el sitio original.';
       }
 
       if (title.includes('3d') || title.includes('rysketches') || title.includes('render') || title.includes('penny')) {
@@ -4655,7 +4665,7 @@
 
       }
 
-      return 'Una historia erótica apasionante a todo color y en máxima definición. Disfruta de viñetas sin censura con la máxima calidad gráfica y lectura fluida en alta resolución.';
+      return 'Cómic a color. Las páginas se cargan desde el proveedor original.';
 
     }
 
@@ -5794,7 +5804,7 @@
       } else if (state.mode === 'galleries') {
         if (resCount) resCount.textContent = `${currentLoadedCount} Galerías VIP Listas`;
         const badgeEl = document.getElementById('grid-status-badge');
-        if (badgeEl) badgeEl.textContent = `${currentLoadedCount} sets en ultra alta definición`;
+        if (badgeEl) badgeEl.textContent = `${currentLoadedCount} sets`;
         if (titleSec) {
           if (state.query) {
             titleSec.innerHTML = `<i class="fa-solid fa-camera-retro text-hot"></i> Galerías encontradas para: "${escapeHtml(state.query)}"`;
@@ -5885,7 +5895,7 @@
         }
 
         if (state.sort === 'random' || state.sort === 'shuffle') {
-          const seed = state.feedSeed || Math.floor(Math.random() * 50000) + 1;
+          const seed = getRotatingSeed();
           gList = [...gList].sort((a, b) => {
             const hA = ((Number(a.id || 1) * 7919) ^ seed) % 10007;
             const hB = ((Number(b.id || 1) * 7919) ^ seed) % 10007;
@@ -5924,18 +5934,21 @@
       }
     }
 
+    let _feedGen = 0;
     async function fetchLiveFeed(skipCache = false) {
-      const requestKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}`;
-      if (!skipCache && _feedLockKey === requestKey && (Date.now() - _feedLockAt) < 4000) {
+      const requestKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}:${state.freshShuffle ? state.feedSeed : getRotatingSeed()}`;
+      if (!skipCache && _feedLockKey === requestKey && (Date.now() - _feedLockAt) < 4000 && _isLoadingFeed) {
         return;
       }
       _feedLockKey = requestKey;
       _feedLockAt = Date.now();
+      const gen = ++_feedGen;
 
       if (_catalogAbortController) {
         try { _catalogAbortController.abort(); } catch (e) {}
       }
       _catalogAbortController = new AbortController();
+      window._catalogAbortController = _catalogAbortController;
       _isLoadingFeed = true;
       const signal = _catalogAbortController.signal;
 
@@ -6008,6 +6021,10 @@
 
         if (state.tag) params.append('tag', state.tag);
         if (state.query) params.append('q', state.query);
+        if (state.freshShuffle && state.feedSeed) {
+          params.append('fresh', '1');
+          params.append('shuffle', String(state.feedSeed));
+        }
 
         const resp = await fetch(`/api/items?${params.toString()}`, { signal, credentials: 'omit' });
 
@@ -6017,6 +6034,7 @@
         }
 
         const data = await resp.json();
+        if (gen !== _feedGen) return;
 
         if (state.mode === 'games' && (!data.items || data.items.length === 0)) {
           if (await loadBundledGamesFeed(signal)) return;
@@ -6067,10 +6085,12 @@
 
         showToast('Error cargando contenido: ' + (err.message || 'Servidores ocupados'), 'error');
       } finally {
-        _isLoadingFeed = false;
-        hidePortalTransition();
-        if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
-          window.VelvetPagination.resetLoadingState();
+        if (gen === _feedGen) {
+          _isLoadingFeed = false;
+          hidePortalTransition();
+          if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
+            window.VelvetPagination.resetLoadingState();
+          }
         }
       }
     }
@@ -11716,25 +11736,90 @@
     // Toggle Dropdown de Usuario
 
     function handleUserButtonClick() {
-
       if (!state.currentUser) {
-
         openAuthModal('login');
-
-      } else {
-
-        const menu = document.getElementById('user-dropdown-menu');
-        const arrow = document.getElementById('user-dropdown-arrow');
-
-        if (menu) {
-          const isHidden = menu.classList.contains('hidden');
-          menu.classList.toggle('hidden');
-          if (arrow) arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-        }
-
+        return;
       }
-
+      const menu = document.getElementById('user-dropdown-menu');
+      const btn = document.getElementById('user-profile-btn');
+      const arrow = document.getElementById('user-dropdown-arrow');
+      if (!menu || !btn) return;
+      const willOpen = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !willOpen);
+      btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (arrow) arrow.style.transform = willOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+      if (willOpen) {
+        const rect = btn.getBoundingClientRect();
+        const menuWidth = Math.min(240, window.innerWidth - 16);
+        menu.style.position = 'fixed';
+        menu.style.top = Math.round(rect.bottom + 8) + 'px';
+        menu.style.width = menuWidth + 'px';
+        menu.style.right = Math.max(8, Math.round(window.innerWidth - rect.right)) + 'px';
+        menu.style.left = 'auto';
+        menu.style.zIndex = '80';
+      }
     }
+    window.handleUserButtonClick = handleUserButtonClick;
+
+    const LEGAL_COPY = {
+      disclaimer: {
+        title: 'Descargo de responsabilidad',
+        paragraphs: [
+          'Velvet Hub funciona como un índice automático. Reúne enlaces y reproductores que ya están publicados en internet por otros sitios.',
+          'Aquí no se alojan ni se guardan los archivos de vídeo, cómics, fotos o juegos. Esos archivos siguen en los servidores de quienes los publicaron.',
+          'Las marcas, los derechos de autor y el material pertenecen a sus dueños y a los sitios de origen. Velvet Hub no está asociado con ellos y no responde por lo que esos sitios publican.'
+        ]
+      },
+      dmca: {
+        title: 'DMCA / Retiro de contenido',
+        paragraphs: [
+          'Si eres el titular de un derecho y quieres que quitemos un enlace indexado, escríbenos a dmca@morbohub.com con la URL exacta de esta web, la URL original y una forma de comprobar que el material es tuyo.',
+          'Revisamos los avisos completos y retiramos el enlace indexado en cuanto lo confirmamos. No hace falta una cuenta.',
+          'Un aviso incompleto (sin la URL del enlace en Velvet Hub) no se puede procesar.'
+        ]
+      },
+      terms: {
+        title: 'Términos de uso',
+        paragraphs: [
+          'Al entrar aceptas que el sitio es solo un índice de enlaces de terceros y que el material puede cambiar o desaparecer sin aviso.',
+          'No subas nada, no intentes saltarte el acceso de otras personas y no uses el sitio si no tienes la edad legal en tu país.',
+          'Podemos quitar enlaces, cerrar cuentas o cambiar estas páginas cuando haga falta.'
+        ]
+      },
+      privacy: {
+        title: 'Privacidad',
+        paragraphs: [
+          'La cuenta guarda el correo, el nombre y tus favoritos e historial para que los veas en el móvil y en el PC.',
+          'No vendemos esa información. La sesión se guarda en este navegador y en una cookie para no pedirte la clave en cada visita.',
+          'Puedes cerrar sesión cuando quieras. Si quieres borrar la cuenta, escribe a privacidad@morbohub.com desde el mismo correo.'
+        ]
+      },
+      adult: {
+        title: 'Solo +18',
+        paragraphs: [
+          'Este sitio es para adultos. Si no tienes 18 años, o la edad que exija tu país, sal de aquí.',
+          'El material enlazado es explícito y lo publican terceros. Velvet Hub no lo revisa página por página antes de indexarlo.'
+        ]
+      }
+    };
+
+    function openLegalModal(key) {
+      const modal = document.getElementById('legal-modal');
+      const title = document.getElementById('legal-modal-title');
+      const body = document.getElementById('legal-modal-body');
+      const entry = LEGAL_COPY[key] || LEGAL_COPY.disclaimer;
+      if (title) title.textContent = entry.title;
+      if (body) {
+        body.innerHTML = entry.paragraphs.map((p) => `<p>${p}</p>`).join('');
+      }
+      if (modal) modal.classList.remove('hidden');
+    }
+    function closeLegalModal() {
+      const modal = document.getElementById('legal-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.openLegalModal = openLegalModal;
+    window.closeLegalModal = closeLegalModal;
 
     // Cerrar dropdown al hacer clic fuera
 
@@ -13257,7 +13342,7 @@
 
     function setCategory(cat, btn) {
       if (state.catalogMode === 'dynamic') {
-        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
       } else {
         state.feedSeed = 0;
@@ -13304,7 +13389,7 @@
       state.catalogMode = mode;
       try { localStorage.setItem('velvet_catalog_mode', mode); } catch(e) {}
       if (mode === 'dynamic') {
-        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
         state.sort = 'random';
         showToast('🎲 Modo Aleatorio activado: las páginas rotan y mezclan contenido', 'info');
@@ -13462,6 +13547,7 @@
       updateCatalogModeUI();
 
       // Semilla fresca de amplio rango (1 a 50,000) que salta a páginas profundas al azar (ej. pág 334 o 391)
+      state.freshShuffle = true;
       state.feedSeed = Math.floor(Math.random() * 50000) + 1;
       state.videoSeed = state.feedSeed;
       state.sort = 'random';
@@ -13483,6 +13569,7 @@
         localKeysToRemove.forEach(lk => localStorage.removeItem(lk));
       } catch (e) {}
       fetchLiveFeed(true);
+      state.freshShuffle = false;
       const grid = document.getElementById('comics-grid');
       if (grid) {
         const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
@@ -13613,6 +13700,10 @@
         if (typeof clearSearch === 'function') clearSearch();
       } else if (act === 'user-button') {
         if (typeof handleUserButtonClick === 'function') handleUserButtonClick();
+      } else if (act === 'open-legal') {
+        if (typeof openLegalModal === 'function') openLegalModal(el.getAttribute('data-legal'));
+      } else if (act === 'close-legal') {
+        if (typeof closeLegalModal === 'function') closeLegalModal();
       } else if (act === 'logout') {
         if (typeof handleLogout === 'function') handleLogout();
       } else if (act === 'reset-home') {
