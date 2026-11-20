@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v13-session-persist';
+const CACHE_VERSION = 'v14-stable-media';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -22,7 +22,8 @@ const STATIC_ASSETS = [
   '/js/store.js',
   '/js/router.js',
   '/js/vault.js',
-  '/js/pagination.js'
+  '/js/pagination.js',
+  '/js/image-loader.js'
 ];
 
 const BRAND_FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%"><rect width="100%" height="100%" fill="#0f071e"/><radialGradient id="g" cx="50%" cy="45%" r="60%"><stop offset="0%" stop-color="#2a0d3f"/><stop offset="100%" stop-color="#0a0414"/></radialGradient><rect width="100%" height="100%" fill="url(#g)"/><circle cx="150" cy="180" r="32" fill="none" stroke="#ff2d95" stroke-width="2" stroke-dasharray="5 4"/><path d="M142 166 L164 180 L142 194 Z" fill="#ff2d95"/><text x="150" y="240" text-anchor="middle" fill="#c4b5fd" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="11" font-weight="700" letter-spacing="2">VELVET HUB</text></svg>`;
@@ -153,23 +154,29 @@ self.addEventListener('fetch', (event) => {
         if (cached) return cached;
 
         const fetchPromise = (async () => {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 8000);
-          try {
-            const networkResp = await fetch(req, { signal: controller.signal });
-            clearTimeout(timer);
-            if (networkResp && networkResp.status === 200) {
-              const cType = networkResp.headers.get('content-type') || '';
-              if (!cType.includes('video') && !cType.includes('mpegurl')) {
-                cache.put(req, networkResp.clone());
-                trimLruCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
+          // Un abort (scroll rápido en Android) no debe dejar la portada en negro:
+          // se reintenta una vez antes del SVG de marca. El fallback no se cachea.
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), attempt === 0 ? 8000 : 12000);
+            try {
+              const networkResp = await fetch(req, { signal: controller.signal });
+              clearTimeout(timer);
+              if (networkResp && networkResp.status === 200) {
+                const cType = networkResp.headers.get('content-type') || '';
+                if (!cType.includes('video') && !cType.includes('mpegurl')) {
+                  cache.put(req, networkResp.clone());
+                  trimLruCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
+                }
               }
+              if (networkResp && (networkResp.status === 200 || networkResp.status === 304)) {
+                return networkResp;
+              }
+            } catch (err) {
+              clearTimeout(timer);
             }
-            return networkResp;
-          } catch (err) {
-            clearTimeout(timer);
-            return null;
           }
+          return null;
         })();
 
         // Si es la primera vez, esperar la red con fallback SVG de marca si falla

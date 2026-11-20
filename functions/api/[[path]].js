@@ -73,12 +73,25 @@ let _activeSupabaseKey = "";
 // Paginación real de datos personales desde PostgreSQL (única fuente de verdad)
 const PERSONAL_PAGE_SIZE = 24;
 
-// Generación de token firmado con Web Crypto HMAC-SHA256 y expiración en segundos (14 días)
-async function encodeMediaToken(targetUrl, referer = "", secret = "") {
+// El exp cambia de segundo en segundo si se calcula como now+TTL, y entonces
+// cada portada es una URL nueva: el edge, el navegador y el SW nunca reutilizan
+// la imagen. Se cuantiza a semanas enteras (alineadas a epoch) para que la misma
+// URL viva 7 días y siga siendo válida al menos 14.
+const MEDIA_TOKEN_QUANTUM_SEC = 7 * 24 * 60 * 60;
+
+function quantizedMediaExpiry(nowSec) {
+  const now = Number(nowSec) || 0;
+  const bucket = Math.floor(now / MEDIA_TOKEN_QUANTUM_SEC);
+  return (bucket + 3) * MEDIA_TOKEN_QUANTUM_SEC - 1;
+}
+
+// Generación de token firmado con Web Crypto HMAC-SHA256 y expiración cuantizada (14–21 días)
+async function encodeMediaToken(targetUrl, referer = "", secret = "", nowSec = 0) {
   const s = secret || _activeMediaSecret;
   if (!targetUrl || !s) return "";
   try {
-    const exp = Math.floor(Date.now() / 1000) + 1209600; // 14 días
+    const now = nowSec > 0 ? nowSec : Math.floor(Date.now() / 1000);
+    const exp = quantizedMediaExpiry(now);
     const payloadStr = JSON.stringify({ u: targetUrl, r: referer || "", exp });
     const dataB64 = toBase64Url(payloadStr);
     const key = await getHmacKey(s);
@@ -259,6 +272,200 @@ function validatePage(pageInput) {
 function validatePageSize(pageSizeInput, defaultSize = 24) {
   const ps = parseInt(pageSizeInput || String(defaultSize), 10);
   return (isNaN(ps) || ps < 1) ? defaultSize : Math.min(ps, 100);
+}
+
+// Cursor de id REAL (min..max del media_type). Nunca uses el conteo estimado
+// como si fuera un id: en galerías el conteo es ~18260 y los ids viven en ~398k,
+// así que id=lte.(estimado-offset) devolvía cero filas.
+function catalogIdCursor({ minId, maxId, page, pageSize, seed, random }) {
+  const lo = Number(minId) || 0;
+  const hi = Number(maxId) || 0;
+  if (lo <= 0 || hi < lo) return null;
+  const span = hi - lo + 1;
+  const safePage = Math.max(1, Number(page) || 1);
+  const size = Math.max(1, Number(pageSize) || 24);
+  if (random) {
+    const salt = Number(seed) || 1;
+    const slot = Math.abs((salt * 313 + (safePage - 1) * 7919) % span);
+    return lo + slot;
+  }
+  const step = ((safePage - 1) * size) % span;
+  return hi - step;
+}
+
+function catalogEdgeCacheUrl(requestUrl) {
+  const u = new URL(requestUrl.toString());
+  u.searchParams.set("cv", "2");
+  return u.toString();
+}
+
+function isDeadUpstreamError(status, detail) {
+  const text = String(detail || "");
+  const code = Number(status) || 0;
+  if (code === 1016 || code >= 500) return true;
+  return /1016|origin dns|enotfound|getaddrinfo|failed to fetch|dns/i.test(text);
+}
+
+function gameMatchesCategory(game, category) {
+  if (!category || category === "all") return true;
+  const engine = String(game.engine || "").toLowerCase();
+  const type = String(game.game_type || "").toLowerCase();
+  const tags = (game.tags || []).map(t => String(t).toLowerCase());
+  const title = String(game.title || "").toLowerCase();
+  if (category === "renpy") return engine.includes("ren") || tags.some(t => t.includes("ren"));
+  if (category === "flash") return type === "flash" || engine.includes("flash") || tags.includes("flash");
+  if (category === "3d") return tags.some(t => t.includes("3d"));
+  if (category === "harem") return tags.some(t => t.includes("harem"));
+  if (category === "rpg") return tags.some(t => t.includes("rpg") || t.includes("adventure"));
+  if (category === "apk") return tags.some(t => t.includes("apk"));
+  if (category === "parody") return tags.some(t => t.includes("parod"));
+  return tags.some(t => t.includes(category)) || engine.includes(category) || title.includes(category);
+}
+
+function buildGameCatalogPage(games, opts) {
+  const page = validatePage(opts && opts.page);
+  const pageSize = validatePageSize(opts && opts.pageSize, 24);
+  const sort = validateSort(opts && opts.sort);
+  const q = sanitizeSearchQuery((opts && opts.q) || "");
+  const category = sanitizeSlug((opts && opts.category) || "");
+  const seed = Number(opts && opts.seed) || 1;
+  let list = Array.isArray(games) ? games.slice() : [];
+  if (category && category !== "all") list = list.filter(g => gameMatchesCategory(g, category));
+  if (q) {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    list = list.filter(g => {
+      const hay = `${g.title || ""} ${(g.tags || []).join(" ")} ${g.engine || ""}`.toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
+  }
+  if (sort === "random") {
+    list.sort((a, b) => {
+      const hA = ((Number(a.id) || 1) * 7919) ^ seed;
+      const hB = ((Number(b.id) || 1) * 7919) ^ seed;
+      return (hA % 10007) - (hB % 10007) || (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
+  } else if (sort === "views" || sort === "popular") {
+    list.sort((a, b) => (b.plays || 0) - (a.plays || 0) || (Number(b.id) || 0) - (Number(a.id) || 0));
+  } else if (sort === "rating") {
+    list.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (Number(b.id) || 0) - (Number(a.id) || 0));
+  } else {
+    list.sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
+  }
+  const total = list.length;
+  const start = (page - 1) * pageSize;
+  let slice = list.slice(start, start + pageSize);
+  if (slice.length < pageSize && total >= pageSize && start >= total) {
+    const wrappedStart = start % total;
+    slice = list.slice(wrappedStart, wrappedStart + pageSize);
+    if (slice.length < pageSize) slice = slice.concat(list.slice(0, pageSize - slice.length));
+  }
+  return {
+    items: slice,
+    total,
+    page,
+    page_size: pageSize,
+    total_pages: Math.max(1, Math.ceil(total / pageSize) || 1),
+    live: false
+  };
+}
+
+let LOCAL_GAMES_CACHE = null;
+let LOCAL_GAMES_CACHE_AT = 0;
+
+async function loadGameCatalog(context, pageUrl) {
+  if (LOCAL_GAMES_CACHE && (Date.now() - LOCAL_GAMES_CACHE_AT) < 60 * 60 * 1000) {
+    return LOCAL_GAMES_CACHE;
+  }
+  const origin = (pageUrl && pageUrl.origin) || "https://www.morbohub.com";
+  let response = null;
+  const assets = context && context.env && context.env.ASSETS;
+  if (assets && typeof assets.fetch === "function") {
+    try {
+      response = await assets.fetch(new Request(origin + "/data/games.json"));
+    } catch (e) {
+      response = null;
+    }
+  }
+  if (!response || !response.ok) {
+    try {
+      response = await fetch(origin + "/data/games.json", { cf: { cacheEverything: true, cacheTtl: 86400 } });
+    } catch (e) {
+      const err = new Error(e && e.message ? e.message : "games.json no disponible");
+      err.status = 502;
+      throw err;
+    }
+  }
+  if (!response || !response.ok) {
+    const detail = response ? await response.text().catch(() => "") : "sin respuesta";
+    const err = new Error(detail || "games.json no disponible");
+    err.status = response ? response.status : 502;
+    throw err;
+  }
+  const data = await response.json();
+  if (!Array.isArray(data)) {
+    const err = new Error("games.json invalido");
+    err.status = 502;
+    throw err;
+  }
+  LOCAL_GAMES_CACHE = data;
+  LOCAL_GAMES_CACHE_AT = Date.now();
+  return LOCAL_GAMES_CACHE;
+}
+
+async function maskGameItem(it, secret) {
+  const rawCover = it.cover_url || it.thumbnail || "";
+  const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://gamcore.com/", secret) : "";
+  const gameType = it.game_type || (it.swf_url ? "flash" : "html5");
+  return {
+    id: it.id,
+    source: it.source || "gamcore",
+    source_id: it.source_id ? String(it.source_id) : String(it.id),
+    title: it.title || "Juego VIP",
+    cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+    media_type: "game",
+    tags: it.tags || [],
+    artists: it.engine ? [it.engine] : [],
+    url: "",
+    page_count: 0,
+    video_sources: [{
+      embed_url: it.embed_url || "",
+      swf_url: it.swf_url || "",
+      game_type: gameType,
+      engine: it.engine || "",
+      plays: it.plays || 0,
+      rating: it.rating || 0,
+      badges: it.badges || []
+    }],
+    has_cover: !!rawCover,
+    embed_url: it.embed_url || "",
+    swf_url: it.swf_url || "",
+    game_type: gameType,
+    engine: it.engine || "",
+    plays: it.plays || 0,
+    rating: it.rating || 0,
+    badges: it.badges || []
+  };
+}
+
+async function fetchIdBounds(supabaseUrl, apiKey, filterQuery) {
+  const cacheKey = `bounds:${supabaseUrl}|${filterQuery}`;
+  const cached = getIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, 1800000);
+  if (cached && cached.minId && cached.maxId) return cached;
+  const headers = { "apikey": apiKey, "Authorization": `Bearer ${apiKey}` };
+  const base = `${supabaseUrl}/rest/v1/items?select=id&limit=1&${filterQuery}`;
+  const [maxRes, minRes] = await Promise.all([
+    fetch(`${base}&order=id.desc`, { headers }),
+    fetch(`${base}&order=id.asc`, { headers })
+  ]);
+  if (!maxRes.ok || !minRes.ok) return null;
+  const maxRows = await maxRes.json().catch(() => []);
+  const minRows = await minRes.json().catch(() => []);
+  const maxId = maxRows && maxRows[0] ? Number(maxRows[0].id) : 0;
+  const minId = minRows && minRows[0] ? Number(minRows[0].id) : 0;
+  if (!maxId || !minId || maxId < minId) return null;
+  const bounds = { minId, maxId };
+  setIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, bounds);
+  return bounds;
 }
 
 // =============================================================================
@@ -1011,9 +1218,40 @@ export async function onRequest(context) {
       }
     }
 
+    if (rawSource === "gamcore" || rawSource === "game") {
+      try {
+        const games = await loadGameCatalog(context, url);
+        const wanted = String(rawSourceId || rawId || "");
+        const found = (games || []).find(g => String(g.source_id) === wanted || String(g.id) === wanted);
+        if (!found) {
+          return new Response(JSON.stringify({ detail: "Juego no encontrado" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          });
+        }
+        const maskedGame = await maskGameItem(found, MEDIA_SECRET);
+        const gameJson = JSON.stringify(maskedGame);
+        setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, gameJson);
+        return new Response(gameJson, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+            ...getCorsHeaders(origin)
+          }
+        });
+      } catch (gameDetailErr) {
+        console.error("[Velvet-Detail] Juego no disponible:", gameDetailErr);
+        return new Response(JSON.stringify({ detail: "Juego no disponible" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+
     try {
-      const detailTargetUrl = (rawSource === "gamcore" ? SUPABASE_URL_DB2 : SUPABASE_URL);
-      const detailTargetKey = (rawSource === "gamcore" ? (SUPABASE_SERVICE_ROLE_KEY_DB2 || SUPABASE_ADMIN_KEY) : SUPABASE_ADMIN_KEY);
+      const detailTargetUrl = SUPABASE_URL;
+      const detailTargetKey = SUPABASE_ADMIN_KEY;
       const spRes = await fetch(`${detailTargetUrl}/rest/v1/items?${queryParam}&limit=1`, {
         headers: { "apikey": detailTargetKey, "Authorization": `Bearer ${detailTargetKey}` }
       });
@@ -1470,7 +1708,7 @@ export async function onRequest(context) {
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
     const catalogSlot = Math.floor(Date.now() / (3 * 60 * 60 * 1000));
-    const isolateCatalogKey = `${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam || catalogSlot}:${sort}`;
+    const isolateCatalogKey = `v2:${mediaType}:${page}:${pageSize}:${q}:${category}:${tag}:${seedParam || catalogSlot}:${sort}`;
     const l1Catalog = getIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, q ? 300000 : 1800000);
     if (l1Catalog) {
       return new Response(method === "HEAD" ? null : l1Catalog, {
@@ -1485,9 +1723,10 @@ export async function onRequest(context) {
       });
     }
 
-    // Cache L2 de Borde Cloudflare para catálogo público
+    // Cache L2 de Borde Cloudflare para catálogo público.
+    // cv=2 descarta respuestas vacías cacheadas con el cursor de id roto.
     const cache = typeof caches !== "undefined" ? caches.default : null;
-    const cacheKey = new Request(url.toString(), { method: "GET" });
+    const cacheKey = new Request(catalogEdgeCacheUrl(url), { method: "GET" });
     if (cache) {
       try {
         const cached = await cache.match(cacheKey);
@@ -1513,7 +1752,7 @@ export async function onRequest(context) {
 
       let fetchPmvPage = page;
       if ((sort === "random" || seedParam > 0) && !q && (!category || category === "all")) {
-        const seedVal = seedParam > 0 ? seedParam : (Math.floor(Math.random() * 50000) + 1);
+        const seedVal = seedParam > 0 ? seedParam : (((catalogSlot * 7919) % 50000) + 1);
         const randomBasePage = ((seedVal * 137) % 2500) + 1;
         fetchPmvPage = ((randomBasePage + (page - 1) * 3) % 2500) + 1;
       }
@@ -1531,7 +1770,8 @@ export async function onRequest(context) {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Referer": "https://pmvhaven.com/",
             "Accept": "application/json, text/plain, */*"
-          }
+          },
+          cf: { cacheEverything: true, cacheTtl: 1800 }
         });
 
         if (pmvRes.ok) {
@@ -1539,7 +1779,7 @@ export async function onRequest(context) {
           let vList = pmvData.videos || [];
 
           if ((sort === "random" || seedParam > 0) && vList.length > 1) {
-            const seedVal = seedParam > 0 ? seedParam : (Math.floor(Math.random() * 50000) + 1);
+            const seedVal = seedParam > 0 ? seedParam : (((catalogSlot * 7919) % 50000) + 1);
             vList = [...vList].sort((a, b) => {
               const hA = (((a.durationSeconds || a.views || 1) * 7919) ^ seedVal) % 10007;
               const hB = (((b.durationSeconds || b.views || 1) * 7919) ^ seedVal) % 10007;
@@ -1619,71 +1859,97 @@ export async function onRequest(context) {
       estimatedTotal = 20242;
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
       estimatedTotal = 18260;
+    } else if (mediaType === "game") {
+      estimatedTotal = 8032;
     }
 
     // Modo aleatorio y rotación cada 3 horas SOLO si sort=random o viene seed Y no hay búsqueda, categoría ni tag
     const isRandomMode = (sort === "random" || seedParam > 0) && !q && !tag && (!category || category === "all");
-    let baseOffset = 0;
+    const effectiveSeed = seedParam > 0 ? seedParam : (((catalogSlot * 7919) % 50000) + 1);
 
-    if (isRandomMode) {
-      const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
-      const threeHourSlot = Math.floor(Date.now() / THREE_HOURS_MS);
-      const effectiveSeed = seedParam > 0 ? seedParam : (((threeHourSlot * 7919) % 50000) + 1);
-
-      let maxCatalogOffset = 18000;
-      if (mediaType === "video") {
-        maxCatalogOffset = 35000;
-      } else if (mediaType === "gallery" || mediaType === "cosplay") {
-        maxCatalogOffset = 15000;
-      } else {
-        maxCatalogOffset = 18000;
+    // Juegos: el proyecto Supabase DB2 (vtyleivfovkolpxjjkjs) ya no resuelve (Cloudflare 1016).
+    // El catálogo real está en /data/games.json. Un fallo de origen NUNCA debe ser HTTP 500.
+    if (mediaType === "game") {
+      try {
+        const games = await loadGameCatalog(context, url);
+        const seeded = buildGameCatalogPage(games, {
+          page,
+          pageSize,
+          sort,
+          q,
+          category,
+          seed: effectiveSeed
+        });
+        const items = await Promise.all((seeded.items || []).map(it => maskGameItem(it, MEDIA_SECRET)));
+        const responsePayload = {
+          items,
+          total: seeded.total,
+          page: seeded.page,
+          page_size: seeded.page_size,
+          total_pages: seeded.total_pages,
+          live: false
+        };
+        const jsonStr = JSON.stringify(responsePayload);
+        setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+        const gameResp = new Response(method === "HEAD" ? null : jsonStr, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "public, max-age=1800, s-maxage=86400, stale-while-revalidate=604800",
+            ...getCorsHeaders(origin)
+          }
+        });
+        if (cache) {
+          try { context.waitUntil(cache.put(cacheKey, gameResp.clone())); } catch (e) {}
+        }
+        return gameResp;
+      } catch (gameErr) {
+        const detail = gameErr && gameErr.message ? gameErr.message : "catalogo de juegos no disponible";
+        const status = gameErr && gameErr.status ? gameErr.status : 502;
+        console.error("[Velvet-Items] Juegos degradados:", isDeadUpstreamError(status, detail), detail);
+        return new Response(JSON.stringify({
+          items: [],
+          total: 0,
+          page,
+          page_size: pageSize,
+          total_pages: 1,
+          live: false,
+          degraded: true
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+            ...getCorsHeaders(origin)
+          }
+        });
       }
-
-      const maxPageSlots = Math.floor(maxCatalogOffset / pageSize);
-      // Salto aleatorio de amplio espectro: permite iniciar en cualquier página profunda (ej. pág 334, 391)
-      const randomStartPage = (Math.abs(effectiveSeed * 313) % Math.max(1, maxPageSlots - 30));
-      baseOffset = randomStartPage * pageSize;
     }
 
     const safePage = Math.max(1, page);
-    // Paginación continua y acotada: en modo aleatorio envuelve dentro del catálogo total, en orden directo respeta offset
-    const maxOffset = Math.max(0, estimatedTotal - pageSize);
-    let offset = 0;
-    if (isRandomMode) {
-      offset = (baseOffset + (safePage - 1) * pageSize) % Math.max(pageSize, maxOffset);
-    } else {
-      offset = (safePage - 1) * pageSize;
-    }
-
-    const isGameMedia = (mediaType === "game");
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists,video_sources";
-    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
-
-    if (mediaType === "game") {
-      postgrestUrl = `${SUPABASE_URL_DB2}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}&media_type=eq.game`;
-    } else if (mediaType === "video") {
-      postgrestUrl += "&media_type=eq.video";
+    let filterQuery = "";
+    if (mediaType === "video") {
+      filterQuery = "media_type=eq.video";
     } else if (mediaType === "gallery" || mediaType === "cosplay") {
-      postgrestUrl += "&media_type=eq.gallery&page_count=gt.0";
+      filterQuery = "media_type=eq.gallery&page_count=gt.0";
       const allowLeak = (q && q.toLowerCase().includes("leak")) || (category === "leak" || category === "patreon");
-      if (!allowLeak) {
-        postgrestUrl += "&source=neq.leakgallery";
-      }
+      if (!allowLeak) filterQuery += "&source=neq.leakgallery";
     } else {
-      postgrestUrl += "&media_type=eq.comic&page_count=gt.0";
+      filterQuery = "media_type=eq.comic&page_count=gt.0";
     }
 
     if (tag) {
-      postgrestUrl += `&tags=cs.{${encodeURIComponent(tag)}}`;
+      filterQuery += `&tags=cs.{${encodeURIComponent(tag)}}`;
     }
 
     if (q) {
       const words = q.split(/\s+/).filter(Boolean).slice(0, 3);
       if (words.length === 1) {
-        postgrestUrl += `&search_text=ilike.*${encodeURIComponent(words[0])}*`;
+        filterQuery += `&search_text=ilike.*${encodeURIComponent(words[0])}*`;
       } else {
         const orClauses = words.map(w => `search_text.ilike.*${encodeURIComponent(w)}*`).join(",");
-        postgrestUrl += `&or=(${orClauses})`;
+        filterQuery += `&or=(${orClauses})`;
       }
     } else if (category && category !== "all") {
       let catTerm = category;
@@ -1713,14 +1979,41 @@ export async function onRequest(context) {
         else if (category === "parody") catTerm = "parodia";
         else if (category === "western") catTerm = "comic";
       }
-      postgrestUrl += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
+      filterQuery += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
     }
 
-    // OFFSET profundo obliga a Postgres a recorrer miles de filas (~4s).
-    // A partir de la página 11 se salta con id=lte, que usa el índice primario.
-    if (offset > 240) {
-      const cursorId = Math.max(1, estimatedTotal - offset);
-      postgrestUrl = postgrestUrl.replace(/offset=\d+/, "offset=0");
+    // Las primeras páginas usan OFFSET (barato y sin huecos). A partir de la
+    // página cuyo offset pasa de 240, y en sort=random, se salta con id=lte
+    // sobre el rango REAL de ids. El conteo estimado no es un id: en galerías
+    // vale ~18260 y las filas viven cerca de 398000, así que el cursor viejo
+    // devolvía cero resultados.
+    let minId = 0;
+    let maxId = 0;
+    let cursorId = null;
+    let offset = isRandomMode ? 0 : (safePage - 1) * pageSize;
+    const needsKeyset = isRandomMode || offset > 240;
+    if (needsKeyset) {
+      const bounds = await fetchIdBounds(SUPABASE_URL, SUPABASE_KEY, filterQuery);
+      if (bounds) {
+        minId = bounds.minId;
+        maxId = bounds.maxId;
+        cursorId = catalogIdCursor({
+          minId,
+          maxId,
+          page: safePage,
+          pageSize,
+          seed: effectiveSeed,
+          random: isRandomMode
+        });
+        offset = 0;
+      } else if (offset > 240) {
+        offset = 0;
+      }
+    }
+
+    let postgrestUrl = `${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=${offset}`;
+    postgrestUrl += `&${filterQuery}`;
+    if (cursorId) {
       postgrestUrl += `&id=lte.${cursorId}`;
     }
 
@@ -1730,7 +2023,7 @@ export async function onRequest(context) {
     try {
       // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
       const preferCount = (q || tag) ? "count=exact" : "";
-      const activeQueryKey = isGameMedia ? (SUPABASE_SERVICE_ROLE_KEY_DB2 || SUPABASE_ANON_KEY_DB2 || SUPABASE_KEY) : SUPABASE_KEY;
+      const activeQueryKey = SUPABASE_KEY;
       const catalogHeaders = {
         "apikey": activeQueryKey,
         "Authorization": `Bearer ${activeQueryKey}`,
@@ -1785,6 +2078,29 @@ export async function onRequest(context) {
       }
 
       let rawItems = await spRes.json();
+      if (cursorId && Array.isArray(rawItems) && rawItems.length < pageSize && maxId) {
+        const seen = new Set(rawItems.map(it => it.id));
+        const wrapUrl = postgrestUrl
+          .replace(/&id=lte\.\d+/, `&id=lte.${maxId}`)
+          .replace(/limit=\d+/, `limit=${pageSize}`);
+        try {
+          const wrapRes = await fetch(wrapUrl, {
+            headers: { "apikey": activeQueryKey, "Authorization": `Bearer ${activeQueryKey}` }
+          });
+          if (wrapRes.ok) {
+            const extra = await wrapRes.json();
+            if (Array.isArray(extra)) {
+              for (const it of extra) {
+                if (!seen.has(it.id)) {
+                  rawItems.push(it);
+                  seen.add(it.id);
+                  if (rawItems.length >= pageSize) break;
+                }
+              }
+            }
+          }
+        } catch (wrapErr) {}
+      }
       const items = await Promise.all((rawItems || []).map(async it => {
         const isGame = it.media_type === "game";
         const coverToken = (!isGame && it.cover_url) ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
