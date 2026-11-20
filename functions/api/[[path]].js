@@ -364,6 +364,167 @@ function sliceCatalogIds(idsDesc, page, pageSize, seed, random) {
   };
 }
 
+// Semilla explícita de "Al Azar". No se recorta a 1e6: ese tope convertía
+// cualquier nonce grande en la misma semilla y el botón devolvía siempre
+// la misma página.
+function readShuffleSeed(raw) {
+  const text = String(raw == null ? "" : raw).trim();
+  if (!/^[0-9]+$/.test(text)) return 0;
+  const n = Number(text);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (n > 2147483646) return (Math.floor(n) % 2147483646) + 1;
+  return Math.floor(n);
+}
+
+const SHUFFLE_NO_STORE = "private, no-store, no-cache, must-revalidate";
+
+function catalogResponseCacheHeaders(isFresh, publicCacheControl) {
+  if (isFresh) {
+    return {
+      "Cache-Control": SHUFFLE_NO_STORE,
+      "CDN-Cache-Control": "no-store",
+      "Cloudflare-CDN-Cache-Control": "no-store",
+      "Pragma": "no-cache"
+    };
+  }
+  return { "Cache-Control": publicCacheControl };
+}
+
+function shuffleRng(seed) {
+  let a = (Math.abs(Number(seed) | 0) || 1) >>> 0;
+  return function next() {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function fisherYates(items, seed) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  const rng = shuffleRng(seed);
+  for (let i = list.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = list[i];
+    list[i] = list[j];
+    list[j] = tmp;
+  }
+  return list;
+}
+
+// Ventanas repartidas por todo el catálogo. El mismo seed+página es
+// determinista; otro seed (o otra página) cae en otros puntos de cada banda,
+// desde el id mínimo real hasta el máximo, aunque haya huecos.
+function planShuffleWindows(opts) {
+  const total = Math.max(1, Math.floor(Number(opts && opts.total) || 1));
+  const pageSize = Math.max(1, Math.floor(Number(opts && opts.pageSize) || 24));
+  const page = Math.max(1, Math.floor(Number(opts && opts.page) || 1));
+  const seed = Math.abs(Math.floor(Number(opts && opts.seed) || 1)) || 1;
+  const minId = Math.floor(Number(opts && opts.minId) || 1);
+  const maxId = Math.max(minId, Math.floor(Number(opts && opts.maxId) || minId));
+  const idSpan = Math.max(1, maxId - minId + 1);
+  const bands = Math.max(4, Math.min(8, Math.floor(Number(opts && opts.bands) || 4)));
+  const rng = shuffleRng((seed ^ Math.imul(page, 0x9e3779b1) ^ Math.imul(bands, 0x85ebca6b)) >>> 0);
+  const take = Math.max(3, Math.ceil(pageSize / bands) + 2);
+  const windows = [];
+  for (let i = 0; i < bands; i++) {
+    const rowStart = Math.floor((i * total) / bands);
+    const rowEnd = Math.max(rowStart + 1, Math.floor(((i + 1) * total) / bands));
+    const rowSpan = Math.max(1, rowEnd - rowStart);
+    const rowJitter = Math.floor(rng() * rowSpan);
+    const pageShift = ((page - 1) * take) % rowSpan;
+    const offset = (rowStart + ((rowJitter + pageShift) % rowSpan)) % total;
+
+    const idStart = minId + Math.floor((i * idSpan) / bands);
+    const idEnd = minId + Math.floor(((i + 1) * idSpan) / bands) - 1;
+    const idBand = Math.max(1, (idEnd < idStart ? idStart : idEnd) - idStart + 1);
+    const idJitter = Math.floor(rng() * idBand);
+    const idShift = ((page - 1) * take) % idBand;
+    const anchorId = idStart + ((idJitter + idShift) % idBand);
+    windows.push({
+      band: i,
+      offset,
+      anchorId: Math.min(maxId, Math.max(minId, anchorId)),
+      take
+    });
+  }
+  return { windows, bands, minId, maxId, total, page, pageSize, seed };
+}
+
+// Toma de cada banda antes de rellenar, así la página cruza el catálogo
+// entero y no se queda en un solo tramo de ids vecinos.
+function assembleShufflePage(bandRows, pageSize, seed) {
+  const size = Math.max(1, Math.floor(Number(pageSize) || 24));
+  const bands = (Array.isArray(bandRows) ? bandRows : []).map((rows, i) => {
+    const seen = new Set();
+    const unique = [];
+    const list = Array.isArray(rows) ? rows : [];
+    for (const row of list) {
+      if (!row || row.id === undefined || row.id === null || row.id === "") continue;
+      const key = String(row.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(row);
+    }
+    return fisherYates(unique, (Math.abs(Number(seed) || 1) + (i + 1) * 131) >>> 0);
+  });
+  const active = bands.filter((band) => band.length > 0);
+  if (!active.length) return [];
+  const used = new Set();
+  const picked = [];
+  const perBand = Math.max(1, Math.floor(size / active.length));
+  for (const band of active) {
+    let n = 0;
+    for (const row of band) {
+      const key = String(row.id);
+      if (used.has(key)) continue;
+      used.add(key);
+      picked.push(row);
+      n += 1;
+      if (n >= perBand || picked.length >= size) break;
+    }
+    if (picked.length >= size) break;
+  }
+  if (picked.length < size) {
+    const rest = [];
+    for (const band of active) {
+      for (const row of band) {
+        if (!used.has(String(row.id))) rest.push(row);
+      }
+    }
+    for (const row of fisherYates(rest, seed || 1)) {
+      if (picked.length >= size) break;
+      const key = String(row.id);
+      if (used.has(key)) continue;
+      used.add(key);
+      picked.push(row);
+    }
+  }
+  return fisherYates(picked, seed || 1).slice(0, size);
+}
+
+function pmvPageNumbers(seed, page, pageSize, totalPages) {
+  const total = Math.max(1, Math.floor(Number(totalPages) || 1));
+  const plan = planShuffleWindows({
+    total,
+    minId: 1,
+    maxId: total,
+    page: page || 1,
+    pageSize: pageSize || 24,
+    seed: seed || 1,
+    bands: 4
+  });
+  const pages = [];
+  const seen = new Set();
+  for (const w of plan.windows) {
+    const p = Math.min(total, Math.max(1, Math.floor(Number(w.anchorId) || 1)));
+    if (seen.has(p)) continue;
+    seen.add(p);
+    pages.push(p);
+  }
+  return pages;
+}
+
 function mediaTypeSalt(mediaType) {
   const s = String(mediaType || "comic");
   let h = 0;
@@ -586,6 +747,143 @@ async function fetchIdBounds(supabaseUrl, apiKey, filterQuery) {
   const bounds = { minId, maxId };
   setIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, bounds);
   return bounds;
+}
+
+async function fetchCatalogSpan(supabaseUrl, apiKey, filterQuery) {
+  const cacheKey = `span:v3:${filterQuery}`;
+  const cached = getIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, 1800000);
+  if (cached && cached.minId && cached.maxId) return cached;
+  const headers = { "apikey": apiKey, "Authorization": `Bearer ${apiKey}` };
+  const base = `${supabaseUrl}/rest/v1/items?select=id&limit=1&${filterQuery}`;
+  try {
+    const [maxRes, minRes] = await Promise.all([
+      fetch(`${base}&order=id.desc`, { headers }),
+      fetch(`${base}&order=id.asc`, { headers })
+    ]);
+    if (!maxRes.ok || !minRes.ok) return null;
+    const maxRows = await maxRes.json().catch(() => []);
+    const minRows = await minRes.json().catch(() => []);
+    const maxId = maxRows && maxRows[0] ? Number(maxRows[0].id) : 0;
+    const minId = minRows && minRows[0] ? Number(minRows[0].id) : 0;
+    if (!maxId || !minId || maxId < minId) return null;
+    let total = 0;
+    const range = maxRes.headers.get("content-range") || "";
+    if (range.includes("/")) {
+      const part = range.split("/")[1];
+      const n = parseInt(part, 10);
+      if (!isNaN(n) && n > 0) total = n;
+    }
+    const span = { minId, maxId, total };
+    setIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, span);
+    return span;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectFields, page, pageSize, seed, estimatedTotal }) {
+  const span = await fetchCatalogSpan(supabaseUrl, apiKey, filterQuery);
+  const minId = span && span.minId ? span.minId : 1;
+  const maxId = span && span.maxId ? span.maxId : minId;
+  const total = (span && span.total) || estimatedTotal || pageSize;
+  const plan = planShuffleWindows({
+    total: Math.max(pageSize, total),
+    minId,
+    maxId,
+    page,
+    pageSize,
+    seed,
+    bands: 4
+  });
+  const headers = { "apikey": apiKey, "Authorization": `Bearer ${apiKey}` };
+  const fetchRows = async (url) => {
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) return [];
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      return [];
+    }
+  };
+  const bandRows = await Promise.all(plan.windows.map((w) => {
+    const url = `${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${w.take}&offset=0&order=id.desc&id=lte.${w.anchorId}&${filterQuery}`;
+    return fetchRows(url);
+  }));
+  const mixSeed = Number(seed) + Number(page) * 997;
+  let items = assembleShufflePage(bandRows, pageSize, mixSeed);
+  if (items.length < Math.min(pageSize, Math.max(1, total))) {
+    const offsetRows = await Promise.all(plan.windows.map((w) => {
+      const off = Math.max(0, Math.min(w.offset, Math.max(0, total - 1)));
+      const url = `${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${w.take}&offset=${off}&order=id.desc&${filterQuery}`;
+      return fetchRows(url);
+    }));
+    items = assembleShufflePage(bandRows.concat(offsetRows), pageSize, mixSeed);
+  }
+  if (!items.length) {
+    const fallback = await fetchRows(`${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=0&order=id.desc&${filterQuery}`);
+    if (fallback.length) items = fallback.slice(0, pageSize);
+  }
+  return { items, total: Math.max(total, items.length) };
+}
+
+async function fetchPmvShuffleItems({ page, pageSize, seed, category, q, encodeToken }) {
+  const totalPages = 2500;
+  const pages = pmvPageNumbers(seed, page, pageSize, totalPages);
+  const take = Math.max(4, Math.ceil(pageSize / Math.max(1, pages.length)) + 2);
+  const bandRows = await Promise.all(pages.map(async (p) => {
+    let apiUrl = `https://pmvhaven.com/api/videos?page=${p}&limit=${take}&sort=recent`;
+    if (category && category !== "all") apiUrl += `&tag=${encodeURIComponent(category)}`;
+    else if (q) apiUrl += `&tag=${encodeURIComponent(q)}`;
+    try {
+      const res = await fetch(apiUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+          "Referer": "https://pmvhaven.com/",
+          "Accept": "application/json, text/plain, */*"
+        }
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      const list = data.videos || data.data || [];
+      return list.map((v) => ({ ...v, id: v._id || v.id }));
+    } catch (e) {
+      return [];
+    }
+  }));
+  const picked = assembleShufflePage(bandRows, pageSize, Number(seed) + Number(page) * 997);
+  const items = [];
+  for (const v of picked) {
+    const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+    const rawVideo = v.videoUrl || "";
+    const coverToken = rawCover && encodeToken ? await encodeToken(rawCover, "https://pmvhaven.com/") : "";
+    const videoToken = rawVideo && encodeToken ? await encodeToken(rawVideo, "https://pmvhaven.com/") : "";
+    items.push({
+      id: v._id || v.id,
+      source: "pmvhaven",
+      source_id: v._id || v.id,
+      title: v.title || "Video HD",
+      cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+      media_type: "video",
+      tags: v.tags || [],
+      artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+      url: `https://pmvhaven.com/video?v=${v._id || v.id}`,
+      page_count: 0,
+      video_sources: rawVideo ? [{
+        quality: "1080p HD",
+        url: videoToken ? `/api/media?t=${videoToken}` : "",
+        format: "mp4"
+      }] : [],
+      extra: {
+        duration: v.duration || "",
+        durationSeconds: v.durationSeconds || 0,
+        views: v.views || 0,
+        likes: v.likes || 0
+      },
+      has_cover: !!rawCover
+    });
+  }
+  return { items, total: 70704, pages };
 }
 
 // =============================================================================
@@ -1852,8 +2150,8 @@ export async function onRequest(context) {
     const q = sanitizeSearchQuery(url.searchParams.get("q"));
     const category = sanitizeSlug(url.searchParams.get("category"));
     const tag = sanitizeSlug(url.searchParams.get("tag"));
-    const seedParam = Math.max(0, Math.min(1000000, parseInt(url.searchParams.get("seed") || "0", 10) || 0));
-    const shuffleParam = Math.max(0, Math.min(1000000, parseInt(url.searchParams.get("shuffle") || "0", 10) || 0));
+    const seedParam = readShuffleSeed(url.searchParams.get("seed"));
+    const shuffleParam = readShuffleSeed(url.searchParams.get("shuffle"));
     const sort = validateSort(url.searchParams.get("sort"));
 
     // Cache L1 de Memoria RAM Isolate (0ms de latencia)
@@ -1903,7 +2201,45 @@ export async function onRequest(context) {
 
 
     const preferLivePmv = env.ENABLE_PMVHAVEN_LIVE !== "false" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db";
-    if (mediaType === "video" && preferLivePmv) {
+    // "Al Azar" en videos: varias páginas repartidas por todo PMV, no el
+    // sort=random cacheado que devuelve siempre el mismo cubo.
+    if (mediaType === "video" && preferLivePmv && freshShuffle) {
+      try {
+        const shuffledPmv = await fetchPmvShuffleItems({
+          page,
+          pageSize,
+          seed: freshSeed,
+          category,
+          q,
+          encodeToken
+        });
+        if (shuffledPmv && shuffledPmv.items && shuffledPmv.items.length) {
+          const totalVideos = shuffledPmv.total || 70704;
+          const responsePayload = {
+            items: shuffledPmv.items,
+            total: totalVideos,
+            page,
+            page_size: pageSize,
+            total_pages: Math.max(1, Math.ceil(totalVideos / pageSize)),
+            live: true,
+            shuffle: freshSeed
+          };
+          return new Response(JSON.stringify(responsePayload), {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "X-Velvet-Rotation": String(catalogSlot),
+              "X-Velvet-Shuffle": String(freshSeed),
+              ...catalogResponseCacheHeaders(true, catalogCacheControl),
+              ...getCorsHeaders(origin)
+            }
+          });
+        }
+      } catch (pmvShuffleErr) {
+        console.error("PMVHaven shuffle error:", pmvShuffleErr);
+      }
+    }
+    if (mediaType === "video" && preferLivePmv && !freshShuffle) {
       let pmvSort = "recent";
       if (sort === "random") pmvSort = "random";
       else if (sort === "views") pmvSort = "views";
@@ -2053,14 +2389,16 @@ export async function onRequest(context) {
           total_pages: seeded.total_pages,
           live: false
         };
+        if (freshShuffle) responsePayload.shuffle = freshSeed;
         const jsonStr = JSON.stringify(responsePayload);
-        setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+        if (!freshShuffle) setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
         const gameResp = new Response(method === "HEAD" ? null : jsonStr, {
           status: 200,
           headers: {
             "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
             "X-Velvet-Rotation": String(catalogSlot),
+            ...(freshShuffle ? { "X-Velvet-Shuffle": String(freshSeed) } : {}),
+            ...catalogResponseCacheHeaders(freshShuffle, catalogCacheControl),
             ...getCorsHeaders(origin)
           }
         });
@@ -2147,6 +2485,34 @@ export async function onRequest(context) {
       filterQuery += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
     }
 
+    let rawItems = [];
+    let totalCount = estimatedTotal;
+    let usedShuffleSample = false;
+
+    try {
+      if (freshShuffle) {
+        try {
+          const sampled = await sampleSupabaseShuffle({
+            supabaseUrl: SUPABASE_URL,
+            apiKey: SUPABASE_KEY,
+            filterQuery,
+            selectFields,
+            page: safePage,
+            pageSize,
+            seed: freshSeed,
+            estimatedTotal
+          });
+          if (sampled && Array.isArray(sampled.items) && sampled.items.length) {
+            rawItems = sampled.items;
+            totalCount = sampled.total || estimatedTotal;
+            usedShuffleSample = true;
+          }
+        } catch (shuffleErr) {
+          console.error("[Velvet-Items] shuffle:", shuffleErr && shuffleErr.message ? shuffleErr.message : shuffleErr);
+        }
+      }
+
+      if (!usedShuffleSample) {
     // Cada página es un tramo distinto del conjunto FILTRADO (no del espacio
     // de ids). Un cursor id=lte a 24 o 7919 ids de distancia caía en el mismo
     // hueco y la 494 y la 495 devolvían las mismas filas. La rotación de 3 h
@@ -2192,7 +2558,6 @@ export async function onRequest(context) {
     // Orden por defecto indexado por clave primaria
     postgrestUrl += "&order=id.desc";
 
-    try {
       // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
       const preferCount = (q || tag) ? "count=exact" : "";
       const activeQueryKey = SUPABASE_KEY;
@@ -2240,7 +2605,7 @@ export async function onRequest(context) {
 
       // Obtener el conteo real exacto mediante cabecera Content-Range
       const contentRange = spRes.headers.get("content-range");
-      let totalCount = estimatedTotal;
+      totalCount = estimatedTotal;
       if (contentRange && contentRange.includes("/")) {
         const totalPart = contentRange.split("/")[1];
         if (totalPart && totalPart !== "*") {
@@ -2251,7 +2616,7 @@ export async function onRequest(context) {
         }
       }
 
-      let rawItems = await spRes.json();
+      rawItems = await spRes.json();
       if (cursorId && Array.isArray(rawItems) && rawItems.length > 0 && rawItems.length < pageSize) {
         const lastId = Number(rawItems[rawItems.length - 1].id) || 0;
         if (lastId > 1) {
@@ -2277,6 +2642,7 @@ export async function onRequest(context) {
             }
           } catch (moreErr) {}
         }
+      }
       }
       const items = await Promise.all((rawItems || []).map(async it => {
         const isGame = it.media_type === "game";
@@ -2318,18 +2684,20 @@ export async function onRequest(context) {
         page_size: pageSize,
         total_pages: totalPages,
         live: false,
-        rotation: catalogSlot
+        rotation: catalogSlot,
+        shuffle: freshShuffle ? freshSeed : undefined
       };
 
       const jsonStr = JSON.stringify(responsePayload);
-      setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+      if (!freshShuffle) setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
 
       const resp = new Response(method === "HEAD" ? null : jsonStr, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
           "X-Velvet-Rotation": String(catalogSlot),
+          ...(freshShuffle ? { "X-Velvet-Shuffle": String(freshSeed) } : {}),
+          ...catalogResponseCacheHeaders(freshShuffle, catalogCacheControl),
           ...getCorsHeaders(origin)
         }
       });

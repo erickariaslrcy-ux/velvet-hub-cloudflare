@@ -1440,6 +1440,17 @@
       </div>
 
       <!-- Selector de Orden Personalizado Accesible (Dropdown Desktop / Bottom Sheet Móvil) -->
+      <button
+        type="button"
+        id="filter-random-btn"
+        data-action="fetch-random"
+        title="Al Azar"
+        aria-label="Al Azar"
+        class="h-10 px-3 rounded-xl bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] text-white text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-hot-glow active:scale-95 cursor-pointer"
+      >
+        <i class="fa-solid fa-dice text-sm"></i>
+        <span class="hidden sm:inline">Al Azar</span>
+      </button>
       <div id="sort-menu-container" class="relative shrink-0 flex items-center">
         <button id="sort-menu-btn"
                 type="button"
@@ -3885,6 +3896,7 @@
       sort: 'random',
       catalogMode: 'dynamic',
       feedSeed: getRotatingSeed(),
+      freshShuffle: false,
 
       live: true,
 
@@ -4210,7 +4222,18 @@
     function showPortalTransition() {}
     function hidePortalTransition() {}
 
+    function endManualShuffle() {
+      if (!state.freshShuffle && !state._shuffleRetried) return;
+      state.freshShuffle = false;
+      state._shuffleRetried = false;
+      if (state.sort === 'random' || state.catalogMode === 'dynamic') {
+        state.feedSeed = getRotatingSeed();
+        state.videoSeed = state.feedSeed;
+      }
+    }
+
     function setPortalMode(mode, isUserClick = false, options = {}) {
+      endManualShuffle();
 
       const videoView = document.getElementById('video-view');
 
@@ -4545,6 +4568,7 @@
 
     function selectSortOption(sortId) {
       closeSortMenu();
+      endManualShuffle();
       if (sortId === 'random') {
         state.catalogMode = 'dynamic';
         state.sort = 'random';
@@ -5752,31 +5776,23 @@
         const cacheKey = `${state.mode}:${state.category}:${state.tag || ''}:${nextPage}:${state.query}:${state.sort}:${state.pageSize}:${state.feedSeed || 0}`;
         let data = null;
 
-        if (CLIENT_CACHE.has(cacheKey)) {
+        if (!state.freshShuffle && CLIENT_CACHE.has(cacheKey)) {
           data = CLIENT_CACHE.get(cacheKey).data;
         } else {
-          const params = new URLSearchParams({
-            page: nextPage,
-            page_size: state.pageSize,
-            sort: state.sort
+          const manualShuffle = !!(state.freshShuffle && state.feedSeed);
+          const params = buildCatalogParams(nextPage);
+
+          const resp = await fetch(`/api/items?${params.toString()}`, {
+            signal,
+            credentials: 'omit',
+            cache: manualShuffle ? 'no-store' : 'default'
           });
-
-          if (state.mode === 'videos') {
-            params.append('media_type', 'video');
-            if (state.category && state.category !== 'all') params.append('category', state.category);
-          } else if (state.mode === 'galleries') {
-            params.append('media_type', 'gallery');
-            if (state.category && state.category !== 'all') params.append('category', state.category);
-          } else {
-            params.append('media_type', 'comic');
-            if (state.category && state.category !== 'all') params.append('category', state.category);
-          }
-          if (state.tag) params.append('tag', state.tag);
-          if (state.query) params.append('q', state.query);
-
-          const resp = await fetch(`/api/items?${params.toString()}`, { signal, credentials: 'omit' });
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           data = await resp.json();
+          if (state.freshShuffle && data && Array.isArray(data.items)) {
+            data = Object.assign({}, data, { items: arrangeShuffleItems(data.items) });
+            noteShownShuffleIds(data.items);
+          }
           CLIENT_CACHE.set(cacheKey, { ts: Date.now(), data });
         }
 
@@ -6020,12 +6036,13 @@
         }
 
         if (state.sort === 'random' || state.sort === 'shuffle') {
-          const seed = getRotatingSeed();
-          gList = [...gList].sort((a, b) => {
-            const hA = ((Number(a.id || 1) * 7919) ^ seed) % 10007;
-            const hB = ((Number(b.id || 1) * 7919) ^ seed) % 10007;
-            return hA - hB;
-          });
+          const seed = (state.freshShuffle && state.feedSeed) ? Number(state.feedSeed) : getRotatingSeed();
+          const mixId = (id) => {
+            let x = ((Number(id) || 1) ^ Math.imul(seed | 0, 0x9e3779b1)) >>> 0;
+            x = Math.imul(x ^ (x >>> 16), 0x7feb352d) >>> 0;
+            return (x ^ (x >>> 16)) >>> 0;
+          };
+          gList = [...gList].sort((a, b) => mixId(a.id || 1) - mixId(b.id || 1) || ((Number(a.id) || 0) - (Number(b.id) || 0)));
         } else if (state.sort === 'popular' || state.sort === 'plays' || !state.sort) {
           gList = [...gList].sort((a, b) => (b.plays || 0) - (a.plays || 0));
         } else if (state.sort === 'rating') {
@@ -6059,8 +6076,94 @@
       }
     }
 
+    const RECENT_SHUFFLE_CAP = 160;
+    const recentShuffleIds = { comics: [], videos: [], galleries: [], games: [] };
+
+    function recentShuffleKey() {
+      if (state.mode === 'videos') return 'videos';
+      if (state.mode === 'galleries') return 'galleries';
+      if (state.mode === 'games') return 'games';
+      return 'comics';
+    }
+
+    function nextShuffleSeed() {
+      const prev = Number(state.feedSeed) || 0;
+      const now = Date.now() & 0x7fffffff;
+      const rnd = Math.floor(Math.random() * 2147483646) + 1;
+      let seed = (now ^ rnd) >>> 0;
+      if (seed > 2147483646) seed = (seed % 2147483646) + 1;
+      if (!seed || seed === prev) seed = ((prev + 1 + (rnd % 997)) % 2147483646) + 1;
+      if (seed === prev) seed = (seed % 2147483646) + 1;
+      return seed || 1;
+    }
+
+    function shuffleOverlapRatio(items) {
+      const recent = recentShuffleIds[recentShuffleKey()] || [];
+      if (!recent.length || !items || !items.length) return 0;
+      const seen = new Set(recent);
+      let hit = 0;
+      for (const it of items) {
+        if (it && seen.has(String(it.id))) hit += 1;
+      }
+      return hit / items.length;
+    }
+
+    function arrangeShuffleItems(items) {
+      const recent = new Set(recentShuffleIds[recentShuffleKey()] || []);
+      const list = Array.isArray(items) ? items : [];
+      if (!recent.size) return list;
+      const fresh = [];
+      const dup = [];
+      for (const it of list) {
+        if (it && recent.has(String(it.id))) dup.push(it);
+        else fresh.push(it);
+      }
+      if (fresh.length >= Math.max(8, Math.ceil(list.length * 0.6))) return fresh;
+      return fresh.concat(dup);
+    }
+
+    function noteShownShuffleIds(items) {
+      const key = recentShuffleKey();
+      const bucket = recentShuffleIds[key] || (recentShuffleIds[key] = []);
+      const seen = new Set(bucket);
+      for (const it of items || []) {
+        const id = it && it.id != null ? String(it.id) : '';
+        if (!id || seen.has(id)) continue;
+        bucket.push(id);
+        seen.add(id);
+      }
+      while (bucket.length > RECENT_SHUFFLE_CAP) bucket.shift();
+    }
+
+    function buildCatalogParams(page) {
+      const params = new URLSearchParams({
+        page: page,
+        page_size: state.pageSize,
+        sort: state.sort || 'recent'
+      });
+      if (state.mode === 'videos') params.append('media_type', 'video');
+      else if (state.mode === 'galleries') params.append('media_type', 'gallery');
+      else if (state.mode === 'games') params.append('media_type', 'game');
+      else params.append('media_type', 'comic');
+      if (state.category && state.category !== 'all') params.append('category', state.category);
+      if (state.tag) params.append('tag', state.tag);
+      if (state.query) params.append('q', state.query);
+      if (state.freshShuffle && state.feedSeed) {
+        params.append('fresh', '1');
+        params.append('shuffle', String(state.feedSeed));
+      }
+      return params;
+    }
+
+    function setShuffleSpin(on) {
+      document.querySelectorAll('#random-btn i, #filter-random-btn i').forEach((el) => {
+        el.classList.toggle('fa-spin', !!on);
+      });
+    }
+
     let _feedGen = 0;
-    async function fetchLiveFeed(skipCache = false) {
+    async function fetchLiveFeed(skipCache = false, feedOpts = null) {
+      const shuffleRetry = !!(feedOpts && feedOpts.shuffleRetry);
       const requestKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}:${state.freshShuffle ? state.feedSeed : getRotatingSeed()}`;
       if (!skipCache && _feedLockKey === requestKey && (Date.now() - _feedLockAt) < 4000 && _isLoadingFeed) {
         return;
@@ -6091,8 +6194,9 @@
         return;
       }
 
-      // 2. Si existe en Cache Persistente de Sesión (sessionStorage), renderizar inmediatamente a 0ms sin skeletons
-      if (!skipCache) {
+      // 2. Si existe en Cache Persistente de Sesión (sessionStorage), renderizar inmediatamente a 0ms sin skeletons.
+      // Un "Al Azar" nunca reutiliza esa caché: cada clic tiene que salir a la red.
+      if (!skipCache && !state.freshShuffle) {
         try {
           const stored = sessionStorage.getItem('vcache_' + cacheKey);
           if (stored) {
@@ -6116,50 +6220,33 @@
       if (resCount) resCount.textContent = 'Actualizando catálogo...';
 
       try {
-        const params = new URLSearchParams({
-          page: state.page,
-          page_size: state.pageSize,
-          sort: state.sort
+        const manualShuffle = !!(state.freshShuffle && state.feedSeed);
+        const params = buildCatalogParams(state.page);
+
+        const resp = await fetch(`/api/items?${params.toString()}`, {
+          signal,
+          credentials: 'omit',
+          cache: manualShuffle ? 'no-store' : 'default'
         });
-
-        if (state.mode === 'videos') {
-          params.append('media_type', 'video');
-          if (state.category && state.category !== 'all') {
-            params.append('category', state.category);
-          }
-        } else if (state.mode === 'galleries') {
-          params.append('media_type', 'gallery');
-          if (state.category && state.category !== 'all') {
-            params.append('category', state.category);
-          }
-        } else if (state.mode === 'games') {
-          params.append('media_type', 'game');
-          if (state.category && state.category !== 'all') {
-            params.append('category', state.category);
-          }
-        } else {
-          params.append('media_type', 'comic');
-          if (state.category && state.category !== 'all') {
-            params.append('category', state.category);
-          }
-        }
-
-        if (state.tag) params.append('tag', state.tag);
-        if (state.query) params.append('q', state.query);
-        if (state.freshShuffle && state.feedSeed) {
-          params.append('fresh', '1');
-          params.append('shuffle', String(state.feedSeed));
-        }
-
-        const resp = await fetch(`/api/items?${params.toString()}`, { signal, credentials: 'omit' });
 
         if (!resp.ok) {
           const errDetail = await resp.text();
           throw new Error(`Servidor respondio con codigo ${resp.status}: ${errDetail}`);
         }
 
-        const data = await resp.json();
+        let data = await resp.json();
         if (gen !== _feedGen) return;
+
+        if (state.freshShuffle && state.feedSeed && Array.isArray(data.items)) {
+          const overlap = shuffleOverlapRatio(data.items);
+          if (state.page === 1 && !shuffleRetry && overlap >= 0.34 && data.items.length >= 8) {
+            state.feedSeed = nextShuffleSeed();
+            state.videoSeed = state.feedSeed;
+            return fetchLiveFeed(true, { shuffleRetry: true });
+          }
+          data = Object.assign({}, data, { items: arrangeShuffleItems(data.items) });
+          noteShownShuffleIds(data.items);
+        }
 
         if (state.mode === 'games' && (!data.items || data.items.length === 0)) {
           if (await loadBundledGamesFeed(signal)) return;
@@ -6171,10 +6258,12 @@
           CLIENT_CACHE.delete(firstKey);
         }
         CLIENT_CACHE.set(cacheKey, { ts: Date.now(), data });
-        try {
-          const cachedJson = JSON.stringify({ ts: Date.now(), data });
-          sessionStorage.setItem('vcache_' + cacheKey, cachedJson);
-        } catch (e) {}
+        if (!state.freshShuffle) {
+          try {
+            const cachedJson = JSON.stringify({ ts: Date.now(), data });
+            sessionStorage.setItem('vcache_' + cacheKey, cachedJson);
+          } catch (e) {}
+        }
 
         renderFeedData(data);
       } catch (err) {
@@ -6212,6 +6301,7 @@
       } finally {
         if (gen === _feedGen) {
           _isLoadingFeed = false;
+          setShuffleSpin(false);
           hidePortalTransition();
           if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
             window.VelvetPagination.resetLoadingState();
@@ -6234,7 +6324,7 @@
       const frag = document.createDocumentFragment();
       for (let i = 0; i < skelCount; i++) {
         const skel = document.createElement('div');
-        skel.className = 'flex flex-col bg-[#0f071c] border border-white/[0.08] rounded-2xl overflow-hidden';
+        skel.className = 'flex flex-col bg-[#0f071c] border border-white/[0.08] rounded-2xl overflow-hidden animate-pulse';
         skel.innerHTML = `
           <div class="relative ${isVideo ? 'aspect-video' : 'aspect-[3/4]'} w-full bg-[#090312]">
             ${velvetLogoPlaceholder()}
@@ -13618,6 +13708,8 @@
 
       }
 
+      endManualShuffle();
+
       state.query = val;
 
       state.page = 1;
@@ -13629,6 +13721,7 @@
     }
 
     function quickSearch(tag) {
+      endManualShuffle();
 
       document.getElementById('search-input').value = tag;
 
@@ -13645,6 +13738,7 @@
     }
 
     function clearSearch() {
+      endManualShuffle();
 
       document.getElementById('search-input').value = '';
 
@@ -13659,6 +13753,7 @@
     }
 
     function setCategory(cat, btn) {
+      endManualShuffle();
       if (state.catalogMode === 'dynamic') {
         state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
@@ -13704,6 +13799,7 @@
     }
 
     function setCatalogMode(mode) {
+      endManualShuffle();
       state.catalogMode = mode;
       try { localStorage.setItem('velvet_catalog_mode', mode); } catch(e) {}
       if (mode === 'dynamic') {
@@ -13840,6 +13936,7 @@
     }
 
     function resetHome() {
+      endManualShuffle();
 
       state.query = '';
 
@@ -13856,22 +13953,35 @@
     }
 
     function shuffleCurrentFeed() {
-      const shuffleIcon = document.querySelector('#random-btn i') || document.querySelector('#category-chips .fa-shuffle');
-      if (shuffleIcon) shuffleIcon.classList.add('fa-spin');
+      setShuffleSpin(true);
       state.catalogMode = 'dynamic';
       try { localStorage.setItem('velvet_catalog_mode', 'dynamic'); } catch(e) {}
       updateCatalogModeUI();
 
-      // Semilla fresca de amplio rango (1 a 50,000) que salta a páginas profundas al azar (ej. pág 334 o 391)
+      // Cada clic es un nonce distinto. freshShuffle se queda activo para que
+      // la paginación de esta mezcla siga pidiendo la misma semilla y no
+      // vuelva al cubo cacheado de 3 horas.
       state.freshShuffle = true;
-      state.feedSeed = Math.floor(Math.random() * 50000) + 1;
+      state._shuffleRetried = false;
+      state.feedSeed = nextShuffleSeed();
       state.videoSeed = state.feedSeed;
       state.sort = 'random';
       state.page = 1;
       _isLoadingFeed = false;
+      if (typeof updateSortUI === 'function') updateSortUI('random');
       if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
         window.VelvetPagination.resetLoadingState();
       }
+      if (window.VelvetPagination && typeof window.VelvetPagination.render === 'function' && state.totalPages > 1) {
+        window.VelvetPagination.render(1, state.totalPages, state.totalPages);
+      }
+      try {
+        const curUrl = new URL(window.location.href);
+        if (curUrl.searchParams.has('page')) {
+          curUrl.searchParams.delete('page');
+          history.replaceState(history.state, '', curUrl.pathname + curUrl.search + curUrl.hash);
+        }
+      } catch (e) {}
       CLIENT_CACHE.clear();
       try {
         Object.keys(sessionStorage).forEach(k => {
@@ -13884,8 +13994,8 @@
         }
         localKeysToRemove.forEach(lk => localStorage.removeItem(lk));
       } catch (e) {}
+      renderSkeletons();
       fetchLiveFeed(true);
-      state.freshShuffle = false;
       const grid = document.getElementById('comics-grid');
       if (grid) {
         const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
@@ -13893,7 +14003,6 @@
       } else {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-      if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
     }
 
     function shuffleVideoFeed() {
@@ -14155,6 +14264,7 @@
         shouldRefresh = true;
       }
       if (shouldRefresh) {
+        endManualShuffle();
         state.page = 1;
         if (typeof fetchLiveFeed === 'function') fetchLiveFeed(true);
       }
