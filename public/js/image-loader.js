@@ -23,17 +23,36 @@
     return "wait";
   }
 
-  function revealCover(img) {
+  function revealCover(img, instant) {
+    if (!img || img.dataset.coverSettled === "1") return;
     img.dataset.coverSettled = "1";
+    if (instant && img.style) img.style.transition = "none";
     if (img.classList) {
       img.classList.remove("opacity-0");
       img.classList.add("opacity-100");
+      img.classList.add("is-loaded");
     }
-    const sk = img.previousElementSibling;
-    if (sk && sk.classList && (sk.classList.contains("skeleton-shimmer") || sk.classList.contains("velvet-skeleton"))) {
-      sk.style.opacity = "0";
-      setTimeout(() => { try { sk.remove(); } catch (e) {} }, 200);
+    if (instant && img.style) {
+      void img.offsetWidth;
+      img.style.transition = "";
     }
+    const parent = img.parentElement;
+    const nodes = [];
+    if (parent && parent.querySelectorAll) {
+      parent.querySelectorAll(".skeleton-shimmer, .velvet-skeleton, .velvet-logo-ph").forEach((sk) => nodes.push(sk));
+    } else if (img.previousElementSibling) {
+      nodes.push(img.previousElementSibling);
+    }
+    nodes.forEach((sk) => {
+      if (!sk || !sk.classList) return;
+      if (!(sk.classList.contains("skeleton-shimmer") || sk.classList.contains("velvet-skeleton") || sk.classList.contains("velvet-logo-ph"))) return;
+      if (instant) {
+        try { sk.remove(); } catch (e) {}
+      } else if (sk.style) {
+        sk.style.opacity = "0";
+        setTimeout(() => { try { sk.remove(); } catch (e) {} }, 220);
+      }
+    });
   }
 
   function bindCover(img, onFallback, watchdogMs) {
@@ -48,7 +67,7 @@
       if (settled) return;
       settled = true;
       if (typeof onFallback === "function") onFallback(img, type);
-      revealCover(img);
+      revealCover(img, true);
     };
 
     const retry = () => {
@@ -74,7 +93,7 @@
       });
       if (decision === "reveal") {
         settled = true;
-        revealCover(img);
+        revealCover(img, !!snapshot.instant);
         return;
       }
       if (decision === "retry") {
@@ -86,7 +105,7 @@
     };
 
     img.addEventListener("load", () => {
-      apply({ failed: false, complete: true, naturalWidth: img.naturalWidth || 0, elapsedMs: 0 });
+      apply({ failed: false, complete: true, naturalWidth: img.naturalWidth || 0, elapsedMs: 0, instant: false });
     });
     img.addEventListener("error", () => {
       apply({ failed: true, complete: true, naturalWidth: 0, elapsedMs: watchdogMs });
@@ -97,7 +116,8 @@
         failed: !(img.naturalWidth > 0),
         complete: true,
         naturalWidth: img.naturalWidth || 0,
-        elapsedMs: img.naturalWidth > 0 ? 0 : watchdogMs
+        elapsedMs: img.naturalWidth > 0 ? 0 : watchdogMs,
+        instant: img.naturalWidth > 0
       });
     }
 

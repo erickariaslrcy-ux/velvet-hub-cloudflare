@@ -266,8 +266,11 @@
 
       // 2. Actualizar estado interno
       this.currentRoute = route;
+      const instant = !!this._instantNav;
+      this._instantNav = false;
 
-      // 3. Transición de vista con View Transitions API si está disponible
+      // 3. Transición de vista con View Transitions API si está disponible.
+      // La barra inferior y el drawer cambian de sección al instante, sin animación de vista.
       const render = () => {
         window.dispatchEvent(new CustomEvent('velvet:route-render', { detail: route }));
         this.updateDocumentMeta(route);
@@ -278,7 +281,7 @@
         }
       };
 
-      if (document.startViewTransition && !document.documentElement.classList.contains('reduce-motion')) {
+      if (!instant && document.startViewTransition && !document.documentElement.classList.contains('reduce-motion')) {
         document.startViewTransition(() => render());
       } else {
         render();
@@ -317,37 +320,65 @@
 
     updateActiveNavLinks(currentPath) {
       const path = currentPath || '/';
-      document.querySelectorAll('a[href]').forEach((link) => {
-        if (link.closest('#mobile-navbar')) return;
+      const isAccount = path === '/cuenta' || path.startsWith('/cuenta/') || path === '/acceso' || path.startsWith('/perfil') || path === '/boveda/cuenta' || path === '/boveda/perfil';
+      const isVault = !isAccount && (path === '/boveda' || path.startsWith('/boveda/'));
+      const isVideos = !isAccount && (path === '/videos' || path.startsWith('/v/') || path.startsWith('/video/'));
+      const isGalleries = !isAccount && (path === '/cosplay' || path.startsWith('/g/') || path.startsWith('/gallery') || path.startsWith('/galeria'));
+      const isGames = !isAccount && (path === '/juegos' || path === '/games' || path.startsWith('/j/') || path.startsWith('/juego/') || path.startsWith('/game/'));
+      const isComics = !isAccount && !isVault && !isVideos && !isGalleries && !isGames && (
+        path === '/' || path === '/index.html' || path === '/comics' || path.startsWith('/c/') || path.startsWith('/comic/')
+      );
+      const sectionHref = isAccount ? '/cuenta' : isVault ? '/boveda/favoritos' : isVideos ? '/videos' : isGalleries ? '/cosplay' : isGames ? '/juegos' : isComics ? '/comics' : '';
+      document.querySelectorAll('#desktop-mode-nav a[href], #mobile-drawer a[href]').forEach((link) => {
         const href = link.getAttribute('href');
-        if (!href || href.charAt(0) !== '/') return;
-        const isActive = href === path || (href.startsWith('/boveda') && path.startsWith('/boveda') && href !== '/');
-        if (isActive) {
-          link.setAttribute('aria-current', 'page');
-          link.classList.add('nav-link-active');
-        } else {
-          link.removeAttribute('aria-current');
-          link.classList.remove('nav-link-active');
-        }
+        const on = !!sectionHref && href === sectionHref;
+        if (on) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+        link.classList.toggle('nav-link-active', on);
       });
       this.syncMobileNav(path);
     },
 
     syncMobileNav(path) {
-      const nav = document.getElementById('mobile-navbar');
-      if (!nav) return;
+      const clean = path || '/';
+      const isAccount = clean === '/cuenta' || clean.startsWith('/cuenta/') || clean === '/acceso' || clean.startsWith('/perfil') || clean === '/boveda/cuenta' || clean === '/boveda/perfil';
+      const isVault = !isAccount && (clean === '/boveda' || clean.startsWith('/boveda/'));
+      const isVideos = !isAccount && (clean === '/videos' || clean.startsWith('/v/') || clean.startsWith('/video/'));
+      const isGalleries = !isAccount && (clean === '/cosplay' || clean.startsWith('/g/') || clean.startsWith('/gallery') || clean.startsWith('/galeria'));
+      const isGames = !isAccount && (clean === '/juegos' || clean === '/games' || clean.startsWith('/j/') || clean.startsWith('/juego/') || clean.startsWith('/game/'));
+      const isComics = !isAccount && !isVault && !isVideos && !isGalleries && !isGames && (
+        clean === '/' || clean === '/index.html' || clean === '/comics' || clean.startsWith('/c/') || clean.startsWith('/comic/')
+      );
+      const section = isAccount ? 'account' : isVault ? 'vault' : isVideos ? 'videos' : isGalleries ? 'galleries' : isGames ? 'games' : isComics ? 'comics' : '';
+
+      // Un solo tab de la barra. Cuenta vive en el avatar (tab-btn-account no está en la barra).
       const tabs = [
-        { id: 'tab-btn-home', on: path === '/' || path === '/index.html' },
-        { id: 'tab-btn-videos', on: path === '/videos' || path.startsWith('/v/') },
-        { id: 'tab-btn-comics', on: path === '/comics' || path.startsWith('/c/') },
-        { id: 'tab-btn-vault', on: path.startsWith('/boveda') },
-        { id: 'tab-btn-account', on: path === '/cuenta' || path.startsWith('/cuenta') || path.startsWith('/perfil') || path === '/boveda/cuenta' }
+        { id: 'tab-btn-comics', on: isComics },
+        { id: 'tab-btn-videos', on: isVideos },
+        { id: 'tab-btn-galleries', on: isGalleries },
+        { id: 'tab-btn-games', on: isGames },
+        { id: 'tab-btn-vault', on: isVault },
+        { id: 'tab-btn-account', on: isAccount }
       ];
       tabs.forEach((tab) => {
         const el = document.getElementById(tab.id);
         if (!el) return;
         el.classList.toggle('mob-tab-active', tab.on);
         if (tab.on) el.setAttribute('aria-current', 'page');
+        else el.removeAttribute('aria-current');
+      });
+
+      const profile = document.getElementById('user-profile-btn');
+      if (profile) {
+        profile.classList.toggle('is-account-active', isAccount);
+        if (isAccount) profile.setAttribute('aria-current', 'page');
+        else if (profile.getAttribute('aria-current') === 'page') profile.removeAttribute('aria-current');
+      }
+
+      document.querySelectorAll('[data-drawer-nav]').forEach((el) => {
+        const on = el.getAttribute('data-drawer-nav') === section;
+        el.classList.toggle('is-active', on);
+        if (on) el.setAttribute('aria-current', 'page');
         else el.removeAttribute('aria-current');
       });
     },
@@ -383,8 +414,10 @@
           return;
         }
 
-        // Si es una ruta interna de Velvet Hub, interceptar y navegar sin recargar
+        // Si es una ruta interna de Velvet Hub, interceptar y navegar sin recargar.
+        // Barra inferior y drawer: cambio inmediato, sin View Transition.
         e.preventDefault();
+        this._instantNav = !!(link.closest('#mobile-navbar') || link.closest('#mobile-drawer'));
         this.navigate(url.pathname + url.search + url.hash);
       });
     },
