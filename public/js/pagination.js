@@ -757,11 +757,19 @@
         if (curState.category && curState.category !== 'all') params.append('category', curState.category);
         if (curState.tag) params.append('tag', curState.tag);
         if (curState.query) params.append('q', curState.query);
+        if (curState.freshShuffle && curState.feedSeed) {
+          params.append('fresh', '1');
+          params.append('shuffle', String(curState.feedSeed));
+        }
 
         const prefetchUrl = `/api/items?${params.toString()}`;
 
         // Usar fetch prioritariamente o link rel=prefetch
-        fetch(prefetchUrl, { credentials: 'omit', priority: 'low' })
+        fetch(prefetchUrl, {
+          credentials: 'omit',
+          priority: 'low',
+          cache: curState.freshShuffle ? 'no-store' : 'default'
+        })
           .then(res => res.ok ? res.json() : null)
           .then(data => {
             if (data && window.CLIENT_CACHE) {
