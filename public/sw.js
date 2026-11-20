@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v16-stable-covers';
+const CACHE_VERSION = 'v17-gallery-mirrors';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -39,6 +39,16 @@ function getFallbackImageResponse() {
   });
 }
 
+function isUsableCoverResponse(resp) {
+  if (!resp || resp.status !== 200) return false;
+  if (resp.headers.get('X-Velvet-Fallback') === 'true') return false;
+  const cType = (resp.headers.get('content-type') || '').toLowerCase();
+  if (!cType.includes('image/')) return false;
+  if (cType.includes('svg')) return false;
+  if (cType.includes('text/html') || cType.includes('application/json') || cType.includes('text/plain')) return false;
+  return true;
+}
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -48,12 +58,20 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
+    caches.keys().then(async (keys) => {
+      await Promise.all(
         keys
           .filter((key) => !key.endsWith(CACHE_VERSION))
           .map((key) => caches.delete(key))
       );
+      // Por si una portada fallida (SVG de reserva, 403 o HTML) quedó
+      // guardada con el nombre de caché nuevo.
+      const imageCache = await caches.open(IMAGE_CACHE);
+      const imageKeys = await imageCache.keys();
+      await Promise.all(imageKeys.map(async (key) => {
+        const cached = await imageCache.match(key);
+        if (!isUsableCoverResponse(cached)) await imageCache.delete(key);
+      }));
     }).then(() => self.clients.claim())
   );
 });
@@ -150,8 +168,8 @@ self.addEventListener('fetch', (event) => {
         const cached = await cache.match(req);
 
         // Cache-first: una portada ya vista no vuelve a salir a la red.
-        // El SVG de Play cacheado en versiones viejas no cuenta como portada.
-        if (cached && cached.headers.get('X-Velvet-Fallback') === 'true') {
+        // SVG de reserva, 403 y HTML cacheados no cuentan como portada.
+        if (cached && !isUsableCoverResponse(cached)) {
           try { await cache.delete(req); } catch (e) {}
         } else if (cached) return cached;
 

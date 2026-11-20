@@ -38,6 +38,11 @@ const loadApi = new Function("exports", prelude + `
   exports.hostRejectsImageResize = hostRejectsImageResize;
   exports.alternateCoverUrls = alternateCoverUrls;
   exports.maskCoverFields = maskCoverFields;
+  exports.galleryFetchPlan = galleryFetchPlan;
+  exports.xasiatAlbumPreview = xasiatAlbumPreview;
+  exports.unwrapBuonduaEmbed = unwrapBuonduaEmbed;
+  exports.isFollowableMediaRedirect = isFollowableMediaRedirect;
+  exports.isGalleryFallbackUrl = isGalleryFallbackUrl;
 `);
 loadApi(testContext);
 
@@ -53,7 +58,12 @@ const {
   inferUpstreamReferer,
   hostRejectsImageResize,
   alternateCoverUrls,
-  maskCoverFields
+  maskCoverFields,
+  galleryFetchPlan,
+  xasiatAlbumPreview,
+  unwrapBuonduaEmbed,
+  isFollowableMediaRedirect,
+  isGalleryFallbackUrl
 } = testContext;
 
 const quantum = MEDIA_TOKEN_QUANTUM_SEC;
@@ -265,6 +275,7 @@ assert.equal((buonRes.headers.get("content-type") || "").includes("image/jpeg"),
 assert.ok(resizeCalls.every((c) => !c.image), "buondua no pasa por Image Resizing, que tira el Referer");
 assert.equal(resizeCalls[0].referer, "https://buondua.com/");
 assert.equal(resizeCalls[0].redirect, "manual");
+assert.ok(String(resizeCalls[0].url).includes("i0.wp.com/i2.buondua.com/"), "i2.buondua sale por Photon: el CDN responde 403 al worker");
 
 const mitakuToken = await encodeMediaToken("https://mitaku.net/wp-content/uploads/cover.jpg", "", mediaSecret, bucketStart + 20);
 const mitakuCalls = [];
@@ -322,5 +333,101 @@ assert.equal(coverLoadDecision({
 }), "done");
 assert.equal(coverWatchdogMs({ connection: { effectiveType: "2g" } }), 12000);
 assert.equal(coverWatchdogMs({ connection: { effectiveType: "4g" } }), 8000);
+
+const xasiatBlocked = "https://www.xasiat.com/get_image/2/abc/sources/36000/36203/2534993.jpg/?i-acctoken=abc";
+assert.equal(
+  xasiatAlbumPreview(xasiatBlocked),
+  "https://pic.xascdn.li/contents/albums/preview/380x507/36000/36203/preview.jpg"
+);
+assert.equal(
+  unwrapBuonduaEmbed("https://cdn.buondua.com/pok.misskon.com/images/2025/12/30/a.webp?hash?other"),
+  "https://pok.misskon.com/images/2025/12/30/a.webp"
+);
+const buonPlan = galleryFetchPlan("https://i2.buondua.com/2025/51077/XIUREN-No.10975.jpeg?e068?c3e9");
+assert.ok(buonPlan[0].startsWith("https://i0.wp.com/i2.buondua.com/2025/51077/XIUREN-No.10975.jpeg?"));
+assert.ok(buonPlan.includes("https://i2.buondua.com/2025/51077/XIUREN-No.10975.jpeg?e068?c3e9"));
+const xasiatPlan = galleryFetchPlan(xasiatBlocked);
+assert.equal(xasiatPlan[0], "https://pic.xascdn.li/contents/albums/preview/380x507/36000/36203/preview.jpg");
+assert.equal(isGalleryFallbackUrl("https://evil.example/secret"), false);
+assert.equal(isFollowableMediaRedirect("https://169.254.169.254/latest", "https://pic.4khd.com/a.webp"), false);
+assert.equal(
+  isFollowableMediaRedirect(
+    "https://yt4.googleusercontent.com/a.webp",
+    "https://pic.4khd.com/a.webp"
+  ),
+  true
+);
+
+const jpeg = () => new Response(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]), {
+  status: 200,
+  headers: { "content-type": "image/jpeg" }
+});
+const blockedHtml = () => new Response("<html>Attention Required</html>", {
+  status: 403,
+  headers: { "content-type": "text/html" }
+});
+
+const xasiatToken = await encodeMediaToken(xasiatBlocked, "", mediaSecret, bucketStart + 20);
+const xasiatCalls = [];
+const xasiatRes = await callMedia(xasiatToken, "&w=360", async (input) => {
+  const url = typeof input === "string" ? input : input.url;
+  xasiatCalls.push(url);
+  if (url.includes("pic.xascdn.li")) return jpeg();
+  return blockedHtml();
+});
+assert.equal(xasiatRes.status, 200, "La portada xasiat sale de la preview de xascdn");
+assert.equal(xasiatRes.headers.get("X-Velvet-Media"), "mirror");
+assert.ok(xasiatCalls[0].includes("/380x507/36000/36203/preview.jpg"));
+assert.equal(xasiatCalls.some((u) => u.includes("xasiat.com/get_image")), false);
+
+const hdUrl = "https://pic.4khd.com/album/w1090-h1500-p-k-no-rw/4KHD-beautifulGirls.webp";
+const hdToken = await encodeMediaToken(hdUrl, "", mediaSecret, bucketStart + 20);
+const hdCalls = [];
+const hdRes = await callMedia(hdToken, "", async (input) => {
+  const url = typeof input === "string" ? input : input.url;
+  hdCalls.push(url);
+  if (url.startsWith("https://pic.4khd.com/")) {
+    return new Response(null, {
+      status: 301,
+      headers: { location: "https://yt4.googleusercontent.com/album/4KHD-beautifulGirls.webp", "content-type": "text/html" }
+    });
+  }
+  if (url.includes("googleusercontent.com")) return jpeg();
+  return blockedHtml();
+});
+assert.equal(hdRes.status, 200, "pic.4khd.com se sigue hasta googleusercontent");
+assert.ok(hdCalls.some((u) => u.includes("yt4.googleusercontent.com")));
+assert.equal(hdCalls.some((u) => u.includes("169.254.169.254")), false);
+
+const evilToken = await encodeMediaToken(hdUrl, "", mediaSecret, bucketStart + 21);
+const evilCalls = [];
+const evilRes = await callMedia(evilToken, "", async (input) => {
+  const url = typeof input === "string" ? input : input.url;
+  evilCalls.push(url);
+  if (url.startsWith("https://pic.4khd.com/")) {
+    return new Response("no", {
+      status: 301,
+      headers: { location: "https://169.254.169.254/latest/meta-data", "content-type": "text/html" }
+    });
+  }
+  return blockedHtml();
+});
+assert.equal(evilRes.status, 502, "Un redirect de 4khd a metadata no se sigue");
+assert.equal(evilCalls.some((u) => u.includes("169.254.169.254")), false);
+
+const embedUrl = "https://cdn.buondua.com/pok.misskon.com/images/2025/12/30/cover.webp?aaaa?bbbb";
+const embedToken = await encodeMediaToken(embedUrl, "", mediaSecret, bucketStart + 20);
+const embedCalls = [];
+const embedRes = await callMedia(embedToken, "", async (input) => {
+  const url = typeof input === "string" ? input : input.url;
+  embedCalls.push(url);
+  if (url.startsWith("https://pok.misskon.com/images/")) return jpeg();
+  return blockedHtml();
+});
+assert.equal(embedRes.status, 200, "cdn.buondua.com se abre en pok.misskon.com");
+assert.equal(embedCalls[0], "https://pok.misskon.com/images/2025/12/30/cover.webp");
+
+assert.ok(sw.includes("v17-gallery-mirrors"), "El service worker purga la caché vieja de portadas");
+assert.ok(sw.includes("function isUsableCoverResponse"), "El service worker descarta SVG y 403 cacheados");
 
 console.log("✓ Galería aleatoria, juegos sin 500, tokens estables y portadas resilientes.");
