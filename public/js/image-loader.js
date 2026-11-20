@@ -23,6 +23,21 @@
     return "wait";
   }
 
+  function stripResizeParams(url) {
+    if (!url || url.indexOf("data:") === 0) return url || "";
+    try {
+      const u = new URL(url, "https://velvet.local");
+      u.searchParams.delete("w");
+      u.searchParams.delete("q");
+      u.searchParams.delete("fmt");
+      u.searchParams.delete("retry");
+      if (/^https?:\/\//i.test(url)) return u.href;
+      return u.pathname + u.search;
+    } catch (e) {
+      return url;
+    }
+  }
+
   function revealCover(img, instant) {
     if (!img || img.dataset.coverSettled === "1") return;
     img.dataset.coverSettled = "1";
@@ -62,22 +77,46 @@
     const type = img.dataset.mediaType || "comic";
     let retries = 0;
     let settled = false;
+    let suppressError = false;
+    let watchGen = 0;
 
     const fallback = () => {
       if (settled) return;
       settled = true;
+      img.dataset.coverFinal = "1";
       if (typeof onFallback === "function") onFallback(img, type);
       revealCover(img, true);
     };
 
+    const armWatchdog = () => {
+      const gen = ++watchGen;
+      setTimeout(() => {
+        if (gen !== watchGen || settled || img.dataset.coverSettled === "1") return;
+        apply({
+          failed: false,
+          complete: !!img.complete,
+          naturalWidth: img.naturalWidth || 0,
+          elapsedMs: watchdogMs
+        });
+      }, watchdogMs);
+    };
+
     const retry = () => {
       retries += 1;
-      if (original && original.indexOf("data:") !== 0) {
-        img.src = "";
-        img.src = original;
-        return true;
+      if (!(original && original.indexOf("data:") !== 0)) return false;
+      const plain = stripResizeParams(original);
+      let next = plain && plain !== original && plain !== img.src ? plain : "";
+      if (!next) {
+        const sep = original.indexOf("?") === -1 ? "?" : "&";
+        next = original + sep + "retry=" + retries;
       }
-      return false;
+      suppressError = true;
+      img.src = next;
+      const failedNow = !!(img.complete && !(img.naturalWidth > 0));
+      suppressError = false;
+      armWatchdog();
+      if (failedNow) apply({ failed: true, complete: true, naturalWidth: 0, elapsedMs: 0 });
+      return true;
     };
 
     const apply = (snapshot) => {
@@ -108,7 +147,8 @@
       apply({ failed: false, complete: true, naturalWidth: img.naturalWidth || 0, elapsedMs: 0, instant: false });
     });
     img.addEventListener("error", () => {
-      apply({ failed: true, complete: true, naturalWidth: 0, elapsedMs: watchdogMs });
+      if (suppressError || settled) return;
+      apply({ failed: true, complete: true, naturalWidth: 0, elapsedMs: 0 });
     });
 
     if (img.complete) {
@@ -121,15 +161,7 @@
       });
     }
 
-    setTimeout(() => {
-      if (settled || img.dataset.coverSettled === "1") return;
-      apply({
-        failed: false,
-        complete: !!img.complete,
-        naturalWidth: img.naturalWidth || 0,
-        elapsedMs: watchdogMs
-      });
-    }, watchdogMs);
+    armWatchdog();
   }
 
   function settleCoverImages(rootEl, onFallback) {
@@ -140,6 +172,6 @@
     for (let i = 0; i < imgs.length; i++) bindCover(imgs[i], onFallback, watchdogMs);
   }
 
-  const api = { coverLoadDecision, coverWatchdogMs, settleCoverImages };
+  const api = { coverLoadDecision, coverWatchdogMs, settleCoverImages, stripResizeParams };
   root.VelvetCovers = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

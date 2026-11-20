@@ -135,6 +135,10 @@ assert.ok(indexHtml.includes("Math.floor(Date.now() / (3 * 3600 * 1000))"));
 assert.ok(!indexHtml.includes("params.append('seed'"), "La navegación normal no manda una semilla por usuario");
 assert.ok(indexHtml.includes('id="random-btn"'));
 assert.ok(indexHtml.includes('id="filter-random-btn"'));
+assert.ok(indexHtml.includes("function rememberActiveShuffle"));
+assert.ok(indexHtml.includes("function restoreActiveShuffle"));
+assert.ok(indexHtml.includes("searchParams.set('shuffle'"));
+assert.ok(indexHtml.includes("sessionStorage.setItem(activeShuffleKey()"));
 assert.ok(indexHtml.includes('data-action="drawer-random"'));
 assert.ok(pagination.includes("params.append('fresh', '1')"));
 assert.ok(pagination.includes("params.append('shuffle', String(curState.feedSeed))"));
@@ -170,6 +174,7 @@ const games = Array.from({ length: 120 }, (_, i) => ({
 }));
 
 const pmvPagesHit = [];
+const pmvSorts = [];
 const lteHits = [];
 const originalFetch = globalThis.fetch;
 
@@ -187,6 +192,7 @@ globalThis.fetch = async (input) => {
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
     const limit = Math.max(1, parseInt(url.searchParams.get("limit") || "24", 10));
     pmvPagesHit.push(page);
+    pmvSorts.push(url.searchParams.get("sort") || "");
     const videos = [];
     for (let i = 0; i < limit; i++) {
       const id = `pmv_${page}_${i}`;
@@ -309,6 +315,7 @@ try {
   assert.equal(normalA.res.headers.get("X-Velvet-Rotation"), slot);
   assert.equal(normalA.res.headers.get("X-Velvet-Shuffle"), null);
   assert.deepEqual(idsOf(normalA.body), idsOf(normalB.body), "Sin semilla manual la página no cambia dentro de la ventana");
+  assert.deepEqual(idsOf(normalA.body).slice(0, 5), idsOf(normalB.body).slice(0, 5), "El hero de cómics no cambia al recargar");
   assert.equal(idsOf(normalA.body).length, 24);
 
   lteHits.length = 0;
@@ -327,7 +334,10 @@ try {
   assert.ok(lteHits.every((id) => id >= 380391), `Un ancla cayó en el hueco bajo de galería: ${Math.min(...lteHits)}`);
 
   const galleryPlain = await callItems("media_type=gallery&sort=random&page=1&page_size=24");
+  const galleryPlainAgain = await callItems("media_type=gallery&sort=random&page=1&page_size=24");
   assert.equal(idsOf(galleryPlain.body).length, 24, "La rotación normal de galería no queda vacía por huecos de id");
+  assert.deepEqual(idsOf(galleryPlain.body), idsOf(galleryPlainAgain.body), "La galería sin shuffle no cambia al recargar");
+  assert.deepEqual(idsOf(galleryPlain.body).slice(0, 5), idsOf(galleryPlainAgain.body).slice(0, 5), "El hero de Modelos no cambia al recargar");
   assert.ok(idsOf(galleryPlain.body).every((id) => id >= 380391));
   assert.ok((galleryPlain.res.headers.get("Cache-Control") || "").includes("public"));
 
@@ -365,7 +375,9 @@ try {
   assert.ok((videoNormalA.res.headers.get("Cache-Control") || "").includes("public"));
   assert.ok(!(videoNormalA.res.headers.get("Cache-Control") || "").includes("no-store"));
   assert.deepEqual(idsOf(videoNormalA.body), idsOf(videoNormalB.body));
+  assert.deepEqual(idsOf(videoNormalA.body).slice(0, 5), idsOf(videoNormalB.body).slice(0, 5), "El hero de videos no cambia al recargar");
   assert.equal(idsOf(videoNormalA.body).length, 24);
+  assert.ok(pmvSorts.length > 0 && pmvSorts.every((s) => s !== "random"), `PMV sort=random cambia en cada F5: ${pmvSorts.join(",")}`);
 
   const gameA = await callItems("media_type=game&sort=random&page=1&page_size=24&fresh=1&shuffle=11");
   const gameB = await callItems("media_type=game&sort=random&page=1&page_size=24&fresh=1&shuffle=90210");

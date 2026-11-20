@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v15-mobile-nav';
+const CACHE_VERSION = 'v16-stable-covers';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -26,7 +26,7 @@ const STATIC_ASSETS = [
   '/js/image-loader.js'
 ];
 
-const BRAND_FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%"><rect width="100%" height="100%" fill="#0f071e"/><radialGradient id="g" cx="50%" cy="45%" r="60%"><stop offset="0%" stop-color="#2a0d3f"/><stop offset="100%" stop-color="#0a0414"/></radialGradient><rect width="100%" height="100%" fill="url(#g)"/><circle cx="150" cy="180" r="32" fill="none" stroke="#ff2d95" stroke-width="2" stroke-dasharray="5 4"/><path d="M142 166 L164 180 L142 194 Z" fill="#ff2d95"/><text x="150" y="240" text-anchor="middle" fill="#c4b5fd" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="11" font-weight="700" letter-spacing="2">VELVET HUB</text></svg>`;
+const BRAND_FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%"><rect width="100%" height="100%" fill="#0f071e"/><radialGradient id="g" cx="50%" cy="45%" r="60%"><stop offset="0%" stop-color="#2a0d3f"/><stop offset="100%" stop-color="#0a0414"/></radialGradient><rect width="100%" height="100%" fill="url(#g)"/><circle cx="150" cy="168" r="28" fill="none" stroke="#ff2d95" stroke-width="2"/><text x="150" y="176" text-anchor="middle" fill="#ff2d95" font-family="Georgia,serif" font-size="22" font-weight="700">V</text><text x="150" y="230" text-anchor="middle" fill="#c4b5fd" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="11" font-weight="700" letter-spacing="2">VELVET HUB</text></svg>`;
 
 function getFallbackImageResponse() {
   return new Response(BRAND_FALLBACK_SVG, {
@@ -150,26 +150,27 @@ self.addEventListener('fetch', (event) => {
         const cached = await cache.match(req);
 
         // Cache-first: una portada ya vista no vuelve a salir a la red.
-        // Antes cada imagen cacheada disparaba otra petición en segundo plano.
-        if (cached) return cached;
+        // El SVG de Play cacheado en versiones viejas no cuenta como portada.
+        if (cached && cached.headers.get('X-Velvet-Fallback') === 'true') {
+          try { await cache.delete(req); } catch (e) {}
+        } else if (cached) return cached;
 
         const fetchPromise = (async () => {
-          // Un abort (scroll rápido en Android) no debe dejar la portada en negro:
-          // se reintenta una vez antes del SVG de marca. El fallback no se cachea.
+          // Reintento antes de rendirse. No se aborta a los 8s: en Android
+          // eso pintaba el placeholder de Play aunque la foto sí iba a llegar.
           for (let attempt = 0; attempt < 2; attempt++) {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), attempt === 0 ? 8000 : 12000);
+            const timer = setTimeout(() => controller.abort(), attempt === 0 ? 20000 : 28000);
             try {
               const networkResp = await fetch(req, { signal: controller.signal });
               clearTimeout(timer);
-              if (networkResp && networkResp.status === 200) {
-                const cType = networkResp.headers.get('content-type') || '';
-                if (!cType.includes('video') && !cType.includes('mpegurl')) {
-                  cache.put(req, networkResp.clone());
-                  trimLruCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
-                }
+              const cType = (networkResp && networkResp.headers.get('content-type') || '').toLowerCase();
+              const isHtml = cType.includes('text/html') || cType.includes('application/json');
+              if (networkResp && networkResp.status === 200 && !isHtml && cType.includes('image') && !cType.includes('video') && !cType.includes('mpegurl')) {
+                cache.put(req, networkResp.clone());
+                trimLruCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
               }
-              if (networkResp && (networkResp.status === 200 || networkResp.status === 304)) {
+              if (networkResp && !isHtml && (networkResp.status === 200 || networkResp.status === 304)) {
                 return networkResp;
               }
             } catch (err) {
@@ -179,14 +180,17 @@ self.addEventListener('fetch', (event) => {
           return null;
         })();
 
-        // Si es la primera vez, esperar la red con fallback SVG de marca si falla
         const netRes = await fetchPromise;
         if (netRes && (netRes.status === 200 || netRes.status === 304)) {
           return netRes;
         }
 
-        // Fallback visual garantizado: nunca pantalla negra
-        return getFallbackImageResponse();
+        // 502 para que el onerror de la tarjeta elija cámara, libro o play.
+        // Un SVG 200 con ▶ se veía como un video en galerías de fotos.
+        return new Response('', {
+          status: 502,
+          headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }
+        });
       })
     );
     return;

@@ -33,6 +33,11 @@ const loadApi = new Function("exports", prelude + `
   exports.encodeMediaToken = encodeMediaToken;
   exports.decodeMediaToken = decodeMediaToken;
   exports.MEDIA_TOKEN_QUANTUM_SEC = MEDIA_TOKEN_QUANTUM_SEC;
+  exports.normalizeUpstreamUrl = normalizeUpstreamUrl;
+  exports.inferUpstreamReferer = inferUpstreamReferer;
+  exports.hostRejectsImageResize = hostRejectsImageResize;
+  exports.alternateCoverUrls = alternateCoverUrls;
+  exports.maskCoverFields = maskCoverFields;
 `);
 loadApi(testContext);
 
@@ -43,7 +48,12 @@ const {
   isDeadUpstreamError,
   encodeMediaToken,
   decodeMediaToken,
-  MEDIA_TOKEN_QUANTUM_SEC
+  MEDIA_TOKEN_QUANTUM_SEC,
+  normalizeUpstreamUrl,
+  inferUpstreamReferer,
+  hostRejectsImageResize,
+  alternateCoverUrls,
+  maskCoverFields
 } = testContext;
 
 const quantum = MEDIA_TOKEN_QUANTUM_SEC;
@@ -197,6 +207,96 @@ const okBody = await okRes.json();
 assert.equal(okBody.items.length, 5);
 assert.ok(okBody.items[0].cover_url.startsWith("/api/media?t="), "La portada del juego sale por /api/media");
 assert.ok(okBody.items.every((it) => it.embed_url || it.swf_url), "Cada juego trae URL para jugar");
+
+assert.equal(normalizeUpstreamUrl("//i2.buondua.com/a-001.gif"), "https://i2.buondua.com/a-001.gif");
+assert.equal(inferUpstreamReferer("https://i2.buondua.com/a-001.gif", ""), "https://buondua.com/");
+assert.equal(inferUpstreamReferer("https://cdni.xascdn.li/p.jpg", ""), "https://xasiat.com/");
+assert.equal(hostRejectsImageResize("https://i2.buondua.com/a.jpeg"), true);
+assert.equal(hostRejectsImageResize("https://mitaku.net/cover.jpg"), false);
+const buonAlts = alternateCoverUrls("https://i2.buondua.com/set-001.gif");
+assert.ok(buonAlts.some((u) => u.endsWith(".jpeg")), "Un poster gif de buondua tiene foto jpeg de reserva");
+assert.ok(!buonAlts.includes("https://i2.buondua.com/set-001.gif"));
+const thumbAlts = alternateCoverUrls("https://cdn.example/gallery/thumb.jpg");
+assert.ok(thumbAlts.some((u) => u.endsWith("/1.jpg")), "thumb.jpg cae a la primera foto");
+const masked = await maskCoverFields("https://i2.buondua.com/set-001.gif", secret);
+assert.ok(masked.cover_url.startsWith("/api/media?t="));
+assert.ok(masked.cover_fallback.startsWith("/api/media?t="));
+assert.notEqual(masked.cover_url, masked.cover_fallback);
+
+const mediaSecret = secret;
+async function callMedia(token, query, fetchImpl) {
+  const prev = globalThis.fetch;
+  globalThis.fetch = fetchImpl;
+  try {
+    return await onRequest({
+      request: new Request(`https://www.morbohub.com/api/media?t=${encodeURIComponent(token)}${query || ""}`),
+      env: {
+        SUPABASE_URL: "http://127.0.0.1:9",
+        SUPABASE_ANON_KEY: "anon",
+        SUPABASE_SERVICE_ROLE_KEY: "service",
+        MEDIA_SECRET: mediaSecret
+      },
+      waitUntil() {}
+    });
+  } finally {
+    globalThis.fetch = prev;
+  }
+}
+
+const buonToken = await encodeMediaToken("https://i2.buondua.com/set-001.gif", "", mediaSecret, bucketStart + 20);
+const resizeCalls = [];
+const buonRes = await callMedia(buonToken, "&w=360&q=70", async (input, init) => {
+  resizeCalls.push({
+    url: typeof input === "string" ? input : input.url,
+    image: !!(init && init.cf && init.cf.image),
+    referer: init && init.headers && init.headers.Referer,
+    redirect: init && init.redirect
+  });
+  if (init && init.cf && init.cf.image) {
+    return new Response("blocked", { status: 403, headers: { "content-type": "text/plain" } });
+  }
+  return new Response(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]), {
+    status: 200,
+    headers: { "content-type": "image/jpeg" }
+  });
+});
+assert.equal(buonRes.status, 200, "La portada de galería no puede redirigir al CDN");
+assert.equal((buonRes.headers.get("content-type") || "").includes("image/jpeg"), true);
+assert.ok(resizeCalls.every((c) => !c.image), "buondua no pasa por Image Resizing, que tira el Referer");
+assert.equal(resizeCalls[0].referer, "https://buondua.com/");
+assert.equal(resizeCalls[0].redirect, "manual");
+
+const mitakuToken = await encodeMediaToken("https://mitaku.net/wp-content/uploads/cover.jpg", "", mediaSecret, bucketStart + 20);
+const mitakuCalls = [];
+const mitakuRes = await callMedia(mitakuToken, "&w=360", async (input, init) => {
+  mitakuCalls.push(!!(init && init.cf && init.cf.image));
+  if (init && init.cf && init.cf.image) {
+    return new Response("<html>hotlink</html>", { status: 403, headers: { "content-type": "text/html" } });
+  }
+  return new Response(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]), {
+    status: 200,
+    headers: { "content-type": "image/jpeg" }
+  });
+});
+assert.equal(mitakuRes.status, 200);
+assert.deepEqual(mitakuCalls, [true, false], "Si el resize falla se reintenta la imagen original");
+
+const deadToken = await encodeMediaToken("https://i2.buondua.com/missing.jpeg", "", mediaSecret, bucketStart + 20);
+const deadRes = await callMedia(deadToken, "&w=360", async () => {
+  return new Response("no", { status: 403, headers: { "content-type": "text/html" } });
+});
+assert.equal(deadRes.status, 502, "Una portada caída no se redirige con 307 al origen");
+assert.notEqual(deadRes.status, 307);
+
+const gallerySvg = indexHtml.slice(indexHtml.indexOf("const GALLERY_FALLBACK_SVG"), indexHtml.indexOf("const VIDEO_FALLBACK_SVG"));
+const comicSvg = indexHtml.slice(indexHtml.indexOf("const COMIC_FALLBACK_SVG"), indexHtml.indexOf("const GALLERY_FALLBACK_SVG"));
+assert.ok(gallerySvg.includes("GALLERY_FALLBACK_SVG"));
+assert.equal(gallerySvg.includes("polygon"), false, "El fallback de galería no lleva botón de Play");
+assert.equal(comicSvg.includes("polygon"), false, "El fallback de cómic no lleva botón de Play");
+assert.ok(indexHtml.includes("Ver Galería"));
+assert.ok(indexHtml.includes("Fotos"));
+assert.ok(indexHtml.includes("fa-arrow-down-wide-short"));
+assert.ok(indexHtml.includes('class="hidden md:flex h-10 px-3 rounded-xl bg-gradient-to-r from-[#ff2d95] to-[#8b3dff]'));
 
 const coverSrc = fs.readFileSync(path.join("public", "js", "image-loader.js"), "utf8");
 const coverSb = { globalThis: {} };
