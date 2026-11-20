@@ -112,6 +112,41 @@
       will-change: auto;
     }
 
+    #reader-stage-title {
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    #reader-scroll-content.reader-zoom-anim #reader-pages-vertical {
+      transition: width 0.22s ease, max-width 0.22s ease;
+    }
+    #reader-body.reader-zoomed {
+      overflow-x: auto;
+      cursor: grab;
+      touch-action: pan-x pan-y;
+    }
+    #reader-body.reader-zoomed.is-panning {
+      cursor: grabbing;
+    }
+    #reader-body:not(.reader-zoomed) {
+      overflow-x: hidden;
+      touch-action: pan-y;
+    }
+
+    #video-player-loader {
+      z-index: 40;
+      pointer-events: auto;
+    }
+    #video-player-loader.hidden {
+      pointer-events: none;
+    }
+    #video-controls-bar.video-controls-locked,
+    #video-center-play-btn.video-controls-locked {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
     #video-sidebar-column {
       z-index: 10;
       position: relative;
@@ -1122,7 +1157,7 @@
 
         </div>
 
-        <div class="flex items-center gap-1 sm:gap-1.5">
+        <div id="brand-wordmark" class="flex items-center gap-1 sm:gap-1.5">
 
           <span class="text-base sm:text-xl font-black tracking-tight text-white flex items-center gap-1 sm:gap-1.5 font-sans">
 
@@ -1191,7 +1226,7 @@
 
       <!-- Barra de Búsqueda de Cómics y Videos Calientes -->
 
-      <div class="flex-1 min-w-[150px] sm:min-w-[220px] max-w-lg mx-2 sm:mx-4">
+      <div class="flex-1 min-w-0 sm:min-w-[220px] max-w-lg mx-1 sm:mx-4">
 
         <form id="search-form" onsubmit="handleSearch(event)" class="relative w-full">
 
@@ -1227,13 +1262,13 @@
 
         <button
           id="random-btn"
+          type="button"
           data-action="fetch-random"
-          onclick="shuffleCurrentFeed()"
-          title="Descubrir videos y mangas al azar"
+          title="Otra selección"
           class="flex h-8 sm:h-9 px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] hover:opacity-90 text-white text-[11px] sm:text-xs font-bold items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-hot-glow active:scale-95 cursor-pointer shrink-0"
         >
           <i class="fa-solid fa-dice text-xs sm:text-sm"></i>
-          <span>Al Azar</span>
+          <span class="random-label">Al Azar</span>
         </button>
 
         <!-- Botón Perfil / Mi Bóveda -->
@@ -1244,11 +1279,17 @@
 
             id="user-profile-btn"
 
+            type="button"
+
             data-action="user-button"
 
-            onclick="handleUserButtonClick()"
+            aria-haspopup="menu"
 
-            class="flex items-center justify-center gap-1.5 h-9 px-2.5 sm:px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-xs font-bold text-white transition-all cursor-pointer"
+            aria-expanded="false"
+
+            aria-controls="user-dropdown-menu"
+
+            class="flex items-center justify-center gap-1.5 h-9 px-2 sm:px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 hover:border-pink-500/50 text-xs font-bold text-white transition-all cursor-pointer"
 
           >
 
@@ -1288,7 +1329,7 @@
 
               <i class="fa-solid fa-heart text-pink-500 text-sm"></i>
 
-              <span>Mi Bóveda</span>
+              <span>Mi Bóveda / Favoritos</span>
 
               <span id="dropdown-fav-count" class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-purple-950 border border-purple-500/30 font-mono">0</span>
 
@@ -1306,7 +1347,7 @@
 
               <i class="fa-solid fa-id-badge text-indigo-400 text-sm"></i>
 
-              <span>Detalles de Cuenta</span>
+              <span>Detalles de Cuenta / Configuración</span>
 
             </a>
 
@@ -1352,7 +1393,7 @@
 
       <!-- Switch de Modo Móvil Compacto (solo teléfonos) -->
 
-      <div class="flex sm:hidden items-center p-0.5 rounded-xl bg-black/60 border border-purple-500/30 shrink-0">
+      <div id="mob-mode-switch" class="hidden" hidden aria-hidden="true">
 
         <a href="/comics" id="mob-toggle-comics" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-sm">Cómics</a>
         <a href="/videos" id="mob-toggle-videos" class="px-2.5 py-1 rounded-lg text-[11px] font-bold text-lav/70 hover:text-white">Videos</a>
@@ -1400,34 +1441,12 @@
   </div>
 
   <!-- ===================================================================== -->
-  <!-- VELVET PORTAL TRANSITION CURTAIN (CAMBIO DE PANTALLAS ULTRA-SUAVE) -->
-  <!-- ===================================================================== -->
-  <div id="portal-transition-curtain"
-       class="fixed inset-0 z-40 pointer-events-none opacity-0 transition-opacity duration-300 flex items-center justify-center bg-[#06020c]/80 backdrop-blur-md"
-       aria-hidden="true">
-    <div id="portal-transition-card"
-         class="flex flex-col items-center gap-3.5 p-6 rounded-3xl bg-[#120726]/95 border border-pink-500/30 shadow-[0_0_50px_rgba(236,72,153,0.25)] scale-95 transition-all duration-300 transform select-none">
-      <div class="relative w-14 h-14 rounded-2xl bg-gradient-to-tr from-pink-500 via-magenta to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30">
-        <i id="portal-transition-icon" class="fa-solid fa-book-open text-white text-xl animate-pulse"></i>
-        <div class="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-pink-500 to-purple-600 opacity-40 blur-sm -z-10 animate-pulse"></div>
-      </div>
-      <div class="text-center space-y-1">
-        <p id="portal-transition-text" class="text-sm font-black text-white tracking-wide">Accediendo a Cómics VIP...</p>
-        <p class="text-[11px] text-lav/60">Cargando catálogo en alta definición</p>
-      </div>
-      <div class="w-40 h-1.5 rounded-full bg-white/10 overflow-hidden relative">
-        <div class="absolute inset-0 bg-gradient-to-r from-pink-500 via-purple-400 to-pink-500 animate-pulse"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================================================================== -->
 
   <!-- CONTENIDO PRINCIPAL -->
 
   <!-- ===================================================================== -->
 
-  <main id="home-view" class="velvet-view flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 pb-24 lg:pb-12 space-y-6">
+  <main id="home-view" class="velvet-view catalog-tight max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-2 space-y-3">
 
     <!-- 1. HERO SPOTLIGHT CAROUSEL CINEMATOGRÁFICO (TOP 5 ESTRENOS) -->
 
@@ -1599,14 +1618,14 @@
     </div>
 
     <!-- Flujo Ultra-Liviano & Paginación Velvet Android (Cero Saturación de Memoria) -->
-    <div id="infinite-scroll-container" class="mt-8 flex flex-col items-center justify-center gap-4 select-none pb-16 px-3">
+    <div id="infinite-scroll-container" class="mt-2 flex flex-col items-center justify-center gap-2 select-none pb-1 px-1">
       <!-- Sentinel invisible para auto-carga suave al llegar al fondo -->
       <div id="feed-sentinel" class="w-full h-4"></div>
 
       <!-- Spinner animado de carga en segundo plano -->
       <div id="infinite-loading-spinner" class="hidden flex items-center gap-3 px-6 py-3 rounded-2xl bg-[#0d0720]/95 border border-neon/40 text-ink shadow-[0_0_25px_rgba(236,72,153,0.3)] backdrop-blur-md">
         <div class="w-5 h-5 border-2 border-hot/30 border-t-hot rounded-full animate-spin"></div>
-        <span class="text-xs font-black text-lav">Cargando siguiente página en alta definición...</span>
+        <span class="text-xs font-black text-lav">Cargando la siguiente página...</span>
       </div>
 
       <!-- Barra de Paginación Rediseñada Velvet Pro -->
@@ -1632,7 +1651,7 @@
           <span>Mi Bóveda Personal</span>
         </h1>
         <p class="text-xs sm:text-sm text-lav/70 mt-1">
-          Tus favoritos e historial, sincronizados permanentemente en la nube.
+          Tus favoritos e historial, en tu cuenta.
         </p>
       </div>
 
@@ -1922,9 +1941,9 @@
                 <i id="vault-acc-avatar-icon" class="fa-solid fa-crown text-amber-300 hidden"></i>
               </div>
               <div>
-                <div class="flex items-center gap-2.5">
+                <div class="flex flex-wrap items-center gap-2">
                   <h3 id="vault-acc-username" class="text-base sm:text-lg font-black text-white">Mi Perfil</h3>
-                  <span id="vault-acc-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">MIEMBRO VIP</span>
+                  <span id="vault-acc-badge" class="whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">MIEMBRO VIP</span>
                 </div>
                 <p id="vault-acc-email" class="text-xs text-lav/70 mt-0.5">tu@correo.com</p>
                 <p id="vault-acc-created" class="text-[11px] text-lav/50 mt-0.5">Activo recientemente</p>
@@ -2177,28 +2196,28 @@
 
     <div class="grid grid-cols-5 h-14 sm:h-16 w-full max-w-md mx-auto px-1">
 
-      <a href="/" id="tab-btn-home" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-bold text-lav/70 hover:text-white transition-all">
+      <a href="/" id="tab-btn-home" data-nav="home" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
         <i class="fa-solid fa-house text-sm sm:text-base"></i>
         <span>Inicio</span>
       </a>
 
-      <a href="/videos" id="tab-btn-videos" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
-        <i class="fa-solid fa-film text-sm sm:text-base text-pink-400"></i>
+      <a href="/videos" id="tab-btn-videos" data-nav="videos" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-film text-sm sm:text-base"></i>
         <span>Videos</span>
       </a>
 
-      <a href="/comics" id="tab-btn-comics" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-black text-pink-400 transition-all">
-        <i class="fa-solid fa-book-open text-sm sm:text-base text-purple-400"></i>
+      <a href="/comics" id="tab-btn-comics" data-nav="comics" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-book-open text-sm sm:text-base"></i>
         <span>Cómics</span>
       </a>
 
-      <a href="/boveda/favoritos" id="tab-btn-vault" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
-        <i class="fa-solid fa-heart text-sm sm:text-base text-pink-500"></i>
+      <a href="/boveda/favoritos" id="tab-btn-vault" data-nav="vault" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-heart text-sm sm:text-base"></i>
         <span>Bóveda</span>
       </a>
 
-      <a href="/cuenta" id="tab-btn-account" class="flex flex-col items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-medium text-lav/70 hover:text-white transition-all">
-        <i class="fa-solid fa-circle-user text-sm sm:text-base text-indigo-400"></i>
+      <a href="/cuenta" id="tab-btn-account" data-nav="account" class="mob-tab flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] font-semibold text-lav/70">
+        <i class="fa-solid fa-circle-user text-sm sm:text-base"></i>
         <span>Cuenta</span>
       </a>
 
@@ -2297,11 +2316,10 @@
               ></video>
 
               <!-- Logo Loader de Carga / Buffering con Pulso Neón -->
-              <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0610]/95 z-30 pointer-events-none transition-opacity duration-300">
+              <div id="video-player-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0610] z-40 transition-opacity duration-300">
                 <div class="relative w-24 h-24 flex items-center justify-center">
-                  <img src="/velvet_logo.png" alt="Velvet Hub" class="w-16 h-16 object-contain relative z-10 animate-velvet-breathe select-none" />
+                  <img src="/velvet_logo.png" alt="" class="w-16 h-16 object-contain relative z-10 animate-velvet-breathe select-none" />
                 </div>
-                <span class="mt-2 text-xs font-medium tracking-wider text-white/70">Cargando experiencia...</span>
               </div>
 
               <!-- Indicador Buffering Sutil / No Invasivo -->
@@ -2313,7 +2331,7 @@
               </div>
 
               <!-- Botón Central de Play Grande (Pausado) -->
-              <div id="video-center-play-btn" class="absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
+              <div id="video-center-play-btn" class="video-controls-locked absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
                 <button type="button" data-action="video-play-toggle" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/85 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_30px_rgba(255,45,149,0.35)] hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
                   <i class="fa-solid fa-play ml-1 drop-shadow"></i>
                 </button>
@@ -2357,7 +2375,7 @@
               </div>
 
               <!-- BARRA DE CONTROLES FLOTANTE CON AUTO-HIDE A 2.5s -->
-              <div id="video-controls-bar" class="absolute bottom-0 inset-x-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-10 pb-2 px-3 sm:px-5 flex flex-col gap-2 transition-all duration-300 opacity-100" onclick="event.stopPropagation()">
+              <div id="video-controls-bar" class="video-controls-locked absolute bottom-0 inset-x-0 z-30 bg-gradient-to-t from-black/95 via-black/60 to-transparent pt-10 pb-2 px-3 sm:px-5 flex flex-col gap-2 transition-all duration-300 opacity-100" onclick="event.stopPropagation()">
                 <!-- SCRUB BAR -->
                 <div id="video-scrub-container" class="relative w-full h-6 group/scrub flex items-center cursor-pointer select-none touch-none" onclick="event.stopPropagation()">
                   <div class="w-full h-1 group-hover/scrub:h-2 rounded-full bg-white/20 relative overflow-hidden transition-all duration-150">
@@ -2440,9 +2458,7 @@
                 <span id="video-player-source" class="px-2 py-0.5 rounded-md bg-white/[0.04] text-white/80 font-medium border border-white/10">Velvet VIP</span>
                 <span id="video-player-quality-badge" class="px-2 py-0.5 rounded-md bg-[#ff2d95]/15 text-[#ff2d95] font-semibold border border-[#ff2d95]/25">1080p</span>
                 <span id="video-meta-duration" class="text-white/60">HD</span>
-                <span id="video-meta-views" class="hidden text-white/50">&bull; </span>
-                <span class="text-white/30">&bull;</span>
-                <span class="text-white/40 text-[11px]">18 U.S.C. 2257</span>
+                <span id="video-meta-views" class="hidden text-white/50"></span>
               </div>
             </div>
 
@@ -2559,7 +2575,7 @@
 
         <div class="truncate">
 
-          <h2 id="reader-title" class="text-xs sm:text-sm font-bold text-white truncate">Cargando cómic...</h2>
+          <h2 id="reader-title" class="sr-only">Cargando...</h2>
 
           <div class="flex items-center gap-2 text-[10px] text-lav/70">
 
@@ -2630,9 +2646,13 @@
 
     </div>
 
+    <div id="reader-title-bar" class="fixed top-14 inset-x-0 z-30 h-9 px-4 flex items-center justify-center pointer-events-none bg-gradient-to-b from-[#090312]/90 to-transparent">
+      <p id="reader-stage-title" class="max-w-3xl w-full text-center text-[13px] sm:text-base font-semibold text-white/95 truncate"></p>
+    </div>
+
     <!-- Contenedor del Cuerpo de Lectura con Zonas Táctiles para una Sola Mano -->
 
-    <div id="reader-body" onscroll="handleReaderScroll()" onclick="handleReaderContainerClick(event)" class="w-full h-full overflow-y-auto overflow-x-hidden relative pt-16 pb-36 px-0 sm:px-4 cursor-pointer select-none">
+    <div id="reader-body" onscroll="handleReaderScroll()" onclick="handleReaderContainerClick(event)" class="w-full h-full overflow-y-auto overflow-x-hidden relative pt-24 pb-36 px-0 sm:px-4 cursor-pointer select-none">
       <div id="reader-scroll-content" class="w-full min-h-full flex flex-col items-center">
 
       <!-- Cargando Páginas en Alta Calidad -->
@@ -2641,7 +2661,7 @@
 
         <div class="w-14 h-14 border-4 border-hot/20 border-t-hot rounded-full animate-spin shadow-hot-glow"></div>
 
-        <p class="text-ink text-sm sm:text-base font-bold tracking-wide">Cargando páginas en alta definición...</p>
+        <p class="text-ink text-sm sm:text-base font-bold tracking-wide">Cargando páginas...</p>
 
         <span class="text-xs text-lav/60">Sin censura ni publicidad invasiva</span>
 
@@ -2691,7 +2711,7 @@
 
           <h3 id="end-card-title" class="text-xl font-bold text-ink">¡Has completado este cómic!</h3>
 
-          <p class="text-xs sm:text-sm text-lav/70 mt-1">¿Qué te ha parecido la historia? Califica o continúa con las mejores recomendaciones similares.</p>
+          <p id="end-card-sub" class="text-xs sm:text-sm text-lav/70 mt-1">¿Qué te ha parecido la historia? Sigue con recomendaciones parecidas.</p>
 
         </div>
 
@@ -2701,7 +2721,7 @@
 
           <button onclick="loadNextChapter()" class="w-full max-w-md mx-auto py-3.5 px-6 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white text-sm font-black shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">
 
-            <span>Leer Siguiente Capítulo</span>
+            <span id="end-card-next-label">Leer siguiente capítulo</span>
 
             <i class="fa-solid fa-forward-step text-sm"></i>
 
@@ -2713,15 +2733,15 @@
 
         <div class="flex items-center justify-center gap-3">
 
-          <button onclick="showToast('¡Gracias por tu valoración!', 'success')" class="px-4 py-2 rounded-xl bg-pitch/80 border border-hot/30 text-xs font-bold text-hot hover:bg-hot/20 transition-colors">
+          <button type="button" class="px-4 py-2 rounded-xl bg-pitch/80 border border-hot/30 text-xs font-bold text-hot">
 
-            🔥 Caliente (4.8k)
+            Caliente
 
           </button>
 
-          <button onclick="showToast('¡Añadido a tus favoritos!', 'success')" class="px-4 py-2 rounded-xl bg-pitch/80 border border-neon/30 text-xs font-bold text-neon hover:bg-neon/20 transition-colors">
+          <button type="button" class="px-4 py-2 rounded-xl bg-pitch/80 border border-neon/30 text-xs font-bold text-neon">
 
-            ❤️ Me encantó (2.3k)
+            Me encantó
 
           </button>
 
@@ -2733,7 +2753,7 @@
 
           <h4 class="text-xs font-black uppercase tracking-wider text-hot flex items-center gap-1.5">
 
-            <i class="fa-solid fa-fire"></i> Recomendados Para Ti (Continúa Leyendo):
+            <i class="fa-solid fa-fire"></i> <span id="end-card-recs">Recomendados para ti (sigue leyendo):</span>
 
           </h4>
 
@@ -2753,9 +2773,9 @@
 
           </button>
 
-          <button onclick="fetchRandom()" class="px-6 py-2.5 bg-gradient-to-r from-hot to-neon text-white text-xs font-extrabold rounded-xl shadow-hot-glow active:scale-95">
+          <button id="end-card-random" onclick="fetchRandom()" class="px-6 py-2.5 bg-gradient-to-r from-hot to-neon text-white text-xs font-extrabold rounded-xl shadow-hot-glow active:scale-95">
 
-            Leer Cómic al Azar &rarr;
+            Leer cómic al azar
 
           </button>
 
@@ -2800,18 +2820,6 @@
             <button onclick="setAutoScrollSpeed(1.0, this)" class="speed-btn active h-8 flex-1 rounded-xl text-xs font-extrabold bg-hot/30 text-white shadow-[inset_0_0_0_1px_rgba(236,72,153,0.8)] transition-colors cursor-pointer">1.0x</button>
             <button onclick="setAutoScrollSpeed(1.5, this)" class="speed-btn h-8 flex-1 rounded-xl text-xs font-bold text-lav/70 hover:text-ink transition-colors cursor-pointer">1.5x</button>
             <button onclick="setAutoScrollSpeed(2.0, this)" class="speed-btn h-8 flex-1 rounded-xl text-xs font-bold text-lav/70 hover:text-ink transition-colors cursor-pointer">2.0x</button>
-          </div>
-
-          <div class="flex items-center gap-1 border-l border-neon/20 pl-2">
-            <button onclick="changeReaderZoom(-0.25)" class="w-8 h-8 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer" title="Zoom -">
-              <i class="fa-solid fa-minus"></i>
-            </button>
-            <button onclick="resetReaderZoom()" id="reader-zoom-btn-bottom" class="px-2 h-8 rounded-lg text-[11px] font-black tabular-nums text-hot hover:text-white transition-colors cursor-pointer" title="Zoom 100%">
-              100%
-            </button>
-            <button onclick="changeReaderZoom(0.25)" class="w-8 h-8 rounded-lg bg-black/40 hover:bg-hot text-lav hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer" title="Zoom +">
-              <i class="fa-solid fa-plus"></i>
-            </button>
           </div>
 
         </div>
@@ -3138,7 +3146,7 @@
 
             <h3 class="text-base font-black text-white">Mi Bóveda Personal</h3>
 
-            <p class="text-[11px] text-purple-300/70">Tus favoritos e historial sincronizados permanentemente en la nube</p>
+            <p class="text-[11px] text-purple-300/70">Favoritos e historial de tu cuenta</p>
 
           </div>
 
@@ -3688,10 +3696,26 @@
 
   <!-- Footer Comercial Discreto -->
 
-  <footer class="bg-obsidian border-t border-neon/15 pt-6 pb-24 lg:pb-6 text-center text-xs text-lav/50 block">
-    <p>Velvet Hub &copy; 2026 &bull; Plataforma Privada &bull; Todos los derechos reservados a sus respectivos autores.</p>
-    <p class="text-[10px] text-lav/40 font-mono mt-1">v3.1.0 (v11-velvet-turbo) &bull; Cloudflare Pages Native</p>
+  <footer id="site-footer" class="bg-obsidian border-t border-white/10 pt-3 text-center text-xs text-lav/60 block">
+    <p>Velvet Hub &copy; 2026</p>
+    <nav class="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 px-3 text-[11px]" aria-label="Información legal">
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="disclaimer">Descargo de responsabilidad</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="dmca">DMCA / Retiro de contenido</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="terms">Términos de uso</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="privacy">Privacidad</button>
+      <button type="button" class="hover:text-white underline-offset-2 hover:underline" data-action="open-legal" data-legal="adult">Solo +18</button>
+    </nav>
   </footer>
+
+  <div id="legal-modal" class="hidden fixed inset-0 z-[80] bg-black/80 flex items-end sm:items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="legal-modal-title">
+    <div class="w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl bg-[#120726] border border-purple-500/30 p-5 shadow-2xl">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <h2 id="legal-modal-title" class="text-base font-black text-white">Aviso</h2>
+        <button type="button" data-action="close-legal" class="w-8 h-8 rounded-lg bg-white/10 text-white" aria-label="Cerrar">×</button>
+      </div>
+      <div id="legal-modal-body" class="text-sm text-purple-100/80 leading-relaxed space-y-3"></div>
+    </div>
+  </div>
 
   <!-- ===================================================================== -->
 
@@ -3699,6 +3723,7 @@
 
   <!-- ===================================================================== -->
 
+  <script src="/js/video-session.js?v=3.5.0"></script>
   <script>
 
     // =======================================================================
@@ -3753,19 +3778,7 @@
     })();
 
     function getRotatingSeed() {
-      const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
-      const currentSlot = Math.floor(Date.now() / THREE_HOURS_MS);
-      let userSalt = 1;
-      try {
-        userSalt = parseInt(localStorage.getItem('velvet_user_rot_salt') || '0', 10);
-        if (!userSalt) {
-          userSalt = Math.floor(Math.random() * 50000) + 1;
-          localStorage.setItem('velvet_user_rot_salt', String(userSalt));
-        }
-      } catch (e) {
-        userSalt = 1234;
-      }
-      return ((currentSlot * 7919 + userSalt) % 50000) + 1;
+      return Math.floor(Date.now() / (3 * 3600 * 1000));
     }
 
     // =======================================================================
@@ -4002,70 +4015,10 @@
       }
     }
 
-    let _portalTransitionTimer = null;
-    let _portalTransitionStart = 0;
-
-    function showPortalTransition(mode) {
-      const curtain = document.getElementById('portal-transition-curtain');
-      const card = document.getElementById('portal-transition-card');
-      const icon = document.getElementById('portal-transition-icon');
-      const text = document.getElementById('portal-transition-text');
-      if (!curtain) return;
-
-      _portalTransitionStart = Date.now();
-      if (_portalTransitionTimer) {
-        clearTimeout(_portalTransitionTimer);
-        _portalTransitionTimer = null;
-      }
-
-      if (mode === 'videos') {
-        if (icon) icon.className = 'fa-solid fa-film text-white text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Videos HD...';
-      } else if (mode === 'games') {
-        if (icon) icon.className = 'fa-solid fa-gamepad text-emerald-400 text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Juegos VIP...';
-      } else if (mode === 'galleries') {
-        if (icon) icon.className = 'fa-solid fa-camera-retro text-white text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Cosplay & Modelos...';
-      } else {
-        if (icon) icon.className = 'fa-solid fa-book-open text-white text-xl animate-pulse';
-        if (text) text.textContent = 'Accediendo a Cómics VIP...';
-      }
-
-      curtain.classList.remove('pointer-events-none', 'opacity-0');
-      curtain.classList.add('opacity-100');
-      if (card) {
-        card.classList.remove('scale-95');
-        card.classList.add('scale-100');
-      }
-    }
-
-    function hidePortalTransition() {
-      const curtain = document.getElementById('portal-transition-curtain');
-      const card = document.getElementById('portal-transition-card');
-      if (!curtain || curtain.classList.contains('opacity-0')) return;
-
-      const elapsed = Date.now() - _portalTransitionStart;
-      const minDuration = 280;
-      const remaining = Math.max(0, minDuration - elapsed);
-
-      if (_portalTransitionTimer) clearTimeout(_portalTransitionTimer);
-      _portalTransitionTimer = setTimeout(() => {
-        curtain.classList.remove('opacity-100');
-        curtain.classList.add('opacity-0', 'pointer-events-none');
-        if (card) {
-          card.classList.remove('scale-100');
-          card.classList.add('scale-95');
-        }
-      }, remaining);
-    }
+    function showPortalTransition() {}
+    function hidePortalTransition() {}
 
     function setPortalMode(mode, isUserClick = false, options = {}) {
-      if (isUserClick || options.animate) {
-        showPortalTransition(mode);
-      }
-
-      console.log('%c🔄 [VELVET HUB] Cambiando Portal a Modo: ' + mode.toUpperCase(), 'color: #a855f7; font-weight: bold; font-size: 13px;');
 
       const videoView = document.getElementById('video-view');
 
@@ -4094,7 +4047,7 @@
       if (options.sort) {
         state.sort = options.sort;
         if (state.sort === 'random') {
-          if (!state.feedSeed) state.feedSeed = Math.floor(Math.random() * 500) + 1;
+          if (!state.feedSeed) state.feedSeed = getRotatingSeed();
           state.videoSeed = state.feedSeed;
         } else {
           state.feedSeed = 0;
@@ -4102,7 +4055,7 @@
         }
       } else if (isUserClick) {
         if (state.catalogMode === 'dynamic') {
-          state.feedSeed = Math.floor(Math.random() * 500) + 1;
+          state.feedSeed = getRotatingSeed();
           state.videoSeed = state.feedSeed;
           state.sort = 'random';
         } else {
@@ -4164,7 +4117,7 @@
 
       if (mode === "games") {
         if (sInput) sInput.placeholder = "Buscar juegos, novelas Ren'Py, Flash, tags...";
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-gamepad text-emerald-400"></i> Catálogo VIP de Juegos Porn & Hentai';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-gamepad text-emerald-400"></i> Juegos';
         if (resCount) resCount.textContent = "Actualizando catálogo de juegos...";
         if (badgeEl) badgeEl.textContent = "juegos listos para jugar";
         if (heroTitle) heroTitle.textContent = "Avatar: Blood Legacy [Ch. 3.5]";
@@ -4177,7 +4130,7 @@
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-xs sm:text-sm shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
         }
       } else if (mode === "videos") {
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-film text-hot"></i> Videos';
         if (resCount) resCount.textContent = "Actualizando videos en streaming...";
         if (badgeEl) badgeEl.textContent = "videos en streaming directo";
         if (heroTitle) heroTitle.textContent = "Cargando video destacado...";
@@ -4190,9 +4143,9 @@
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
         }
       } else if (mode === "galleries") {
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Sets Exclusivos de Cosplay & Modelos';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-camera-retro text-hot"></i> Modelos';
         if (resCount) resCount.textContent = "Actualizando galerías VIP...";
-        if (badgeEl) badgeEl.textContent = "sets en ultra alta definición";
+        if (badgeEl) badgeEl.textContent = "sets";
         if (heroTitle) heroTitle.textContent = "Cargando galería destacada...";
         if (heroBadge) {
           heroBadge.textContent = "GALERÍA VIP 4K";
@@ -4203,7 +4156,7 @@
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
         }
       } else {
-        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-fire text-hot"></i> Últimas Novedades Calientes';
+        if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-book-open text-hot"></i> Cómics';
         if (resCount) resCount.textContent = "Actualizando catálogo...";
         if (badgeEl) badgeEl.textContent = "historias listas para leer";
         if (heroTitle) heroTitle.textContent = "Cargando cómic destacado...";
@@ -4242,10 +4195,6 @@
       renderContinueShelf();
       fetchLiveFeed();
       initInfiniteScrollObserver();
-
-      if (isUserClick) {
-        showToast(mode === 'videos' ? '🎬 Portal de Videos Porno Activado' : (mode === 'galleries' ? '📸 Portal de Cosplay & Modelos Activado' : '📖 Portal de Cómics & Imágenes Activado'), 'info');
-      }
     }
 
     function renderCategoryChips() {
@@ -4407,7 +4356,7 @@
       if (sortId === 'random') {
         state.catalogMode = 'dynamic';
         state.sort = 'random';
-        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
       } else {
         state.catalogMode = 'static';
@@ -4623,12 +4572,12 @@
 
       const title = (item.title || '').toLowerCase();
 
-      if (item.media_type === 'video' || state.mode === 'videos') {
-        return 'Producción erótica en streaming de ultra alta definición sin censura. Disfruta de las mejores escenas y actuaciones exclusivas con máxima velocidad y nitidez.';
+        if (item.media_type === 'video' || state.mode === 'videos') {
+        return 'Video en streaming. El archivo está en un servidor externo.';
       }
 
       if (item.media_type === 'gallery' || (item.tags && item.tags.some(t => String(t).toLowerCase().includes('cosplay')))) {
-        return 'Exclusiva sesión fotográfica en ultra alta definición sin censura. Disfruta de la galería completa de la modelo con capturas profesionales en máxima resolución.';
+        return 'Galería de fotos. Las imágenes se sirven desde el sitio original.';
       }
 
       if (title.includes('3d') || title.includes('rysketches') || title.includes('render') || title.includes('penny')) {
@@ -4655,7 +4604,7 @@
 
       }
 
-      return 'Una historia erótica apasionante a todo color y en máxima definición. Disfruta de viñetas sin censura con la máxima calidad gráfica y lectura fluida en alta resolución.';
+      return 'Cómic a color. Las páginas se cargan desde el proveedor original.';
 
     }
 
@@ -4687,7 +4636,7 @@
       const urlParams = new URLSearchParams(window.location.search);
 
       if (urlParams.get('patreon_login') === 'success') {
-        showToast('¡Bienvenido! Sesión iniciada con Patreon exitosamente.', 'success');
+        showToast('Sesión iniciada', 'success');
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (urlParams.get('auth_error')) {
         const errorMsg = urlParams.get('msg') || 'No se pudo iniciar sesión con Patreon.';
@@ -5130,7 +5079,7 @@
         if (res.ok && data.user) {
           window.VelvetStore?.setCurrentUser(data.user, data.token, data.refresh_token, data.device_token);
           state.currentUser = data.user;
-          showToast('¡Llave VIP activada exitosamente!', 'success');
+          showToast('Llave activada', 'success');
           window.VelvetVault?.renderAccount();
         } else {
           showToast(data.error || 'Llave inválida o ya canjeada', 'error');
@@ -5484,7 +5433,6 @@
 
         if (readerOledBtn) readerOledBtn.classList.add('border-gold', 'text-gold');
 
-        showToast('Modo Oscuro Puro OLED Activado (#000000)', 'info');
 
       } else {
 
@@ -5638,14 +5586,6 @@
         }
 
         if (data && data.items && data.items.length > 0) {
-          // Transición suave: desvanecer la grilla actual para no cambiar de golpe (200ms)
-          if (grid) {
-            grid.style.transition = 'opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)';
-            grid.style.opacity = '0';
-            grid.style.transform = 'translateY(-10px) scale(0.99)';
-            await new Promise(r => setTimeout(r, 200));
-          }
-
           state.page = nextPage;
           if (data.total_pages) state.totalPages = data.total_pages;
 
@@ -5668,7 +5608,7 @@
       } catch (err) {
         if (err.name === 'AbortError') return;
         console.error('[PAGE TRANSITION ERROR]:', err);
-        showToast('Reintentando sincronización de catálogo...', 'info');
+        showToast('No se pudo cambiar de página', 'error');
       } finally {
         _isLoadingMore = false;
         if (spinner) spinner.classList.add('hidden');
@@ -5794,7 +5734,7 @@
       } else if (state.mode === 'galleries') {
         if (resCount) resCount.textContent = `${currentLoadedCount} Galerías VIP Listas`;
         const badgeEl = document.getElementById('grid-status-badge');
-        if (badgeEl) badgeEl.textContent = `${currentLoadedCount} sets en ultra alta definición`;
+        if (badgeEl) badgeEl.textContent = `${currentLoadedCount} sets`;
         if (titleSec) {
           if (state.query) {
             titleSec.innerHTML = `<i class="fa-solid fa-camera-retro text-hot"></i> Galerías encontradas para: "${escapeHtml(state.query)}"`;
@@ -5819,7 +5759,7 @@
             const catLabel = catObj ? catObj.label.replace(/^[^\w\s]+/, '').trim() : state.category.toUpperCase();
             titleSec.innerHTML = `<i class="fa-solid fa-play text-hot"></i> Videos: ${catLabel}`;
           } else {
-            titleSec.innerHTML = `<i class="fa-solid fa-fire text-hot"></i> Estrenos de Videos en Alta Definición`;
+            titleSec.innerHTML = `<i class="fa-solid fa-film text-hot"></i> Videos`;
           }
         }
         renderVideoGrid(itemsToRender, append);
@@ -5885,7 +5825,7 @@
         }
 
         if (state.sort === 'random' || state.sort === 'shuffle') {
-          const seed = state.feedSeed || Math.floor(Math.random() * 50000) + 1;
+          const seed = getRotatingSeed();
           gList = [...gList].sort((a, b) => {
             const hA = ((Number(a.id || 1) * 7919) ^ seed) % 10007;
             const hB = ((Number(b.id || 1) * 7919) ^ seed) % 10007;
@@ -5924,18 +5864,21 @@
       }
     }
 
+    let _feedGen = 0;
     async function fetchLiveFeed(skipCache = false) {
-      const requestKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}`;
-      if (!skipCache && _feedLockKey === requestKey && (Date.now() - _feedLockAt) < 4000) {
+      const requestKey = `${state.mode}:${state.category}:${state.tag || ''}:${state.page}:${state.query}:${state.sort}:${state.pageSize}:${state.freshShuffle ? state.feedSeed : getRotatingSeed()}`;
+      if (!skipCache && _feedLockKey === requestKey && (Date.now() - _feedLockAt) < 4000 && _isLoadingFeed) {
         return;
       }
       _feedLockKey = requestKey;
       _feedLockAt = Date.now();
+      const gen = ++_feedGen;
 
       if (_catalogAbortController) {
         try { _catalogAbortController.abort(); } catch (e) {}
       }
       _catalogAbortController = new AbortController();
+      window._catalogAbortController = _catalogAbortController;
       _isLoadingFeed = true;
       const signal = _catalogAbortController.signal;
 
@@ -6008,6 +5951,10 @@
 
         if (state.tag) params.append('tag', state.tag);
         if (state.query) params.append('q', state.query);
+        if (state.freshShuffle && state.feedSeed) {
+          params.append('fresh', '1');
+          params.append('shuffle', String(state.feedSeed));
+        }
 
         const resp = await fetch(`/api/items?${params.toString()}`, { signal, credentials: 'omit' });
 
@@ -6017,6 +5964,7 @@
         }
 
         const data = await resp.json();
+        if (gen !== _feedGen) return;
 
         if (state.mode === 'games' && (!data.items || data.items.length === 0)) {
           if (await loadBundledGamesFeed(signal)) return;
@@ -6067,10 +6015,12 @@
 
         showToast('Error cargando contenido: ' + (err.message || 'Servidores ocupados'), 'error');
       } finally {
-        _isLoadingFeed = false;
-        hidePortalTransition();
-        if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
-          window.VelvetPagination.resetLoadingState();
+        if (gen === _feedGen) {
+          _isLoadingFeed = false;
+          hidePortalTransition();
+          if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
+            window.VelvetPagination.resetLoadingState();
+          }
         }
       }
     }
@@ -6283,7 +6233,6 @@
           el.style.maxHeight = '100%';
           el.style.aspectRatio = 'auto';
         });
-        showToast('Pantalla expandida al 100% (Fill)', 'info');
       } else {
         _gameAspectRatioMode = '16-9';
         if (label) label.textContent = '16:9';
@@ -6292,7 +6241,6 @@
           el.style.maxHeight = 'calc(100vw * (9 / 16))';
           el.style.aspectRatio = '16 / 9';
         });
-        showToast('Ajuste cinemático 16:9 con Ambilight', 'info');
       }
     }
 
@@ -6314,10 +6262,10 @@
           _suspendedGame = window._activeGame;
           _suspendedGameTargetUrl = cur;
         }, 150);
-        showToast('Juego reiniciado desde el inicio', 'info');
+        showToast('Juego reiniciado', 'info');
       } else if (ruffle && !ruffle.classList.contains('hidden')) {
         openGameModal(window._activeGame, true);
-        showToast('Emulador Flash reiniciado', 'info');
+        showToast('Flash reiniciado', 'info');
       }
     }
 
@@ -6458,7 +6406,7 @@
         modal.classList.add('flex');
         document.body.style.overflow = 'hidden';
         handleGameMouseMove();
-        showToast('⚡ Partida reanudada al instante', 'success');
+        showToast('Partida reanudada', 'success');
         return;
       }
 
@@ -6563,7 +6511,7 @@
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
-      showToast('Partida suspendida en segundo plano. Progreso a salvo.', 'info');
+      showToast('Partida guardada', 'info');
     }
 
     function toggleGameFullscreen() {
@@ -6884,7 +6832,6 @@
       retry: "Reintentar Conexión",
       switchServer: "Cambiar Servidor",
       playingNow: "Reproduciendo ahora",
-      compliance2257: "18 U.S.C. 2257",
       sourceUnavailable: "El servidor de origen no respondió a tiempo. Tus preferencias se mantienen intactas."
     };
 
@@ -6913,6 +6860,97 @@
 
     let hlsInstance = null;
     let videoFailoverAttempts = 0;
+    const videoGuard = window.VelvetVideoSession
+      ? window.VelvetVideoSession.createVideoLoadGuard()
+      : { start() { return { token: 1, signal: null }; }, stop() { return 0; }, current() { return 1; }, matches() { return true; } };
+    let videoLoadToken = 0;
+    let videoControlsLocked = true;
+
+    function videoEventIsCurrent(player) {
+      return !!(player && videoGuard.matches(player._loadToken));
+    }
+
+    function hardResetVideoElement(player) {
+      if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (e) {}
+        hlsInstance = null;
+      }
+      if (videoWatchdogTimer) {
+        clearTimeout(videoWatchdogTimer);
+        videoWatchdogTimer = null;
+      }
+      if (window.VelvetVideoSession) {
+        window.VelvetVideoSession.teardownVideoElement(player);
+      } else if (player) {
+        try { player.pause(); } catch (e) {}
+        try { player.removeAttribute('src'); } catch (e) {}
+        try { player.src = ''; } catch (e) {}
+        try { player.poster = ''; } catch (e) {}
+        try { player.load(); } catch (e) {}
+      }
+      if (player) {
+        player._loadToken = 0;
+        player._currentVs = null;
+      }
+    }
+
+    function resetVideoTimeChrome() {
+      const cur = document.getElementById('video-time-current');
+      const dur = document.getElementById('video-time-duration');
+      const meta = document.getElementById('video-meta-duration');
+      const prog = document.getElementById('video-progress-bar');
+      const buf = document.getElementById('video-buffer-bar');
+      const pin = document.getElementById('video-scrubber-pin');
+      if (cur) cur.textContent = '00:00';
+      if (dur) dur.textContent = '00:00';
+      if (meta) meta.textContent = '';
+      if (prog) prog.style.width = '0%';
+      if (buf) buf.style.width = '0%';
+      if (pin) pin.style.left = '0%';
+    }
+
+    function lockVideoControls() {
+      videoControlsLocked = true;
+      const bar = document.getElementById('video-controls-bar');
+      const center = document.getElementById('video-center-play-btn');
+      const loader = document.getElementById('video-player-loader');
+      if (bar) {
+        bar.classList.add('video-controls-locked');
+        bar.setAttribute('aria-hidden', 'true');
+        bar.querySelectorAll('button, input').forEach((el) => { el.disabled = true; });
+      }
+      if (center) {
+        center.classList.add('video-controls-locked');
+        const btn = center.querySelector('button');
+        if (btn) btn.disabled = true;
+      }
+      if (loader) {
+        loader.classList.remove('hidden', 'opacity-0');
+        loader.setAttribute('aria-hidden', 'false');
+      }
+    }
+
+    function unlockVideoControls() {
+      const player = document.getElementById('html5-video-player');
+      if (!player || player.readyState < 2 || player.paused || !videoEventIsCurrent(player)) return;
+      videoControlsLocked = false;
+      const bar = document.getElementById('video-controls-bar');
+      const center = document.getElementById('video-center-play-btn');
+      const loader = document.getElementById('video-player-loader');
+      if (bar) {
+        bar.classList.remove('video-controls-locked');
+        bar.removeAttribute('aria-hidden');
+        bar.querySelectorAll('button, input').forEach((el) => { el.disabled = false; });
+      }
+      if (center) {
+        center.classList.remove('video-controls-locked');
+        const btn = center.querySelector('button');
+        if (btn) btn.disabled = false;
+      }
+      if (loader) loader.classList.add('hidden');
+      const buffSpinner = document.getElementById('video-buffering-spinner');
+      if (buffSpinner) buffSpinner.classList.add('hidden');
+    }
     const MAX_FAILOVER_ATTEMPTS = 3;
 
     // --- Dynamic Favicon Loader Pulse Engine ---
@@ -7325,6 +7363,7 @@
       };
 
       player.onloadedmetadata = () => {
+        if (!videoEventIsCurrent(player)) return;
         if (videoWatchdogTimer) {
           clearTimeout(videoWatchdogTimer);
           videoWatchdogTimer = null;
@@ -7349,24 +7388,19 @@
           }
         }
 
-        if (loader) loader.classList.add('hidden');
-        if (buffSpinner) buffSpinner.classList.add('hidden');
-        finishNavProgress();
-        stopFaviconPulse();
-
-        if (videoPendingSeekTime !== null && videoPendingSeekTime > 0) {
+        if (videoPendingSeekTime !== null && videoPendingSeekTime > 0 && videoEventIsCurrent(player)) {
           player.currentTime = videoPendingSeekTime;
           videoPendingSeekTime = null;
         }
-
-        player.play().catch(e => {
-          const centerPlay = document.getElementById('video-center-play-btn');
-          if (centerPlay) centerPlay.classList.remove('hidden');
-          showControls();
-        });
       };
 
       player.onplay = () => {
+        if (!videoEventIsCurrent(player)) {
+          try { player.pause(); } catch (e) {}
+          return;
+        }
+        if (player.readyState >= 2) unlockVideoControls();
+        if (videoControlsLocked) return;
         if (playIcon) playIcon.className = 'fa-solid fa-pause';
         const centerPlay = document.getElementById('video-center-play-btn');
         if (centerPlay) centerPlay.classList.add('hidden');
@@ -7401,6 +7435,11 @@
       };
 
       player.onplaying = () => {
+        if (!videoEventIsCurrent(player) || player.readyState < 2) {
+          try { player.pause(); } catch (e) {}
+          return;
+        }
+        unlockVideoControls();
         startFrameRateWatchdog();
 
         if (videoWatchdogTimer) {
@@ -7416,14 +7455,11 @@
       };
 
       player.oncanplay = () => {
-        if (videoWatchdogTimer) {
+        if (!videoEventIsCurrent(player)) return;
+        if (videoWatchdogTimer && player.readyState >= 2 && !player.paused) {
           clearTimeout(videoWatchdogTimer);
           videoWatchdogTimer = null;
         }
-        if (loader) loader.classList.add('hidden');
-        if (buffSpinner) buffSpinner.classList.add('hidden');
-        finishNavProgress();
-        stopFaviconPulse();
       };
 
       player.onerror = (e) => {
@@ -7455,6 +7491,7 @@
       };
 
       stage.onclick = (e) => {
+        if (videoControlsLocked) return;
         if (e.target.closest('#video-controls-bar') || e.target.closest('#video-quality-menu') || e.target.closest('#video-speed-menu') || e.target.closest('#video-center-play-btn')) {
           return;
         }
@@ -7485,6 +7522,7 @@
         };
 
         scrubContainer.onpointerdown = (e) => {
+          if (videoControlsLocked) return;
           e.stopPropagation();
           isScrubbing = true;
           videoIsSeeking = true;
@@ -7571,6 +7609,7 @@
 
     // Auto-hide controls con timer exacto de 2.5s
     function showControls() {
+      if (videoControlsLocked) return;
       const controlsBar = document.getElementById('video-controls-bar');
       const stage = document.getElementById('video-stage');
       const player = document.getElementById('html5-video-player');
@@ -7663,8 +7702,9 @@
 
     function toggleVideoPlay(e) {
       if (e && e.stopPropagation) e.stopPropagation();
+      if (videoControlsLocked) return;
       const player = document.getElementById('html5-video-player');
-      if (!player) return;
+      if (!player || !videoEventIsCurrent(player)) return;
 
       if (player.paused) {
         player.play().catch(e => {
@@ -8117,9 +8157,10 @@
     }
 
     // Manejo de Failover Automático con Reintentos Exponenciales (1s, 2s, 4s)
-    function handleVideoPlaybackFailover() {
+    function handleVideoPlaybackFailover(loadToken = videoLoadToken) {
       const player = document.getElementById('html5-video-player');
       const allSources = (state.currentVideo && state.currentVideo.video_sources) || [];
+      if (!videoGuard.matches(loadToken)) return;
 
       if (videoFailoverAttempts < MAX_FAILOVER_ATTEMPTS) {
         videoFailoverAttempts++;
@@ -8128,15 +8169,21 @@
         showVideoHud('fa-rotate', `Reintentando en ${backoffMs/1000}s...`);
 
         setTimeout(() => {
+          if (!videoGuard.matches(loadToken)) return;
           if (allSources.length > 1) {
             const nextSrc = allSources[videoFailoverAttempts % allSources.length];
-            playVideoSource(nextSrc, null, true);
-          } else if (player && player._currentVs) {
+            playVideoSource(nextSrc, null, true, loadToken);
+          } else if (player && player._currentVs && videoGuard.matches(loadToken)) {
             const ref = state.currentVideo?.url || '';
             const proxyUrl = getStealthStreamUrl(player._currentVs.url, ref);
+            player._loadToken = loadToken;
             player.src = proxyUrl;
             player.load();
-            player.play().catch(() => {});
+            player.play().then(() => {
+              if (!videoGuard.matches(loadToken)) {
+                try { player.pause(); } catch (e) {}
+              }
+            }).catch(() => {});
           }
         }, backoffMs);
         return;
@@ -8188,6 +8235,16 @@
         return;
       }
 
+      const player = document.getElementById('html5-video-player');
+      if (player && player.currentTime > 0 && state.currentVideo && Number.isFinite(player.duration)) {
+        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
+      }
+      const ticket = videoGuard.start();
+      videoLoadToken = ticket.token;
+      hardResetVideoElement(player);
+      lockVideoControls();
+      resetVideoTimeChrome();
+
       startNavProgress();
       startFaviconPulse();
 
@@ -8195,7 +8252,6 @@
       if (prevBanner) prevBanner.classList.add('hidden');
       const view = document.getElementById('video-view');
       const homeView = document.getElementById('home-view');
-      const player = document.getElementById('html5-video-player');
       const titleEl = document.getElementById('video-player-title');
       const srcBadge = document.getElementById('video-player-source');
       const loader = document.getElementById('video-player-loader');
@@ -8214,20 +8270,9 @@
 
       stopHeroAutoPlay();
       view.classList.remove('hidden');
-      loader.classList.remove('hidden');
+      if (loader) loader.classList.remove('hidden');
       videoFailoverAttempts = 0;
-
-      if (hlsInstance) {
-        try { hlsInstance.destroy(); } catch(e) {}
-        hlsInstance = null;
-      }
-
-      if (player && player.duration && state.currentVideo) {
-        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
-      }
-
-      player.pause();
-      player.removeAttribute('src');
+      lockVideoControls();
 
       titleEl.textContent = initialTitle || 'Cargando video...';
       player.loop = false;
@@ -8271,23 +8316,28 @@
           history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cachedVid.title, canonicalUrl);
           document.title = `${cachedVid.title} — VELVET HUB`;
         }
+        if (!videoGuard.matches(ticket.token)) return;
         setupVideoQualityButtons(cachedVid.video_sources);
-        playVideoSource(cachedVid.video_sources[0]);
+        playVideoSource(cachedVid.video_sources[0], null, false, ticket.token);
         renderVideoRecommendations();
         return;
       }
 
       try {
         let detailUrl = (itemId || (source === 'id' && sourceId)) ? `/api/items/id/${itemId || sourceId}` : `/api/items/${source}/${encodeURIComponent(sourceId)}`;
-        let resp = await fetch(detailUrl);
+        let resp = await fetch(detailUrl, { signal: ticket.signal });
+        if (!videoGuard.matches(ticket.token)) return;
         if (!resp.ok && source && sourceId && source !== 'id') {
-          resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`);
+          resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`, { signal: ticket.signal });
         }
+        if (!videoGuard.matches(ticket.token)) return;
         if (!resp.ok && itemId && /^[a-f0-9]{24}$/i.test(itemId)) {
-          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`);
+          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`, { signal: ticket.signal });
         }
+        if (!videoGuard.matches(ticket.token)) return;
         if (!resp.ok) throw new Error('No se pudo obtener el detalle del video');
         const item = await resp.json();
+        if (!videoGuard.matches(ticket.token)) return;
 
         state.currentVideo = item;
         state.currentVideo.media_type = 'video';
@@ -8332,25 +8382,33 @@
           }
         });
 
+        if (!videoGuard.matches(ticket.token)) return;
         setupVideoQualityButtons(sources);
-        playVideoSource(sources[0]);
+        playVideoSource(sources[0], null, false, ticket.token);
         renderVideoRecommendations();
 
       } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        if (!videoGuard.matches(ticket.token)) return;
         console.error('Error al abrir video:', err);
         loader.classList.add('hidden');
         showVideoUnavailableState(state.currentVideo || { source, sourceId }, 'Error al conectar con la fuente de video.');
       }
     }
 
-    function playVideoSource(vs, clickedBtn = null, preserveTime = false) {
+    function playVideoSource(vs, clickedBtn = null, preserveTime = false, loadToken = videoLoadToken) {
       const player = document.getElementById('html5-video-player');
       const loader = document.getElementById('video-player-loader');
       const qualityBadge = document.getElementById('video-player-quality-badge');
       const qualityLabel = document.getElementById('video-quality-label');
       const buffSpinner = document.getElementById('video-buffering-spinner');
 
-      if (!player) return;
+      if (!player || !vs || !vs.url) return;
+      if (!videoGuard.matches(loadToken)) return;
+      if (!preserveTime) {
+        lockVideoControls();
+        resetVideoTimeChrome();
+      }
 
       if (!player._lastWorkingVs && player._currentVs) {
         player._lastWorkingVs = player._currentVs;
@@ -8407,9 +8465,6 @@
           clearTimeout(videoWatchdogTimer);
           videoWatchdogTimer = null;
         }
-        if (loader) loader.classList.add('hidden');
-        if (buffSpinner) buffSpinner.classList.add('hidden');
-        stopFaviconPulse();
       };
 
       if (hlsInstance) {
@@ -8437,12 +8492,13 @@
 
       // Watchdog Inteligente (8 segundos sin respuesta)
       videoWatchdogTimer = setTimeout(() => {
-        if (player.readyState >= 2 || !player.paused) {
+        if (!videoGuard.matches(loadToken)) return;
+        if (player.readyState >= 2 && !player.paused) {
           clearVideoWatchdog();
           return;
         }
         console.warn('⚡ [WATCHDOG] Tiempo de respuesta excedido (8s). Ejecutando failover suave...');
-        handleVideoPlaybackFailover();
+        handleVideoPlaybackFailover(loadToken);
       }, 8000);
 
       const isHls = (vs.format && (vs.format.toLowerCase() === 'hls' || vs.format.toLowerCase() === 'm3u8')) ||
@@ -8450,9 +8506,12 @@
         vs.url.includes('/master.m3u8') ||
         vs.url.includes('/playlist.m3u8');
 
+      if (!videoGuard.matches(loadToken)) return;
       player._currentVs = vs;
+      player._loadToken = loadToken;
 
       const applySeekSafely = () => {
+        if (!videoGuard.matches(loadToken)) return;
         if (videoPendingSeekTime !== null && videoPendingSeekTime > 0) {
           try {
             player.currentTime = videoPendingSeekTime;
@@ -8461,11 +8520,24 @@
         }
       };
 
+      const startPlayback = () => {
+        if (!videoGuard.matches(loadToken) || player._loadToken !== loadToken) return;
+        player.play().then(() => {
+          if (!videoGuard.matches(loadToken)) {
+            try { player.pause(); } catch (e) {}
+            return;
+          }
+          player._lastWorkingVs = vs;
+        }).catch(() => {});
+      };
+
       if (isHls && !player.canPlayType('application/vnd.apple.mpegurl')) {
         ensureHlsLoaded().then((Hls) => {
+          if (!videoGuard.matches(loadToken)) return;
           if (!Hls || !Hls.isSupported()) {
+            player._loadToken = loadToken;
             player.src = streamUrl;
-            player.play().catch(() => {});
+            startPlayback();
             return;
           }
           if (hlsInstance) {
@@ -8486,41 +8558,49 @@
         hlsInstance.attachMedia(player);
 
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (!videoGuard.matches(loadToken)) {
+            try { hlsInstance && hlsInstance.destroy(); } catch (e) {}
+            return;
+          }
           clearVideoWatchdog();
           applySeekSafely();
-          player.play().then(() => {
-            player._lastWorkingVs = vs;
-          }).catch(() => {});
+          startPlayback();
         });
 
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+          if (!videoGuard.matches(loadToken)) return;
           if (data.fatal) {
             console.warn('[HLS FATAL ERROR]', data);
             clearVideoWatchdog();
-            handleVideoPlaybackFailover();
+            handleVideoPlaybackFailover(loadToken);
           }
         });
       });
     } else {
+        if (!videoGuard.matches(loadToken)) return;
         player.pause();
         player.removeAttribute('src');
         player.preload = 'auto';
+        player._loadToken = loadToken;
         player.src = streamUrl;
         player.load();
 
         const onReadyToPlay = () => {
+          if (!videoGuard.matches(loadToken) || player._loadToken !== loadToken) {
+            player.removeEventListener('canplay', onReadyToPlay);
+            player.removeEventListener('loadeddata', onReadyToPlay);
+            return;
+          }
+          if (player.readyState < 2) return;
           player.removeEventListener('canplay', onReadyToPlay);
           player.removeEventListener('loadeddata', onReadyToPlay);
           clearVideoWatchdog();
           applySeekSafely();
-          player.play().then(() => {
-            player._lastWorkingVs = vs;
-          }).catch(() => {});
+          startPlayback();
         };
 
         player.addEventListener('canplay', onReadyToPlay);
         player.addEventListener('loadeddata', onReadyToPlay);
-        player.play().catch(() => {});
       }
     }
 
@@ -8572,6 +8652,14 @@
     }
 
     function closeVideoPlayer(pushRoute = true) {
+      videoLoadToken = videoGuard.stop();
+      const player = document.getElementById('html5-video-player');
+      if (player && player.currentTime > 0 && state.currentVideo && Number.isFinite(player.duration)) {
+        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
+      }
+      hardResetVideoElement(player);
+      lockVideoControls();
+      resetVideoTimeChrome();
       stopFrameRateWatchdog();
 
       if (!cinemaLightsOn) toggleCinemaLights();
@@ -8584,26 +8672,6 @@
       if (state.continueShelfDirty) {
         state.continueShelfDirty = false;
         renderContinueShelf();
-      }
-
-      const player = document.getElementById('html5-video-player');
-      if (videoWatchdogTimer) {
-        clearTimeout(videoWatchdogTimer);
-        videoWatchdogTimer = null;
-      }
-
-      if (hlsInstance) {
-        try { hlsInstance.destroy(); } catch(e) {}
-        hlsInstance = null;
-      }
-
-      if (player && player.duration && state.currentVideo) {
-        saveVideoPlaybackProgress(player.currentTime, player.duration, player.currentTime >= (player.duration - 15));
-      }
-
-      if (player) {
-        player.pause();
-        player.removeAttribute('src');
       }
 
       if (pushRoute && window.history.length > 1 && window.history.state && (window.history.state.fromApp || window.history.state.type)) {
@@ -9962,6 +10030,47 @@
 
     // =======================================================================
 
+    function readerIsGallery(item) {
+      const it = item || state.currentItem || {};
+      const type = String(it.media_type || '').toLowerCase();
+      const sourceName = String(it.source || '').toLowerCase();
+      return type === 'gallery' || type === 'cosplay' || state.mode === 'galleries' || ['buondua', '4khd', 'xasiat'].includes(sourceName);
+    }
+
+    function setReaderHeading(text) {
+      const value = text || '';
+      const titleEl = document.getElementById('reader-title');
+      const stage = document.getElementById('reader-stage-title');
+      if (titleEl) titleEl.textContent = value;
+      if (stage) {
+        stage.textContent = value;
+        stage.setAttribute('title', value);
+      }
+    }
+
+    function applyReaderCopy(item) {
+      const gallery = readerIsGallery(item);
+      const title = document.getElementById('end-card-title');
+      const sub = document.getElementById('end-card-sub');
+      const recs = document.getElementById('end-card-recs');
+      const randomBtn = document.getElementById('end-card-random');
+      const nextLabel = document.getElementById('end-card-next-label');
+      if (gallery) {
+        if (title) title.textContent = 'Galería completada';
+        if (sub) sub.textContent = 'Explora más galerías y modelos similares.';
+        if (recs) recs.textContent = 'Recomendados para ti:';
+        if (randomBtn) randomBtn.textContent = 'Ver otra galería';
+        if (nextLabel) nextLabel.textContent = 'Ver siguiente set';
+      } else {
+        if (title) title.textContent = '¡Has completado este cómic!';
+        if (sub) sub.textContent = '¿Qué te ha parecido la historia? Sigue con recomendaciones parecidas.';
+        if (recs) recs.textContent = 'Recomendados para ti (sigue leyendo):';
+        if (randomBtn) randomBtn.textContent = 'Leer cómic al azar';
+        if (nextLabel) nextLabel.textContent = 'Leer siguiente capítulo';
+      }
+      if (typeof updateAutoScrollUI === 'function') updateAutoScrollUI(!!state.autoScroll);
+    }
+
     async function openReader(source, sourceId, pushRoute = true, itemId = null) {
 
       if (typeof canUserAccessItem === 'function' && !canUserAccessItem({ id: itemId, source, sourceId, media_type: 'comic' })) {
@@ -10017,7 +10126,8 @@
       const _rBody = document.getElementById('reader-body');
       if (_rBody) _rBody.scrollTop = 0;
 
-      titleEl.textContent = 'Cargando páginas en alta definición...';
+      setReaderHeading('Cargando...');
+      applyReaderCopy(null);
 
       metaEl.textContent = '';
 
@@ -10043,7 +10153,8 @@
         if (cachedItem && cachedItem.pages && cachedItem.pages.length > 0) {
           state.currentItem = cachedItem;
           const fmt = getFormatInfo(cachedItem);
-          titleEl.textContent = cachedItem.title;
+          setReaderHeading(cachedItem.title);
+          applyReaderCopy(cachedItem);
           formatBadge.textContent = fmt.label;
           metaEl.textContent = `• ${cachedItem.pages.length} páginas`;
           loading.classList.add('hidden');
@@ -10105,7 +10216,8 @@
 
           const firstCh = item.chapters[0];
 
-          titleEl.textContent = `${item.title} - ${firstCh.title || 'Cap. 1'}`;
+          setReaderHeading(`${item.title} - ${firstCh.title || 'Cap. 1'}`);
+          applyReaderCopy(item);
 
           await openReader(source, firstCh.id || firstCh.url);
 
@@ -10118,7 +10230,8 @@
 
         const fmt = getFormatInfo(item);
 
-        titleEl.textContent = item.title;
+        setReaderHeading(item.title);
+        applyReaderCopy(item);
 
         formatBadge.textContent = fmt.label;
 
@@ -10151,7 +10264,7 @@
 
         loading.classList.add('hidden');
 
-        titleEl.textContent = 'Error al cargar cómic';
+        setReaderHeading(readerIsGallery() ? 'No se pudo cargar la galería' : 'No se pudo cargar el cómic');
 
         metaEl.textContent = err.message;
 
@@ -10798,7 +10911,7 @@
 
       if (active) {
         if (dot) dot.classList.remove('hidden');
-        if (text) text.textContent = 'Pausar Auto-Scroll';
+        if (text) text.textContent = readerIsGallery() ? 'Pausar pase' : 'Pausar lectura';
         if (icon) icon.className = 'fa-solid fa-pause';
         if (topBtn) {
           topBtn.classList.add('bg-hot/40', 'border-hot', 'text-white', 'shadow-hot-glow');
@@ -10808,14 +10921,14 @@
         if (topText) topText.textContent = 'Pausar';
       } else {
         if (dot) dot.classList.add('hidden');
-        if (text) text.textContent = 'Lectura Manos Libres';
+        if (text) text.textContent = readerIsGallery() ? 'Pase automático' : 'Lectura Manos Libres';
         if (icon) icon.className = 'fa-solid fa-play';
         if (topBtn) {
           topBtn.classList.remove('bg-hot/40', 'border-hot', 'text-white', 'shadow-hot-glow');
           topBtn.classList.add('bg-glass', 'text-lav');
         }
         if (topIcon) topIcon.className = 'fa-solid fa-play text-hot';
-        if (topText) topText.textContent = 'Auto-Scroll';
+        if (topText) topText.textContent = readerIsGallery() ? 'Pase' : 'Auto-Scroll';
       }
     }
 
@@ -10903,12 +11016,13 @@
 
     
     // =========================================================================
-    // SISTEMA DE ZOOM INTERACTIVO & ANCLAJE SUAVE DE LECTURA
+    // ZOOM FLUIDO: escala centrada, doble toque a 200% y paneo si pasa de 100%
     state.readerZoom = 1.0;
 
-    function setReaderZoom(zoom) {
-      // Pasos discretos entre 0.5 (50%) y 3.0 (300%)
-      const clamped = Math.min(3.0, Math.max(0.5, Math.round(zoom * 100) / 100));
+    function setReaderZoom(zoom, focal, opts) {
+      const animate = !!(opts && opts.animate);
+      const oldZoom = state.readerZoom || 1;
+      const clamped = Math.min(3, Math.max(0.5, Math.round(Number(zoom) * 100) / 100));
       state.readerZoom = clamped;
 
       const readerBody = document.getElementById('reader-body');
@@ -10916,122 +11030,77 @@
       const vContainer = document.getElementById('reader-pages-vertical');
       const slideImg = document.getElementById('slide-current-img');
       const badge = document.getElementById('reader-zoom-btn');
-      const badge2 = document.getElementById('reader-zoom-btn-bottom');
-      const pct = Math.round(state.readerZoom * 100);
+      const pct = Math.round(clamped * 100);
+      if (badge) badge.textContent = pct + '%';
 
-      if (badge) badge.textContent = `${pct}%`;
-      if (badge2) badge2.textContent = `${pct}%`;
+      const rect = readerBody ? readerBody.getBoundingClientRect() : null;
+      const fx = focal && focal.x != null ? focal.x : (rect ? rect.left + rect.width / 2 : 0);
+      const fy = focal && focal.y != null ? focal.y : (rect ? rect.top + (readerBody.clientHeight / 2) : 0);
+      const relX = readerBody && oldZoom ? (readerBody.scrollLeft + (fx - (rect ? rect.left : 0))) / oldZoom : 0;
+      const relY = readerBody && oldZoom ? (readerBody.scrollTop + (fy - (rect ? rect.top : 0))) / oldZoom : 0;
 
-      // Anclaje de lectura para evitar saltos aleatorios a otras páginas
-      let anchorEl = null;
-      let anchorTop = 0;
-      if (readerBody && vContainer && state.readerMode === 'vertical') {
-        const pages = vContainer.querySelectorAll('[data-page-index]');
-        for (let i = 0; i < pages.length; i++) {
-          const rect = pages[i].getBoundingClientRect();
-          if (rect.bottom > 70) {
-            anchorEl = pages[i];
-            anchorTop = rect.top;
-            break;
-          }
-        }
+      if (scrollContent) {
+        scrollContent.classList.toggle('reader-zoom-anim', animate);
       }
 
-      // Modo Cascada Vertical
       if (vContainer) {
-        if (state.readerZoom === 1.0) {
-          // 100% normal: ancho completo en móvil, 56rem máx en PC
+        if (clamped === 1) {
           vContainer.style.width = '100%';
           vContainer.style.maxWidth = '56rem';
           vContainer.style.margin = '0 auto';
-          if (scrollContent) {
-            scrollContent.style.minWidth = '100%';
-            scrollContent.style.alignItems = 'center';
-          }
-          if (readerBody) {
-            readerBody.style.overflowX = 'hidden';
-            readerBody.scrollLeft = 0;
-          }
-        } else if (state.readerZoom < 1.0) {
-          // Reducción (< 100%): la columna encoge visiblemente y queda centrada
-          const pctVal = Math.round(state.readerZoom * 100);
-          vContainer.style.width = `${pctVal}%`;
-          vContainer.style.maxWidth = `${Math.round(56 * state.readerZoom)}rem`;
+          vContainer.style.transform = '';
+          vContainer.style.transformOrigin = 'top center';
+        } else if (clamped < 1) {
+          vContainer.style.width = pct + '%';
+          vContainer.style.maxWidth = Math.round(56 * clamped) + 'rem';
           vContainer.style.margin = '0 auto';
-          if (scrollContent) {
-            scrollContent.style.minWidth = '100%';
-            scrollContent.style.alignItems = 'center';
-          }
-          if (readerBody) {
-            readerBody.style.overflowX = 'hidden';
-            readerBody.scrollLeft = 0;
-          }
+          vContainer.style.transform = '';
+          vContainer.style.transformOrigin = 'top center';
         } else {
-          // Aumento (> 100%): la columna se expande y permite paneo horizontal
-          const isMobile = window.innerWidth < 640;
-          if (isMobile) {
-            const vwVal = Math.round(state.readerZoom * 100);
-            vContainer.style.width = `${vwVal}vw`;
-            vContainer.style.maxWidth = 'none';
-            vContainer.style.margin = '0';
-            if (scrollContent) {
-              scrollContent.style.minWidth = `${vwVal}vw`;
-              scrollContent.style.alignItems = 'flex-start';
-            }
-          } else {
-            const basePx = Math.min(window.innerWidth - 32, 896);
-            const targetPx = Math.round(basePx * state.readerZoom);
-            vContainer.style.width = `${targetPx}px`;
-            vContainer.style.maxWidth = 'none';
-            vContainer.style.margin = '0 auto';
-            if (scrollContent) {
-              scrollContent.style.minWidth = `${targetPx}px`;
-              scrollContent.style.alignItems = 'center';
-            }
-          }
-          if (readerBody) {
-            readerBody.style.overflowX = 'auto';
-          }
+          const base = Math.min((readerBody ? readerBody.clientWidth : window.innerWidth) - 8, 896);
+          vContainer.style.width = Math.round(base * clamped) + 'px';
+          vContainer.style.maxWidth = 'none';
+          vContainer.style.margin = '0 auto';
+          vContainer.style.transform = '';
+          vContainer.style.transformOrigin = 'top center';
         }
       }
 
-      // Modo Paginado (Slide)
       if (slideImg) {
-        slideImg.style.transform = `scale(${state.readerZoom})`;
+        slideImg.style.transition = animate ? 'transform 0.22s ease' : 'none';
+        slideImg.style.transform = 'scale(' + clamped + ')';
         slideImg.style.transformOrigin = 'center center';
-        slideImg.style.transition = 'transform 0.15s ease-out';
       }
 
-      // Ajustar posición de lectura para que la página visible no se mueva
-      if (anchorEl && readerBody && state.readerMode === 'vertical') {
-        requestAnimationFrame(() => {
-          const newRect = anchorEl.getBoundingClientRect();
-          const deltaY = newRect.top - anchorTop;
-          if (Math.abs(deltaY) > 0.5) {
-            readerBody.scrollTop += Math.round(deltaY);
-          }
-        });
+      if (readerBody) {
+        readerBody.classList.toggle('reader-zoomed', clamped > 1.01);
+        if (clamped <= 1.01) {
+          readerBody.style.overflowX = 'hidden';
+          readerBody.scrollLeft = 0;
+        } else {
+          readerBody.style.overflowX = 'auto';
+          const nextLeft = relX * clamped - (fx - (rect ? rect.left : 0));
+          const nextTop = relY * clamped - (fy - (rect ? rect.top : 0));
+          readerBody.scrollLeft = Math.max(0, nextLeft);
+          readerBody.scrollTop = Math.max(0, nextTop);
+        }
       }
     }
 
-    function changeReaderZoom(delta) {
-      const current = state.readerZoom || 1.0;
+    function changeReaderZoom(delta, focal) {
+      const current = state.readerZoom || 1;
       const next = Math.round((current + delta) * 100) / 100;
-      setReaderZoom(next);
+      setReaderZoom(next, focal, { animate: true });
     }
 
     function resetReaderZoom() {
-      setReaderZoom(1.0);
+      setReaderZoom(1, null, { animate: true });
     }
 
-    function toggleReaderZoomLevel() {
-      if (state.readerZoom < 1.0) {
-        setReaderZoom(1.0);
-      } else if (state.readerZoom === 1.0) {
-        setReaderZoom(1.5);
-      } else {
-        setReaderZoom(1.0);
-      }
+    function toggleReaderZoomLevel(focal) {
+      const z = state.readerZoom || 1;
+      if (Math.abs(z - 1) < 0.08) setReaderZoom(2, focal, { animate: true });
+      else setReaderZoom(1, focal, { animate: true });
     }
 
     let _lastReaderTouchEndTime = 0;
@@ -11057,12 +11126,15 @@
       const thumbbar = document.getElementById('reader-thumbbar');
       const controls = document.getElementById('thumbbar-controls');
 
+      const titleBar = document.getElementById('reader-title-bar');
       if (state.hudVisible) {
         if (topHud) topHud.style.transform = 'translateY(0)';
+        if (titleBar) titleBar.style.transform = 'translateY(0)';
         if (thumbbar) thumbbar.style.transform = 'translateY(0)';
         if (controls) controls.classList.remove('hidden');
       } else {
         if (topHud) topHud.style.transform = 'translateY(-110%)';
+        if (titleBar) titleBar.style.transform = 'translateY(-220%)';
         if (thumbbar) thumbbar.style.transform = 'translateY(130%)';
       }
     }
@@ -11112,10 +11184,17 @@
 
       body.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2 && _readerIsPinching) {
+          if (e.cancelable) e.preventDefault();
           _touchCurrentDist = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
             e.touches[0].clientY - e.touches[1].clientY
           );
+          if (_touchInitialDist > 12) {
+            const ratio = _touchCurrentDist / _touchInitialDist;
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            setReaderZoom(_touchInitialZoom * ratio, { x: midX, y: midY }, { animate: false });
+          }
         } else if (e.touches.length === 1) {
           const dx = Math.abs(e.touches[0].clientX - _readerTouchStartX);
           const dy = Math.abs(e.touches[0].clientY - _readerTouchStartY);
@@ -11123,7 +11202,7 @@
             _readerTouchMoved = true;
           }
         }
-      }, { passive: true });
+      }, { passive: false });
 
       body.addEventListener('touchend', (e) => {
         _lastReaderTouchEndTime = Date.now();
@@ -11131,14 +11210,6 @@
         // 1. Manejar fin de pellizco (Pinch-to-zoom)
         if (_readerIsPinching) {
           _readerIsPinching = false;
-          if (_touchInitialDist > 20 && _touchCurrentDist > 0) {
-            const ratio = _touchCurrentDist / _touchInitialDist;
-            if (ratio > 1.25) {
-              changeReaderZoom(0.25);
-            } else if (ratio < 0.80) {
-              changeReaderZoom(-0.25);
-            }
-          }
           _touchInitialDist = 0;
           _touchCurrentDist = 0;
           return;
@@ -11174,7 +11245,7 @@
               _singleTapTimer = null;
             }
             _lastTapTime = 0;
-            toggleReaderZoomLevel();
+            toggleReaderZoomLevel({ x: touch.clientX, y: touch.clientY });
           } else {
             // Primer tap -> esperar por si viene un segundo tap antes de alternar el HUD
             _lastTapTime = now;
@@ -11192,9 +11263,46 @@
       body.addEventListener('wheel', (e) => {
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          changeReaderZoom(e.deltaY < 0 ? 0.25 : -0.25);
+          changeReaderZoom(e.deltaY < 0 ? 0.1 : -0.1, { x: e.clientX, y: e.clientY });
         }
       }, { passive: false });
+
+      body.addEventListener('dblclick', (e) => {
+        if (e.target && e.target.closest('button, a, input, select, #reader-end-card, #reader-hud-top, #reader-thumbbar')) return;
+        e.preventDefault();
+        toggleReaderZoomLevel({ x: e.clientX, y: e.clientY });
+      });
+
+      let panning = false;
+      let panX = 0;
+      let panY = 0;
+      let panLeft = 0;
+      let panTop = 0;
+      body.addEventListener('pointerdown', (e) => {
+        if ((state.readerZoom || 1) <= 1.01) return;
+        if (e.pointerType === 'touch' || e.button !== 0) return;
+        if (e.target && e.target.closest('button, a, input, select')) return;
+        panning = true;
+        panX = e.clientX;
+        panY = e.clientY;
+        panLeft = body.scrollLeft;
+        panTop = body.scrollTop;
+        body.classList.add('is-panning');
+        try { body.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+      body.addEventListener('pointermove', (e) => {
+        if (!panning) return;
+        body.scrollLeft = panLeft - (e.clientX - panX);
+        body.scrollTop = panTop - (e.clientY - panY);
+      });
+      const endPan = () => {
+        if (!panning) return;
+        panning = false;
+        body.classList.remove('is-panning');
+        _readerTouchMoved = true;
+      };
+      body.addEventListener('pointerup', endPan);
+      body.addEventListener('pointercancel', endPan);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -11716,25 +11824,90 @@
     // Toggle Dropdown de Usuario
 
     function handleUserButtonClick() {
-
       if (!state.currentUser) {
-
         openAuthModal('login');
-
-      } else {
-
-        const menu = document.getElementById('user-dropdown-menu');
-        const arrow = document.getElementById('user-dropdown-arrow');
-
-        if (menu) {
-          const isHidden = menu.classList.contains('hidden');
-          menu.classList.toggle('hidden');
-          if (arrow) arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-        }
-
+        return;
       }
-
+      const menu = document.getElementById('user-dropdown-menu');
+      const btn = document.getElementById('user-profile-btn');
+      const arrow = document.getElementById('user-dropdown-arrow');
+      if (!menu || !btn) return;
+      const willOpen = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !willOpen);
+      btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (arrow) arrow.style.transform = willOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+      if (willOpen) {
+        const rect = btn.getBoundingClientRect();
+        const menuWidth = Math.min(240, window.innerWidth - 16);
+        menu.style.position = 'fixed';
+        menu.style.top = Math.round(rect.bottom + 8) + 'px';
+        menu.style.width = menuWidth + 'px';
+        menu.style.right = Math.max(8, Math.round(window.innerWidth - rect.right)) + 'px';
+        menu.style.left = 'auto';
+        menu.style.zIndex = '80';
+      }
     }
+    window.handleUserButtonClick = handleUserButtonClick;
+
+    const LEGAL_COPY = {
+      disclaimer: {
+        title: 'Descargo de responsabilidad',
+        paragraphs: [
+          'Velvet Hub funciona como un índice automático. Reúne enlaces y reproductores que ya están publicados en internet por otros sitios.',
+          'Aquí no se alojan ni se guardan los archivos de vídeo, cómics, fotos o juegos. Esos archivos siguen en los servidores de quienes los publicaron.',
+          'Las marcas, los derechos de autor y el material pertenecen a sus dueños y a los sitios de origen. Velvet Hub no está asociado con ellos y no responde por lo que esos sitios publican.'
+        ]
+      },
+      dmca: {
+        title: 'DMCA / Retiro de contenido',
+        paragraphs: [
+          'Si eres el titular de un derecho y quieres que quitemos un enlace indexado, escríbenos a dmca@morbohub.com con la URL exacta de esta web, la URL original y una forma de comprobar que el material es tuyo.',
+          'Revisamos los avisos completos y retiramos el enlace indexado en cuanto lo confirmamos. No hace falta una cuenta.',
+          'Un aviso incompleto (sin la URL del enlace en Velvet Hub) no se puede procesar.'
+        ]
+      },
+      terms: {
+        title: 'Términos de uso',
+        paragraphs: [
+          'Al entrar aceptas que el sitio es solo un índice de enlaces de terceros y que el material puede cambiar o desaparecer sin aviso.',
+          'No subas nada, no intentes saltarte el acceso de otras personas y no uses el sitio si no tienes la edad legal en tu país.',
+          'Podemos quitar enlaces, cerrar cuentas o cambiar estas páginas cuando haga falta.'
+        ]
+      },
+      privacy: {
+        title: 'Privacidad',
+        paragraphs: [
+          'La cuenta guarda el correo, el nombre y tus favoritos e historial para que los veas en el móvil y en el PC.',
+          'No vendemos esa información. La sesión se guarda en este navegador y en una cookie para no pedirte la clave en cada visita.',
+          'Puedes cerrar sesión cuando quieras. Si quieres borrar la cuenta, escribe a privacidad@morbohub.com desde el mismo correo.'
+        ]
+      },
+      adult: {
+        title: 'Solo +18',
+        paragraphs: [
+          'Este sitio es para adultos. Si no tienes 18 años, o la edad que exija tu país, sal de aquí.',
+          'El material enlazado es explícito y lo publican terceros. Velvet Hub no lo revisa página por página antes de indexarlo.'
+        ]
+      }
+    };
+
+    function openLegalModal(key) {
+      const modal = document.getElementById('legal-modal');
+      const title = document.getElementById('legal-modal-title');
+      const body = document.getElementById('legal-modal-body');
+      const entry = LEGAL_COPY[key] || LEGAL_COPY.disclaimer;
+      if (title) title.textContent = entry.title;
+      if (body) {
+        body.innerHTML = entry.paragraphs.map((p) => `<p>${p}</p>`).join('');
+      }
+      if (modal) modal.classList.remove('hidden');
+    }
+    function closeLegalModal() {
+      const modal = document.getElementById('legal-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.openLegalModal = openLegalModal;
+    window.closeLegalModal = closeLegalModal;
 
     // Cerrar dropdown al hacer clic fuera
 
@@ -11932,7 +12105,7 @@
         }
 
         closeAuthModal();
-        showToast(`¡Bienvenido de nuevo, ${data.user.username}!`, 'success');
+        showToast('Sesión iniciada', 'success');
 
         // Sincronización en segundo plano de sesión
         initAuth().catch(() => {});
@@ -12080,7 +12253,7 @@
 
         closeAuthModal();
 
-        showToast(`¡Cuenta VIP activada exitosamente! Bienvenido, ${data.user.username}`, 'success');
+        showToast('Cuenta lista', 'success');
 
       } catch (err) {
 
@@ -12163,7 +12336,7 @@
         if (!res.ok) {
           showToast(data.error || 'Error al guardar perfil', 'error');
         } else {
-          showToast('Perfil actualizado correctamente', 'success');
+          showToast('Perfil guardado', 'success');
           if (state.currentUser) {
             state.currentUser.username = data.user.username;
             state.currentUser.avatar = data.user.avatar;
@@ -12217,7 +12390,7 @@
         if (!res.ok) {
           showToast(data.error || 'Error al cambiar contraseña', 'error');
         } else {
-          showToast('Contraseña actualizada con éxito', 'success');
+          showToast('Contraseña actualizada', 'success');
           if (p1) p1.value = '';
           if (p2) p2.value = '';
         }
@@ -12263,7 +12436,7 @@
 
       if (adminBtn) adminBtn.classList.add('hidden');
 
-      showToast('Sesión cerrada correctamente', 'info');
+      showToast('Sesión cerrada', 'info');
       fetchLiveFeed(true);
 
     }
@@ -12486,7 +12659,7 @@
       saveStorage();
       renderVaultHistoryPro();
       renderContinueShelf();
-      showToast('Elemento eliminado del historial', 'info');
+      showToast('Quitado del historial', 'info');
 
       if (state.currentUser) {
         try {
@@ -12550,7 +12723,7 @@
           await fetch(deleteUrl, { method: 'DELETE', headers: authHeaders() });
         } catch (e) {}
       }
-      showToast('Eliminado de Mi Bóveda', 'info');
+      showToast('Quitado de tu bóveda', 'info');
     }
 
     async function handleClearCloudHistory() {
@@ -12565,7 +12738,7 @@
           await fetch('/api/user/history', { method: 'DELETE', headers: authHeaders() });
         } catch (e) {}
       }
-      showToast('Historial borrado por completo', 'info');
+      showToast('Historial borrado', 'info');
     }
 
     async function toggleFavorite(item, event) {
@@ -12585,7 +12758,7 @@
 
       if (isFav) {
         state.favorites.splice(idx, 1);
-        showToast('Eliminado de Mi Bóveda', 'info');
+        showToast('Quitado de tu bóveda', 'info');
 
         if (state.currentUser) {
           try {
@@ -12607,7 +12780,7 @@
           created_at: new Date().toISOString()
         };
         state.favorites.unshift(favEntry);
-        showToast('Guardado en Mi Bóveda ❤️', 'success');
+        showToast('Guardado en tu bóveda', 'success');
 
         if (state.currentUser) {
           try {
@@ -12927,7 +13100,7 @@
 
           }
 
-          showToast(`¡Se generaron ${data.count} llaves VIP listas para entregar!`, 'success');
+          showToast(`${data.count} llaves generadas`, 'success');
 
           loadAdminStats();
 
@@ -13257,7 +13430,7 @@
 
     function setCategory(cat, btn) {
       if (state.catalogMode === 'dynamic') {
-        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
       } else {
         state.feedSeed = 0;
@@ -13304,15 +13477,13 @@
       state.catalogMode = mode;
       try { localStorage.setItem('velvet_catalog_mode', mode); } catch(e) {}
       if (mode === 'dynamic') {
-        state.feedSeed = Math.floor(Math.random() * 500) + 1;
+        state.feedSeed = getRotatingSeed();
         state.videoSeed = state.feedSeed;
         state.sort = 'random';
-        showToast('🎲 Modo Aleatorio activado: las páginas rotan y mezclan contenido', 'info');
       } else {
         state.feedSeed = 0;
         state.videoSeed = 0;
         state.sort = 'recent';
-        showToast('📌 Modo Estático activado: páginas fijas y cronológicas por fecha', 'info');
       }
       updateCatalogModeUI();
       state.page = 1;
@@ -13462,6 +13633,7 @@
       updateCatalogModeUI();
 
       // Semilla fresca de amplio rango (1 a 50,000) que salta a páginas profundas al azar (ej. pág 334 o 391)
+      state.freshShuffle = true;
       state.feedSeed = Math.floor(Math.random() * 50000) + 1;
       state.videoSeed = state.feedSeed;
       state.sort = 'random';
@@ -13483,6 +13655,7 @@
         localKeysToRemove.forEach(lk => localStorage.removeItem(lk));
       } catch (e) {}
       fetchLiveFeed(true);
+      state.freshShuffle = false;
       const grid = document.getElementById('comics-grid');
       if (grid) {
         const topOffset = grid.getBoundingClientRect().top + window.scrollY - 100;
@@ -13490,10 +13663,7 @@
       } else {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
-      setTimeout(() => {
-        if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
-      }, 700);
-      showToast('🎲 ¡Páginas al azar cargadas con nuevo contenido variado!', 'info');
+      if (shuffleIcon) shuffleIcon.classList.remove('fa-spin');
     }
 
     function shuffleVideoFeed() {
@@ -13613,6 +13783,10 @@
         if (typeof clearSearch === 'function') clearSearch();
       } else if (act === 'user-button') {
         if (typeof handleUserButtonClick === 'function') handleUserButtonClick();
+      } else if (act === 'open-legal') {
+        if (typeof openLegalModal === 'function') openLegalModal(el.getAttribute('data-legal'));
+      } else if (act === 'close-legal') {
+        if (typeof closeLegalModal === 'function') closeLegalModal();
       } else if (act === 'logout') {
         if (typeof handleLogout === 'function') handleLogout();
       } else if (act === 'reset-home') {

@@ -316,10 +316,12 @@
     },
 
     updateActiveNavLinks(currentPath) {
+      const path = currentPath || '/';
       document.querySelectorAll('a[href]').forEach((link) => {
+        if (link.closest('#mobile-navbar')) return;
         const href = link.getAttribute('href');
-        if (!href) return;
-        const isActive = href === currentPath || (href.startsWith('/boveda') && currentPath.startsWith('/boveda'));
+        if (!href || href.charAt(0) !== '/') return;
+        const isActive = href === path || (href.startsWith('/boveda') && path.startsWith('/boveda') && href !== '/');
         if (isActive) {
           link.setAttribute('aria-current', 'page');
           link.classList.add('nav-link-active');
@@ -327,6 +329,26 @@
           link.removeAttribute('aria-current');
           link.classList.remove('nav-link-active');
         }
+      });
+      this.syncMobileNav(path);
+    },
+
+    syncMobileNav(path) {
+      const nav = document.getElementById('mobile-navbar');
+      if (!nav) return;
+      const tabs = [
+        { id: 'tab-btn-home', on: path === '/' || path === '/index.html' },
+        { id: 'tab-btn-videos', on: path === '/videos' || path.startsWith('/v/') },
+        { id: 'tab-btn-comics', on: path === '/comics' || path.startsWith('/c/') },
+        { id: 'tab-btn-vault', on: path.startsWith('/boveda') },
+        { id: 'tab-btn-account', on: path === '/cuenta' || path.startsWith('/cuenta') || path.startsWith('/perfil') || path === '/boveda/cuenta' }
+      ];
+      tabs.forEach((tab) => {
+        const el = document.getElementById(tab.id);
+        if (!el) return;
+        el.classList.toggle('mob-tab-active', tab.on);
+        if (tab.on) el.setAttribute('aria-current', 'page');
+        else el.removeAttribute('aria-current');
       });
     },
 

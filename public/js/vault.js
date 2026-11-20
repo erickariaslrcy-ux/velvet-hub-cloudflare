@@ -196,7 +196,7 @@
       } else {
         if (multiselectBtn) multiselectBtn.classList.remove('hidden');
         if (headingEl) headingEl.textContent = 'Mi Bóveda Personal';
-        if (subEl) subEl.textContent = 'Tus favoritos e historial, sincronizados permanentemente en la nube.';
+        if (subEl) subEl.textContent = 'Tus favoritos e historial, en tu cuenta.';
         if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
           window.VelvetPersonalData.fetchFavorites(1, { filter: favFilterType, sort: favSortMode, search: favSearchQuery });
         }
@@ -225,9 +225,9 @@
           mobileBtn.setAttribute('role', 'tab');
           mobileBtn.setAttribute('aria-selected', isActive ? 'true' : 'false');
           if (isActive) {
-            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-pink-500 text-white font-black text-xs shrink-0 shadow-md min-h-[44px] flex items-center';
+            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-pink-500 text-white font-black text-xs shrink-0 shadow-md min-h-[44px] flex items-center gap-2';
           } else {
-            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-white/[0.05] text-lav/70 font-semibold text-xs shrink-0 hover:text-white min-h-[44px] flex items-center';
+            mobileBtn.className = 'px-4 py-2.5 rounded-full bg-white/[0.05] text-lav/70 font-semibold text-xs shrink-0 hover:text-white min-h-[44px] flex items-center gap-2';
           }
         }
 
@@ -278,7 +278,7 @@
             </div>
             <h3 class="font-serif text-xl font-bold text-white mb-2">Inicia sesión en tu Bóveda</h3>
             <p class="text-xs text-lav/70 max-w-sm mb-6 leading-relaxed">
-              Tus favoritos e historial se sincronizan permanentemente en la nube para acceder desde tu PC, teléfono o tableta sin perder ningún progreso.
+              Entra para ver tus favoritos y tu historial en este móvil y en el PC.
             </p>
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full max-w-sm">
               <button type="button" onclick="if(window.openAuthModal) window.openAuthModal('login');" class="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-600 text-white text-xs font-bold active:scale-95 transition-transform shadow-md cursor-pointer min-h-[44px]">
@@ -800,26 +800,33 @@
         avatarSvg.outerHTML = this.getAvatarSvg(userAvatar);
       }
 
-      // Actualizar contadores de estadísticas en tiempo real sin riesgo de excepciones
-      const favs = window.VelvetStore?.getFavorites?.() || window.VelvetPersonalData?.getFavorites?.() || [];
-      const hist = window.VelvetStore?.getHistory?.() || window.VelvetPersonalData?.getHistory?.() || [];
+      // Misma fuente que las pastillas: el total canónico, no un array distinto.
+      const favState = window.VelvetPersonalData?.getFavoritesState?.();
+      const histState = window.VelvetPersonalData?.getHistoryState?.();
       const saves = window.VelvetStore?.getGameSaves?.() || window.VelvetPersonalData?.getGameSaves?.() || [];
+      const favCount = favState && typeof favState.total === 'number'
+        ? favState.total
+        : (window.VelvetPersonalData?.getFavorites?.() || []).length;
+      const histCount = histState && typeof histState.total === 'number'
+        ? histState.total
+        : (window.VelvetPersonalData?.getHistory?.() || []).length;
       const favEl = document.getElementById('vault-stats-favs');
       const histEl = document.getElementById('vault-stats-hist');
       const gamesEl = document.getElementById('vault-stats-games');
-      if (favEl) favEl.textContent = Array.isArray(favs) ? favs.length : 0;
-      if (histEl) histEl.textContent = Array.isArray(hist) ? hist.length : 0;
+      if (favEl) favEl.textContent = String(favCount);
+      if (histEl) histEl.textContent = String(histCount);
       if (gamesEl) gamesEl.textContent = Array.isArray(saves) ? saves.length : 0;
+      if (window.VelvetPersonalData?.updateAllCounters) window.VelvetPersonalData.updateAllCounters();
 
       if (badgeEl) {
         if (window.VelvetStore?.hasFullAccess?.()) {
-          badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40';
+          badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40';
           badgeEl.textContent = user?.role === 'admin' ? 'ADMINISTRADOR' : 'MIEMBRO VIP ILIMITADO';
         } else if (isAuth) {
-          badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/70 border border-white/20';
+          badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/70 border border-white/20';
           badgeEl.textContent = 'CUENTA REGISTRADA';
         } else {
-          badgeEl.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/50 border border-white/10';
+          badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/50 border border-white/10';
           badgeEl.textContent = 'INVITADO';
         }
       }

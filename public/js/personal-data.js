@@ -243,8 +243,10 @@
 
     init() {
       this.restoreSessionFromStorage();
+      this.hydrateCanonicalCache();
       this.loadCachedPreferences();
       this.cleanupOldBackups();
+      this.updateAllCounters();
 
       // Sincronizar reconexión a Internet
       window.addEventListener('online', () => {
@@ -364,6 +366,7 @@
       _progressThrottle.clear();
 
       this.loadCachedPreferences();
+      if (_currentUser) this.hydrateCanonicalCache();
       this.updateAllCounters();
 
       if (_currentUser) {
@@ -534,6 +537,76 @@
     },
 
     // ------------------------------------------------------------------------
+    // FUENTE ÚNICA: la misma lista alimenta pastillas, stats y la bóveda
+    // ------------------------------------------------------------------------
+    readLegacyList(keys) {
+      for (const key of keys) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length) return parsed;
+        } catch (e) {}
+      }
+      return [];
+    },
+
+    hydrateCanonicalCache() {
+      const uid = _currentUser && _currentUser.id;
+      const favKeys = [];
+      const histKeys = [];
+      if (uid) {
+        favKeys.push(`velvet_usr_${uid}_favs`, `velvet_${uid}_favs`);
+        histKeys.push(`velvet_usr_${uid}_history`);
+      }
+      favKeys.push('velvet_favorites', 'velvet_guest_favs', 'velvet_favs');
+      histKeys.push('velvet_history', 'velvet_guest_history');
+
+      const cachedFavs = readLocalCache('favs', null);
+      const favList = Array.isArray(cachedFavs) && cachedFavs.length ? cachedFavs : this.readLegacyList(favKeys);
+      if (favList.length) {
+        _favState.items = favList;
+        const storedTotal = Number(readLocalCache('favs_total', favList.length));
+        _favState.total = storedTotal > 0 ? storedTotal : favList.length;
+        _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
+        _favState.error = null;
+      }
+
+      const cachedHist = readLocalCache('history', null);
+      const histList = Array.isArray(cachedHist) && cachedHist.length ? cachedHist : this.readLegacyList(histKeys);
+      if (histList.length) {
+        _histState.items = histList;
+        const storedTotal = Number(readLocalCache('history_total', histList.length));
+        _histState.total = storedTotal > 0 ? storedTotal : histList.length;
+        _histState.totalPages = Math.max(1, Math.ceil(_histState.total / _histState.pageSize));
+        _histState.error = null;
+      }
+    },
+
+    publishCanonical(kind) {
+      if (kind !== 'history') {
+        writeLocalCache('favs', _favState.items);
+        writeLocalCache('favs_total', _favState.total);
+        try {
+          const serialized = JSON.stringify(_favState.items || []);
+          localStorage.setItem('velvet_favorites', serialized);
+          localStorage.setItem('velvet_guest_favs', serialized);
+          localStorage.setItem('velvet_favs', serialized);
+        } catch (e) {}
+        if (window.state) window.state.favorites = _favState.items.slice();
+      }
+      if (kind !== 'favorites') {
+        writeLocalCache('history', _histState.items);
+        writeLocalCache('history_total', _histState.total);
+        try {
+          localStorage.setItem('velvet_history', JSON.stringify(_histState.items || []));
+        } catch (e) {}
+        if (window.state) window.state.history = _histState.items.slice();
+      }
+      this.updateAllCounters();
+    },
+
+    // ------------------------------------------------------------------------
     // FAVORITOS: FUENTE DE VERDAD CON PAGINACIÓN REAL
     // ------------------------------------------------------------------------
     getFavorites() {
@@ -614,24 +687,73 @@
         }
 
         const data = await res.json();
-        _favState.items = Array.isArray(data.items) ? data.items : [];
-        _favState.total = typeof data.total === 'number' ? data.total : _favState.items.length;
+        if (data && data.degraded && (!Array.isArray(data.items) || data.items.length === 0) && _favState.items.length > 0) {
+          _favState.isLoading = false;
+          _favState.error = null;
+          this.publishCanonical('favorites');
+          this.updateSyncStatusText();
+          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
+          return this.getFavoritesState();
+        }
+
+        const serverItems = Array.isArray(data.items) ? data.items : [];
+        const serverTotal = typeof data.total === 'number' ? data.total : serverItems.length;
+        const localBefore = _favState.items.slice();
+
+        if (serverTotal === 0 && localBefore.length > 0 && !data.degraded) {
+          if (!_favState._pushedLocal) {
+            _favState._pushedLocal = true;
+            try {
+              const syncRes = await this.fetchAuthed('/api/user/favorites', {
+                method: 'POST',
+                body: JSON.stringify({ items: localBefore })
+              });
+              if (syncRes && syncRes.ok) {
+                const again = await this.fetchFavorites(page);
+                if (again && again.total > 0) return again;
+              }
+            } catch (syncErr) {}
+          }
+          _favState.items = localBefore;
+          _favState.total = localBefore.length;
+          _favState.totalPages = Math.max(1, Math.ceil(localBefore.length / _favState.pageSize));
+          _favState.isLoading = false;
+          _favState.error = null;
+          this.publishCanonical('favorites');
+          this.updateSyncStatusText();
+          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
+          return this.getFavoritesState();
+        }
+
+        _favState.items = serverItems;
+        _favState.total = serverTotal;
         _favState.totalPages = data.totalPages || Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
         _favState.isLoading = false;
         _favState.error = null;
 
-        // Guardar en caché local de lectura
         writeLocalCache(`favs_p${_favState.page}`, _favState.items);
-        writeLocalCache('favs_total', _favState.total);
-        _lastSyncTimestamp = Date.now();
-
-        this.updateAllCounters();
+        this.publishCanonical('favorites');
         this.updateSyncStatusText();
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
         return this.getFavoritesState();
       } catch (err) {
         if (err.name === 'AbortError') return; // Cancelación normal
         _favState.isLoading = false;
+        if (_favState.items && _favState.items.length > 0) {
+          _favState.error = null;
+          _favState.total = Math.max(_favState.total, _favState.items.length);
+          this.publishCanonical('favorites');
+          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
+          return this.getFavoritesState();
+        }
+        this.hydrateCanonicalCache();
+        if (_favState.items && _favState.items.length > 0) {
+          _favState.error = null;
+          _favState.isLoading = false;
+          this.publishCanonical('favorites');
+          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
+          return this.getFavoritesState();
+        }
         _favState.error = err.message || 'Error de conexión';
         window.dispatchEvent(new CustomEvent('velvet:favorites-error', { detail: { error: _favState.error, retry: () => this.fetchFavorites(page) } }));
         return this.getFavoritesState();
@@ -853,6 +975,13 @@
         if (!res.ok) throw new Error(`Error en el servidor (${res.status})`);
 
         const data = await res.json();
+        if (data && data.degraded && (!Array.isArray(data.items) || data.items.length === 0) && _histState.items.length > 0) {
+          _histState.isLoading = false;
+          _histState.error = null;
+          this.publishCanonical('history');
+          window.dispatchEvent(new CustomEvent('velvet:history-updated', { detail: this.getHistoryState() }));
+          return this.getHistoryState();
+        }
         _histState.items = Array.isArray(data.items) ? data.items : [];
         _histState.total = typeof data.total === 'number' ? data.total : _histState.items.length;
         _histState.totalPages = data.totalPages || Math.max(1, Math.ceil(_histState.total / _histState.pageSize));
@@ -870,6 +999,13 @@
       } catch (err) {
         if (err.name === 'AbortError') return;
         _histState.isLoading = false;
+        if (_histState.items && _histState.items.length > 0) {
+          _histState.error = null;
+          _histState.total = Math.max(_histState.total, _histState.items.length);
+          this.publishCanonical('history');
+          window.dispatchEvent(new CustomEvent('velvet:history-updated', { detail: this.getHistoryState() }));
+          return this.getHistoryState();
+        }
         _histState.error = err.message || 'Error de conexión';
         window.dispatchEvent(new CustomEvent('velvet:history-error', { detail: { error: _histState.error, retry: () => this.fetchHistory(page) } }));
         return this.getHistoryState();
@@ -1134,8 +1270,8 @@
     // ACTUALIZACIÓN UNIFICADA DE CONTADORES EN LA UI
     // ------------------------------------------------------------------------
     updateAllCounters() {
-      const favCount = String(_favState.total);
-      const histCount = String(_histState.total);
+      const favCount = String(Math.max(0, Number(_favState.total) || 0));
+      const histCount = String(Math.max(0, Number(_histState.total) || 0));
 
       // Menú de usuario (dropdown en global header)
       const dropFavCount = document.getElementById('dropdown-fav-count');
@@ -1152,6 +1288,11 @@
       document.querySelectorAll('.vault-hist-counter').forEach(el => {
         el.textContent = histCount;
       });
+
+      const statsFav = document.getElementById('vault-stats-favs');
+      const statsHist = document.getElementById('vault-stats-hist');
+      if (statsFav) statsFav.textContent = favCount;
+      if (statsHist) statsHist.textContent = histCount;
 
       // Sincronizar window.state para módulos heredados
       if (window.state) {
