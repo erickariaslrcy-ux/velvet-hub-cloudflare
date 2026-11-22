@@ -109,4 +109,19 @@ assert.ok(
   'submitLogin debe enviar petición a /api/auth/login'
 );
 
+// [7] REPORTE 7: Clic directo en botones numéricos de paginación
+console.log('\n[7] Verificando disparadores directos y delegados para números de página...');
+assert.ok(
+  paginationJs.includes('onclick="window.VelvetPagination ? window.VelvetPagination.jumpToPage(${item})'),
+  'pagination.js DEBE tener evento onclick inline directo en cada botón numérico'
+);
+assert.ok(
+  indexHtml.includes("if (act === 'page-number')"),
+  'index.html DEBE respaldar la acción page-number en el listener de delegación global'
+);
+assert.ok(
+  paginationJs.includes('focusJumpInput'),
+  'pagination.js DEBE exportar focusJumpInput para elipsis interactiva'
+);
+
 console.log('\n✅ TODOS LOS PUNTOS REPORTADOS POR EL USUARIO HAN SIDO VERIFICADOS Y BLINDADOS.');

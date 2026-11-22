@@ -200,6 +200,19 @@
     if (typeof window === 'undefined' || !window.history || !window.location) return;
     try {
       const curUrl = new URL(window.location.href);
+      // Si estamos en la vista de catálogo pero la URL conservaba una ruta de cómic/lector cerrado, normalizar
+      if (curUrl.pathname.startsWith('/c/') || curUrl.pathname.startsWith('/g/') || curUrl.pathname.startsWith('/v/')) {
+        const homeView = document.getElementById('home-view');
+        const readerModal = document.getElementById('reader-modal');
+        const videoView = document.getElementById('video-view');
+        const isHomeVisible = homeView && !homeView.classList.contains('hidden') &&
+                              (!readerModal || readerModal.classList.contains('hidden')) &&
+                              (!videoView || videoView.classList.contains('hidden'));
+        if (isHomeVisible) {
+          const mode = (window.state && window.state.mode) || 'comics';
+          curUrl.pathname = mode === 'videos' ? '/videos' : mode === 'galleries' ? '/cosplay' : mode === 'games' ? '/juegos' : '/comics';
+        }
+      }
       if (targetPage > 1) {
         curUrl.searchParams.set('page', String(targetPage));
       } else {
@@ -222,13 +235,20 @@
    * Ejecuta el salto a una página específica.
    */
   function jumpToPage(targetPage, options = {}) {
-    const { fromHistory = false } = options;
+    const { fromHistory = false, force = false } = options;
     targetPage = parseInt(targetPage, 10);
     if (isNaN(targetPage) || targetPage < 1) targetPage = 1;
     if (state.totalPages && targetPage > state.totalPages) targetPage = state.totalPages;
 
-    // Evitar recarga si ya estamos en esa página
-    if (targetPage === state.currentPage && !fromHistory) return;
+    // Sincronizar y verificar estado global
+    const globalPage = (typeof window !== 'undefined' && window.state && Number.isInteger(window.state.page))
+      ? parseInt(window.state.page, 10)
+      : null;
+
+    // Evitar recarga SOLO si ya estamos realmente en esa página en ambos estados y no se fuerza
+    const isActuallyCurrent = (targetPage === state.currentPage) &&
+                              (globalPage === null || globalPage === targetPage);
+    if (!force && !fromHistory && isActuallyCurrent) return;
 
     // Cancelar peticiones previas si el usuario cambia de página para evitar bloqueos
     if (typeof window !== 'undefined' && window._catalogAbortController) {
@@ -331,6 +351,7 @@
             type="button"
             class="v-page-btn v-page-ellipsis"
             data-action="focus-jump"
+            onclick="window.VelvetPagination ? window.VelvetPagination.focusJumpInput('desktop') : null"
             aria-label="Ir a una página específica"
             title="Saltar a página...">
             &hellip;
@@ -344,6 +365,7 @@
             class="v-page-btn v-page-num ${isActive ? 'is-active' : ''}"
             data-action="page-number"
             data-page="${item}"
+            onclick="window.VelvetPagination ? window.VelvetPagination.jumpToPage(${item}) : (window.jumpToPage && window.jumpToPage(${item}))"
             aria-label="${isActive ? `Página ${item}` : `Ir a la página ${item}`}"
             ${isActive ? 'aria-current="page"' : ''}>
             ${item}
@@ -358,6 +380,7 @@
           type="button"
           class="v-page-btn v-page-nav-btn v-page-prev"
           data-action="page-prev"
+          onclick="window.VelvetPagination ? window.VelvetPagination.jumpToPage(${currentPage - 1}) : (window.jumpToPage && window.jumpToPage(${currentPage - 1}))"
           aria-label="Ir a la página anterior"
           ${isFirstPage ? 'disabled aria-disabled="true"' : ''}>
           <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -371,6 +394,7 @@
           type="button"
           class="v-page-btn v-page-nav-btn v-page-next"
           data-action="page-next"
+          onclick="window.VelvetPagination ? window.VelvetPagination.jumpToPage(${currentPage + 1}) : (window.jumpToPage && window.jumpToPage(${currentPage + 1}))"
           aria-label="Ir a la página siguiente"
           ${isLastPage ? 'disabled aria-disabled="true"' : ''}>
           <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
@@ -415,6 +439,7 @@
           type="button"
           class="v-page-btn v-mobile-nav-btn v-page-prev"
           data-action="page-prev"
+          onclick="window.VelvetPagination ? window.VelvetPagination.jumpToPage(${currentPage - 1}) : (window.jumpToPage && window.jumpToPage(${currentPage - 1}))"
           aria-label="Ir a la página anterior"
           ${isFirstPage ? 'disabled aria-disabled="true"' : ''}>
           <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -435,6 +460,7 @@
           type="button"
           class="v-page-btn v-mobile-nav-btn v-page-next"
           data-action="page-next"
+          onclick="window.VelvetPagination ? window.VelvetPagination.jumpToPage(${currentPage + 1}) : (window.jumpToPage && window.jumpToPage(${currentPage + 1}))"
           aria-label="Ir a la página siguiente"
           ${isLastPage ? 'disabled aria-disabled="true"' : ''}>
           <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
@@ -621,6 +647,19 @@
     jumpToPage(validation.page);
   }
 
+  function focusJumpInput(context = 'desktop') {
+    if (context === 'desktop' && typeof window !== 'undefined' && window.innerWidth >= 768) {
+      const input = document.getElementById('v-page-jump-input-desktop');
+      if (input) {
+        clearJumpError('desktop');
+        input.focus();
+        input.select();
+      }
+    } else {
+      openBottomSheet();
+    }
+  }
+
   // ==========================================================================
   // 6. DELEGACIÓN DE EVENTOS (DATA-ACTION) & ACCESIBILIDAD
   // ==========================================================================
@@ -644,23 +683,17 @@
 
       case 'page-number': {
         e.preventDefault();
-        const pageNum = parseInt(actionEl.getAttribute('data-page'), 10);
+        let pageNum = parseInt(actionEl.getAttribute('data-page'), 10);
+        if (isNaN(pageNum)) {
+          pageNum = parseInt(actionEl.textContent.trim(), 10);
+        }
         if (!isNaN(pageNum)) jumpToPage(pageNum);
         break;
       }
 
       case 'focus-jump': {
         e.preventDefault();
-        if (window.innerWidth >= 768) {
-          const input = document.getElementById('v-page-jump-input-desktop');
-          if (input) {
-            clearJumpError('desktop');
-            input.focus();
-            input.select();
-          }
-        } else {
-          openBottomSheet();
-        }
+        focusJumpInput('desktop');
         break;
       }
 
@@ -826,6 +859,7 @@
     resetLoadingState,
     openBottomSheet,
     closeBottomSheet,
+    focusJumpInput,
     getState: () => ({ ...state })
   };
 
