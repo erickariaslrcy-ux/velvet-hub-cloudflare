@@ -345,6 +345,16 @@ function xasiatAlbumPreview(targetUrl) {
   return `https://pic.xascdn.li/contents/albums/preview/380x507/${match[1]}/${match[2]}/preview.jpg`;
 }
 
+// Para páginas individuales de galerías xasiat, cada foto tiene su miniatura
+// correspondiente en el CDN de xascdn (evita repetir la portada del álbum en el lector).
+function xasiatPhotoThumbnail(targetUrl) {
+  const raw = String(targetUrl || "");
+  if (!/xasiat\.com/i.test(raw)) return "";
+  const match = raw.match(/\/sources\/(\d+)\/(\d+)\/(\d+)\.jpg/i);
+  if (!match) return "";
+  return `https://pic.xascdn.li/contents/albums/main/200x150/${match[1]}/${match[2]}/${match[3]}.jpg`;
+}
+
 // cdn.buondua.com/{host-real}/ruta también cae en el challenge. El archivo
 // está en el host que va embebido en la ruta (pok.misskon.com, etc.).
 function unwrapBuonduaEmbed(targetUrl) {
@@ -366,7 +376,7 @@ function photonCoverUrl(targetUrl) {
   return `https://i0.wp.com/${host}${parsed.pathname}?ssl=1`;
 }
 
-function galleryFetchPlan(targetUrl) {
+function galleryFetchPlan(targetUrl, targetWidth) {
   const primary = normalizeUpstreamUrl(targetUrl);
   if (!primary) return [];
   const ordered = [];
@@ -375,12 +385,20 @@ function galleryFetchPlan(targetUrl) {
     if (!next || ordered.indexOf(next) !== -1) return;
     ordered.push(next);
   };
-  add(xasiatAlbumPreview(primary));
+  const isThumbnail = targetWidth !== undefined ? Number(targetWidth) > 0 : true;
+
+  if (isThumbnail) {
+    add(xasiatAlbumPreview(primary));
+  }
   add(unwrapBuonduaEmbed(primary));
   let host = "";
   try { host = new URL(primary).hostname.toLowerCase(); } catch (e) { host = ""; }
   if (hostnameEndsWith(host, "buondua.com")) add(photonCoverUrl(primary));
   add(primary);
+  if (!isThumbnail) {
+    add(xasiatPhotoThumbnail(primary));
+    add(xasiatAlbumPreview(primary));
+  }
   if (hostnameEndsWith(host, "4khd.com")) add(photonCoverUrl(primary));
   return ordered;
 }
@@ -390,7 +408,7 @@ function isGalleryFallbackUrl(urlStr) {
     const parsed = new URL(urlStr);
     if (parsed.protocol !== "https:") return false;
     const host = parsed.hostname.toLowerCase();
-    if (host === "pic.xascdn.li" && parsed.pathname.includes("/contents/albums/preview/")) return true;
+    if (host === "pic.xascdn.li" && (parsed.pathname.includes("/contents/albums/preview/") || parsed.pathname.includes("/contents/albums/main/"))) return true;
     if (host === "pok.misskon.com" && parsed.pathname.startsWith("/images/")) return true;
     if (host === "i0.wp.com") {
       const embedded = parsed.pathname.replace(/^\//, "").split("/")[0].toLowerCase();
@@ -1737,14 +1755,28 @@ export async function onRequest(context) {
     const spoofedReferer = inferUpstreamReferer(targetMediaUrl, payload.r || "");
     const clientRange = context.request.headers.get("Range");
 
-    const buildUpstreamHeaders = (currentReferer, includeRange) => {
+    const buildUpstreamHeaders = (currentReferer, includeRange, currentUrl) => {
+      let activeReferer = currentReferer || spoofedReferer;
+      const targetStr = String(currentUrl || targetMediaUrl || "");
+      let extraCookie = "";
+
+      if (targetStr.includes("xasiat.com") || targetStr.includes("xascdn.li")) {
+        const xMatch = targetStr.match(/\/sources\/(\d+)\/(\d+)\//i);
+        if (xMatch) {
+          const albumId = xMatch[2];
+          activeReferer = `https://www.xasiat.com/albums/${albumId}/`;
+          extraCookie = `kt_qparams=id%3D${albumId}; kt_acctoken=MTkwLjYyLjg5LjE3Mg`;
+        }
+      }
+
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-        "Referer": currentReferer || spoofedReferer,
+        "Referer": activeReferer,
         "Accept": isVideo ? "*/*" : "image/avif,image/webp,image/apng,image/jpeg,image/png,*/*;q=0.8",
         "Accept-Encoding": "identity"
       };
-      const originHeader = refererOrigin(currentReferer || spoofedReferer);
+      if (extraCookie) headers["Cookie"] = extraCookie;
+      const originHeader = refererOrigin(activeReferer);
       if (originHeader) headers["Origin"] = originHeader;
       if (includeRange && clientRange) headers["Range"] = clientRange;
       return headers;
@@ -1770,7 +1802,7 @@ export async function onRequest(context) {
         for (let hop = 0; hop < 4; hop++) {
           last = await fetch(current, {
             method: method === "HEAD" ? "HEAD" : "GET",
-            headers: buildUpstreamHeaders(spoofedReferer, false),
+            headers: buildUpstreamHeaders(spoofedReferer, false, current),
             redirect: "manual",
             cf: {
               cacheEverything: true,
@@ -1797,7 +1829,7 @@ export async function onRequest(context) {
       if (isVideo) {
         upstream = await fetch(targetMediaUrl, {
           method,
-          headers: buildUpstreamHeaders(spoofedReferer, true),
+          headers: buildUpstreamHeaders(spoofedReferer, true, targetMediaUrl),
           redirect: "follow",
           cf: { cacheTtl: 0, cacheEverything: false }
         });
@@ -1805,7 +1837,7 @@ export async function onRequest(context) {
           return Response.redirect(targetMediaUrl, 307);
         }
       } else {
-        const plan = galleryFetchPlan(targetMediaUrl);
+        const plan = galleryFetchPlan(targetMediaUrl, targetWidth);
         const primaryUrl = normalizeUpstreamUrl(targetMediaUrl);
         upstream = null;
         for (let i = 0; i < plan.length; i++) {

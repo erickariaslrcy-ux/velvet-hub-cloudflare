@@ -40,6 +40,7 @@ const loadApi = new Function("exports", prelude + `
   exports.maskCoverFields = maskCoverFields;
   exports.galleryFetchPlan = galleryFetchPlan;
   exports.xasiatAlbumPreview = xasiatAlbumPreview;
+  exports.xasiatPhotoThumbnail = xasiatPhotoThumbnail;
   exports.unwrapBuonduaEmbed = unwrapBuonduaEmbed;
   exports.isFollowableMediaRedirect = isFollowableMediaRedirect;
   exports.isGalleryFallbackUrl = isGalleryFallbackUrl;
@@ -61,6 +62,7 @@ const {
   maskCoverFields,
   galleryFetchPlan,
   xasiatAlbumPreview,
+  xasiatPhotoThumbnail,
   unwrapBuonduaEmbed,
   isFollowableMediaRedirect,
   isGalleryFallbackUrl
@@ -420,6 +422,35 @@ assert.equal(xasiatRes.status, 200, "La portada xasiat sale de la preview de xas
 assert.equal(xasiatRes.headers.get("X-Velvet-Media"), "mirror");
 assert.ok(xasiatCalls[0].includes("/380x507/36000/36203/preview.jpg"));
 assert.equal(xasiatCalls.some((u) => u.includes("xasiat.com/get_image")), false);
+
+// [VERIFICACIÓN DEL LECTOR DE GALERÍAS (w=0)]
+const xasiatReaderPlan = galleryFetchPlan(xasiatBlocked, 0);
+assert.equal(xasiatReaderPlan[0], xasiatBlocked, "En el visor/lector (w=0) la primera opción es la foto original");
+assert.equal(
+  xasiatReaderPlan[1],
+  "https://pic.xascdn.li/contents/albums/main/200x150/36000/36203/2534993.jpg",
+  "Segunda opción en el visor es la miniatura individual de la foto en xascdn (no repite la portada)"
+);
+assert.equal(
+  xasiatReaderPlan[2],
+  "https://pic.xascdn.li/contents/albums/preview/380x507/36000/36203/preview.jpg",
+  "Última opción en el visor es la portada como fallback"
+);
+
+const xasiatReaderCalls = [];
+const xasiatReaderRes = await callMedia(xasiatToken, "", async (input) => {
+  const url = typeof input === "string" ? input : input.url;
+  xasiatReaderCalls.push(url);
+  // Simular que xasiat original responde 403 y se recurre al CDN individual
+  if (url.includes("/main/200x150/36000/36203/2534993.jpg")) return jpeg();
+  return blockedHtml();
+});
+assert.equal(xasiatReaderRes.status, 200, "La foto de página sale del CDN individual");
+assert.equal(xasiatReaderCalls[0], xasiatBlocked, "El visor intenta la foto original primero");
+assert.ok(
+  xasiatReaderCalls[1].includes("/main/200x150/36000/36203/2534993.jpg"),
+  "Si falla la original, el visor usa la foto individual y no la portada repetida"
+);
 
 const hdUrl = "https://pic.4khd.com/album/w1090-h1500-p-k-no-rw/4KHD-beautifulGirls.webp";
 const hdToken = await encodeMediaToken(hdUrl, "", mediaSecret, bucketStart + 20);
