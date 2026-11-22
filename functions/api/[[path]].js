@@ -548,7 +548,7 @@ function catalogPageOffset(page, pageSize, totalItems, seed, random) {
   const total = Math.max(0, Number(totalItems) || 0);
   const totalPages = Math.max(1, Math.ceil(total / size) || 1);
   const safePage = Math.max(1, Number(page) || 1);
-  const logical = (safePage - 1) % totalPages;
+  const logical = random ? ((safePage - 1) % totalPages) : (safePage - 1);
   const index = random ? permutePageIndex(logical, totalPages, seed) : logical;
   return { offset: index * size, index, totalPages, pageSize: size, page: safePage };
 }
@@ -764,7 +764,7 @@ function orderCatalogForSlot(items, slot, mediaType) {
 
 function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "4");
+  u.searchParams.set("cv", "5");
   if (slot !== undefined && slot !== null && slot !== "") {
     u.searchParams.set("rot", String(slot));
   }
@@ -2870,12 +2870,14 @@ export async function onRequest(context) {
     let totalCount = estimatedTotal;
     let usedShuffleSample = false;
     let filteredSpan = null;
-    try {
-      filteredSpan = await fetchCatalogSpan(SUPABASE_URL, SUPABASE_KEY, filterQuery);
-    } catch (spanErr) {
-      filteredSpan = null;
+    if (!q) {
+      try {
+        filteredSpan = await fetchCatalogSpan(SUPABASE_URL, SUPABASE_KEY, filterQuery);
+      } catch (spanErr) {
+        filteredSpan = null;
+      }
+      if (filteredSpan && filteredSpan.total > 0) totalCount = filteredSpan.total;
     }
-    if (filteredSpan && filteredSpan.total > 0) totalCount = filteredSpan.total;
 
     try {
       if (freshShuffle) {
@@ -2915,7 +2917,7 @@ export async function onRequest(context) {
     );
     let offset = pagePlan.offset;
     let cursorId = null;
-    if (offset > 240) {
+    if (offset > 240 && !q) {
       const boundaryKey = `boundary:v3:${filterQuery}:${offset}`;
       const cachedBoundary = getIsolateCache(ISOLATE_CATALOG_CACHE, boundaryKey, 1800000);
       let boundaryId = cachedBoundary && cachedBoundary.id ? Number(cachedBoundary.id) : 0;

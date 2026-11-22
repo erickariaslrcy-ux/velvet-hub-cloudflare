@@ -1223,27 +1223,6 @@
           <span>Juegos</span>
         </a>
 
-        <a
-          id="mode-btn-vault"
-          href="/boveda/favoritos"
-          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-pink-300/80 hover:text-white hover:bg-pink-500/20 cursor-pointer"
-          title="Ver Mis Favoritos"
-        >
-          <i class="fa-solid fa-heart text-xs text-pink-500"></i>
-          <span>Bóveda</span>
-          <span class="vault-fav-counter text-[10px] px-1.5 py-0.2 rounded-full bg-pink-500/20 text-pink-300 font-mono">0</span>
-        </a>
-
-        <a
-          id="mode-btn-account"
-          href="/cuenta"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer"
-          title="Cuenta / Mi Perfil"
-        >
-          <i class="fa-solid fa-circle-user text-xs text-pink-300"></i>
-          <span class="hidden xl:inline">Cuenta</span>
-        </a>
-
       </div>
 
       <!-- Barra de Búsqueda de Cómics y Videos Calientes -->
@@ -2422,7 +2401,7 @@
               </div>
 
               <!-- Botón Central de Play Grande (Pausado) -->
-              <div id="video-center-play-btn" class="video-controls-locked absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
+              <div id="video-center-play-btn" class="hidden video-controls-locked absolute inset-0 flex items-center justify-center z-20 pointer-events-none transition-all duration-200">
                 <button type="button" data-action="video-play-toggle" onclick="event.stopPropagation(); toggleVideoPlay()" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#180c22]/85 hover:bg-[#ff2d95] text-white flex items-center justify-center text-2xl sm:text-3xl shadow-[0_0_30px_rgba(255,45,149,0.35)] hover:scale-105 active:scale-95 transition-all duration-200 border border-white/20 hover:border-transparent pointer-events-auto cursor-pointer" title="Reproducir (Espacio)">
                   <i class="fa-solid fa-play ml-1 drop-shadow"></i>
                 </button>
@@ -6563,7 +6542,7 @@
       // Un "Al Azar" nunca reutiliza esa caché: cada clic tiene que salir a la red.
       if (!skipCache && !state.freshShuffle) {
         try {
-          const stored = sessionStorage.getItem('vcache4_' + cacheKey);
+          const stored = sessionStorage.getItem('vcache5_' + cacheKey);
           if (stored) {
             const parsed = JSON.parse(stored);
             if (parsed && parsed.data && parsed.data.items && parsed.data.items.length > 0) {
@@ -6627,7 +6606,7 @@
         if (!state.freshShuffle) {
           try {
             const cachedJson = JSON.stringify({ ts: Date.now(), data });
-            sessionStorage.setItem('vcache4_' + cacheKey, cachedJson);
+            sessionStorage.setItem('vcache5_' + cacheKey, cachedJson);
           } catch (e) {}
         }
 
@@ -7376,7 +7355,7 @@
           : VIDEO_FALLBACK_SVG;
         const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const duration = (it.extra && it.extra.duration) || 'HD';
-        const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || (it.source ? it.source.toUpperCase() : 'Morbo');
+        const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || 'Morbo VIP';
         const viewsCount = (it.extra && it.extra.views) ? `${it.extra.views} vistas` : null;
         const domColor = getCardDominantColor(cardId);
 
@@ -7630,7 +7609,7 @@
         bar.querySelectorAll('button, input').forEach((el) => { el.disabled = true; });
       }
       if (center) {
-        center.classList.add('video-controls-locked');
+        center.classList.add('video-controls-locked', 'hidden');
         const btn = center.querySelector('button');
         if (btn) btn.disabled = true;
       }
@@ -7656,6 +7635,9 @@
         center.classList.remove('video-controls-locked');
         const btn = center.querySelector('button');
         if (btn) btn.disabled = false;
+        if (player && !player.paused) {
+          center.classList.add('hidden');
+        }
       }
       if (loader) loader.classList.add('hidden');
       const buffSpinner = document.getElementById('video-buffering-spinner');
@@ -8112,11 +8094,11 @@
           try { player.pause(); } catch (e) {}
           return;
         }
+        const centerPlay = document.getElementById('video-center-play-btn');
+        if (centerPlay) centerPlay.classList.add('hidden');
         if (player.readyState >= 2) unlockVideoControls();
         if (videoControlsLocked) return;
         if (playIcon) playIcon.className = 'fa-solid fa-pause';
-        const centerPlay = document.getElementById('video-center-play-btn');
-        if (centerPlay) centerPlay.classList.add('hidden');
         if (buffSpinner) buffSpinner.classList.add('hidden');
         stopFaviconPulse();
         scheduleAmbilightLoop();
@@ -8153,6 +8135,9 @@
           return;
         }
         unlockVideoControls();
+        const centerPlay = document.getElementById('video-center-play-btn');
+        if (centerPlay) centerPlay.classList.add('hidden');
+        if (playIcon) playIcon.className = 'fa-solid fa-pause';
         startFrameRateWatchdog();
 
         if (videoWatchdogTimer) {
@@ -10229,7 +10214,9 @@
               </h4>
             </div>
             <div class="pt-1.5 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
-              <span class="text-lav/60 text-[10px]">${escapeHtml(it.source ? it.source.toUpperCase() : 'MORBO')}</span>
+              <span class="text-lav/60 text-[10px] truncate max-w-[120px] flex items-center gap-1">
+                <i class="fa-solid fa-crown text-[8px] text-amber-400"></i> ${escapeHtml((it.artists && it.artists[0]) || 'Morbo VIP')}
+              </span>
               <span class="text-[#ff4da8] font-bold text-[10px] group-hover:translate-x-0.5 transition-transform">Leer &rarr;</span>
             </div>
           </div>

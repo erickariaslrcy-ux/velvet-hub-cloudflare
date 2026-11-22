@@ -111,4 +111,33 @@ assert.equal(calcTotalPages(3, 24), 1);
 assert.equal(calcTotalPages(0, 24), 1);
 console.log("✓ Coherencia matemática de páginas verificada.");
 
+// 6. Verificación de paginación secuencial en búsquedas (sin wrapping ni estancamiento)
+console.log("\n[6] Verificando paginación secuencial y sin wrapping para búsquedas...");
+const prelude = functionsCode.substring(
+  functionsCode.indexOf("// ============================================================================="),
+  functionsCode.indexOf("export async function onRequest")
+);
+const testCtx = {};
+new Function("exports", prelude + "\nexports.catalogPageOffset = catalogPageOffset;")(testCtx);
+const { catalogPageOffset } = testCtx;
+
+// Búsqueda con 80 resultados totales (4 páginas de 24)
+const searchTotal = 80;
+const p1 = catalogPageOffset(1, 24, searchTotal, 1, false);
+const p2 = catalogPageOffset(2, 24, searchTotal, 1, false);
+const p3 = catalogPageOffset(3, 24, searchTotal, 1, false);
+const p4 = catalogPageOffset(4, 24, searchTotal, 1, false);
+
+assert.equal(p1.offset, 0, "Página 1 debe tener offset 0");
+assert.equal(p2.offset, 24, "Página 2 debe tener offset 24");
+assert.equal(p3.offset, 48, "Página 3 debe tener offset 48");
+assert.equal(p4.offset, 72, "Página 4 debe tener offset 72");
+assert.notEqual(p2.offset, p1.offset, "Página 2 no debe repetir el offset de la página 1");
+assert.notEqual(p3.offset, p2.offset, "Página 3 no debe repetir el offset de la página 2");
+
+// Búsqueda con estimación pequeña inicial (e.g. 24)
+const p2SmallEstimate = catalogPageOffset(2, 24, 24, 1, false);
+assert.equal(p2SmallEstimate.offset, 24, "Página 2 no debe colapsar a 0 con estimaciones pequeñas");
+console.log("✓ Paginación secuencial en búsquedas validada exitosamente.");
+
 console.log("\n=== TODAS LAS PRUEBAS DE LA FASE 1 PASARON CON ÉXITO ===");
