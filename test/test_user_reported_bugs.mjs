@@ -73,8 +73,8 @@ assert.ok(
   'El backend NO debe aplicar saltos aleatorios de amplio espectro cuando hay categorías o búsquedas activas'
 );
 assert.ok(
-  apiJs.includes("postgrestUrl.replace(/offset=\\d+/, 'offset=0')"),
-  'El backend DEBE preservar los filtros de categoría si un offset profundo excede el rango (416)'
+  !apiJs.includes("postgrestUrl.replace(/offset=\\d+/, 'offset=0')"),
+  'Un offset fuera de rango no puede reescribirse a la página 1: eso repetía los mismos títulos'
 );
 
 // [5] REPORTE 5: Juegos & Videos - "Al Azar" dinámico y sincronización de paginación

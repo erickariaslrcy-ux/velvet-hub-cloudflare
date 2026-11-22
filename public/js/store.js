@@ -26,6 +26,45 @@
   const PROGRESS_KEY = 'velvet_progress';
   const FAVORITES_KEY = 'velvet_favorites';
 
+  function compactStoredFavorite(f) {
+    if (!f || typeof f !== 'object') return null;
+    const id = parseInt(f.id || f.item_id, 10);
+    const hasId = Number.isInteger(id) && id > 0;
+    if (!hasId && !(f.source && f.source_id)) return null;
+    const out = {};
+    if (hasId) {
+      out.id = id;
+      out.item_id = id;
+    }
+    if (f.source) out.source = String(f.source).slice(0, 40);
+    if (f.source_id != null && f.source_id !== '') out.source_id = String(f.source_id).slice(0, 80);
+    if (f.media_type) out.media_type = String(f.media_type).slice(0, 16);
+    if (f.title) out.title = String(f.title).slice(0, 80);
+    return out;
+  }
+
+  function compactStoredHistory(h) {
+    if (!h || typeof h !== 'object') return null;
+    const id = parseInt(h.id || h.item_id, 10);
+    const hasId = Number.isInteger(id) && id > 0;
+    if (!hasId && !(h.source && h.source_id)) return null;
+    const out = {
+      media_type: String(h.media_type || '').slice(0, 16),
+      position: Math.max(0, parseInt(h.position || h.page || h.currentTime || 0, 10) || 0),
+      duration: Math.max(0, parseInt(h.duration || h.total || 0, 10) || 0),
+      completed: !!h.completed,
+      at: Number(h.at || 0) || 0
+    };
+    if (hasId) {
+      out.id = id;
+      out.item_id = id;
+    }
+    if (h.source) out.source = String(h.source).slice(0, 40);
+    if (h.source_id != null && h.source_id !== '') out.source_id = String(h.source_id).slice(0, 80);
+    if (h.title) out.title = String(h.title).slice(0, 80);
+    return out;
+  }
+
   const DEFAULT_PREFERENCES = {
     version: 2,
     defaultQuality: 'auto',       // 'auto' | '1080p' | '720p' | '480p'
@@ -298,7 +337,8 @@
 
     setHistory(hist) {
       try {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(hist || []));
+        const slim = (Array.isArray(hist) ? hist : []).map(compactStoredHistory).filter(Boolean).slice(0, 50);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(slim));
         window.dispatchEvent(new CustomEvent('velvet:history-updated', { detail: hist }));
       } catch (e) {}
     },
@@ -382,7 +422,14 @@
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ item: newEntry })
+            body: JSON.stringify({
+            item_id: item.id || item.item_id,
+            media_type: newEntry.media_type,
+            position: newEntry.currentTime || newEntry.page || 0,
+            duration: newEntry.duration || newEntry.total || 0,
+            completed: !!newEntry.completed,
+            client_timestamp: newEntry.at
+          })
           }).catch(() => {});
         } catch (e) {}
       }
@@ -470,10 +517,11 @@
     setFavorites(favs) {
       try {
         const list = Array.isArray(favs) ? favs : [];
-        const serialized = JSON.stringify(list);
+        const serialized = JSON.stringify(list.map(compactStoredFavorite).filter(Boolean));
         localStorage.setItem(FAVORITES_KEY, serialized);
         localStorage.setItem('velvet_guest_favs', serialized);
         localStorage.setItem('velvet_favs', serialized);
+        localStorage.setItem('velvet_fav_ids', serialized);
         if (window.state) window.state.favorites = list;
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: list }));
       } catch (e) {}
@@ -522,7 +570,13 @@
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify(newFav)
+            body: JSON.stringify({
+            id: item.id || null,
+            item_id: item.id || null,
+            source: item.source || '',
+            source_id: item.source_id || '',
+            media_type: item.media_type || 'comic'
+          })
           }).catch(() => {});
         } catch (e) {}
       }

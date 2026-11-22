@@ -39,7 +39,7 @@ assert(indexHtml.includes('transform: translateZ(0)'), 'Hardware acceleration (t
 
 // 2. Check SmartImageLoader enhancements
 assert(indexHtml.includes('cancelPendingForElement'), 'SmartImageLoader implements queue cancellation and aborts for off-screen items');
-assert(indexHtml.includes('isSlowConn ? 2 : 5'), 'SmartImageLoader throttles concurrency based on network connection status');
+assert(indexHtml.includes('isSlowConn ? 4 : 8'), 'SmartImageLoader throttles concurrency based on network connection status');
 assert(indexHtml.includes('img.dataset.loaded = \'true\''), 'SmartImageLoader marks loaded elements to avoid redundant processing');
 
 // 3. Check Comic Reader preloading & lookahead

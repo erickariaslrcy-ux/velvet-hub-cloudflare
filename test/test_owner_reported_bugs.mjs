@@ -84,7 +84,7 @@ assert.notDeepEqual(page1.ids, rotatedHome.ids);
 assert.ok(api.includes('searchParams.set("rot"'), "La caché de borde debe variar con la ventana de 3 horas");
 assert.ok(api.includes("const catalogSlot = Math.floor(Date.now() / (3 * 3600 * 1000));"));
 assert.ok(api.includes("id=lte.${cursorId}"));
-assert.ok(api.includes("postgrestUrl.replace(/offset=\\d+/, 'offset=0')"));
+assert.ok(!api.includes("postgrestUrl.replace(/offset=\\d+/, 'offset=0')"), "Una página fuera de rango no puede volver a pintar la página 1");
 assert.ok(api.includes("fetchPmvPage = ((randomBasePage + (page - 1) * 3) % 2500) + 1;"));
 assert.ok(api.includes('const isRandomMode = (sort === "random" || seedParam > 0) && !q && !tag && (!category || category === "all");'));
 assert.ok(!indexHtml.includes("velvet_user_rot_salt"), "La rotación no puede depender de una sal por usuario");

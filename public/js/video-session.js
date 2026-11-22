@@ -43,6 +43,10 @@
 
   function teardownVideoElement(video) {
     if (!video) return;
+    // display:none no corta el audio. Silenciar antes de soltar el src
+    // evita que un play() tardío deje el video sonando en otra página.
+    try { video.muted = true; } catch (e) {}
+    try { video.volume = 0; } catch (e) {}
     try { video.pause(); } catch (e) {}
     try { video.removeAttribute('src'); } catch (e) {}
     try { video.src = ''; } catch (e) {}

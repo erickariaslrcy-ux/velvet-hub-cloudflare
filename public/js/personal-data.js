@@ -56,7 +56,9 @@
     isLoading: false,
     error: null,
     controller: null,
-    requestId: 0
+    requestId: 0,
+    ids: null,
+    refs: []
   };
 
   // Estado de Historial
@@ -113,6 +115,51 @@
 
   function safeGet(key) {
     try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function compactFavRecord(f) {
+    if (!f || typeof f !== 'object') return null;
+    const id = parseInt(f.id || f.item_id, 10);
+    const hasId = Number.isInteger(id) && id > 0;
+    if (!hasId && !(f.source && f.source_id)) return null;
+    const out = {};
+    if (hasId) {
+      out.id = id;
+      out.item_id = id;
+    }
+    if (f.source) out.source = String(f.source).slice(0, 40);
+    if (f.source_id != null && f.source_id !== '') out.source_id = String(f.source_id).slice(0, 80);
+    if (f.media_type) out.media_type = String(f.media_type).slice(0, 16);
+    if (f.title) out.title = String(f.title).slice(0, 80);
+    return out;
+  }
+
+  function compactHistRecord(h) {
+    if (!h || typeof h !== 'object') return null;
+    const id = parseInt(h.id || h.item_id, 10);
+    const hasId = Number.isInteger(id) && id > 0;
+    if (!hasId && !(h.source && h.source_id)) return null;
+    const isVid = h.media_type === 'video';
+    const pos = Math.max(0, parseInt(h.position || h.page || h.currentTime || 0, 10) || 0);
+    const dur = Math.max(0, parseInt(h.duration || h.total || 0, 10) || 0);
+    const out = {
+      media_type: String(h.media_type || (isVid ? 'video' : 'comic')).slice(0, 16),
+      position: pos,
+      duration: dur,
+      completed: !!h.completed,
+      at: Number(h.at || h.client_timestamp || 0) || 0
+    };
+    if (hasId) {
+      out.id = id;
+      out.item_id = id;
+    }
+    if (h.source) out.source = String(h.source).slice(0, 40);
+    if (h.source_id != null && h.source_id !== '') out.source_id = String(h.source_id).slice(0, 80);
+    if (h.title) out.title = String(h.title).slice(0, 80);
+    if (!isVid && pos) out.page = pos;
+    if (!isVid && dur) out.total = dur;
+    if (isVid && pos) out.currentTime = pos;
+    return out;
   }
 
   function purgeBulkyLocalKeys() {
@@ -351,6 +398,8 @@
     handleSessionSwitched() {
       // Limpiar estado en memoria al cerrar sesión o cambiar de usuario
       _favState.items = [];
+      _favState.ids = null;
+      _favState.refs = [];
       _favState.total = 0;
       _favState.page = 1;
       _favState.totalPages = 1;
@@ -563,9 +612,12 @@
       histKeys.push('velvet_history', 'velvet_guest_history');
 
       const cachedFavs = readLocalCache('favs', null);
-      const favList = Array.isArray(cachedFavs) && cachedFavs.length ? cachedFavs : this.readLegacyList(favKeys);
+      const favList = (Array.isArray(cachedFavs) && cachedFavs.length ? cachedFavs : this.readLegacyList(favKeys))
+        .map(compactFavRecord)
+        .filter(Boolean);
       if (favList.length) {
         _favState.items = favList;
+        _favState.ids = favList.map(f => parseInt(f.id, 10)).filter(n => Number.isInteger(n) && n > 0);
         const storedTotal = Number(readLocalCache('favs_total', favList.length));
         _favState.total = storedTotal > 0 ? storedTotal : favList.length;
         _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
@@ -573,7 +625,10 @@
       }
 
       const cachedHist = readLocalCache('history', null);
-      const histList = Array.isArray(cachedHist) && cachedHist.length ? cachedHist : this.readLegacyList(histKeys);
+      const histList = (Array.isArray(cachedHist) && cachedHist.length ? cachedHist : this.readLegacyList(histKeys))
+        .map(compactHistRecord)
+        .filter(Boolean)
+        .slice(0, 50);
       if (histList.length) {
         _histState.items = histList;
         const storedTotal = Number(readLocalCache('history_total', histList.length));
@@ -585,23 +640,34 @@
 
     publishCanonical(kind) {
       if (kind !== 'history') {
-        writeLocalCache('favs', _favState.items);
-        writeLocalCache('favs_total', _favState.total);
+        let compactFavs;
+        if (Array.isArray(_favState.ids) && _favState.ids.length) {
+          const byId = new Map((_favState.items || []).map(it => [String(it.id || it.item_id), it]));
+          compactFavs = _favState.ids.map(id => compactFavRecord(byId.get(String(id)) || { id, item_id: id })).filter(Boolean);
+          (_favState.refs || []).forEach(ref => {
+            const slim = compactFavRecord(ref);
+            if (slim && !slim.id) compactFavs.push(slim);
+          });
+        } else {
+          compactFavs = (_favState.items || []).map(compactFavRecord).filter(Boolean);
+        }
+        writeLocalCache('favs', compactFavs);
+        writeLocalCache('favs_total', compactFavs.length);
         try {
-          const serialized = JSON.stringify(_favState.items || []);
+          const serialized = JSON.stringify(compactFavs);
           localStorage.setItem('velvet_favorites', serialized);
           localStorage.setItem('velvet_guest_favs', serialized);
           localStorage.setItem('velvet_favs', serialized);
+          localStorage.setItem('velvet_fav_ids', serialized);
         } catch (e) {}
-        if (window.state) window.state.favorites = _favState.items.slice();
       }
       if (kind !== 'favorites') {
-        writeLocalCache('history', _histState.items);
-        writeLocalCache('history_total', _histState.total);
+        const compactHist = (_histState.items || []).map(compactHistRecord).filter(Boolean).slice(0, 50);
+        writeLocalCache('history', compactHist);
+        writeLocalCache('history_total', compactHist.length);
         try {
-          localStorage.setItem('velvet_history', JSON.stringify(_histState.items || []));
+          localStorage.setItem('velvet_history', JSON.stringify(compactHist));
         } catch (e) {}
-        if (window.state) window.state.history = _histState.items.slice();
       }
       this.updateAllCounters();
     },
@@ -628,11 +694,80 @@
       };
     },
 
+    async _loadCanonicalFavoriteIds(signal, currentReqId) {
+      const idRes = await this.fetchAuthed('/api/user/favorites?ids=1', { signal });
+      if (currentReqId !== _favState.requestId) return 'stale';
+      if (!idRes) return 'degraded';
+      if (idRes.status === 401) return 'auth';
+      if (!idRes.ok) return 'degraded';
+      const idData = await idRes.json();
+      if (!idData || idData.degraded || !Array.isArray(idData.ids)) return 'degraded';
+
+      let serverIds = idData.ids.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
+      const refs = (Array.isArray(idData.refs) ? idData.refs : []).map(compactFavRecord).filter(Boolean);
+      const localCompact = (_favState.items || []).map(compactFavRecord).filter(Boolean);
+      const serverSet = new Set(serverIds.map(String));
+      const missing = localCompact.filter(f => f.id && !serverSet.has(String(f.id)));
+      const serverEmpty = serverIds.length === 0 && refs.length === 0;
+      if ((serverEmpty && localCompact.some(f => f.id)) || missing.length > 0) {
+        if (!_favState._pushedLocal) {
+          const payloadSrc = serverEmpty ? localCompact.filter(f => f.id) : missing;
+          const syncRes = await this.fetchAuthed('/api/user/favorites', {
+            method: 'POST',
+            body: JSON.stringify({
+              items: payloadSrc.slice(0, 2000).map(f => ({
+                id: f.id,
+                item_id: f.id,
+                source: f.source || '',
+                source_id: f.source_id || '',
+                media_type: f.media_type || ''
+              }))
+            })
+          });
+          if (syncRes && syncRes.ok) {
+            _favState._pushedLocal = true;
+            const again = await this.fetchAuthed('/api/user/favorites?ids=1', { signal });
+            if (again && again.ok) {
+              const againData = await again.json();
+              if (againData && Array.isArray(againData.ids) && !againData.degraded) {
+                serverIds = againData.ids.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
+              }
+            }
+          }
+        }
+      }
+
+      const details = new Map();
+      let page = 1;
+      let totalPages = 1;
+      while (page <= totalPages && page <= 8) {
+        const res = await this.fetchAuthed(`/api/user/favorites?page=${page}&pageSize=50`, { signal });
+        if (currentReqId !== _favState.requestId) return 'stale';
+        if (!res || !res.ok) break;
+        const data = await res.json();
+        if (!data || data.degraded) break;
+        totalPages = data.totalPages || 1;
+        (data.items || []).forEach(it => {
+          const n = parseInt(it.id || it.item_id, 10);
+          if (n > 0) details.set(n, it);
+        });
+        page++;
+      }
+
+      _favState.ids = serverIds;
+      _favState.refs = refs.filter(ref => !ref.id);
+      _favState.items = serverIds.map(id => details.get(id) || { id, item_id: id });
+      _favState.refs.forEach(ref => _favState.items.push(ref));
+      _favState.total = _favState.items.length;
+      _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
+      return 'ok';
+    },
+
     async fetchFavorites(page = 1, options = {}) {
       if (!this.isAuthenticated()) {
         // Invitado: leer de caché de invitado
         const guestFavs = readLocalCache('favs', []);
-        _favState.items = Array.isArray(guestFavs) ? guestFavs : [];
+        _favState.items = (Array.isArray(guestFavs) ? guestFavs : []).map(compactFavRecord).filter(Boolean);
         _favState.total = _favState.items.length;
         _favState.page = 1;
         _favState.totalPages = 1;
@@ -660,6 +795,25 @@
       window.dispatchEvent(new CustomEvent('velvet:favorites-loading', { detail: { page: _favState.page } }));
 
       try {
+        if (_favState.filter === 'all' && _favState.page === 1) {
+          const synced = await this._loadCanonicalFavoriteIds(_favState.controller.signal, currentReqId);
+          if (currentReqId !== _favState.requestId) return;
+          if (synced === 'auth') {
+            _favState.isLoading = false;
+            _favState.error = 'Sesión expirada';
+            window.dispatchEvent(new CustomEvent('velvet:favorites-error', { detail: { error: _favState.error } }));
+            return this.getFavoritesState();
+          }
+          if (synced === 'ok') {
+            _favState.isLoading = false;
+            _favState.error = null;
+            this.publishCanonical('favorites');
+            this.updateSyncStatusText();
+            window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
+            return this.getFavoritesState();
+          }
+        }
+
         const queryParams = new URLSearchParams({
           page: String(_favState.page),
           pageSize: String(_favState.pageSize)
@@ -706,7 +860,9 @@
             try {
               const syncRes = await this.fetchAuthed('/api/user/favorites', {
                 method: 'POST',
-                body: JSON.stringify({ items: localBefore })
+                body: JSON.stringify({
+                  items: localBefore.map(compactFavRecord).filter(f => f && f.id).slice(0, 2000)
+                })
               });
               if (syncRes && syncRes.ok) {
                 const again = await this.fetchFavorites(page);
@@ -731,7 +887,6 @@
         _favState.isLoading = false;
         _favState.error = null;
 
-        writeLocalCache(`favs_p${_favState.page}`, _favState.items);
         this.publishCanonical('favorites');
         this.updateSyncStatusText();
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
@@ -785,6 +940,11 @@
       const exists = _favState.items.some(f => String(f.id) === String(itemId) || String(f.item_id) === String(itemId));
       if (!exists) {
         _favState.items.unshift(optimisticItem);
+        const n = parseInt(itemId, 10);
+        if (Number.isInteger(n) && n > 0) {
+          _favState.ids = Array.isArray(_favState.ids) ? _favState.ids : [];
+          if (!_favState.ids.some(id => String(id) === String(n))) _favState.ids.unshift(n);
+        }
         _favState.total++;
         _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
         this.updateAllCounters();
@@ -792,7 +952,7 @@
       }
 
       if (!this.isAuthenticated()) {
-        writeLocalCache('favs', _favState.items);
+        writeLocalCache('favs', _favState.items.map(compactFavRecord).filter(Boolean));
         return;
       }
 
@@ -804,9 +964,6 @@
             item_id: itemId,
             source: item.source || '',
             source_id: item.source_id || '',
-            title: item.title || '',
-            cover_url: item.cover_url || '',
-            url: item.url || '',
             media_type: item.media_type || 'video'
           })
         });
@@ -831,6 +988,9 @@
 
       const removed = _favState.items.find(f => String(f.id) === String(itemId) || String(f.item_id) === String(itemId));
       _favState.items = _favState.items.filter(f => String(f.id) !== String(itemId) && String(f.item_id) !== String(itemId));
+      if (Array.isArray(_favState.ids)) {
+        _favState.ids = _favState.ids.filter(id => String(id) !== String(itemId));
+      }
       _favState.total = Math.max(0, _favState.total - 1);
       _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
 
@@ -838,7 +998,7 @@
       window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
 
       if (!this.isAuthenticated()) {
-        writeLocalCache('favs', _favState.items);
+        writeLocalCache('favs', _favState.items.map(compactFavRecord).filter(Boolean));
         return removed;
       }
 
@@ -864,6 +1024,9 @@
       if (!itemIds || itemIds.length === 0) return;
       const idSet = new Set(itemIds.map(String));
       _favState.items = _favState.items.filter(f => !idSet.has(String(f.id)) && !idSet.has(String(f.item_id)));
+      if (Array.isArray(_favState.ids)) {
+        _favState.ids = _favState.ids.filter(id => !idSet.has(String(id)));
+      }
       _favState.total = Math.max(0, _favState.total - itemIds.length);
       _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
 
@@ -871,7 +1034,7 @@
       window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
 
       if (!this.isAuthenticated()) {
-        writeLocalCache('favs', _favState.items);
+        writeLocalCache('favs', _favState.items.map(compactFavRecord).filter(Boolean));
         return;
       }
 
@@ -886,6 +1049,7 @@
     isFavorite(itemId) {
       if (!itemId) return false;
       const sId = String(itemId);
+      if (Array.isArray(_favState.ids) && _favState.ids.some(id => String(id) === sId)) return true;
       return _favState.items.some(f => String(f.id) === sId || String(f.item_id) === sId);
     },
 
@@ -924,7 +1088,7 @@
     async fetchHistory(page = 1, options = {}) {
       if (!this.isAuthenticated()) {
         const guestHist = readLocalCache('history', []);
-        _histState.items = Array.isArray(guestHist) ? guestHist : [];
+        _histState.items = (Array.isArray(guestHist) ? guestHist : []).map(compactHistRecord).filter(Boolean).slice(0, 50);
         _histState.total = _histState.items.length;
         _histState.page = 1;
         _histState.totalPages = 1;
@@ -982,15 +1146,44 @@
           window.dispatchEvent(new CustomEvent('velvet:history-updated', { detail: this.getHistoryState() }));
           return this.getHistoryState();
         }
-        _histState.items = Array.isArray(data.items) ? data.items : [];
+        let serverItems = Array.isArray(data.items) ? data.items : [];
+        if (_histState.page === 1 && _histState.filter === 'all' && !data.degraded) {
+          const byId = new Map(serverItems.map(h => [String(h.item_id || h.id), h]));
+          const localSlim = (_histState.items || []).map(compactHistRecord).filter(Boolean);
+          const toPush = localSlim.filter(h => {
+            const n = parseInt(h.id || h.item_id, 10);
+            if (!Number.isInteger(n) || n <= 0) return false;
+            const cur = byId.get(String(n));
+            if (!cur) return true;
+            return (h.at || 0) > (Number(cur.at) || 0);
+          });
+          if (toPush.length > 0 && !_histState._pushedLocal) {
+            const syncRes = await this.fetchAuthed('/api/user/history', {
+              method: 'POST',
+              body: JSON.stringify({ items: toPush.slice(0, 100) })
+            });
+            if (syncRes && syncRes.ok) {
+              _histState._pushedLocal = true;
+              const again = await this.fetchAuthed(`/api/user/history?${queryParams.toString()}`, {
+                signal: _histState.controller.signal
+              });
+              if (currentReqId !== _histState.requestId) return;
+              if (again && again.ok) {
+                const againData = await again.json();
+                if (againData && !againData.degraded && Array.isArray(againData.items)) serverItems = againData.items;
+              }
+            }
+          }
+        }
+        _histState.items = serverItems;
         _histState.total = typeof data.total === 'number' ? data.total : _histState.items.length;
         _histState.totalPages = data.totalPages || Math.max(1, Math.ceil(_histState.total / _histState.pageSize));
         _histState.isLoading = false;
         _histState.error = null;
 
-        writeLocalCache(`hist_p${_histState.page}`, _histState.items);
         writeLocalCache('hist_total', _histState.total);
         _lastSyncTimestamp = Date.now();
+        this.publishCanonical('history');
 
         this.updateAllCounters();
         this.updateSyncStatusText();
@@ -1066,7 +1259,7 @@
       window.dispatchEvent(new CustomEvent('velvet:continue-shelf-updated', { detail: this.getContinueShelfItems() }));
 
       if (!this.isAuthenticated()) {
-        writeLocalCache('history', _histState.items);
+        writeLocalCache('history', _histState.items.map(compactHistRecord).filter(Boolean));
         return;
       }
 
@@ -1130,7 +1323,7 @@
       window.dispatchEvent(new CustomEvent('velvet:continue-shelf-updated', { detail: this.getContinueShelfItems() }));
 
       if (!this.isAuthenticated()) {
-        writeLocalCache('history', _histState.items);
+        writeLocalCache('history', _histState.items.map(compactHistRecord).filter(Boolean));
         return;
       }
 
@@ -1195,8 +1388,8 @@
           if (rawHist) legacyHist = JSON.parse(rawHist);
         } catch (e) {}
 
-        if (!Array.isArray(legacyFavs)) legacyFavs = [];
-        if (!Array.isArray(legacyHist)) legacyHist = [];
+        legacyFavs = (Array.isArray(legacyFavs) ? legacyFavs : []).map(compactFavRecord).filter(Boolean);
+        legacyHist = (Array.isArray(legacyHist) ? legacyHist : []).map(compactHistRecord).filter(Boolean);
 
         // Si no hay datos locales, marcar como completado directamente
         if (legacyFavs.length === 0 && legacyHist.length === 0) {
@@ -1296,7 +1489,12 @@
 
       // Sincronizar window.state para módulos heredados
       if (window.state) {
-        window.state.favorites = _favState.items;
+        if (Array.isArray(_favState.ids) && _favState.ids.length) {
+          const byId = new Map((_favState.items || []).map(it => [String(it.id || it.item_id), it]));
+          window.state.favorites = _favState.ids.map(id => byId.get(String(id)) || { id, item_id: id });
+        } else {
+          window.state.favorites = _favState.items;
+        }
         window.state.history = _histState.items;
       }
     },

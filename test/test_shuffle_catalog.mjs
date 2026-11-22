@@ -230,6 +230,10 @@ globalThis.fetch = async (input) => {
     } else if (idFilter.startsWith("lt.")) {
       const n = Number(idFilter.slice(3));
       list = ids.filter((id) => id < n);
+    } else if (idFilter.startsWith("in.")) {
+      const body = idFilter.replace(/^in\.\(?/, "").replace(/\)?$/, "");
+      const wanted = new Set(body.split(",").map((s) => Number(s.trim())).filter((n) => n > 0));
+      list = ids.filter((id) => wanted.has(id));
     }
     const ordered = order.includes(".asc") || order.endsWith("asc")
       ? list.slice().sort((a, b) => a - b)
@@ -331,6 +335,7 @@ try {
   assert.notDeepEqual(idsOf(galleryA.body), idsOf(galleryB.body));
   assert.deepEqual(idsOf(galleryA.body), idsOf(galleryAgain.body));
   assert.ok(lteHits.length >= 4, "La galería se muestrea con varias anclas");
+  assert.ok(lteHits.length <= 24, `La galería no puede abrir una consulta por ficha: ${lteHits.length}`);
   assert.ok(lteHits.every((id) => id >= 380391), `Un ancla cayó en el hueco bajo de galería: ${Math.min(...lteHits)}`);
 
   const galleryPlain = await callItems("media_type=gallery&sort=random&page=1&page_size=24");

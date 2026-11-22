@@ -67,6 +67,8 @@ assert.equal(video.src, "");
 assert.equal(video.poster, "");
 assert.equal(video.removedSources, 1);
 assert.equal(video.loaded, true, "load() vacía el frame anterior");
+assert.equal(video.muted, true, "El teardown deja el video mudo");
+assert.equal(video.volume, 0, "El teardown baja el volumen a cero");
 
 const closed = guard.stop();
 assert.equal(second.signal.aborted, true);
@@ -109,6 +111,9 @@ assert.ok(!indexHtml.includes("4.8k"));
 assert.ok(!indexHtml.includes("2.3k"));
 assert.ok(!indexHtml.includes('id="reader-zoom-btn-bottom"'));
 assert.ok(indexHtml.includes("toggleReaderZoomLevel({ x: touch.clientX, y: touch.clientY })"));
-assert.ok(indexHtml.includes("setReaderZoom(2, focal"));
+assert.ok(indexHtml.includes("setReaderZoom(1.5, focal"));
+assert.ok(indexHtml.includes("function silenceBackgroundVideo"));
+assert.ok(indexHtml.includes("function stopBackgroundVideo"));
+assert.ok(indexHtml.includes("addEventListener('play'"));
 
 console.log("✓ El token impide el audio fantasma y el frame del video anterior.");

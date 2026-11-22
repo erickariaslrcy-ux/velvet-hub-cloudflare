@@ -8,7 +8,7 @@
   function coverWatchdogMs(nav) {
     const conn = nav && nav.connection;
     const slow = !!(conn && (conn.saveData || SLOW_TYPES.indexOf(conn.effectiveType) !== -1));
-    return slow ? 12000 : 8000;
+    return slow ? 20000 : 20000;
   }
 
   function coverLoadDecision(state) {

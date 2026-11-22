@@ -320,6 +320,21 @@ function hostnameEndsWith(hostname, suffix) {
   return !!tail && (host === tail || host.endsWith("." + tail));
 }
 
+// El <video> pide el archivo con referrerpolicy=no-referrer. Este CDN
+// responde 206 sin Referer. Retransmitirlo por el Worker hace que Cloudflare
+// ignore Range y entregue el mp4 completo.
+function directVideoRedirectUrl(targetUrl) {
+  let parsed;
+  try { parsed = new URL(String(targetUrl || "")); } catch (e) { return ""; }
+  if (parsed.protocol !== "https:") return "";
+  const path = parsed.pathname.toLowerCase();
+  if (path.includes(".m3u8") || path.endsWith(".ts")) return "";
+  const isFile = path.endsWith(".mp4") || path.endsWith(".m4v") || path.endsWith(".webm");
+  if (!isFile) return "";
+  if (!hostnameEndsWith(parsed.hostname.toLowerCase(), "ovh.net")) return "";
+  return parsed.href;
+}
+
 // www.xasiat.com/get_image/.../sources/{carpeta}/{album}/... responde 403
 // (challenge de Cloudflare) al worker. La portada del álbum en xascdn no.
 function xasiatAlbumPreview(targetUrl) {
@@ -348,7 +363,7 @@ function photonCoverUrl(targetUrl) {
   const host = parsed.hostname.toLowerCase();
   if (!hostnameEndsWith(host, "buondua.com") && !hostnameEndsWith(host, "4khd.com")) return "";
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
-  return `https://i0.wp.com/${host}${parsed.pathname}?w=480&ssl=1`;
+  return `https://i0.wp.com/${host}${parsed.pathname}?ssl=1`;
 }
 
 function galleryFetchPlan(targetUrl) {
@@ -749,7 +764,7 @@ function orderCatalogForSlot(items, slot, mediaType) {
 
 function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "3");
+  u.searchParams.set("cv", "4");
   if (slot !== undefined && slot !== null && slot !== "") {
     u.searchParams.set("rot", String(slot));
   }
@@ -934,14 +949,17 @@ async function fetchIdBounds(supabaseUrl, apiKey, filterQuery) {
 }
 
 async function fetchCatalogSpan(supabaseUrl, apiKey, filterQuery) {
-  const cacheKey = `span:v3:${filterQuery}`;
+  const cacheKey = `span:v4:${filterQuery}`;
   const cached = getIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, 1800000);
-  if (cached && cached.minId && cached.maxId) return cached;
+  if (cached && cached.minId && cached.maxId && cached.total) return cached;
   const headers = { "apikey": apiKey, "Authorization": `Bearer ${apiKey}` };
+  // planned sale del plan de Postgres, sin recorrer la tabla. exact en un
+  // ILIKE de categoría llegaba al statement_timeout y dejaba el índice colgado.
+  const countHeaders = { ...headers, "Prefer": "count=planned" };
   const base = `${supabaseUrl}/rest/v1/items?select=id&limit=1&${filterQuery}`;
   try {
     const [maxRes, minRes] = await Promise.all([
-      fetch(`${base}&order=id.desc`, { headers }),
+      fetch(`${base}&order=id.desc`, { headers: countHeaders }),
       fetch(`${base}&order=id.asc`, { headers })
     ]);
     if (!maxRes.ok || !minRes.ok) return null;
@@ -965,20 +983,66 @@ async function fetchCatalogSpan(supabaseUrl, apiKey, filterQuery) {
   }
 }
 
-async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectFields, page, pageSize, seed, estimatedTotal }) {
-  const span = await fetchCatalogSpan(supabaseUrl, apiKey, filterQuery);
+// Un id aleatorio por franja del conjunto YA FILTRADO (categoría incluida).
+// limit=1: la fila en ese punto, no el bloque de vecinos que repetía la página.
+function randomAnchorsInSpan(minId, maxId, total, page, pageSize, seed) {
+  const lo = Math.floor(Number(minId) || 1);
+  const hi = Math.max(lo, Math.floor(Number(maxId) || lo));
+  const span = Math.max(1, hi - lo + 1);
+  const size = Math.max(1, Math.floor(Number(pageSize) || 24));
+  const safePage = Math.max(1, Math.floor(Number(page) || 1));
+  const available = Math.max(0, Math.floor(Number(total) || 0));
+  const bands = Math.min(size, Math.max(1, available || size));
+  const rng = shuffleRng((Math.imul((Math.abs(Number(seed) | 0) || 1), 0x9E3779B1) ^ Math.imul(safePage, 0x85EBCA6B)) >>> 0);
+  const anchors = [];
+  for (let i = 0; i < bands; i++) {
+    const start = lo + Math.floor((i * span) / bands);
+    const end = i === bands - 1 ? hi : lo + Math.floor(((i + 1) * span) / bands) - 1;
+    const width = Math.max(1, end - start + 1);
+    anchors.push(Math.min(hi, Math.max(lo, start + Math.floor(rng() * width))));
+  }
+  return anchors;
+}
+
+function comicCatalogSelect(selectFields) {
+  const parts = String(selectFields || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s && s !== "video_sources");
+  return parts.length
+    ? parts.join(",")
+    : "id,source,source_id,title,cover_url,media_type,tags,page_count,artists";
+}
+
+// Ids uniformes en el rango real. El catálogo de cómics tiene huecos grandes:
+// pedir la fila vecina de un ancla repetía el mismo puñado.
+function lotteryCandidateIds(minId, maxId, count, seed) {
+  const lo = Math.floor(Number(minId) || 1);
+  const hi = Math.max(lo, Math.floor(Number(maxId) || lo));
+  const span = Math.max(1, hi - lo + 1);
+  const rng = shuffleRng((Math.abs(Number(seed) | 0) || 1) >>> 0);
+  const target = Math.max(1, Math.floor(Number(count) || 1));
+  const picked = new Set();
+  const out = [];
+  let guard = target * 8;
+  while (out.length < target && guard-- > 0) {
+    const id = lo + Math.floor(rng() * span);
+    if (picked.has(id)) continue;
+    picked.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+async function sampleComicByIdLottery({ supabaseUrl, apiKey, filterQuery, selectFields, page, pageSize, seed, span }) {
   const minId = span && span.minId ? span.minId : 1;
   const maxId = span && span.maxId ? span.maxId : minId;
-  const total = (span && span.total) || estimatedTotal || pageSize;
-  const plan = planShuffleWindows({
-    total: Math.max(pageSize, total),
-    minId,
-    maxId,
-    page,
-    pageSize,
-    seed,
-    bands: 4
-  });
+  const total = (span && span.total) || 0;
+  const size = Math.max(1, Math.floor(Number(pageSize) || 24));
+  const safePage = Math.max(1, Math.floor(Number(page) || 1));
+  if (!total || (safePage - 1) * size >= total) {
+    return { items: [], total: total || 0 };
+  }
   const headers = { "apikey": apiKey, "Authorization": `Bearer ${apiKey}` };
   const fetchRows = async (url) => {
     try {
@@ -990,25 +1054,115 @@ async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectF
       return [];
     }
   };
-  const bandRows = await Promise.all(plan.windows.map((w) => {
-    const url = `${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${w.take}&offset=0&order=id.desc&id=lte.${w.anchorId}&${filterQuery}`;
-    return fetchRows(url);
-  }));
-  const mixSeed = Number(seed) + Number(page) * 997;
-  let items = assembleShufflePage(bandRows, pageSize, mixSeed);
-  if (items.length < Math.min(pageSize, Math.max(1, total))) {
+  const select = comicCatalogSelect(selectFields);
+  const idSpan = Math.max(1, Math.floor(maxId) - Math.floor(minId) + 1);
+  const density = Math.min(1, Math.max(0.004, total / idSpan));
+  const probes = Math.min(720, Math.max(size * 8, Math.ceil((size * 5) / density)));
+  const mixSeed = (Math.abs(Number(seed) || 1) + safePage * 997) >>> 0;
+  const chunkSize = 160;
+  const pullIds = async (salt) => {
+    const candidates = lotteryCandidateIds(minId, maxId, probes, (mixSeed + salt * 104729) >>> 0);
+    const jobs = [];
+    for (let i = 0; i < candidates.length; i += chunkSize) {
+      const chunk = candidates.slice(i, i + chunkSize);
+      if (!chunk.length) continue;
+      const url = `${supabaseUrl}/rest/v1/items?select=${select}&limit=${chunk.length}&id=in.(${chunk.join(",")})&${filterQuery}`;
+      jobs.push(fetchRows(url));
+    }
+    return Promise.all(jobs);
+  };
+
+  let bandRows = await pullIds(1);
+  let items = assembleShufflePage(bandRows, size, mixSeed);
+  if (items.length < size) {
+    bandRows = bandRows.concat(await pullIds(2));
+    items = assembleShufflePage(bandRows, size, mixSeed);
+  }
+  if (items.length < size) {
+    const plan = planShuffleWindows({
+      total,
+      minId,
+      maxId,
+      page: safePage,
+      pageSize: size,
+      seed: mixSeed,
+      bands: 6
+    });
     const offsetRows = await Promise.all(plan.windows.map((w) => {
-      const off = Math.max(0, Math.min(w.offset, Math.max(0, total - 1)));
-      const url = `${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${w.take}&offset=${off}&order=id.desc&${filterQuery}`;
+      const url = `${supabaseUrl}/rest/v1/items?select=${select}&limit=${w.take}&offset=${w.offset}&order=id.desc&${filterQuery}`;
       return fetchRows(url);
     }));
-    items = assembleShufflePage(bandRows.concat(offsetRows), pageSize, mixSeed);
+    bandRows = bandRows.concat(offsetRows);
+    items = assembleShufflePage(bandRows, size, mixSeed);
   }
-  if (!items.length) {
-    const fallback = await fetchRows(`${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${pageSize}&offset=0&order=id.desc&${filterQuery}`);
-    if (fallback.length) items = fallback.slice(0, pageSize);
+  if (items.length < size) {
+    const hole = Math.max(0, total - size);
+    const rng = shuffleRng((mixSeed ^ 0x51ed) >>> 0);
+    const offset = Math.floor(rng() * (hole + 1));
+    const extra = await fetchRows(`${supabaseUrl}/rest/v1/items?select=${select}&limit=${size}&offset=${offset}&order=id.desc&${filterQuery}`);
+    bandRows.push(extra);
+    items = assembleShufflePage(bandRows, size, mixSeed);
   }
-  return { items, total: Math.max(total, items.length) };
+  return { items: items.slice(0, size), total };
+}
+
+async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectFields, page, pageSize, seed, estimatedTotal, span: knownSpan }) {
+  const span = (knownSpan && knownSpan.minId && knownSpan.maxId && knownSpan.total)
+    ? knownSpan
+    : await fetchCatalogSpan(supabaseUrl, apiKey, filterQuery);
+  const minId = span && span.minId ? span.minId : 1;
+  const maxId = span && span.maxId ? span.maxId : minId;
+  const total = (span && span.total) || estimatedTotal || 0;
+  const size = Math.max(1, Math.floor(Number(pageSize) || 24));
+  const safePage = Math.max(1, Math.floor(Number(page) || 1));
+  if (!total || (safePage - 1) * size >= total) {
+    return { items: [], total: total || 0 };
+  }
+  if (String(filterQuery || "").includes("media_type=eq.comic")) {
+    return sampleComicByIdLottery({
+      supabaseUrl,
+      apiKey,
+      filterQuery,
+      selectFields,
+      page: safePage,
+      pageSize: size,
+      seed,
+      span: { minId, maxId, total }
+    });
+  }
+  const headers = { "apikey": apiKey, "Authorization": `Bearer ${apiKey}` };
+  const fetchRows = async (url) => {
+    try {
+      const res = await fetch(url, { headers });
+      if (!res.ok) return [];
+      const rows = await res.json();
+      return Array.isArray(rows) ? rows : [];
+    } catch (e) {
+      return [];
+    }
+  };
+  // Una consulta por ficha (24 o 48) más el conteo pasa el tope de 50
+  // subrequests del Worker y Cloudflare responde 500. Seis franjas bastan
+  // para cruzar el catálogo y llenar la página.
+  const bandCount = Math.min(6, size);
+  const anchors = randomAnchorsInSpan(minId, maxId, total, safePage, bandCount, seed);
+  const take = Math.min(16, Math.max(4, Math.ceil(size / bandCount) + 2));
+  const loadBand = (anchor) => {
+    const url = `${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${take}&offset=0&order=id.desc&id=lte.${anchor}&${filterQuery}`;
+    return fetchRows(url);
+  };
+  const mixSeed = Number(seed) + safePage * 997;
+  let bandRows = await Promise.all(anchors.map(loadBand));
+  let items = assembleShufflePage(bandRows, size, mixSeed);
+  if (items.length < size) {
+    const hole = Math.max(0, total - size);
+    const rng = shuffleRng((mixSeed ^ 0x51ed) >>> 0);
+    const offset = Math.floor(rng() * (hole + 1));
+    const extra = await fetchRows(`${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${size}&offset=${offset}&order=id.desc&${filterQuery}`);
+    bandRows.push(extra);
+    items = assembleShufflePage(bandRows, size, mixSeed);
+  }
+  return { items: items.slice(0, size), total };
 }
 
 async function fetchPmvShuffleItems({ page, pageSize, seed, category, q, encodeToken }) {
@@ -1490,6 +1644,16 @@ export async function onRequest(context) {
       targetMediaUrl.includes(".m3u8") ||
       url.pathname.includes("/video/");
 
+    const directVideo = directVideoRedirectUrl(targetMediaUrl);
+    if (directVideo && (method === "GET" || method === "HEAD")) {
+      const directHeaders = new Headers();
+      directHeaders.set("Location", directVideo);
+      directHeaders.set("Cache-Control", "public, max-age=86400");
+      directHeaders.set("Access-Control-Allow-Origin", "*");
+      directHeaders.set("X-Velvet-Media", "direct");
+      return new Response(null, { status: 302, headers: directHeaders });
+    }
+
     // Parámetros de variantes y compresión de imagen (Fase B)
     const rawW = parseInt(url.searchParams.get("w") || "0", 10);
     const ALLOWED_WIDTHS = [120, 240, 360, 480, 720, 1080];
@@ -1634,7 +1798,8 @@ export async function onRequest(context) {
         upstream = await fetch(targetMediaUrl, {
           method,
           headers: buildUpstreamHeaders(spoofedReferer, true),
-          redirect: "follow"
+          redirect: "follow",
+          cf: { cacheTtl: 0, cacheEverything: false }
         });
         if (!upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
           return Response.redirect(targetMediaUrl, 307);
@@ -2692,14 +2857,25 @@ export async function onRequest(context) {
         else if (category === "3d") catTerm = "3d";
         else if (category === "doujin") catTerm = "doujin";
         else if (category === "parody") catTerm = "parodia";
-        else if (category === "western") catTerm = "comic";
+        else if (category === "western") catTerm = "western";
       }
-      filterQuery += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
+      if (category === "parody") {
+        filterQuery += "&or=(search_text.ilike.*parody*,search_text.ilike.*parodia*)";
+      } else {
+        filterQuery += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
+      }
     }
 
     let rawItems = [];
     let totalCount = estimatedTotal;
     let usedShuffleSample = false;
+    let filteredSpan = null;
+    try {
+      filteredSpan = await fetchCatalogSpan(SUPABASE_URL, SUPABASE_KEY, filterQuery);
+    } catch (spanErr) {
+      filteredSpan = null;
+    }
+    if (filteredSpan && filteredSpan.total > 0) totalCount = filteredSpan.total;
 
     try {
       if (freshShuffle) {
@@ -2712,11 +2888,12 @@ export async function onRequest(context) {
             page: safePage,
             pageSize,
             seed: freshSeed,
-            estimatedTotal
+            estimatedTotal: totalCount,
+            span: filteredSpan
           });
           if (sampled && Array.isArray(sampled.items) && sampled.items.length) {
             rawItems = sampled.items;
-            totalCount = sampled.total || estimatedTotal;
+            totalCount = sampled.total || totalCount;
             usedShuffleSample = true;
           }
         } catch (shuffleErr) {
@@ -2732,7 +2909,7 @@ export async function onRequest(context) {
     const pagePlan = catalogPageOffset(
       safePage,
       pageSize,
-      Math.max(pageSize, estimatedTotal),
+      Math.max(pageSize, totalCount),
       rotateCatalog ? catalogSlot : 1,
       rotateCatalog
     );
@@ -2795,18 +2972,12 @@ export async function onRequest(context) {
           });
         }
         if (!spRes.ok && spRes.status === 416 && offset > 0) {
-          // Solo un 416 (offset pasado del final) puede caer a offset 0, y
-          // únicamente para no perder los filtros. Una página profunda que
-          // sí existe no se sustituye por la página 1.
-          const pageOneUrl = postgrestUrl.replace(/offset=\d+/, 'offset=0');
-          spRes = await fetch(pageOneUrl, {
-            headers: {
-              "apikey": activeQueryKey,
-              "Authorization": `Bearer ${activeQueryKey}`
-            }
-          });
+          // El offset ya no existe en este filtro. Repetir la página 1
+          // hacía que el usuario viera otra vez los mismos títulos.
+          rawItems = [];
+          spRes = null;
         }
-        if (!spRes.ok) {
+        if (spRes && !spRes.ok) {
           const finalErr = spRes === null ? errText : await spRes.text().catch(() => errText);
           return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: finalErr }), {
             status: 500,
@@ -2816,8 +2987,8 @@ export async function onRequest(context) {
       }
 
       // Obtener el conteo real exacto mediante cabecera Content-Range
+      if (spRes) {
       const contentRange = spRes.headers.get("content-range");
-      totalCount = estimatedTotal;
       if (contentRange && contentRange.includes("/")) {
         const totalPart = contentRange.split("/")[1];
         if (totalPart && totalPart !== "*") {
@@ -2829,31 +3000,6 @@ export async function onRequest(context) {
       }
 
       rawItems = await spRes.json();
-      if (cursorId && Array.isArray(rawItems) && rawItems.length > 0 && rawItems.length < pageSize) {
-        const lastId = Number(rawItems[rawItems.length - 1].id) || 0;
-        if (lastId > 1) {
-          const moreUrl = postgrestUrl
-            .replace(/&id=lte\.\d+/, `&id=lt.${lastId}`)
-            .replace(/offset=\d+/, "offset=0")
-            .replace(/limit=\d+/, `limit=${pageSize - rawItems.length}`);
-          try {
-            const moreRes = await fetch(moreUrl, {
-              headers: { "apikey": activeQueryKey, "Authorization": `Bearer ${activeQueryKey}` }
-            });
-            if (moreRes.ok) {
-              const extra = await moreRes.json();
-              const seen = new Set(rawItems.map((it) => it.id));
-              if (Array.isArray(extra)) {
-                for (const it of extra) {
-                  if (!seen.has(it.id)) {
-                    rawItems.push(it);
-                    seen.add(it.id);
-                  }
-                }
-              }
-            }
-          } catch (moreErr) {}
-        }
       }
       }
       const items = await Promise.all((rawItems || []).map(async it => {
@@ -3094,7 +3240,7 @@ export async function onRequest(context) {
           username: displayName,
           email: authData.user.email,
           role,
-          tier: isAdmin ? "Dueño" : "Velvet VIP ($5.99)",
+          tier: isAdmin ? "Dueño" : "Morbo VIP ($5.99)",
           tier_level: "pro",
           is_pro: true
         }
@@ -3163,7 +3309,7 @@ export async function onRequest(context) {
         username: displayName,
         email: user.email,
         role,
-        tier: isAdmin ? "Dueño" : "Velvet VIP ($5.99)",
+        tier: isAdmin ? "Dueño" : "Morbo VIP ($5.99)",
         tier_level: "pro",
         is_pro: true,
         max_devices: 10,
@@ -3239,7 +3385,7 @@ export async function onRequest(context) {
           username: displayName,
           email: user.email,
           role,
-          tier: isAdmin ? "Dueño" : "Velvet VIP ($5.99)",
+          tier: isAdmin ? "Dueño" : "Morbo VIP ($5.99)",
           tier_level: "pro",
           is_pro: true
         }
@@ -3321,7 +3467,7 @@ export async function onRequest(context) {
         .filter(Boolean);
       if (MASTER_KEYS.includes(access_key)) {
         keyValid = true;
-        keyNote = "Llave Maestra Velvet VIP";
+        keyNote = "Llave Maestra Morbo VIP";
       } else {
         try {
           const keyCheckRes = await fetch(`${SUPABASE_URL}/rest/v1/invite_keys?code=eq.${encodeURIComponent(access_key)}&revoked=eq.false&select=*`, {
@@ -3412,7 +3558,7 @@ export async function onRequest(context) {
           username,
           email,
           role: "member",
-          tier: "Velvet VIP ($5.99)",
+          tier: "Morbo VIP ($5.99)",
           tier_level: "pro",
           is_pro: true,
           registered_with_key: access_key
@@ -3475,6 +3621,72 @@ export async function onRequest(context) {
         status: 401,
         headers: getPersonalHeaders(origin)
       });
+    }
+
+    // --- GET ids: la lista completa de la cuenta, solo números ---
+    if (method === "GET" && url.searchParams.get("ids") === "1") {
+      const authHeaders = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`
+      };
+      try {
+        const ids = [];
+        const seen = new Set();
+        let offset = 0;
+        const step = 1000;
+        while (offset < 2000) {
+          const idsRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id&order=created_at.desc,item_id.desc`,
+            { headers: { ...authHeaders, "Range": `${offset}-${offset + step - 1}` } }
+          );
+          if (!idsRes.ok) {
+            return new Response(JSON.stringify({ ids: [], refs: [], total: 0, degraded: true }), {
+              status: 200,
+              headers: getPersonalHeaders(origin, newToken)
+            });
+          }
+          const rows = await idsRes.json().catch(() => []);
+          if (!Array.isArray(rows) || rows.length === 0) break;
+          for (const r of rows) {
+            const n = parseInt(r.item_id, 10);
+            if (Number.isInteger(n) && n > 0 && !seen.has(n)) {
+              seen.add(n);
+              ids.push(n);
+            }
+          }
+          if (rows.length < step) break;
+          offset += step;
+        }
+        const refs = [];
+        const custom = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
+        for (const cf of custom) {
+          const n = parseInt(cf && (cf.id || cf.item_id), 10);
+          if (Number.isInteger(n) && n > 0) {
+            if (!seen.has(n)) {
+              seen.add(n);
+              ids.push(n);
+            }
+            continue;
+          }
+          if (cf && cf.source && cf.source_id) {
+            refs.push({
+              source: String(cf.source).slice(0, 40),
+              source_id: String(cf.source_id).slice(0, 80),
+              media_type: String(cf.media_type || "").slice(0, 16),
+              title: String(cf.title || "").slice(0, 80)
+            });
+          }
+        }
+        return new Response(JSON.stringify({ ids, refs, total: ids.length + refs.length }), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      } catch (idsErr) {
+        return new Response(JSON.stringify({ ids: [], refs: [], total: 0, degraded: true }), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
     }
 
     // --- GET FAVORITOS (Paginación determinista 24/página desde PostgreSQL) ---
@@ -3608,7 +3820,7 @@ export async function onRequest(context) {
             .map((it) => parseInt(it.id || it.item_id, 10))
             .filter((id) => Number.isInteger(id) && id > 0);
           if (validIds.length > 0) {
-            const rows = validIds.slice(0, 300).map((id) => ({ user_id: user.id, item_id: id }));
+            const rows = validIds.slice(0, 2000).map((id) => ({ user_id: user.id, item_id: id }));
             await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
               method: "POST",
               headers: {
@@ -3634,15 +3846,10 @@ export async function onRequest(context) {
               if (!existingCustom.some(ex => ((ex.source && ex.source_id) ? `${ex.source}:${ex.source_id}` : String(ex.id)) === k)) {
                 existingCustom.unshift({
                   id: ci.id || ci.source_id || `custom_${Date.now()}`,
-                  item_id: ci.id || ci.source_id,
                   source: ci.source || "external",
                   source_id: String(ci.source_id || ci.id || ""),
-                  title: ci.title || "Contenido guardado",
-                  cover_url: ci.cover_url || "/velvet_logo.png",
-                  url: ci.url || "",
-                  media_type: ci.media_type || "video",
-                  created_at: ci.created_at || new Date().toISOString(),
-                  available: true
+                  title: String(ci.title || "Contenido guardado").slice(0, 80),
+                  media_type: ci.media_type || "video"
                 });
               }
             }
@@ -3724,15 +3931,10 @@ export async function onRequest(context) {
           const customFavs = Array.isArray(currentMeta.custom_favorites) ? [...currentMeta.custom_favorites] : [];
           const customEntry = {
             id: body.id || body.source_id || `custom_${Date.now()}`,
-            item_id: body.id || body.source_id,
             source: body.source || "external",
             source_id: String(body.source_id || body.id || ""),
-            title: body.title || "Contenido guardado",
-            cover_url: body.cover_url || "/velvet_logo.png",
-            url: body.url || "",
-            media_type: body.media_type || "video",
-            created_at: new Date().toISOString(),
-            available: true
+            title: String(body.title || "Contenido guardado").slice(0, 80),
+            media_type: body.media_type || "video"
           };
 
           const existingIdx = customFavs.findIndex(cf =>

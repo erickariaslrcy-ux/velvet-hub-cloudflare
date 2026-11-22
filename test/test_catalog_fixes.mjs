@@ -299,6 +299,47 @@ const deadRes = await callMedia(deadToken, "&w=360", async () => {
 assert.equal(deadRes.status, 502, "Una portada caída no se redirige con 307 al origen");
 assert.notEqual(deadRes.status, 307);
 
+const ovhUrl = "https://pmvhavencloud.s3.eu-west-par.io.cloud.ovh.net/video.mp4";
+const ovhToken = await encodeMediaToken(ovhUrl, "https://pmvhaven.com/", mediaSecret, bucketStart + 22);
+let ovhFetched = false;
+const ovhRes = await callMedia(ovhToken, "", async () => {
+  ovhFetched = true;
+  return new Response("no-stream", { status: 200, headers: { "content-type": "video/mp4" } });
+});
+assert.equal(ovhFetched, false, "Un mp4 de OVH no se descarga por el Worker");
+assert.equal(ovhRes.status, 302);
+assert.equal(ovhRes.headers.get("location"), ovhUrl);
+assert.equal(ovhRes.headers.get("x-velvet-media"), "direct");
+
+const ovhPlaylist = "https://pmvhavencloud.s3.eu-west-par.io.cloud.ovh.net/master.m3u8";
+const ovhPlaylistToken = await encodeMediaToken(ovhPlaylist, "https://pmvhaven.com/", mediaSecret, bucketStart + 22);
+const playlistRes = await callMedia(ovhPlaylistToken, "", async () => {
+  return new Response("#EXTM3U\nseg.ts\n", {
+    status: 200,
+    headers: { "content-type": "application/vnd.apple.mpegurl" }
+  });
+});
+assert.equal(playlistRes.status, 200, "Una lista HLS sigue reescribiéndose en el Worker");
+assert.equal((playlistRes.headers.get("content-type") || "").includes("mpegurl"), true);
+
+const tubeUrl = "https://pornone.com/clip.mp4";
+const tubeToken = await encodeMediaToken(tubeUrl, "", mediaSecret, bucketStart + 22);
+const tubeCalls = [];
+const tubeRes = await callMedia(tubeToken, "", async (input, init) => {
+  tubeCalls.push(init && init.cf && init.cf.cacheTtl);
+  return new Response("abcd", {
+    status: 206,
+    headers: {
+      "content-type": "video/mp4",
+      "content-range": "bytes 0-3/9",
+      "content-length": "4"
+    }
+  });
+});
+assert.equal(tubeRes.status, 206, "Un mp4 que exige Referer sigue saliendo por el proxy");
+assert.equal(tubeCalls[0], 0, "El proxy de video no cachea el archivo entero");
+assert.equal(tubeRes.headers.get("content-range"), "bytes 0-3/9");
+
 const gallerySvg = indexHtml.slice(indexHtml.indexOf("const GALLERY_FALLBACK_SVG"), indexHtml.indexOf("const VIDEO_FALLBACK_SVG"));
 const comicSvg = indexHtml.slice(indexHtml.indexOf("const COMIC_FALLBACK_SVG"), indexHtml.indexOf("const GALLERY_FALLBACK_SVG"));
 assert.ok(gallerySvg.includes("GALLERY_FALLBACK_SVG"));
@@ -331,8 +372,8 @@ assert.equal(coverLoadDecision({
 assert.equal(coverLoadDecision({
   settled: true, complete: false, naturalWidth: 0, elapsedMs: 9000, retries: 0, watchdogMs: 8000
 }), "done");
-assert.equal(coverWatchdogMs({ connection: { effectiveType: "2g" } }), 12000);
-assert.equal(coverWatchdogMs({ connection: { effectiveType: "4g" } }), 8000);
+assert.equal(coverWatchdogMs({ connection: { effectiveType: "2g" } }), 20000);
+assert.equal(coverWatchdogMs({ connection: { effectiveType: "4g" } }), 20000);
 
 const xasiatBlocked = "https://www.xasiat.com/get_image/2/abc/sources/36000/36203/2534993.jpg/?i-acctoken=abc";
 assert.equal(
@@ -427,7 +468,8 @@ const embedRes = await callMedia(embedToken, "", async (input) => {
 assert.equal(embedRes.status, 200, "cdn.buondua.com se abre en pok.misskon.com");
 assert.equal(embedCalls[0], "https://pok.misskon.com/images/2025/12/30/cover.webp");
 
-assert.ok(sw.includes("v17-gallery-mirrors"), "El service worker purga la caché vieja de portadas");
+assert.ok(sw.includes("v23-morbo-name"), "El service worker purga la caché vieja de portadas");
+assert.ok(sw.includes("req.destination === 'video'"), "El service worker no intercepta la reproducción");
 assert.ok(sw.includes("function isUsableCoverResponse"), "El service worker descarta SVG y 403 cacheados");
 
 console.log("✓ Galería aleatoria, juegos sin 500, tokens estables y portadas resilientes.");

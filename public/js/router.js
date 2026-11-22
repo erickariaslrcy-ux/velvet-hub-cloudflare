@@ -92,11 +92,22 @@
     // =======================================================================
     // 2. PARSER DE RUTAS
     // =======================================================================
-    parsePath(pathname, search = '', hash = '') {
+    parsePath(pathname, search, hash) {
       let rawPath = pathname || window.location.pathname || '/';
-      let path = rawPath.replace(/\/+$/, '') || '/';
-      let s = search || window.location.search;
-      let h = hash || window.location.hash;
+      let extractedSearch = null;
+      let extractedHash = null;
+      if (arguments.length < 2 && typeof pathname === 'string' && (pathname.indexOf('?') !== -1 || pathname.indexOf('#') !== -1)) {
+        try {
+          const abs = new URL(pathname, window.location.origin);
+          rawPath = abs.pathname;
+          extractedSearch = abs.search;
+          extractedHash = abs.hash;
+        } catch (e) {}
+      }
+      let path = String(rawPath).replace(/\/+$/, '') || '/';
+      // Una búsqueda vacía explícita (clic a /cosplay) no hereda ?page= de la sección anterior.
+      const s = arguments.length >= 2 ? (search || '') : (extractedSearch != null ? extractedSearch : (window.location.search || ''));
+      const h = arguments.length >= 3 ? (hash || '') : (extractedHash != null ? extractedHash : (window.location.hash || ''));
 
       // 1. Manejo de URLs legadas con hash (ej: /#videos, /#vault, /#history)
       if (h) {
@@ -121,23 +132,23 @@
       if (tabParam === 'videos' && (path === '/' || path === '/videos')) return { name: 'catalog', mode: 'videos', canonical: '/videos' };
       if (tabParam === 'comics' && (path === '/' || path === '/comics')) return { name: 'catalog', mode: 'comics', canonical: '/comics' };
       if (tabParam === 'galleries' && (path === '/' || path === '/cosplay')) return { name: 'catalog', mode: 'galleries', canonical: '/cosplay' };
-      if ((tabParam === 'juegos' || tabParam === 'games')) return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/juegos' };
+      if ((tabParam === 'juegos' || tabParam === 'games')) return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/juegos' };
 
       // 3. Rutas canónicas del nuevo sistema
       if (path === '/' || path === '/index.html') {
-        return { name: 'home', mode: 'comics', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/' };
+        return { name: 'home', mode: 'comics', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/' };
       }
       if (path === '/videos') {
-        return { name: 'catalog', mode: 'videos', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/videos' };
+        return { name: 'catalog', mode: 'videos', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/videos' };
       }
       if (path === '/comics') {
-        return { name: 'catalog', mode: 'comics', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/comics' };
+        return { name: 'catalog', mode: 'comics', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/comics' };
       }
       if (path === '/cosplay') {
-        return { name: 'catalog', mode: 'galleries', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/cosplay' };
+        return { name: 'catalog', mode: 'galleries', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/cosplay' };
       }
       if (path === '/juegos' || path === '/games') {
-        return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, query: q.get('q') || '', canonical: '/juegos' };
+        return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/juegos' };
       }
 
       // 4. Bóveda, Historial y Cuenta
@@ -290,16 +301,16 @@
 
     updateDocumentMeta(route) {
       const titles = {
-        home: 'Velvet Hub — Cómics +18, Videos & Modelos VIP Sin Censura',
-        videos: 'Videos +18 Sin Censura — Velvet Hub',
-        comics: 'Cómics +18 & Hentai VIP — Velvet Hub',
-        galleries: 'Galerías Cosplay & Modelos VIP — Velvet Hub',
-        games: 'Juegos +18 & Hentai VIP — Velvet Hub',
-        vault_favorites: 'Mi Bóveda: Favoritos — Velvet Hub',
-        vault_history: 'Mi Bóveda: Historial — Velvet Hub',
-        account: 'Mi Cuenta Velvet VIP — Velvet Hub',
-        auth: 'Acceso VIP & Membresía — Velvet Hub',
-        '404': 'Página no encontrada &bull; Velvet Hub'
+        home: 'Morbo Hub — Cómics +18, Videos & Modelos VIP Sin Censura',
+        videos: 'Videos +18 Sin Censura — Morbo Hub',
+        comics: 'Cómics +18 & Hentai VIP — Morbo Hub',
+        galleries: 'Galerías Cosplay & Modelos VIP — Morbo Hub',
+        games: 'Juegos +18 & Hentai VIP — Morbo Hub',
+        vault_favorites: 'Mi Bóveda: Favoritos — Morbo Hub',
+        vault_history: 'Mi Bóveda: Historial — Morbo Hub',
+        account: 'Mi Cuenta Morbo VIP — Morbo Hub',
+        auth: 'Acceso VIP & Membresía — Morbo Hub',
+        '404': 'Página no encontrada &bull; Morbo Hub'
       };
 
       let title = titles.home;
