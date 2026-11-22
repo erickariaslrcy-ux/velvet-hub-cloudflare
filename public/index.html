@@ -5065,16 +5065,6 @@
 
       initAuth();
 
-      // Pre-cargar dataset de juegos en background sin bloquear rendering
-      setTimeout(() => {
-        if (!window._cachedGamesData) {
-          fetch('/data/games.json')
-            .then(res => res.ok ? res.json() : null)
-            .then(d => { if (d) window._cachedGamesData = d; })
-            .catch(() => {});
-        }
-      }, 1200);
-
       // Comprobar parámetros de URL o rutas directas
 
       const path = window.location.pathname;

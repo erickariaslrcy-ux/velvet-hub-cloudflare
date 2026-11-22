@@ -176,11 +176,10 @@ self.addEventListener('fetch', (event) => {
         } else if (cached) return cached;
 
         const fetchPromise = (async () => {
-          // Reintento antes de rendirse. No se aborta a los 8s: en Android
-          // eso pintaba el placeholder de Play aunque la foto sí iba a llegar.
+          // Reintento optimizado antes de rendirse con timeout adaptativo
           for (let attempt = 0; attempt < 2; attempt++) {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), attempt === 0 ? 20000 : 28000);
+            const timer = setTimeout(() => controller.abort(), attempt === 0 ? 10000 : 15000);
             try {
               const networkResp = await fetch(req, { signal: controller.signal });
               clearTimeout(timer);
