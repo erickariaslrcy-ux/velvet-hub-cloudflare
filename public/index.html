@@ -1227,7 +1227,7 @@
 
       <!-- Barra de Búsqueda de Cómics y Videos Calientes -->
 
-      <div class="flex-1 min-w-0 sm:min-w-[220px] max-w-lg mx-1 sm:mx-4">
+      <div class="flex-1 min-w-0 sm:min-w-[220px] max-w-2xl lg:max-w-3xl mx-1 sm:mx-4">
 
         <form id="search-form" onsubmit="handleSearch(event)" class="relative w-full">
 
@@ -1259,14 +1259,14 @@
 
       <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
-        <!-- Botón Aleatorio -->
+        <!-- Botón Aleatorio (Oculto en PC para no duplicar con el botón de la barra de filtros) -->
 
         <button
           id="random-btn"
           type="button"
           data-action="fetch-random"
           title="Otra selección"
-          class="flex h-8 sm:h-9 px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] hover:opacity-90 text-white text-[11px] sm:text-xs font-bold items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-hot-glow active:scale-95 cursor-pointer shrink-0"
+          class="flex md:hidden h-8 sm:h-9 px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] hover:opacity-90 text-white text-[11px] sm:text-xs font-bold items-center justify-center gap-1 sm:gap-1.5 transition-all shadow-hot-glow active:scale-95 cursor-pointer shrink-0"
         >
           <i class="fa-solid fa-dice text-xs sm:text-sm"></i>
           <span class="random-label">Al Azar</span>

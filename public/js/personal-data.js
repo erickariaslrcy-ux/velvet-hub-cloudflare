@@ -915,44 +915,6 @@
         return this.getFavoritesState();
       }
     },
-          this.updateSyncStatusText();
-          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
-          return this.getFavoritesState();
-        }
-
-        _favState.items = serverItems;
-        _favState.total = serverTotal;
-        _favState.totalPages = data.totalPages || Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
-        _favState.isLoading = false;
-        _favState.error = null;
-
-        this.publishCanonical('favorites');
-        this.updateSyncStatusText();
-        window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
-        return this.getFavoritesState();
-      } catch (err) {
-        if (err.name === 'AbortError') return; // Cancelación normal
-        _favState.isLoading = false;
-        if (_favState.items && _favState.items.length > 0) {
-          _favState.error = null;
-          _favState.total = Math.max(_favState.total, _favState.items.length);
-          this.publishCanonical('favorites');
-          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
-          return this.getFavoritesState();
-        }
-        this.hydrateCanonicalCache();
-        if (_favState.items && _favState.items.length > 0) {
-          _favState.error = null;
-          _favState.isLoading = false;
-          this.publishCanonical('favorites');
-          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
-          return this.getFavoritesState();
-        }
-        _favState.error = err.message || 'Error de conexión';
-        window.dispatchEvent(new CustomEvent('velvet:favorites-error', { detail: { error: _favState.error, retry: () => this.fetchFavorites(page) } }));
-        return this.getFavoritesState();
-      }
-    },
 
     async addFavorite(item) {
       if (!item) return;
