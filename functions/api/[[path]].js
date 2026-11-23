@@ -1722,6 +1722,7 @@ export async function onRequest(context) {
 
     // Cache Key normalizado en Cloudflare Edge para evitar fragmentación
     const normUrl = new URL(url.origin + url.pathname);
+    normUrl.searchParams.set("mv", "2");
     if (tParam) normUrl.searchParams.set("t", tParam);
     else if (urlParam) normUrl.searchParams.set("url", urlParam);
     if (targetWidth) normUrl.searchParams.set("w", String(targetWidth));
