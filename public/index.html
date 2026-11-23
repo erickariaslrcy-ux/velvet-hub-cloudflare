@@ -4420,6 +4420,9 @@
       }
 
       state.mode = mode;
+      if (mode === 'comics') {
+        state.category = 'all';
+      }
 
       if (switching && isUserClick && !options.keepPage) {
         restoredSection = restoreSectionMemory(mode);
@@ -4601,6 +4604,7 @@
 
     function renderCategoryChips() {
       const container = document.getElementById('category-chips');
+      const scrollWrapper = document.getElementById('category-chips-scroll');
       if (!container) return;
       container.innerHTML = '';
 
@@ -4610,9 +4614,17 @@
       } else if (state.mode === 'galleries') {
         cats = GALLERY_CATEGORIES;
       } else if (state.mode === 'comics') {
-        cats = COMIC_CATEGORIES;
+        // En cómics se eliminan los chips de categorías según solicitud del usuario ("quita estas mierdas no sirven")
+        cats = [];
       } else {
         cats = VIDEO_CATEGORIES;
+      }
+
+      if (state.mode === 'comics' || cats.length === 0) {
+        if (scrollWrapper) scrollWrapper.style.display = 'none';
+        return;
+      } else {
+        if (scrollWrapper) scrollWrapper.style.display = '';
       }
 
       const activeCat = state.category || 'all';
@@ -6374,6 +6386,88 @@
       }
     }
 
+    async function loadBundledVideosFeed(signal) {
+      try {
+        if (!window._cachedVideosData) {
+          const vRes = await fetch('/data/videos.json', { signal });
+          if (vRes.ok) {
+            window._cachedVideosData = await vRes.json();
+          }
+        }
+        if (!window._cachedVideosData) return false;
+        let vList = window._cachedVideosData;
+        const vQ = (state.query || '').toLowerCase().trim();
+        const vCat = state.category || 'all';
+
+        const VIDEO_CAT_TERMS = {
+          pmv: ['pmv', 'hmv', 'music video', 'edit', 'compilation', 'splitscreen'],
+          milf: ['milf', 'mom', 'mature', 'stepmom'],
+          amateur: ['amateur', 'homemade', 'real', 'verified'],
+          anal: ['anal', 'anals', 'ass', 'butt'],
+          pov: ['pov'],
+          group: ['threesome', 'group', 'trio', 'trios', 'gangbang', 'foursome'],
+          tits: ['big boobs', 'big tits', 'tits', 'boobs', 'busty', 'tit'],
+          blondes: ['blonde', 'blondes'],
+          brunettes: ['latina', 'latinas', 'brunette', 'brunettes', 'spanish'],
+          russians: ['russian', 'rusas', 'russians', 'rusia'],
+          hd: ['hd', '1080p', '60fps', '4k']
+        };
+
+        if (vCat !== 'all') {
+          const terms = VIDEO_CAT_TERMS[vCat] || [vCat];
+          vList = vList.filter(x => {
+            if (Array.isArray(x.categories) && x.categories.includes(vCat)) return true;
+            const hay = `${x.title || ''} ${(x.tags || []).join(' ')}`.toLowerCase();
+            return terms.some(t => hay.includes(t));
+          });
+        }
+
+        if (vQ) {
+          vList = vList.filter(x => {
+            const hay = `${x.title || ''} ${(x.tags || []).join(' ')} ${(x.artists || []).join(' ')}`.toLowerCase();
+            return hay.includes(vQ);
+          });
+        }
+
+        if (state.sort === 'random' || state.sort === 'shuffle') {
+          const seed = (state.freshShuffle && state.feedSeed) ? Number(state.feedSeed) : getRotatingSeed();
+          const mixId = (id) => {
+            let x = ((Number(String(id).replace(/\D/g, '')) || 1) ^ Math.imul(seed | 0, 0x9e3779b1)) >>> 0;
+            x = Math.imul(x ^ (x >>> 16), 0x7feb352d) >>> 0;
+            return (x ^ (x >>> 16)) >>> 0;
+          };
+          vList = [...vList].sort((a, b) => mixId(a.id || 1) - mixId(b.id || 1));
+        } else if (state.sort === 'popular' || state.sort === 'views' || !state.sort) {
+          vList = [...vList].sort((a, b) => (b.views || 0) - (a.views || 0));
+        } else if (state.sort === 'rating') {
+          vList = [...vList].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+        }
+
+        const p = Math.max(1, state.page || 1);
+        const sz = state.pageSize || 24;
+        const paged = vList.slice((p - 1) * sz, p * sz);
+
+        const feedPayload = {
+          items: paged,
+          total: vList.length,
+          page: p,
+          page_size: sz,
+          total_pages: Math.max(1, Math.ceil(vList.length / sz))
+        };
+
+        state.isLoading = false;
+        _isLoadingFeed = false;
+        renderFeedData(feedPayload, false);
+        renderPaginationControls(feedPayload.page, feedPayload.total_pages, feedPayload.total);
+        hidePortalTransition();
+        return true;
+      } catch (e) {
+        if (e && e.name === 'AbortError') throw e;
+        console.warn("Fallo carga local de videos:", e);
+        return false;
+      }
+    }
+
     const RECENT_SHUFFLE_CAP = 160;
     const recentShuffleIds = { comics: [], videos: [], galleries: [], games: [] };
 
@@ -6612,6 +6706,9 @@
         if (state.mode === 'games' && (!data.items || data.items.length === 0)) {
           if (await loadBundledGamesFeed(signal)) return;
         }
+        if (state.mode === 'videos' && (!data.items || data.items.length === 0)) {
+          if (await loadBundledVideosFeed(signal)) return;
+        }
 
         // Guardar en Cache del Navegador con límite estricto de memoria para móviles y PC
         if (CLIENT_CACHE.size > 50) {
@@ -6632,6 +6729,13 @@
         if (state.mode === 'games') {
           try {
             if (await loadBundledGamesFeed(signal)) return;
+          } catch (fallbackErr) {
+            if (fallbackErr && fallbackErr.name === 'AbortError') return;
+          }
+        }
+        if (state.mode === 'videos') {
+          try {
+            if (await loadBundledVideosFeed(signal)) return;
           } catch (fallbackErr) {
             if (fallbackErr && fallbackErr.name === 'AbortError') return;
           }

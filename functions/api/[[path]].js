@@ -979,6 +979,163 @@ async function maskGameItem(it, secret) {
   };
 }
 
+const VIDEO_CAT_MAP = {
+  pmv: ["pmv", "hmv", "music video", "edit", "compilation", "splitscreen"],
+  milf: ["milf", "mom", "mature", "stepmom"],
+  amateur: ["amateur", "homemade", "real", "verified"],
+  anal: ["anal", "anals", "ass", "butt"],
+  pov: ["pov"],
+  group: ["threesome", "group", "trio", "trios", "gangbang", "foursome"],
+  tits: ["big boobs", "big tits", "tits", "boobs", "busty", "tit"],
+  blondes: ["blonde", "blondes"],
+  brunettes: ["latina", "latinas", "brunette", "brunettes", "spanish"],
+  russians: ["russian", "rusas", "russians", "rusia"],
+  hd: ["hd", "1080p", "60fps", "4k"]
+};
+
+function videoMatchesCategory(v, category) {
+  if (!category || category === "all") return true;
+  if (Array.isArray(v.categories) && v.categories.includes(category)) return true;
+  const terms = VIDEO_CAT_MAP[category] || [category];
+  const hay = `${v.title || ""} ${(v.tags || []).join(" ")}`.toLowerCase();
+  return terms.some(t => hay.includes(t));
+}
+
+function buildVideoCatalogPage(videos, opts) {
+  const page = validatePage(opts && opts.page);
+  const pageSize = validatePageSize(opts && opts.pageSize, 24);
+  const sort = validateSort(opts && opts.sort);
+  const q = sanitizeSearchQuery((opts && opts.q) || "");
+  const category = sanitizeSlug((opts && opts.category) || "");
+  const seed = Number(opts && opts.seed) || 1;
+  let list = Array.isArray(videos) ? videos.slice() : [];
+  if (category && category !== "all") list = list.filter(v => videoMatchesCategory(v, category));
+  if (q) {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    list = list.filter(v => {
+      const hay = `${v.title || ""} ${(v.tags || []).join(" ")} ${(v.artists || []).join(" ")}`.toLowerCase();
+      return words.every(w => hay.includes(w));
+    });
+  }
+  if (sort === "random") {
+    list = orderCatalogForSlot(list, seed, "video");
+  } else if (sort === "views" || sort === "popular") {
+    list.sort((a, b) => (b.views || 0) - (a.views || 0) || (Number(b.id) || 0) - (Number(a.id) || 0));
+  } else if (sort === "rating") {
+    list.sort((a, b) => (b.likes || 0) - (a.likes || 0) || (Number(b.id) || 0) - (Number(a.id) || 0));
+  } else {
+    list.sort((a, b) => (b.views || 0) - (a.views || 0) || (Number(b.id) || 0) - (Number(a.id) || 0));
+  }
+  const total = list.length;
+  const start = (page - 1) * pageSize;
+  let slice = list.slice(start, start + pageSize);
+  if (slice.length < pageSize && total >= pageSize && start >= total) {
+    const wrappedStart = start % total;
+    slice = list.slice(wrappedStart, wrappedStart + pageSize);
+    if (slice.length < pageSize) slice = slice.concat(list.slice(0, pageSize - slice.length));
+  }
+  return {
+    items: slice,
+    total,
+    page,
+    page_size: pageSize,
+    total_pages: Math.max(1, Math.ceil(total / pageSize) || 1),
+    live: false
+  };
+}
+
+let LOCAL_VIDEOS_CACHE = null;
+let LOCAL_VIDEOS_CACHE_AT = 0;
+
+async function loadVideoCatalog(context, pageUrl) {
+  if (LOCAL_VIDEOS_CACHE && (Date.now() - LOCAL_VIDEOS_CACHE_AT) < 60 * 60 * 1000) {
+    return LOCAL_VIDEOS_CACHE;
+  }
+  const origin = (pageUrl && pageUrl.origin) || "https://www.morbohub.com";
+  let response = null;
+  const assets = context && context.env && context.env.ASSETS;
+  if (assets && typeof assets.fetch === "function") {
+    try {
+      response = await assets.fetch(new Request(origin + "/data/videos.json"));
+    } catch (e) {
+      response = null;
+    }
+  }
+  if (!response || !response.ok) {
+    try {
+      response = await fetch(origin + "/data/videos.json", { cf: { cacheEverything: true, cacheTtl: 86400 } });
+    } catch (e) {
+      response = null;
+    }
+  }
+  if (response && response.ok) {
+    try {
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        LOCAL_VIDEOS_CACHE = data;
+        LOCAL_VIDEOS_CACHE_AT = Date.now();
+        return LOCAL_VIDEOS_CACHE;
+      }
+    } catch (e) {}
+  }
+  // Respaldo Node.js si corre en test local
+  try {
+    if (typeof process !== "undefined" && process.versions && process.versions.node) {
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const candidates = [
+        path.resolve("public/data/videos.json"),
+        path.resolve("VERSION_CLOUDFLARE/public/data/videos.json")
+      ];
+      for (const cand of candidates) {
+        if (fs.existsSync(cand)) {
+          const raw = fs.readFileSync(cand, "utf8");
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            LOCAL_VIDEOS_CACHE = parsed;
+            LOCAL_VIDEOS_CACHE_AT = Date.now();
+            return LOCAL_VIDEOS_CACHE;
+          }
+        }
+      }
+    }
+  } catch (nodeErr) {}
+  return [];
+}
+
+async function maskVideoItem(it, secret) {
+  const rawCover = it.cover_url || "";
+  const rawVideo = it.video_url || (it.video_sources && it.video_sources[0] && it.video_sources[0].url) || "";
+  const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", secret) : "";
+  const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", secret) : "";
+  return {
+    id: it.id,
+    source: it.source || "pmvhaven",
+    source_id: it.source_id ? String(it.source_id) : String(it.id),
+    title: it.title || "Video HD",
+    cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+    media_type: "video",
+    tags: it.tags || [],
+    artists: it.artists || [],
+    url: it.url || `https://pmvhaven.com/video?v=${it.id}`,
+    page_count: 0,
+    video_sources: rawVideo ? [
+      {
+        quality: "1080p HD",
+        url: videoToken ? `/api/media?t=${videoToken}` : "",
+        format: "mp4"
+      }
+    ] : [],
+    extra: {
+      duration: it.duration || "4:00",
+      durationSeconds: it.durationSeconds || 240,
+      views: it.views || 0,
+      likes: it.likes || 0
+    },
+    has_cover: !!rawCover
+  };
+}
+
 async function fetchIdBounds(supabaseUrl, apiKey, filterQuery) {
   const cacheKey = `bounds:${supabaseUrl}|${filterQuery}`;
   const cached = getIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, 1800000);
@@ -2147,6 +2304,33 @@ export async function onRequest(context) {
       }
     }
 
+    if (rawSource === "pmvhaven" || rawSource === "video" || rawSource === "damplips" || rawSource === "redporn" || rawSource === "pornone" || (rawId && String(rawId).startsWith("velvet_vid_"))) {
+      try {
+        const videos = await loadVideoCatalog(context, url);
+        const wanted = String(rawSourceId || rawId || "");
+        const found = (videos || []).find(v => String(v.source_id) === wanted || String(v.id) === wanted);
+        if (found) {
+          const maskedVideo = await maskVideoItem(found, MEDIA_SECRET);
+          const videoJson = JSON.stringify({
+            ...maskedVideo,
+            pages: [],
+            chapters: []
+          });
+          setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, videoJson);
+          return new Response(videoJson, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+              ...getCorsHeaders(origin)
+            }
+          });
+        }
+      } catch (videoDetailErr) {
+        console.error("[Velvet-Detail] Video local fallback error:", videoDetailErr);
+      }
+    }
+
     try {
       const detailTargetUrl = SUPABASE_URL;
       const detailTargetKey = SUPABASE_ADMIN_KEY;
@@ -2654,7 +2838,7 @@ export async function onRequest(context) {
     const preferLivePmv = env.ENABLE_PMVHAVEN_LIVE !== "false" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db";
     // "Al Azar" en videos: varias páginas repartidas por todo PMV, no el
     // sort=random cacheado que devuelve siempre el mismo cubo.
-    if (mediaType === "video" && preferLivePmv && freshShuffle) {
+    if (mediaType === "video" && preferLivePmv && freshShuffle && (!category || category === "all")) {
       try {
         const shuffledPmv = await fetchPmvShuffleItems({
           page,
@@ -2690,7 +2874,7 @@ export async function onRequest(context) {
         console.error("PMVHaven shuffle error:", pmvShuffleErr);
       }
     }
-    if (mediaType === "video" && preferLivePmv && !freshShuffle) {
+    if (mediaType === "video" && preferLivePmv && !freshShuffle && (!category || category === "all")) {
       // sort=random de PMVHaven devuelve otra tanda en cada request.
       // La ventana de 3 h permuta la página y orderCatalogForSlot fija el orden.
       let pmvSort = "recent";
@@ -2729,76 +2913,78 @@ export async function onRequest(context) {
           const pmvData = await pmvRes.json();
           let vList = pmvData.videos || [];
 
-          if ((sort === "random" || freshShuffle) && !q && vList.length > 1) {
-            vList = orderCatalogForSlot(
-              vList.map((v) => ({ ...v, id: v._id || v.id })),
-              freshShuffle ? freshSeed : catalogSlot,
-              "video"
-            );
-          }
-
-          const items = await Promise.all(vList.map(async v => {
-            const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
-            const rawVideo = v.videoUrl || "";
-            const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
-            const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
-            return {
-              id: v._id,
-              source: "pmvhaven",
-              source_id: v._id,
-              title: v.title || "Video HD",
-              cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
-              media_type: "video",
-              tags: v.tags || [],
-              artists: v.uploaderUsername ? [v.uploaderUsername] : [],
-              url: `https://pmvhaven.com/video?v=${v._id}`,
-              page_count: 0,
-              video_sources: rawVideo ? [
-                {
-                  quality: "1080p HD",
-                  url: videoToken ? `/api/media?t=${videoToken}` : "",
-                  format: "mp4"
-                }
-              ] : [],
-              extra: {
-                duration: v.duration || "",
-                durationSeconds: v.durationSeconds || 0,
-                views: v.views || 0,
-                likes: v.likes || 0
-              },
-              has_cover: !!rawCover
-            };
-          }));
-
-          const totalVideos = pmvData.pagination?.total || 70704;
-          const totalPages = pmvData.pagination?.totalPages || Math.ceil(totalVideos / pageSize);
-
-          const responsePayload = {
-            items,
-            total: totalVideos,
-            page: page,
-            page_size: pageSize,
-            total_pages: totalPages,
-            live: true,
-            seed: seedParam || undefined
-          };
-
-          const jsonStr = JSON.stringify(responsePayload);
-          setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
-
-          const pmvResponse = new Response(jsonStr, {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json; charset=utf-8",
-              "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
-              "X-Velvet-Rotation": String(catalogSlot),
-              ...getCorsHeaders(origin)
+          if (vList.length > 0) {
+            if ((sort === "random" || freshShuffle) && !q && vList.length > 1) {
+              vList = orderCatalogForSlot(
+                vList.map((v) => ({ ...v, id: v._id || v.id })),
+                freshShuffle ? freshSeed : catalogSlot,
+                "video"
+              );
             }
-          });
-          if (cache && !freshShuffle) {
-            try { context.waitUntil(cache.put(cacheKey, pmvResponse.clone())); } catch (e) {}
+
+            const items = await Promise.all(vList.map(async v => {
+              const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+              const rawVideo = v.videoUrl || "";
+              const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+              const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+              return {
+                id: v._id,
+                source: "pmvhaven",
+                source_id: v._id,
+                title: v.title || "Video HD",
+                cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+                media_type: "video",
+                tags: v.tags || [],
+                artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+                url: `https://pmvhaven.com/video?v=${v._id}`,
+                page_count: 0,
+                video_sources: rawVideo ? [
+                  {
+                    quality: "1080p HD",
+                    url: videoToken ? `/api/media?t=${videoToken}` : "",
+                    format: "mp4"
+                  }
+                ] : [],
+                extra: {
+                  duration: v.duration || "",
+                  durationSeconds: v.durationSeconds || 0,
+                  views: v.views || 0,
+                  likes: v.likes || 0
+                },
+                has_cover: !!rawCover
+              };
+            }));
+
+            const totalVideos = pmvData.pagination?.total || 70704;
+            const totalPages = pmvData.pagination?.totalPages || Math.ceil(totalVideos / pageSize);
+
+            const responsePayload = {
+              items,
+              total: totalVideos,
+              page: page,
+              page_size: pageSize,
+              total_pages: totalPages,
+              live: true,
+              seed: seedParam || undefined
+            };
+
+            const jsonStr = JSON.stringify(responsePayload);
+            setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+
+            const pmvResponse = new Response(jsonStr, {
+              status: 200,
+              headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Cache-Control": freshShuffle ? "private, no-store" : catalogCacheControl,
+                "X-Velvet-Rotation": String(catalogSlot),
+                ...getCorsHeaders(origin)
+              }
+            });
+            if (cache && !freshShuffle) {
+              try { context.waitUntil(cache.put(cacheKey, pmvResponse.clone())); } catch (e) {}
+            }
+            return pmvResponse;
           }
-          return pmvResponse;
         }
       } catch (pmvErr) {
         console.error("PMVHaven API error:", pmvErr);
@@ -2878,6 +3064,53 @@ export async function onRequest(context) {
             ...getCorsHeaders(origin)
           }
         });
+      }
+    }
+
+    const shouldUseVideoCatalog = mediaType === "video" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db" && (
+      (category && category !== "all") || env.ENABLE_PMVHAVEN_LIVE !== "false"
+    );
+    if (shouldUseVideoCatalog) {
+      try {
+        const videos = await loadVideoCatalog(context, url);
+        if (videos && videos.length > 0) {
+          const seeded = buildVideoCatalogPage(videos, {
+            page,
+            pageSize,
+            sort,
+            q,
+            category,
+            seed: effectiveSeed
+          });
+          const items = await Promise.all((seeded.items || []).map(it => maskVideoItem(it, MEDIA_SECRET)));
+          const responsePayload = {
+            items,
+            total: seeded.total,
+            page: seeded.page,
+            page_size: seeded.page_size,
+            total_pages: seeded.total_pages,
+            live: false
+          };
+          if (freshShuffle) responsePayload.shuffle = freshSeed;
+          const jsonStr = JSON.stringify(responsePayload);
+          if (!freshShuffle) setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
+          const vidResp = new Response(method === "HEAD" ? null : jsonStr, {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "X-Velvet-Rotation": String(catalogSlot),
+              ...(freshShuffle ? { "X-Velvet-Shuffle": String(freshSeed) } : {}),
+              ...catalogResponseCacheHeaders(freshShuffle, catalogCacheControl),
+              ...getCorsHeaders(origin)
+            }
+          });
+          if (cache && !freshShuffle) {
+            try { context.waitUntil(cache.put(cacheKey, vidResp.clone())); } catch (e) {}
+          }
+          return vidResp;
+        }
+      } catch (vidErr) {
+        console.error("[Velvet-Items] Videos error:", vidErr);
       }
     }
 
@@ -3178,37 +3411,55 @@ export async function onRequest(context) {
     const randomOffset = Math.floor(Math.random() * Math.max(1, maxOffset - count));
 
     const preferLivePmv = env.ENABLE_PMVHAVEN_LIVE !== "false" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db";
-    if (mediaType === "video" && preferLivePmv) {
-      try {
-        const pmvRes = await fetch(`https://pmvhaven.com/api/videos?sort=random&limit=${count}`, {
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Referer": "https://pmvhaven.com/" }
-        });
-        if (pmvRes.ok) {
-          const pmvData = await pmvRes.json();
-          const items = await Promise.all((pmvData.videos || []).map(async v => {
-            const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
-            const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
-            const videoToken = v.videoUrl ? await encodeMediaToken(v.videoUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
-            return {
-              id: v._id,
-              source: "pmvhaven",
-              source_id: v._id,
-              title: v.title,
-              cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
-              media_type: "video",
-              tags: v.tags || [],
-              artists: v.uploaderUsername ? [v.uploaderUsername] : [],
-              url: `https://pmvhaven.com/video?v=${v._id}`,
-              page_count: 0,
-              video_sources: videoToken ? [{ quality: "1080p HD", url: `/api/media?t=${videoToken}`, format: "mp4" }] : []
-            };
-          }));
-          return new Response(JSON.stringify(items), {
-            status: 200,
-            headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+    if (mediaType === "video") {
+      if (preferLivePmv) {
+        try {
+          const pmvRes = await fetch(`https://pmvhaven.com/api/videos?sort=random&limit=${count}`, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Referer": "https://pmvhaven.com/" }
           });
-        }
-      } catch (e) {}
+          if (pmvRes.ok) {
+            const pmvData = await pmvRes.json();
+            const vList = pmvData.videos || [];
+            if (vList.length > 0) {
+              const items = await Promise.all(vList.map(async v => {
+                const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+                const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+                const videoToken = v.videoUrl ? await encodeMediaToken(v.videoUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+                return {
+                  id: v._id,
+                  source: "pmvhaven",
+                  source_id: v._id,
+                  title: v.title,
+                  cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
+                  media_type: "video",
+                  tags: v.tags || [],
+                  artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+                  url: `https://pmvhaven.com/video?v=${v._id}`,
+                  page_count: 0,
+                  video_sources: videoToken ? [{ quality: "1080p HD", url: `/api/media?t=${videoToken}`, format: "mp4" }] : []
+                };
+              }));
+              return new Response(JSON.stringify(items), {
+                status: 200,
+                headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+              });
+            }
+          }
+        } catch (e) {}
+      }
+
+      try {
+        const videos = await loadVideoCatalog(context, url);
+        const randomStart = Math.floor(Math.random() * Math.max(1, videos.length - count));
+        const sample = videos.slice(randomStart, randomStart + count);
+        const items = await Promise.all(sample.map(it => maskVideoItem(it, MEDIA_SECRET)));
+        return new Response(JSON.stringify(items), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        });
+      } catch (vidErr) {
+        return new Response("[]", { status: 200, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } });
+      }
     }
 
     let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
