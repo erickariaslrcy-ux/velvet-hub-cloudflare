@@ -42,17 +42,17 @@ export async function onRequest(context) {
 
   // Fast-path para rutas SPA de la aplicación (cómics, videos, galerías, juegos, bóveda)
   if (isSpaNavigation(current.pathname) && context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === "function") {
-    const indexReq = new Request(new URL("/index.html", context.request.url), context.request);
+    const indexReq = new Request(new URL("/", context.request.url), context.request);
     return context.env.ASSETS.fetch(indexReq);
   }
 
   const response = await context.next();
 
-  // Si Cloudflare devolvió 404 para una ruta sin extensión (navegación SPA directa), servir /index.html
+  // Si Cloudflare devolvió 404 para una ruta sin extensión (navegación SPA directa), servir /index.html desde raíz
   if (response.status === 404 && !current.pathname.startsWith("/api/")) {
     const hasExt = /\.[a-zA-Z0-9]+$/.test(current.pathname);
     if (!hasExt && context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === "function") {
-      const indexReq = new Request(new URL("/index.html", context.request.url), context.request);
+      const indexReq = new Request(new URL("/", context.request.url), context.request);
       return context.env.ASSETS.fetch(indexReq);
     }
   }
