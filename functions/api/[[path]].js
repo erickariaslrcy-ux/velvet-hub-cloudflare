@@ -65,6 +65,35 @@ function fromBase64Url(str) {
   return new TextDecoder().decode(bytes);
 }
 
+// Extracción determinista de URLs upstream raw desde tokens anidados o URLs directas
+function extractRawMediaUrl(urlOrToken) {
+  if (!urlOrToken || typeof urlOrToken !== "string") return "";
+  let current = urlOrToken.trim();
+  let depth = 5;
+  while (depth-- > 0) {
+    if (current.includes("?t=") || current.includes("&t=")) {
+      const match = current.match(/[?&]t=([^&]+)/);
+      current = match ? decodeURIComponent(match[1]) : "";
+    }
+    if (current.includes(".")) {
+      const b64 = current.split(".")[0];
+      try {
+        const payloadStr = fromBase64Url(b64);
+        const parsed = JSON.parse(payloadStr);
+        if (parsed && parsed.u) {
+          current = parsed.u;
+          continue;
+        }
+      } catch (e) {}
+    }
+    break;
+  }
+  if (/^https?:\/\//i.test(current)) {
+    return current;
+  }
+  return "";
+}
+
 // Clave activa inyectada en runtime por onRequest
 let _activeMediaSecret = "";
 let _activeSupabaseUrl = "";
@@ -131,6 +160,10 @@ async function decodeMediaToken(token, secret = "") {
     if (payload && payload.u) {
       if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
         return null; // Token expirado
+      }
+      const rawUpstream = extractRawMediaUrl(payload.u);
+      if (rawUpstream) {
+        payload.u = rawUpstream;
       }
       return payload;
     }
@@ -1575,8 +1608,13 @@ export async function onRequest(context) {
     console.warn(`[Velvet-Startup] Variables de entorno críticas ausentes: ${missingRequired.join(", ")}`);
   }
 
-  // Helper local con inyección de secreto para firmar tokens sin exponer nada al cliente
-  const encodeToken = async (targetUrl, referer = "") => await encodeMediaToken(targetUrl, referer, MEDIA_SECRET);
+  // Helper local con inyección de secreto para firmar tokens sin exponer nada al cliente.
+  // Desempaqueta deterministamente cualquier token anidado para prevenir doble codificación.
+  const encodeToken = async (targetUrl, referer = "") => {
+    const raw = extractRawMediaUrl(targetUrl) || targetUrl;
+    if (!raw || !/^https?:\/\//i.test(raw)) return "";
+    return await encodeMediaToken(raw, referer, MEDIA_SECRET);
+  };
 
   // Clave de mínimo privilegio para catálogo público y operaciones autenticadas con RLS
   const SUPABASE_KEY = SUPABASE_ANON_KEY || SUPABASE_SERVICE_ROLE_KEY;
@@ -2895,10 +2933,23 @@ export async function onRequest(context) {
         else if (category === "doujin") catTerm = "doujin";
         else if (category === "parody") catTerm = "parodia";
         else if (category === "western") catTerm = "western";
+
+        // Categorías semánticas reales para Cómics y Manga
+        if (category === "doujin" || category === "manga") {
+          filterQuery += "&or=(source.in.(3hentai,hentaipaw,doujins),search_text.ilike.*manga*,search_text.ilike.*doujin*,search_text.ilike.*japones*)";
+        } else if (category === "western" || category === "comic" || category === "comics") {
+          filterQuery += "&or=(source.in.(comics18_net,comics18_org,comicspornoxxx,reycomix,vercomicsporno,cartooncomixhd,pornocomic,sexkomix2,comicsparaadultos),search_text.ilike.*comic*)";
+        } else if (category === "3d") {
+          filterQuery += "&or=(source.in.(melapelacomics,melapelocondibujos,mhcomics),search_text.ilike.*3d*,search_text.ilike.*cgi*,search_text.ilike.*render*)";
+        } else if (category === "manhwa") {
+          filterQuery += "&or=(source.in.(leermanhwas,manhwaweb),search_text.ilike.*manhwa*,search_text.ilike.*corean*)";
+        } else if (category === "parody") {
+          filterQuery += "&or=(search_text.ilike.*parod*,source.in.(cartooncomixhd,melapelocondibujos))";
+        } else {
+          filterQuery += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
+        }
       }
-      if (category === "parody") {
-        filterQuery += "&or=(search_text.ilike.*parody*,search_text.ilike.*parodia*)";
-      } else {
+      if (mediaType === "gallery" || mediaType === "cosplay" || mediaType === "video") {
         filterQuery += `&search_text=ilike.*${encodeURIComponent(catTerm)}*`;
       }
     }
@@ -3784,32 +3835,60 @@ export async function onRequest(context) {
         }
 
         const rawRows = await favRes.json().catch(() => []);
-        const items = await Promise.all((rawRows || []).map(async (r) => {
-          const it = r.items || {};
-          const isAvailable = !it.id || it.status !== "blocked";
-          const coverUrl = it.cover_url || "";
-          let maskedCover = "";
+
+        // Si algún item_id no vino con items(...) poblado, buscarlo en la tabla items
+        const missingFavIds = (rawRows || [])
+          .filter(r => !r.items || !r.items.title)
+          .map(r => r.item_id)
+          .filter(id => Number.isInteger(id) && id > 0);
+        if (missingFavIds.length > 0) {
           try {
-            maskedCover = coverUrl ? await encodeToken(coverUrl, it.url || "") : "";
-          } catch (e) {
-            maskedCover = "";
+            const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${missingFavIds.join(",")})&select=id,title,cover_url,media_type,source,source_id,url,page_count,status`, {
+              headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
+            });
+            if (itemsRes.ok) {
+              const fetched = await itemsRes.json().catch(() => []);
+              const itMap = new Map((fetched || []).map(it => [it.id, it]));
+              for (const r of rawRows) {
+                if (!r.items || !r.items.title) {
+                  const found = itMap.get(r.item_id);
+                  if (found) r.items = found;
+                }
+              }
+            }
+          } catch(e) {}
+        }
+
+        const userMetaFavs = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
+        const items = await Promise.all((rawRows || []).map(async (r) => {
+          let it = r.items || {};
+          const metaMatch = userMetaFavs.find(cf => String(cf.id) === String(r.item_id) || String(cf.source_id) === String(r.item_id));
+          const effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Guardado";
+          const rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
+          const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
+          let finalCover = "/velvet_logo.png";
+          if (upstreamCover) {
+            const freshTok = await encodeToken(upstreamCover, (it && it.url) || (metaMatch && metaMatch.url) || "");
+            if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+          } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
+            finalCover = rawCover;
           }
+          const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
           return {
             id: it.id || r.item_id,
             item_id: r.item_id,
-            title: isAvailable ? (it.title || "Guardado") : "Contenido no disponible",
-            cover_url: maskedCover ? `/api/media?t=${maskedCover}` : (it.cover_url || "/velvet_logo.png"),
-            media_type: it.media_type || "comic",
-            source: it.source || "",
-            source_id: it.source_id || "",
-            url: isAvailable ? (it.url || "") : "",
-            page_count: it.page_count || 0,
+            title: isAvailable ? effectiveTitle : "Contenido no disponible",
+            cover_url: finalCover,
+            media_type: (it && it.media_type) || (metaMatch && metaMatch.media_type) || "comic",
+            source: (it && it.source) || (metaMatch && metaMatch.source) || "",
+            source_id: (it && it.source_id) || (metaMatch && metaMatch.source_id) || "",
+            url: isAvailable ? ((it && it.url) || (metaMatch && metaMatch.url) || "") : "",
+            page_count: (it && it.page_count) || (metaMatch && metaMatch.page_count) || 0,
             created_at: r.created_at,
             available: isAvailable
           };
         }));
 
-        const userMetaFavs = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
         let finalItems = [...items];
         if (userMetaFavs.length > 0) {
           const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id)));
@@ -3817,7 +3896,18 @@ export async function onRequest(context) {
             const k = (cf.source && cf.source_id) ? `${cf.source}:${cf.source_id}` : String(cf.id);
             if (!seen.has(k)) {
               seen.add(k);
-              finalItems.push(cf);
+              const rawCfCover = extractRawMediaUrl(cf.cover_url) || cf.cover_url || "";
+              let cfCover = "/velvet_logo.png";
+              if (rawCfCover && /^https?:\/\//i.test(rawCfCover)) {
+                const freshTok = await encodeToken(rawCfCover, cf.url || "");
+                if (freshTok) cfCover = `/api/media?t=${freshTok}`;
+              } else if (cf.cover_url && cf.cover_url.startsWith("/api/media?t=")) {
+                cfCover = cf.cover_url;
+              }
+              finalItems.push({
+                ...cf,
+                cover_url: cfCover
+              });
             }
           }
         }
@@ -3907,7 +3997,7 @@ export async function onRequest(context) {
                   source: ci.source || "external",
                   source_id: String(ci.source_id || ci.id || ""),
                   title: String(ci.title || "Contenido guardado").slice(0, 80),
-                  cover_url: ci.cover_url || "",
+                  cover_url: extractRawMediaUrl(ci.cover_url) || ci.cover_url || "",
                   url: ci.url || "",
                   media_type: ci.media_type || "video"
                 });
@@ -3996,7 +4086,7 @@ export async function onRequest(context) {
             source: body.source || "external",
             source_id: String(body.source_id || body.id || targetItemId || ""),
             title: String(body.title || "Contenido guardado").slice(0, 80),
-            cover_url: body.cover_url || "",
+            cover_url: extractRawMediaUrl(body.cover_url) || body.cover_url || "",
             url: body.url || "",
             media_type: body.media_type || "video"
           };
@@ -4141,33 +4231,68 @@ export async function onRequest(context) {
       }
 
       const rawRows = histRes && histRes.ok ? await histRes.json().catch(() => []) : [];
+
+      // Si algún item_id no vino con items(...) poblado, buscarlo en la tabla items
+      const missingHistIds = (rawRows || [])
+        .filter(r => !r.items || !r.items.title)
+        .map(r => r.item_id)
+        .filter(id => Number.isInteger(id) && id > 0);
+      if (missingHistIds.length > 0) {
+        try {
+          const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${missingHistIds.join(",")})&select=id,title,cover_url,media_type,source,source_id,url,page_count,status`, {
+            headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
+          });
+          if (itemsRes.ok) {
+            const fetched = await itemsRes.json().catch(() => []);
+            const itMap = new Map((fetched || []).map(it => [it.id, it]));
+            for (const r of rawRows) {
+              if (!r.items || !r.items.title) {
+                const found = itMap.get(r.item_id);
+                if (found) r.items = found;
+              }
+            }
+          }
+        } catch(e) {}
+      }
+
+      const metaHist = Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [];
       const items = await Promise.all((rawRows || []).map(async (r) => {
         const it = r.items || {};
-        const isAvailable = it && it.id && it.status !== "blocked";
-        const coverUrl = it.cover_url || "";
-        const maskedCover = coverUrl ? await encodeToken(coverUrl, it.url || "") : "";
+        const metaMatch = metaHist.find(mh => String(mh.id || mh.item_id) === String(r.item_id));
+        const effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Contenido visto";
+        const effectiveSource = (it && it.source) || (metaMatch && metaMatch.source) || "";
+        const effectiveSourceId = (it && it.source_id) || (metaMatch && metaMatch.source_id) || "";
+        const rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
+        const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
+        let finalCover = "/velvet_logo.png";
+        if (upstreamCover) {
+          const freshTok = await encodeToken(upstreamCover, (it && it.url) || (metaMatch && metaMatch.url) || "");
+          if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+        } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
+          finalCover = rawCover;
+        }
+        const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
         return {
           id: it.id || r.item_id,
           history_id: r.id,
           item_id: r.item_id,
-          title: isAvailable ? (it.title || "Sin título") : "Contenido no disponible",
-          cover_url: maskedCover ? `/api/media?t=${maskedCover}` : (it.cover_url || "/velvet_logo.png"),
-          media_type: r.media_type || it.media_type || "comic",
-          source: it.source || "",
-          source_id: it.source_id || "",
-          url: isAvailable ? (it.url || "") : "",
-          page_count: it.page_count || 0,
-          position: r.position || 0,
-          duration: r.duration || 0,
-          completed: !!r.completed,
+          title: isAvailable ? effectiveTitle : "Contenido no disponible",
+          cover_url: finalCover,
+          media_type: r.media_type || it.media_type || (metaMatch && metaMatch.media_type) || "comic",
+          source: effectiveSource,
+          source_id: effectiveSourceId,
+          url: isAvailable ? ((it && it.url) || (metaMatch && metaMatch.url) || "") : "",
+          page_count: (it && it.page_count) || (metaMatch && metaMatch.page_count) || 0,
+          position: r.position || (metaMatch && (metaMatch.position || metaMatch.page || metaMatch.currentTime)) || 0,
+          duration: r.duration || (metaMatch && (metaMatch.duration || metaMatch.total)) || 0,
+          completed: Boolean(r.completed || (metaMatch && metaMatch.completed)),
           last_activity: r.last_activity,
-          at: r.client_timestamp ? Number(r.client_timestamp) : new Date(r.last_activity).getTime(),
+          at: r.client_timestamp ? Number(r.client_timestamp) : (metaMatch && metaMatch.at ? Number(metaMatch.at) : new Date(r.last_activity).getTime()),
           available: isAvailable
         };
       }));
 
       // Fusionar con historial en user_metadata (para fuentes externas, juegos, o si user_history no existe aún en BD)
-      const metaHist = Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [];
       let finalItems = [...items];
       if (metaHist.length > 0) {
         const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id || it.item_id)));
@@ -4176,7 +4301,18 @@ export async function onRequest(context) {
           if (!seen.has(k)) {
             seen.add(k);
             if (!typeFilter || typeFilter === "all" || mh.media_type === typeFilter) {
-              finalItems.push(mh);
+              const rawMhCover = extractRawMediaUrl(mh.cover_url) || mh.cover_url || "";
+              let mhCover = "/velvet_logo.png";
+              if (rawMhCover && /^https?:\/\//i.test(rawMhCover)) {
+                const freshTok = await encodeToken(rawMhCover, mh.url || "");
+                if (freshTok) mhCover = `/api/media?t=${freshTok}`;
+              } else if (mh.cover_url && mh.cover_url.startsWith("/api/media?t=")) {
+                mhCover = mh.cover_url;
+              }
+              finalItems.push({
+                ...mh,
+                cover_url: mhCover
+              });
             }
           }
         }
@@ -4337,7 +4473,7 @@ export async function onRequest(context) {
             source: itemData.source || "",
             source_id: itemData.source_id || "",
             title: String(itemData.title || "Contenido visto").slice(0, 80),
-            cover_url: itemData.cover_url || "",
+            cover_url: extractRawMediaUrl(itemData.cover_url) || itemData.cover_url || "",
             url: itemData.url || "",
             media_type: mediaType,
             position: pos,

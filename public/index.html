@@ -4058,11 +4058,11 @@
 
     const COMIC_CATEGORIES = [
       { id: 'all', label: 'Todos los Estrenos', icon: 'fa-solid fa-fire text-amber-400' },
-      { id: 'manhwa', label: 'Manhwas +18', icon: 'fa-solid fa-book-open text-purple-400' },
+      { id: 'doujin', label: 'Manga & Doujinshi', icon: 'fa-solid fa-torii-gate text-rose-400' },
+      { id: 'western', label: 'Cómics XXX', icon: 'fa-solid fa-bolt text-yellow-400' },
       { id: '3d', label: '3D CGI Novels', icon: 'fa-solid fa-gem text-cyan-400' },
-      { id: 'doujin', label: 'Doujinshi & Manga', icon: 'fa-solid fa-torii-gate text-rose-400' },
-      { id: 'parody', label: 'Parodias Animadas', icon: 'fa-solid fa-wand-magic-sparkles text-pink-400' },
-      { id: 'western', label: 'Cómics XXX Clásicos', icon: 'fa-solid fa-bolt text-yellow-400' }
+      { id: 'manhwa', label: 'Manhwas +18', icon: 'fa-solid fa-book-open text-purple-400' },
+      { id: 'parody', label: 'Parodias Animadas', icon: 'fa-solid fa-wand-magic-sparkles text-pink-400' }
     ];
 
     const SORT_OPTIONS = [
@@ -9032,8 +9032,8 @@
           const effId = cachedVid.id || itemId;
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedVid) : `/v/${effId}`;
           history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cachedVid.title, canonicalUrl);
-          document.title = `${cachedVid.title} — MORBO HUB`;
         }
+        document.title = `${cachedVid.title} — MORBO HUB`;
         if (!videoGuard.matches(ticket.token)) return;
         setupVideoQualityButtons(cachedVid.video_sources);
         playVideoSource(cachedVid.video_sources[0], null, false, ticket.token);
@@ -9078,8 +9078,8 @@
           const effId = item.id || itemId;
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/v/${effId}`;
           history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, item.title, canonicalUrl);
-          document.title = `${item.title} — MORBO HUB`;
         }
+        document.title = `${item.title} — MORBO HUB`;
 
         let sources = item.video_sources || [];
         if (sources.length === 0) {
@@ -11008,8 +11008,8 @@
           if (isGallery) state.mode = 'galleries';
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/${isGallery ? 'g' : 'c'}/${effId}`;
           history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, headingTitle, canonicalUrl);
-          document.title = `${headingTitle} — MORBO HUB`;
         }
+        document.title = `${headingTitle} — MORBO HUB`;
 
         renderReaderPages(item.pages || [], item.url);
 
