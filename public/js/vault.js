@@ -301,8 +301,8 @@
         error: null
       };
 
-      // ESTADO 2: Cargando (Skeletons del mismo tamaño que las tarjetas)
-      if (favState.isLoading) {
+      // ESTADO 2: Cargando (Skeletons solo si no tenemos ítems en memoria o caché previa)
+      if (favState.isLoading && (!favState.items || favState.items.length === 0)) {
         if (emptyEl) emptyEl.classList.add('hidden');
         if (paginationContainer) paginationContainer.classList.add('hidden');
         renderSkeletonGrid(container, 8);

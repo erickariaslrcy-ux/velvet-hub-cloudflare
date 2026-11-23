@@ -69,6 +69,7 @@ function fromBase64Url(str) {
 let _activeMediaSecret = "";
 let _activeSupabaseUrl = "";
 let _activeSupabaseKey = "";
+let _activeSupabaseServiceKey = "";
 
 // Paginación real de datos personales desde PostgreSQL (única fuente de verdad)
 const PERSONAL_PAGE_SIZE = 24;
@@ -1503,9 +1504,11 @@ async function updateSupabaseUserMetadata(userId, newMetadata, sbUrl, sbKey) {
 }
 
 async function updateUserMetadata() {
-  // Los favoritos viven en public.favorites (RLS por auth.uid()).
-  // Escribirlos en user_metadata hincha el JWT y tira la sesión al rotar el token.
-  return false;
+  const [userId, newMetadata, sbUrl, sbKey] = arguments;
+  const activeUrl = sbUrl || _activeSupabaseUrl;
+  const activeKey = sbKey || _activeSupabaseServiceKey || (typeof SUPABASE_SERVICE_ROLE_KEY !== "undefined" ? SUPABASE_SERVICE_ROLE_KEY : "") || _activeSupabaseKey;
+  if (!userId || !activeUrl || !activeKey) return false;
+  return updateSupabaseUserMetadata(userId, newMetadata, activeUrl, activeKey);
 }
 
 // Helper para sincronizar tabla SQL favorites si el ítem tiene ID numérico
@@ -1582,6 +1585,7 @@ export async function onRequest(context) {
 
   _activeSupabaseUrl = SUPABASE_URL;
   _activeSupabaseKey = SUPABASE_KEY;
+  _activeSupabaseServiceKey = SUPABASE_ADMIN_KEY;
 
   const url = new URL(context.request.url);
   const origin = context.request.headers.get("origin") || "*";
@@ -3703,12 +3707,15 @@ export async function onRequest(context) {
             }
             continue;
           }
-          if (cf && cf.source && cf.source_id) {
+          if (cf && (cf.source && cf.source_id || cf.id)) {
             refs.push({
-              source: String(cf.source).slice(0, 40),
-              source_id: String(cf.source_id).slice(0, 80),
+              id: cf.id || null,
+              source: String(cf.source || "external").slice(0, 40),
+              source_id: String(cf.source_id || cf.id || "").slice(0, 80),
               media_type: String(cf.media_type || "").slice(0, 16),
-              title: String(cf.title || "").slice(0, 80)
+              title: String(cf.title || "Contenido guardado").slice(0, 80),
+              cover_url: cf.cover_url || "",
+              url: cf.url || ""
             });
           }
         }
@@ -3856,7 +3863,7 @@ export async function onRequest(context) {
             .filter((id) => Number.isInteger(id) && id > 0);
           if (validIds.length > 0) {
             const rows = validIds.slice(0, 2000).map((id) => ({ user_id: user.id, item_id: id }));
-            await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+            const batchRes = await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
               method: "POST",
               headers: {
                 "apikey": SUPABASE_KEY,
@@ -3865,7 +3872,23 @@ export async function onRequest(context) {
                 "Prefer": "resolution=ignore-duplicates"
               },
               body: JSON.stringify(rows)
-            }).catch(() => {});
+            }).catch(() => null);
+
+            // Si la inserción en bloque falló (ej. violación de FK si algún ID no existe en items)
+            if (!batchRes || !batchRes.ok) {
+              for (const singleId of validIds.slice(0, 200)) {
+                await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+                  method: "POST",
+                  headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=ignore-duplicates"
+                  },
+                  body: JSON.stringify({ user_id: user.id, item_id: singleId })
+                }).catch(() => {});
+              }
+            }
           }
 
           // Guardar también cualquier ítem con ID no entero o externo en custom_favorites
@@ -3884,6 +3907,8 @@ export async function onRequest(context) {
                   source: ci.source || "external",
                   source_id: String(ci.source_id || ci.id || ""),
                   title: String(ci.title || "Contenido guardado").slice(0, 80),
+                  cover_url: ci.cover_url || "",
+                  url: ci.url || "",
                   media_type: ci.media_type || "video"
                 });
               }
@@ -3943,7 +3968,7 @@ export async function onRequest(context) {
 
         // Si tenemos un item_id entero válido para la tabla SQL
         if (Number.isInteger(targetItemId) && targetItemId > 0) {
-          await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
+          const sqlFavRes = await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
             method: "POST",
             headers: {
               "apikey": SUPABASE_KEY,
@@ -3952,23 +3977,27 @@ export async function onRequest(context) {
               "Prefer": "resolution=ignore-duplicates"
             },
             body: JSON.stringify({ user_id: user.id, item_id: targetItemId })
-          });
+          }).catch(() => null);
 
-          return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
-            status: 200,
-            headers: getPersonalHeaders(origin, newToken)
-          });
+          if (sqlFavRes && sqlFavRes.ok) {
+            return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
+              status: 200,
+              headers: getPersonalHeaders(origin, newToken)
+            });
+          }
         }
 
-        // Si es un contenido dinámico/externo (ej: pmvhaven, juegos u otros sin registro SQL)
-        if (body.source || body.source_id || body.title || body.id) {
+        // Si es un contenido dinámico/externo (ej: pmvhaven, juegos u otros sin registro SQL o fallo de FK)
+        if (body.source || body.source_id || body.title || body.id || targetItemId) {
           const currentMeta = user.user_metadata || {};
           const customFavs = Array.isArray(currentMeta.custom_favorites) ? [...currentMeta.custom_favorites] : [];
           const customEntry = {
-            id: body.id || body.source_id || `custom_${Date.now()}`,
+            id: body.id || targetItemId || body.source_id || `custom_${Date.now()}`,
             source: body.source || "external",
-            source_id: String(body.source_id || body.id || ""),
+            source_id: String(body.source_id || body.id || targetItemId || ""),
             title: String(body.title || "Contenido guardado").slice(0, 80),
+            cover_url: body.cover_url || "",
+            url: body.url || "",
             media_type: body.media_type || "video"
           };
 
@@ -4016,7 +4045,8 @@ export async function onRequest(context) {
       const lastPart = parts[parts.length - 1];
       const secondLastPart = parts.length >= 4 ? parts[parts.length - 2] : null;
 
-      let targetId = parseInt(url.searchParams.get("id") || url.searchParams.get("item_id"), 10);
+      const rawId = url.searchParams.get("id") || url.searchParams.get("item_id");
+      let targetId = parseInt(rawId, 10);
       if (!targetId || isNaN(targetId)) {
         if (/^\d+$/.test(lastPart)) targetId = parseInt(lastPart, 10);
       }
@@ -4034,7 +4064,8 @@ export async function onRequest(context) {
       if (Array.isArray(currentMeta.custom_favorites) && currentMeta.custom_favorites.length > 0) {
         const updatedCustom = currentMeta.custom_favorites.filter(cf => {
           if (targetId && String(cf.id) === String(targetId)) return false;
-          if (lastPart && (String(cf.id) === String(lastPart) || String(cf.source_id) === String(lastPart))) return false;
+          if (rawId && (String(cf.id) === String(rawId) || String(cf.source_id) === String(rawId))) return false;
+          if (lastPart && lastPart !== "favorites" && (String(cf.id) === String(lastPart) || String(cf.source_id) === String(lastPart))) return false;
           if (secondLastPart && cf.source === secondLastPart && String(cf.source_id) === String(lastPart)) return false;
           return true;
         });
@@ -4043,7 +4074,7 @@ export async function onRequest(context) {
         }
       }
 
-      return new Response(JSON.stringify({ ok: true, success: true, deleted: lastPart || targetId }), {
+      return new Response(JSON.stringify({ ok: true, success: true, deleted: rawId || lastPart || targetId }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });
@@ -4095,19 +4126,21 @@ export async function onRequest(context) {
           "Prefer": "count=exact",
           "Range": `${offset}-${to}`
         }
-      });
+      }).catch(() => null);
 
       let total = 0;
-      const cr = histRes.headers.get("content-range") || "";
-      const slashIdx = cr.indexOf("/");
-      if (slashIdx !== -1) {
-        const totalPart = cr.substring(slashIdx + 1);
-        if (totalPart && totalPart !== "*") {
-          total = parseInt(totalPart, 10) || 0;
+      if (histRes && histRes.headers) {
+        const cr = histRes.headers.get("content-range") || "";
+        const slashIdx = cr.indexOf("/");
+        if (slashIdx !== -1) {
+          const totalPart = cr.substring(slashIdx + 1);
+          if (totalPart && totalPart !== "*") {
+            total = parseInt(totalPart, 10) || 0;
+          }
         }
       }
 
-      const rawRows = histRes.ok ? await histRes.json().catch(() => []) : [];
+      const rawRows = histRes && histRes.ok ? await histRes.json().catch(() => []) : [];
       const items = await Promise.all((rawRows || []).map(async (r) => {
         const it = r.items || {};
         const isAvailable = it && it.id && it.status !== "blocked";
@@ -4133,8 +4166,25 @@ export async function onRequest(context) {
         };
       }));
 
-      const totalPages = Math.max(1, Math.ceil(total / pageSize));
-      return new Response(JSON.stringify({ items, total, page, pageSize, totalPages }), {
+      // Fusionar con historial en user_metadata (para fuentes externas, juegos, o si user_history no existe aún en BD)
+      const metaHist = Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [];
+      let finalItems = [...items];
+      if (metaHist.length > 0) {
+        const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id || it.item_id)));
+        for (const mh of metaHist) {
+          const k = (mh.source && mh.source_id) ? `${mh.source}:${mh.source_id}` : String(mh.id || mh.item_id);
+          if (!seen.has(k)) {
+            seen.add(k);
+            if (!typeFilter || typeFilter === "all" || mh.media_type === typeFilter) {
+              finalItems.push(mh);
+            }
+          }
+        }
+      }
+
+      const finalTotal = Math.max(total, finalItems.length);
+      const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
+      return new Response(JSON.stringify({ items: finalItems.slice(0, pageSize), total: finalTotal, page, pageSize, totalPages }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });
@@ -4212,12 +4262,17 @@ export async function onRequest(context) {
 
         // Caso B: Progreso individual
         const itemData = body.item || body;
-        const targetItemId = parseInt(itemData.id || itemData.item_id, 10);
-        if (!Number.isInteger(targetItemId) || targetItemId <= 0) {
-          return new Response(JSON.stringify({ error: "item_id entero requerido" }), {
-            status: 400,
-            headers: getPersonalHeaders(origin, newToken)
-          });
+        let targetItemId = parseInt(itemData.id || itemData.item_id, 10);
+        if ((!Number.isInteger(targetItemId) || targetItemId <= 0) && itemData.source && itemData.source_id) {
+          try {
+            const lookup = await fetch(`${SUPABASE_URL}/rest/v1/items?source=eq.${encodeURIComponent(itemData.source)}&source_id=eq.${encodeURIComponent(itemData.source_id)}&select=id&limit=1`, {
+              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_KEY}` }
+            });
+            if (lookup.ok) {
+              const rows = await lookup.json().catch(() => []);
+              if (rows && rows[0] && rows[0].id) targetItemId = rows[0].id;
+            }
+          } catch(e) {}
         }
 
         const mediaType = itemData.media_type === "video" ? "video" : (itemData.media_type === "gallery" ? "gallery" : "comic");
@@ -4226,46 +4281,80 @@ export async function onRequest(context) {
         const comp = Boolean(itemData.completed);
         const clientTs = parseInt(itemData.client_timestamp || itemData.at || Date.now(), 10);
 
-        const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_history`, {
-          method: "POST",
-          headers: {
-            "apikey": SUPABASE_KEY,
-            "Authorization": `Bearer ${token || SUPABASE_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            p_item_id: targetItemId,
-            p_media_type: mediaType,
-            p_position: pos,
-            p_duration: dur,
-            p_completed: comp,
-            p_client_timestamp: clientTs
-          })
-        }).catch(() => null);
-
-        if (!rpcRes || !rpcRes.ok) {
-          await fetch(`${SUPABASE_URL}/rest/v1/user_history`, {
+        let sqlSuccess = false;
+        if (Number.isInteger(targetItemId) && targetItemId > 0) {
+          const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_history`, {
             method: "POST",
             headers: {
               "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-              "Content-Type": "application/json",
-              "Prefer": "resolution=merge-duplicates"
+              "Authorization": `Bearer ${token || SUPABASE_KEY}`,
+              "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              user_id: user.id,
-              item_id: targetItemId,
-              media_type: mediaType,
-              position: pos,
-              duration: dur,
-              completed: comp,
-              last_activity: new Date().toISOString(),
-              client_timestamp: clientTs
+              p_item_id: targetItemId,
+              p_media_type: mediaType,
+              p_position: pos,
+              p_duration: dur,
+              p_completed: comp,
+              p_client_timestamp: clientTs
             })
-          }).catch(() => {});
+          }).catch(() => null);
+
+          if (rpcRes && rpcRes.ok) {
+            sqlSuccess = true;
+          } else {
+            const postRes = await fetch(`${SUPABASE_URL}/rest/v1/user_history`, {
+              method: "POST",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates"
+              },
+              body: JSON.stringify({
+                user_id: user.id,
+                item_id: targetItemId,
+                media_type: mediaType,
+                position: pos,
+                duration: dur,
+                completed: comp,
+                last_activity: new Date().toISOString(),
+                client_timestamp: clientTs
+              })
+            }).catch(() => null);
+            if (postRes && postRes.ok) sqlSuccess = true;
+          }
         }
 
-        return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
+        // Respaldo de seguridad en user_metadata.history (últimos 50 items)
+        try {
+          const currentMeta = user.user_metadata || {};
+          const metaHist = Array.isArray(currentMeta.history) ? [...currentMeta.history] : [];
+          const histKey = (itemData.source && itemData.source_id) ? `${itemData.source}:${itemData.source_id}` : String(targetItemId || itemData.id || `hist_${Date.now()}`);
+          const newHistEntry = {
+            id: targetItemId || itemData.id || histKey,
+            item_id: targetItemId || itemData.id || null,
+            source: itemData.source || "",
+            source_id: itemData.source_id || "",
+            title: String(itemData.title || "Contenido visto").slice(0, 80),
+            cover_url: itemData.cover_url || "",
+            url: itemData.url || "",
+            media_type: mediaType,
+            position: pos,
+            duration: dur,
+            completed: comp,
+            client_timestamp: clientTs,
+            last_activity: new Date().toISOString(),
+            at: clientTs
+          };
+          const nextHist = [newHistEntry, ...metaHist.filter(h => {
+            const k = (h.source && h.source_id) ? `${h.source}:${h.source_id}` : String(h.id || h.item_id);
+            return k !== histKey;
+          })].slice(0, 50);
+          await updateUserMetadata(user.id, { ...currentMeta, history: nextHist }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+        } catch(mErr) {}
+
+        return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId || itemData.id, sql: sqlSuccess }), {
           status: 200,
           headers: getPersonalHeaders(origin, newToken)
         });
@@ -4291,7 +4380,11 @@ export async function onRequest(context) {
         await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}`, {
           method: "DELETE",
           headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
-        });
+        }).catch(() => {});
+        try {
+          const currentMeta = user.user_metadata || {};
+          await updateUserMetadata(user.id, { ...currentMeta, history: [] }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+        } catch(e) {}
         return new Response(JSON.stringify({ ok: true, cleared: true }), {
           status: 200,
           headers: getPersonalHeaders(origin, newToken)
@@ -4299,25 +4392,33 @@ export async function onRequest(context) {
       }
 
       let targetId = parseInt(url.searchParams.get("id") || url.searchParams.get("item_id"), 10);
+      const parts = url.pathname.split("/").filter(Boolean);
+      const lastPart = parts[parts.length - 1];
       if (!targetId || isNaN(targetId)) {
-        const parts = url.pathname.split("/").filter(Boolean);
-        const lastPart = parts[parts.length - 1];
         if (/^\d+$/.test(lastPart)) targetId = parseInt(lastPart, 10);
       }
 
-      if (!Number.isInteger(targetId) || targetId <= 0) {
-        return new Response(JSON.stringify({ error: "id numérico requerido o clear=all" }), {
-          status: 400,
-          headers: getPersonalHeaders(origin, newToken)
-        });
+      if (Number.isInteger(targetId) && targetId > 0) {
+        await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
+          method: "DELETE",
+          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
+        }).catch(() => {});
       }
 
-      await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
-        method: "DELETE",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
-      });
+      try {
+        const currentMeta = user.user_metadata || {};
+        const metaHist = Array.isArray(currentMeta.history) ? currentMeta.history : [];
+        const nextHist = metaHist.filter(h => {
+          if (targetId && (String(h.id) === String(targetId) || String(h.item_id) === String(targetId))) return false;
+          if (lastPart && (String(h.id) === String(lastPart) || String(h.source_id) === String(lastPart))) return false;
+          return true;
+        });
+        if (nextHist.length !== metaHist.length) {
+          await updateUserMetadata(user.id, { ...currentMeta, history: nextHist }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+        }
+      } catch(e) {}
 
-      return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId }), {
+      return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId || lastPart }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });

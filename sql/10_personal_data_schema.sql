@@ -227,3 +227,16 @@ REVOKE EXECUTE ON FUNCTION public.prune_user_history(integer) FROM anon;
 
 -- Blindaje de public.profiles: prohibir actualización de is_admin
 REVOKE UPDATE (is_admin) ON public.profiles FROM authenticated;
+
+-- ==============================================================================
+-- 8. COMPATIBILIDAD CON CONTENIDO EXTERNO / JUEGOS / PMV (ARQUITECTURA HÍBRIDA)
+-- ==============================================================================
+-- Los ítems nativos alojados en PostgreSQL se relacionan vía clave foránea
+-- a public.items(id).
+-- Para ítems externos (juegos WebGL, PMVs embebidos o contenidos sin ID en items),
+-- la API Worker de Cloudflare utiliza automáticamente el almacenamiento seguro
+-- en auth.users(raw_user_meta_data -> 'custom_favorites' y 'history'), evitando
+-- fallos por Foreign Key Violation (409/400) y garantizando persistencia
+-- 100% agnóstica entre dispositivos y sesiones.
+-- ==============================================================================
+

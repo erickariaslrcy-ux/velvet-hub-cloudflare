@@ -5708,16 +5708,19 @@
       const histSlim = (state.history || []).slice(0, 50).map(compactHistoryRecord).filter(Boolean);
       const favJson = JSON.stringify(favIds);
       const histJson = JSON.stringify(histSlim);
-      const favKeys = [prefix + 'favs', 'velvet_fav_ids', 'velvet_favorites', 'velvet_guest_favs', 'velvet_favs'];
-      const histKeys = [prefix + 'history', 'velvet_history', 'velvet_guest_history'];
-      favKeys.concat(histKeys).forEach(k => {
-        try {
-          const raw = localStorage.getItem(k);
-          if (raw && raw.indexOf('cover_url') !== -1) localStorage.removeItem(k);
-        } catch (e) {}
-      });
-      favKeys.forEach(k => { try { localStorage.setItem(k, favJson); } catch (e) {} });
-      histKeys.forEach(k => { try { localStorage.setItem(k, histJson); } catch (e) {} });
+
+      if (state.currentUser && state.currentUser.id) {
+        // Usuario autenticado: almacenar estrictamente bajo su prefijo aislado para evitar mezcla entre cuentas
+        try { localStorage.setItem(prefix + 'favs', favJson); } catch (e) {}
+        try { localStorage.setItem(prefix + 'history', histJson); } catch (e) {}
+        try { localStorage.setItem('velvet_fav_ids', JSON.stringify(favIds.map(f => f.id).filter(Boolean))); } catch (e) {}
+      } else {
+        // Invitado
+        const guestFavKeys = ['velvet_guest_favs', 'velvet_fav_ids', 'velvet_favorites', 'velvet_favs'];
+        const guestHistKeys = ['velvet_guest_history', 'velvet_history'];
+        guestFavKeys.forEach(k => { try { localStorage.setItem(k, favJson); } catch (e) {} });
+        guestHistKeys.forEach(k => { try { localStorage.setItem(k, histJson); } catch (e) {} });
+      }
     }
 
     function loadStorage() {
@@ -5749,12 +5752,19 @@
             avatarBg: state.currentUser.role === 'admin' ? 'from-gold to-amber-600' : 'from-pink-600 to-purple-600',
             isVip: true
           };
-          state.favorites = readStoredList([prefix + 'favs', 'velvet_fav_ids', 'velvet_favorites', 'velvet_favs', 'velvet_guest_favs']).map(compactFavoriteRecord).filter(Boolean);
+          // Para usuario autenticado: leer estrictamente de su prefijo
+          const userFavs = readStoredList([prefix + 'favs']);
+          state.favorites = userFavs.length > 0
+            ? userFavs.map(compactFavoriteRecord).filter(Boolean)
+            : readStoredList([prefix + 'favs', 'velvet_fav_ids', 'velvet_favorites']).map(compactFavoriteRecord).filter(Boolean);
 
           const w = localStorage.getItem(prefix + 'watchlist') || localStorage.getItem('velvet_watchlist');
           state.watchlist = w ? JSON.parse(w) : [];
 
-          state.history = readStoredList([prefix + 'history', 'velvet_history', 'velvet_guest_history']).map(compactHistoryRecord).filter(Boolean).slice(0, 50);
+          const userHist = readStoredList([prefix + 'history']);
+          state.history = userHist.length > 0
+            ? userHist.map(compactHistoryRecord).filter(Boolean).slice(0, 50)
+            : readStoredList([prefix + 'history', 'velvet_history']).map(compactHistoryRecord).filter(Boolean).slice(0, 50);
 
           const p = localStorage.getItem(prefix + 'progress') || localStorage.getItem('velvet_progress');
           state.progress = p ? JSON.parse(p) : {};
@@ -12380,10 +12390,11 @@
         delete cleanUser.detail;
       }
       try {
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.setSession === 'function') {
+          window.VelvetPersonalData.setSession(cleanUser, token || null, refreshToken || null, expiresAt || null, deviceToken || null);
+        }
         if (window.VelvetStore && typeof window.VelvetStore.setCurrentUser === 'function') {
           window.VelvetStore.setCurrentUser(cleanUser, token || null, refreshToken || null, deviceToken || null, expiresAt || null);
-        } else if (window.VelvetPersonalData && typeof window.VelvetPersonalData.setSession === 'function') {
-          window.VelvetPersonalData.setSession(cleanUser, token || null, refreshToken || null, expiresAt || null, deviceToken || null);
         }
       } catch (e) {
         console.warn('[AUTH] No se pudo persistir la sesión', e);
@@ -12396,11 +12407,19 @@
       try {
         if (window.VelvetPersonalData && typeof window.VelvetPersonalData.clearSession === 'function') {
           window.VelvetPersonalData.clearSession();
-        } else if (window.VelvetStore && typeof window.VelvetStore.setCurrentUser === 'function') {
+        }
+        if (window.VelvetStore && typeof window.VelvetStore.setCurrentUser === 'function') {
           window.VelvetStore.setCurrentUser(null);
         }
       } catch (e) {}
       state.currentUser = null;
+      state.favorites = [];
+      state.history = [];
+      state.progress = {};
+      state.watchlist = [];
+      ['velvet_favorites', 'velvet_guest_favs', 'velvet_fav_ids', 'velvet_history', 'velvet_guest_history', 'velvet_guest_progress', 'velvet_current_user', 'velvet_user'].forEach(k => {
+        try { localStorage.removeItem(k); } catch(e) {}
+      });
     }
 
     async function initAuth(attempt = 0) {
@@ -12566,16 +12585,54 @@
           page++;
         }
 
-        const merged = ids.map(id => details.get(String(id)) || { id, item_id: id });
+        let merged = ids.map(id => details.get(String(id)) || { id, item_id: id });
         refs.forEach(ref => {
           const slim = compactFavoriteRecord(ref);
           if (slim) merged.push(slim);
         });
+
+        // Fusión no destructiva: si el servidor devolvió vacío pero localmente hay favoritos,
+        // conservar los favoritos locales y subirlos al servidor en vez de borrarlos
+        if (merged.length === 0 && localCompact.length > 0) {
+          merged = localCompact;
+          try {
+            fetch('/api/user/favorites', {
+              method: 'POST',
+              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                items: localCompact.slice(0, 2000).map(f => ({
+                  id: f.id,
+                  item_id: f.id,
+                  source: f.source || '',
+                  source_id: f.source_id || '',
+                  title: f.title || '',
+                  cover_url: f.cover_url || '',
+                  url: f.url || '',
+                  media_type: f.media_type || ''
+                }))
+              })
+            }).catch(() => {});
+          } catch (syncErr) {}
+        } else if (localCompact.length > 0) {
+          const mergedKeySet = new Set(merged.map(m => (m.source && m.source_id) ? `${m.source}:${m.source_id}` : String(m.id || m.item_id)));
+          localCompact.forEach(loc => {
+            const k = (loc.source && loc.source_id) ? `${loc.source}:${loc.source_id}` : String(loc.id || loc.item_id);
+            if (!mergedKeySet.has(k)) {
+              mergedKeySet.add(k);
+              merged.push(loc);
+            }
+          });
+        }
+
         state.favorites = merged;
         saveStorage();
         updateVaultFavCountBadge();
         renderVaultFavoritesPro();
         updateAllFeedFavoriteIcons();
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.updateAllCounters === 'function') {
+          window.VelvetPersonalData.updateAllCounters();
+        }
       } catch (e) {
         console.warn('[FAVORITOS] Error cargando favoritos de la nube:', e);
       }
@@ -12593,7 +12650,7 @@
         const localSlim = (state.history || []).map(compactHistoryRecord).filter(Boolean);
         const toPush = localSlim.filter(h => {
           const n = parseInt(h.id || h.item_id, 10);
-          if (!Number.isInteger(n) || n <= 0) return false;
+          if (!Number.isInteger(n) || n <= 0) return true;
           const cur = byId.get(String(n));
           if (!cur) return true;
           return (h.at || 0) > (Number(cur.at) || 0);
@@ -12613,6 +12670,21 @@
             }
           }
         }
+
+        // Fusión no destructiva: si la nube está vacía pero hay historial local, no destruirlo
+        if (cloud.length === 0 && localSlim.length > 0) {
+          cloud = localSlim;
+        } else if (localSlim.length > 0) {
+          const cloudKeySet = new Set(cloud.map(c => (c.source && c.source_id) ? `${c.source}:${c.source_id}` : String(c.id || c.item_id)));
+          localSlim.forEach(lh => {
+            const k = (lh.source && lh.source_id) ? `${lh.source}:${lh.source_id}` : String(lh.id || lh.item_id);
+            if (!cloudKeySet.has(k)) {
+              cloudKeySet.add(k);
+              cloud.push(lh);
+            }
+          });
+        }
+
         applyHistoryList(cloud);
         saveStorage();
         renderContinueShelf();
@@ -13590,6 +13662,10 @@
         state.favorites.splice(idx, 1);
         showToast('Quitado de tu bóveda', 'info');
 
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.removeFavorite === 'function') {
+          window.VelvetPersonalData.removeFavorite(itemId || item.source_id);
+        }
+
         if (state.currentUser) {
           try {
             const delUrl = itemId
@@ -13601,16 +13677,20 @@
       } else {
         const favEntry = {
           id: itemId,
-          source: item.source,
-          source_id: item.source_id,
-          title: item.title,
-          cover_url: item.cover_url,
-          url: item.url,
+          source: item.source || '',
+          source_id: item.source_id || '',
+          title: item.title || '',
+          cover_url: item.cover_url || '',
+          url: item.url || '',
           media_type: item.media_type || (state.mode === 'videos' ? 'video' : (state.mode === 'galleries' ? 'gallery' : 'comic')),
           created_at: new Date().toISOString()
         };
         state.favorites.unshift(favEntry);
         showToast('Guardado en tu bóveda', 'success');
+
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.addFavorite === 'function') {
+          window.VelvetPersonalData.addFavorite(favEntry);
+        }
 
         if (state.currentUser) {
           try {
@@ -13623,6 +13703,9 @@
                 item_id: itemId,
                 source: item.source || '',
                 source_id: item.source_id || '',
+                title: favEntry.title || '',
+                cover_url: favEntry.cover_url || '',
+                url: favEntry.url || '',
                 media_type: favEntry.media_type
               })
             }).catch(() => {});
