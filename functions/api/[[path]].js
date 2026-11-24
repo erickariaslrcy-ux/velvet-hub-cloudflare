@@ -816,7 +816,7 @@ function orderCatalogForSlot(items, slot, mediaType) {
 
 function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "5");
+  u.searchParams.set("cv", "6");
   if (slot !== undefined && slot !== null && slot !== "") {
     u.searchParams.set("rot", String(slot));
   }
@@ -4114,15 +4114,34 @@ export async function onRequest(context) {
         const items = await Promise.all((rawRows || []).map(async (r) => {
           let it = r.items || {};
           const metaMatch = userMetaFavs.find(cf => String(cf.id) === String(r.item_id) || String(cf.source_id) === String(r.item_id));
-          const effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Guardado";
-          const rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
-          const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
+          let effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Guardado";
+          let effectiveSource = (it && it.source) || (metaMatch && metaMatch.source) || "";
+          let effectiveSourceId = (it && it.source_id) || (metaMatch && metaMatch.source_id) || "";
+          let rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
+          let upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
           let finalCover = "/velvet_logo.png";
           if (upstreamCover) {
             const freshTok = await encodeToken(upstreamCover, (it && it.url) || (metaMatch && metaMatch.url) || "");
             if (freshTok) finalCover = `/api/media?t=${freshTok}`;
           } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
             finalCover = rawCover;
+          }
+          if (finalCover === "/velvet_logo.png" || effectiveTitle === "Guardado") {
+            try {
+              const vCatalog = await loadVideoCatalog(context, url);
+              const target = String(r.item_id || (metaMatch && (metaMatch.id || metaMatch.source_id)) || "");
+              const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (effectiveTitle !== "Guardado" && v.title && v.title.toLowerCase() === effectiveTitle.toLowerCase()));
+              if (vMatch) {
+                effectiveTitle = vMatch.title || effectiveTitle;
+                effectiveSource = "pmvhaven";
+                effectiveSourceId = String(vMatch.id);
+                const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
+                if (vUpstream) {
+                  const freshTok = await encodeToken(vUpstream, vMatch.url || "");
+                  if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+                }
+              }
+            } catch (e) {}
           }
           const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
           return {
@@ -4131,8 +4150,8 @@ export async function onRequest(context) {
             title: isAvailable ? effectiveTitle : "Contenido no disponible",
             cover_url: finalCover,
             media_type: (it && it.media_type) || (metaMatch && metaMatch.media_type) || "comic",
-            source: (it && it.source) || (metaMatch && metaMatch.source) || "",
-            source_id: (it && it.source_id) || (metaMatch && metaMatch.source_id) || "",
+            source: effectiveSource || (it && it.source) || (metaMatch && metaMatch.source) || "",
+            source_id: effectiveSourceId || (it && it.source_id) || (metaMatch && metaMatch.source_id) || "",
             url: isAvailable ? ((it && it.url) || (metaMatch && metaMatch.url) || "") : "",
             page_count: (it && it.page_count) || (metaMatch && metaMatch.page_count) || 0,
             created_at: r.created_at,
@@ -4155,8 +4174,25 @@ export async function onRequest(context) {
               } else if (cf.cover_url && cf.cover_url.startsWith("/api/media?t=")) {
                 cfCover = cf.cover_url;
               }
+              let cfTitle = cf.title || "Contenido guardado";
+              if (cfCover === "/velvet_logo.png" || cfTitle === "Contenido guardado") {
+                try {
+                  const vCatalog = await loadVideoCatalog(context, url);
+                  const target = String(cf.id || cf.item_id || cf.source_id || "");
+                  const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (cfTitle !== "Contenido guardado" && v.title && v.title.toLowerCase() === cfTitle.toLowerCase()));
+                  if (vMatch) {
+                    cfTitle = vMatch.title || cfTitle;
+                    const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
+                    if (vUpstream) {
+                      const freshTok = await encodeToken(vUpstream, vMatch.url || "");
+                      if (freshTok) cfCover = `/api/media?t=${freshTok}`;
+                    }
+                  }
+                } catch (e) {}
+              }
               finalItems.push({
                 ...cf,
+                title: cfTitle,
                 cover_url: cfCover
               });
             }
@@ -4510,17 +4546,34 @@ export async function onRequest(context) {
       const items = await Promise.all((rawRows || []).map(async (r) => {
         const it = r.items || {};
         const metaMatch = metaHist.find(mh => String(mh.id || mh.item_id) === String(r.item_id));
-        const effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Contenido visto";
-        const effectiveSource = (it && it.source) || (metaMatch && metaMatch.source) || "";
-        const effectiveSourceId = (it && it.source_id) || (metaMatch && metaMatch.source_id) || "";
-        const rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
-        const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
+        let effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Contenido visto";
+        let effectiveSource = (it && it.source) || (metaMatch && metaMatch.source) || "";
+        let effectiveSourceId = (it && it.source_id) || (metaMatch && metaMatch.source_id) || "";
+        let rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
+        let upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
         let finalCover = "/velvet_logo.png";
         if (upstreamCover) {
           const freshTok = await encodeToken(upstreamCover, (it && it.url) || (metaMatch && metaMatch.url) || "");
           if (freshTok) finalCover = `/api/media?t=${freshTok}`;
         } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
           finalCover = rawCover;
+        }
+        if (finalCover === "/velvet_logo.png" || effectiveTitle === "Contenido visto") {
+          try {
+            const vCatalog = await loadVideoCatalog(context, url);
+            const target = String(r.item_id || (metaMatch && (metaMatch.id || metaMatch.source_id)) || "");
+            const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (effectiveTitle !== "Contenido visto" && v.title && v.title.toLowerCase() === effectiveTitle.toLowerCase()));
+            if (vMatch) {
+              effectiveTitle = vMatch.title || effectiveTitle;
+              effectiveSource = "pmvhaven";
+              effectiveSourceId = String(vMatch.id);
+              const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
+              if (vUpstream) {
+                const freshTok = await encodeToken(vUpstream, vMatch.url || "");
+                if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+              }
+            }
+          } catch (e) {}
         }
         const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
         return {
@@ -4530,8 +4583,8 @@ export async function onRequest(context) {
           title: isAvailable ? effectiveTitle : "Contenido no disponible",
           cover_url: finalCover,
           media_type: r.media_type || it.media_type || (metaMatch && metaMatch.media_type) || "comic",
-          source: effectiveSource,
-          source_id: effectiveSourceId,
+          source: effectiveSource || (it && it.source) || (metaMatch && metaMatch.source) || "",
+          source_id: effectiveSourceId || (it && it.source_id) || (metaMatch && metaMatch.source_id) || "",
           url: isAvailable ? ((it && it.url) || (metaMatch && metaMatch.url) || "") : "",
           page_count: (it && it.page_count) || (metaMatch && metaMatch.page_count) || 0,
           position: r.position || (metaMatch && (metaMatch.position || metaMatch.page || metaMatch.currentTime)) || 0,
@@ -4560,8 +4613,25 @@ export async function onRequest(context) {
               } else if (mh.cover_url && mh.cover_url.startsWith("/api/media?t=")) {
                 mhCover = mh.cover_url;
               }
+              let mhTitle = mh.title || "Contenido visto";
+              if (mhCover === "/velvet_logo.png" || mhTitle === "Contenido visto") {
+                try {
+                  const vCatalog = await loadVideoCatalog(context, url);
+                  const target = String(mh.id || mh.item_id || mh.source_id || "");
+                  const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (mhTitle !== "Contenido visto" && v.title && v.title.toLowerCase() === mhTitle.toLowerCase()));
+                  if (vMatch) {
+                    mhTitle = vMatch.title || mhTitle;
+                    const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
+                    if (vUpstream) {
+                      const freshTok = await encodeToken(vUpstream, vMatch.url || "");
+                      if (freshTok) mhCover = `/api/media?t=${freshTok}`;
+                    }
+                  }
+                } catch (e) {}
+              }
               finalItems.push({
                 ...mh,
+                title: mhTitle,
                 cover_url: mhCover
               });
             }
