@@ -1963,10 +1963,11 @@
               <div>
                 <div class="flex flex-wrap items-center gap-2">
                   <h3 id="vault-acc-username" class="text-base sm:text-lg font-black text-white">Mi Perfil</h3>
-                  <span id="vault-acc-badge" class="whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">MIEMBRO VIP</span>
+                  <span id="vault-acc-badge" class="whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">CUENTA</span>
                 </div>
                 <p id="vault-acc-email" class="text-xs text-lav/70 mt-0.5">tu@correo.com</p>
                 <p id="vault-acc-created" class="text-[11px] text-lav/50 mt-0.5">Activo recientemente</p>
+                <p id="vault-acc-expiry" class="text-[11px] text-lav/70 mt-0.5"></p>
                 <p class="text-[11px] font-mono text-pink-400/90 mt-0.5">Llave: <span id="vault-acc-key">---</span></p>
               </div>
             </div>
@@ -2101,10 +2102,10 @@
           <div class="p-5 rounded-3xl bg-[#0e071c] border border-purple-500/20">
             <div class="flex items-center gap-2.5 mb-2">
               <i class="fa-solid fa-key text-pink-400 text-sm"></i>
-              <h4 class="text-sm font-bold text-white">Canjear Llave de Acceso VIP</h4>
+              <h4 class="text-sm font-bold text-white">Canjear / Renovar Llave VIP</h4>
             </div>
             <p class="text-xs text-lav/70 mb-4">
-              Si tienes una llave emitida por el administrador o de Patreon, actívala aquí para desbloquear el 100% de la plataforma de por vida.
+              Si compraste una llave de suscripción mensual o tienes una llave del administrador, actívala aquí para desbloquear el 100% de la plataforma durante el tiempo de tu plan. Si ya tienes tiempo activo, los días se acumulan.
             </p>
             <div class="flex flex-col sm:flex-row items-center gap-2.5">
               <input
@@ -2952,16 +2953,36 @@
 
       <h3 class="text-lg font-black text-white tracking-wide">Contenido Exclusivo <span class="text-amber-400">Morbo VIP</span></h3>
       <p class="text-xs text-purple-200/80 mt-2 leading-relaxed" id="pro-upgrade-desc">
-        Este título está reservado exclusivamente para miembros VIP. Desbloquea el 100% del catálogo por solo <strong>$5.99 USD</strong> o con tu Llave de Acceso.
+        Este título está reservado exclusivamente para miembros con suscripción VIP activa. Desbloquea el 100% del catálogo por <strong>$5.99 USD / mes</strong> o con tu Llave de Acceso.
       </p>
 
       <div class="p-3.5 my-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-purple-950/60 to-pink-950/40 border border-amber-500/30 text-xs text-left space-y-2">
         <div class="font-bold text-amber-300 flex items-center gap-2 text-[11px] uppercase tracking-wider">
           <i class="fa-solid fa-sparkles"></i> Beneficios de Membresía VIP:
         </div>
-        <p class="text-[11px] text-purple-200/90 flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-400 text-[10px]"></i> <strong>100% del catálogo desbloqueado</strong> (sin candados en cómics ni videos).</p>
+        <p class="text-[11px] text-purple-200/90 flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-400 text-[10px]"></i> <strong>100% del catálogo desbloqueado</strong> (cómics, videos, galerías y juegos).</p>
         <p class="text-[11px] text-purple-200/90 flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-400 text-[10px]"></i> <strong>Guarda tus favoritos e historial</strong> en tu Bóveda en la nube.</p>
-        <p class="text-[11px] text-purple-200/90 flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-400 text-[10px]"></i> <strong>Acceso simultáneo y streaming rápido</strong> en todos tus dispositivos.</p>
+        <p class="text-[11px] text-purple-200/90 flex items-center gap-1.5"><i class="fa-solid fa-check text-emerald-400 text-[10px]"></i> <strong>Suscripción mensual flexible</strong>: activa o renueva tus días cuando quieras.</p>
+      </div>
+
+      <!-- Canje Rápido con Llave VIP para cuentas ya registradas/vencidas -->
+      <div id="pro-upgrade-quick-redeem" class="mb-3 flex flex-col gap-2 text-left">
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            id="pro-upgrade-key-input"
+            placeholder="VELVET-XXXX-XXXX-XXXX"
+            oninput="this.value = this.value.toUpperCase()"
+            class="flex-1 bg-[#120724] border border-pink-500/40 rounded-xl px-3 py-2 font-mono text-xs font-black text-pink-300 placeholder-pink-400/30 focus:outline-none focus:border-pink-400 uppercase"
+          />
+          <button
+            type="button"
+            onclick="handleProUpgradeQuickRedeem()"
+            class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-xs cursor-pointer shrink-0"
+          >
+            Activar
+          </button>
+        </div>
       </div>
 
       <!-- Botón Principal Patreon $5.99 -->
@@ -2974,9 +2995,9 @@
         <i class="fa-solid fa-arrow-right text-[11px]"></i>
       </a>
 
-      <!-- Botón Secundario Canjear Llave -->
+      <!-- Botón Secundario Canjear Llave / Crear Cuenta -->
       <button
-        onclick="closeProUpgradeModal(); openAuthModal('register');"
+        onclick="openUpgradeKeyFlow()"
         class="w-full py-2.5 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200 hover:text-white font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2"
       >
         <i class="fa-solid fa-key text-pink-400"></i>
@@ -3159,9 +3180,9 @@
 
           <label class="block text-[11px] font-bold text-pink-400 uppercase tracking-wider mb-1 flex items-center justify-between">
 
-            <span>Llave de Acceso VIP (Obligatoria)</span>
+            <span>Llave de Suscripción VIP (Opcional)</span>
 
-            <span class="text-[10px] text-purple-300/60 normal-case font-normal">1 solo uso</span>
+            <span class="text-[10px] text-purple-300/60 normal-case font-normal">Activa tu mes al instante</span>
 
           </label>
 
@@ -3169,7 +3190,7 @@
 
             <i class="fa-solid fa-ticket absolute left-3.5 top-2.5 text-pink-500 text-xs"></i>
 
-            <input type="text" id="register-input-key" placeholder="VELVET-XXXX-XXXX-XXXX" oninput="this.value = this.value.toUpperCase()" autocomplete="off" class="w-full bg-[#170a2f] border-2 border-pink-500/50 rounded-xl pl-9 pr-3.5 py-2 font-mono text-xs font-black text-pink-300 placeholder-pink-400/30 focus:outline-none focus:border-pink-400 focus:shadow-[0_0_15px_rgba(236,72,153,0.3)] transition-all uppercase tracking-wider">
+            <input type="text" id="register-input-key" placeholder="VELVET-XXXX-XXXX-XXXX (o déjalo vacío)" oninput="this.value = this.value.toUpperCase()" autocomplete="off" class="w-full bg-[#170a2f] border-2 border-pink-500/50 rounded-xl pl-9 pr-3.5 py-2 font-mono text-xs font-black text-pink-300 placeholder-pink-400/30 focus:outline-none focus:border-pink-400 focus:shadow-[0_0_15px_rgba(236,72,153,0.3)] transition-all uppercase tracking-wider">
 
           </div>
 
@@ -3177,9 +3198,9 @@
 
         <button onclick="submitRegister()" id="register-submit-btn" class="w-full py-3 rounded-xl bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(236,72,153,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2 mt-2">
 
-          <i class="fa-solid fa-unlock-keyhole"></i>
+          <i class="fa-solid fa-user-plus"></i>
 
-          <span>Canjear Llave y Activar Cuenta</span>
+          <span>Crear Mi Cuenta</span>
 
         </button>
 
@@ -3523,11 +3544,11 @@
 
           <h4 class="text-xs font-black uppercase text-amber-400 tracking-wider flex items-center gap-2">
 
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Generador Rápido de Llaves de Acceso de Un Solo Uso
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Generador de Llaves de Suscripción VIP
 
           </h4>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 
             <div>
 
@@ -3551,6 +3572,30 @@
 
             <div>
 
+              <label class="block text-[11px] font-bold text-pink-300 uppercase mb-1">Tiempo de Suscripción</label>
+
+              <select id="admin-gen-duration" class="w-full bg-[#120724] border border-pink-500/40 rounded-xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-pink-400">
+
+                <option value="30" selected>1 Mes (30 días)</option>
+
+                <option value="7">1 Semana (7 días)</option>
+
+                <option value="15">Quincena (15 días)</option>
+
+                <option value="90">Trimestre (90 días)</option>
+
+                <option value="180">Semestre (180 días)</option>
+
+                <option value="365">1 Año (365 días)</option>
+
+                <option value="0">Permanente (Vitalicio)</option>
+
+              </select>
+
+            </div>
+
+            <div>
+
               <label class="block text-[11px] font-bold text-purple-300 uppercase mb-1">Prefijo</label>
 
               <input type="text" id="admin-gen-prefix" value="VELVET" placeholder="VELVET" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white uppercase focus:outline-none focus:border-amber-400">
@@ -3561,7 +3606,7 @@
 
               <label class="block text-[11px] font-bold text-purple-300 uppercase mb-1">Nota / Cliente (Opcional)</label>
 
-              <input type="text" id="admin-gen-note" placeholder="ej: Para cliente Juan" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
+              <input type="text" id="admin-gen-note" placeholder="ej: Cliente Juan (Nov)" class="w-full bg-[#120724] border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
 
             </div>
 
@@ -3611,15 +3656,17 @@
 
       <div id="apanel-keys" class="hidden flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
 
-        <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
 
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 flex-wrap">
 
             <button onclick="filterAdminKeys('all')" id="btn-kf-all" class="px-3 py-1 rounded-lg text-xs font-bold bg-purple-950/60 text-white border border-purple-500/40 cursor-pointer">Todas</button>
 
             <button onclick="filterAdminKeys('available')" id="btn-kf-avail" class="px-3 py-1 rounded-lg text-xs font-bold text-emerald-300/70 hover:text-emerald-300 cursor-pointer">Disponibles</button>
 
             <button onclick="filterAdminKeys('used')" id="btn-kf-used" class="px-3 py-1 rounded-lg text-xs font-bold text-purple-300/70 hover:text-white cursor-pointer">Consumidas</button>
+
+            <button onclick="filterAdminKeys('revoked')" id="btn-kf-revoked" class="px-3 py-1 rounded-lg text-xs font-bold text-rose-300/70 hover:text-rose-300 cursor-pointer">Revocadas</button>
 
           </div>
 
@@ -3640,6 +3687,8 @@
               <tr>
 
                 <th class="p-3">Llave de Acceso</th>
+
+                <th class="p-3">Plan / Tiempo</th>
 
                 <th class="p-3">Estado</th>
 
@@ -3673,7 +3722,7 @@
 
         <div class="flex items-center justify-between">
 
-          <span class="text-xs text-purple-300/70">Lista de usuarios que han canjeado una llave o tienen acceso</span>
+          <span class="text-xs text-purple-300/70">Lista de usuarios, vencimientos VIP y control de tiempo/acceso</span>
 
           <button onclick="loadAdminUsers()" class="px-2.5 py-1 rounded-lg bg-purple-950/40 hover:bg-purple-900/60 text-purple-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
 
@@ -3693,13 +3742,13 @@
 
                 <th class="p-3">Usuario</th>
 
-                <th class="p-3">Rol</th>
+                <th class="p-3">Plan / Rol</th>
 
-                <th class="p-3">Llave Utilizada</th>
+                <th class="p-3">Llave / Origen</th>
 
-                <th class="p-3">Registro</th>
+                <th class="p-3">Vencimiento</th>
 
-                <th class="p-3">Favoritos / Historial</th>
+                <th class="p-3">Actividad</th>
 
                 <th class="p-3">Estado</th>
 
@@ -5480,25 +5529,40 @@
 
     window.submitVaultKeyRedeem = async function() {
       const input = document.getElementById('vault-redeem-key-input');
-      if (!input || !input.value.trim()) {
+      const keyVal = input ? input.value.trim().toUpperCase() : '';
+      if (!keyVal) {
         showToast('Por favor introduce tu Llave de Acceso VIP', 'warning');
         return;
       }
-      const keyVal = input.value.trim().toUpperCase();
+      if (!state.currentUser) {
+        showToast('Primero crea tu cuenta o inicia sesión para vincular esta llave a tu tiempo VIP', 'info');
+        openAuthModal('register');
+        const regKey = document.getElementById('register-input-key');
+        if (regKey) regKey.value = keyVal;
+        return;
+      }
       try {
-        const res = await fetch('/api/auth/register', {
+        const res = await fetch('/api/redeem', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: keyVal, username: state.currentUser?.username || 'Usuario VIP' })
+          headers: authHeaders(),
+          credentials: 'include',
+          body: JSON.stringify({ code: keyVal, key: keyVal })
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (res.ok && data.user) {
-          window.VelvetStore?.setCurrentUser(data.user, data.token, data.refresh_token, data.device_token);
-          state.currentUser = data.user;
-          showToast('Llave activada', 'success');
+          rememberSession(data.user, data.token || getAuthToken(), null, null, null);
+          loadStorage();
+          updateUserUI();
+          if (input) input.value = '';
+          showToast(data.message || 'Suscripción VIP activada con éxito', 'success');
           window.VelvetVault?.renderAccount();
+          renderContinueShelf();
+          if (state.catalogCache && state.catalogCache.length > 0) {
+            renderFeedData({ items: state.catalogCache, page: state.page || 1, total_pages: state.totalPages || 1 });
+          }
+          if (state.heroItems && state.heroItems.length > 0) setupHeroCarousel(state.heroItems);
         } else {
-          showToast(data.error || 'Llave inválida o ya canjeada', 'error');
+          showToast(data.detail || data.error || 'Llave inválida, expirada o ya canjeada', 'error');
         }
       } catch (e) {
         showToast('Error de conexión al canjear llave', 'error');
@@ -5628,26 +5692,35 @@
 
     function compactFavoriteRecord(f) {
       if (!f || typeof f !== 'object') return null;
-      const id = parseInt(f.id || f.item_id, 10);
-      const hasId = Number.isInteger(id) && id > 0;
-      if (!hasId && !(f.source && f.source_id)) return null;
+      const s = String(f.id || f.item_id || '').trim();
+      const id = /^\d{1,15}$/.test(s) ? Number(s) : null;
+      const hasId = id !== null && Number.isSafeInteger(id) && id > 0;
+      const hasStrId = !hasId && s.length > 0;
+      if (!hasId && !hasStrId && !(f.source && f.source_id)) return null;
       const out = {};
       if (hasId) {
         out.id = id;
         out.item_id = id;
+      } else if (hasStrId) {
+        out.id = s.slice(0, 120);
+        out.item_id = s.slice(0, 120);
       }
       if (f.source) out.source = String(f.source).slice(0, 40);
       if (f.source_id != null && f.source_id !== '') out.source_id = String(f.source_id).slice(0, 80);
       if (f.media_type) out.media_type = String(f.media_type).slice(0, 16);
-      if (f.title) out.title = String(f.title).slice(0, 80);
+      if (f.title) out.title = String(f.title).slice(0, 120);
+      if (f.cover_url) out.cover_url = String(f.cover_url).slice(0, 500);
+      if (f.url) out.url = String(f.url).slice(0, 500);
       return out;
     }
 
     function compactHistoryRecord(h) {
       if (!h || typeof h !== 'object') return null;
-      const id = parseInt(h.id || h.item_id, 10);
-      const hasId = Number.isInteger(id) && id > 0;
-      if (!hasId && !(h.source && h.source_id)) return null;
+      const hs = String(h.id || h.item_id || '').trim();
+      const id = /^\d{1,15}$/.test(hs) ? Number(hs) : null;
+      const hasId = id !== null && Number.isSafeInteger(id) && id > 0;
+      const hasStrId = !hasId && hs.length > 0;
+      if (!hasId && !hasStrId && !(h.source && h.source_id)) return null;
       const isVid = h.media_type === 'video';
       const pos = Math.max(0, parseInt(h.position || h.page || h.currentTime || 0, 10) || 0);
       const dur = Math.max(0, parseInt(h.duration || h.total || 0, 10) || 0);
@@ -5661,6 +5734,9 @@
       if (hasId) {
         out.id = id;
         out.item_id = id;
+      } else if (hasStrId) {
+        out.id = hs.slice(0, 120);
+        out.item_id = hs.slice(0, 120);
       }
       if (h.source) out.source = String(h.source).slice(0, 40);
       if (h.source_id != null && h.source_id !== '') out.source_id = String(h.source_id).slice(0, 80);
@@ -5725,7 +5801,6 @@
         // Usuario autenticado: almacenar estrictamente bajo su prefijo aislado para evitar mezcla entre cuentas
         try { localStorage.setItem(prefix + 'favs', favJson); } catch (e) {}
         try { localStorage.setItem(prefix + 'history', histJson); } catch (e) {}
-        try { localStorage.setItem('velvet_fav_ids', JSON.stringify(favIds.map(f => f.id).filter(Boolean))); } catch (e) {}
       } else {
         // Invitado
         const guestFavKeys = ['velvet_guest_favs', 'velvet_fav_ids', 'velvet_favorites', 'velvet_favs'];
@@ -5759,26 +5834,22 @@
 
         if (state.currentUser) {
           state.user = {
-            name: state.currentUser.username || 'Usuario VIP',
-            avatar: state.currentUser.role === 'admin' ? '👑' : '⭐',
+            name: state.currentUser.username || 'Usuario',
+            avatar: state.currentUser.role === 'admin' ? '👑' : (hasFullAccess() ? '⭐' : '🔓'),
             avatarBg: state.currentUser.role === 'admin' ? 'from-gold to-amber-600' : 'from-pink-600 to-purple-600',
-            isVip: true
+            isVip: hasFullAccess()
           };
-          // Para usuario autenticado: leer estrictamente de su prefijo
+          // Para usuario autenticado: leer estrictamente de su prefijo aislado
           const userFavs = readStoredList([prefix + 'favs']);
-          state.favorites = userFavs.length > 0
-            ? userFavs.map(compactFavoriteRecord).filter(Boolean)
-            : readStoredList([prefix + 'favs', 'velvet_fav_ids', 'velvet_favorites']).map(compactFavoriteRecord).filter(Boolean);
+          state.favorites = userFavs.map(compactFavoriteRecord).filter(Boolean);
 
-          const w = localStorage.getItem(prefix + 'watchlist') || localStorage.getItem('velvet_watchlist');
+          const w = localStorage.getItem(prefix + 'watchlist');
           state.watchlist = w ? JSON.parse(w) : [];
 
           const userHist = readStoredList([prefix + 'history']);
-          state.history = userHist.length > 0
-            ? userHist.map(compactHistoryRecord).filter(Boolean).slice(0, 50)
-            : readStoredList([prefix + 'history', 'velvet_history']).map(compactHistoryRecord).filter(Boolean).slice(0, 50);
+          state.history = userHist.map(compactHistoryRecord).filter(Boolean).slice(0, 50);
 
-          const p = localStorage.getItem(prefix + 'progress') || localStorage.getItem('velvet_progress');
+          const p = localStorage.getItem(prefix + 'progress');
           state.progress = p ? JSON.parse(p) : {};
         } else {
           state.user = { name: 'Invitado', avatar: '🔑', avatarBg: 'from-purple-900 to-slate-900', isVip: false };
@@ -5859,19 +5930,32 @@
       const adminBtn = document.getElementById('dropdown-admin-btn');
       const dropUser = document.getElementById('dropdown-username');
       const dropRole = document.getElementById('dropdown-role-badge');
-      const badge = document.getElementById('user-avatar-badge');
 
       if (state.currentUser) {
         const u = state.currentUser;
+        const subInfo = window.VelvetStore?.getSubscriptionInfo?.() || { active: hasFullAccess(), status: u.subscription_status || 'inactive' };
         if (btnText) btnText.textContent = u.username || 'Mi Cuenta';
         if (dropUser) dropUser.textContent = u.username || 'Mi Cuenta';
         if (u.role === 'admin') {
           if (avatarIcon) avatarIcon.className = 'fa-solid fa-crown text-amber-300';
           if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-crown text-amber-400"></i> Dueño &bull; Administrador';
           if (adminBtn) adminBtn.classList.remove('hidden');
-        } else {
+        } else if (subInfo.active) {
           if (avatarIcon) avatarIcon.className = 'fa-solid fa-user-check text-pink-300';
-          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-shield-halved text-pink-400"></i> Miembro VIP';
+          const daysTxt = subInfo.isLifetime ? 'Permanente' : (subInfo.daysRemaining != null ? `${subInfo.daysRemaining}d restantes` : 'Activo');
+          if (dropRole) dropRole.innerHTML = `<i class="fa-solid fa-shield-halved text-pink-400"></i> Miembro VIP &bull; ${daysTxt}`;
+          if (adminBtn) adminBtn.classList.add('hidden');
+        } else if (subInfo.status === 'expired') {
+          if (avatarIcon) avatarIcon.className = 'fa-solid fa-hourglass-end text-amber-400';
+          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-hourglass-end text-amber-400"></i> Suscripción Vencida';
+          if (adminBtn) adminBtn.classList.add('hidden');
+        } else if (subInfo.status === 'suspended') {
+          if (avatarIcon) avatarIcon.className = 'fa-solid fa-ban text-rose-400';
+          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-ban text-rose-400"></i> Cuenta Suspendida';
+          if (adminBtn) adminBtn.classList.add('hidden');
+        } else {
+          if (avatarIcon) avatarIcon.className = 'fa-solid fa-user text-purple-300';
+          if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-user text-purple-300"></i> Cuenta Gratuita';
           if (adminBtn) adminBtn.classList.add('hidden');
         }
       } else {
@@ -6875,17 +6959,17 @@
 
             <!-- Badge Superior Izquierda -->
             <span class="absolute top-2 left-2 ${isFlash ? 'bg-amber-500/90 text-black border-amber-400/50' : 'bg-emerald-500/90 text-white border-emerald-400/50'} border px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow-md">
-              ${badge}
+              ${escapeHtml(badge)}
             </span>
 
             <!-- Badge Motor Superior Derecha -->
             <span class="absolute top-2 right-2 bg-black/80 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider backdrop-blur-sm">
-              ${engineLabel}
+              ${escapeHtml(engineLabel)}
             </span>
 
             <!-- Rating Inferior Derecha -->
             <span class="absolute bottom-2 right-2 bg-black/80 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md text-[10px] font-black tabular-nums backdrop-blur-sm">
-              ${rating}
+              ${escapeHtml(rating)}
             </span>
           </div>
 
@@ -6895,9 +6979,9 @@
                 ${escapeHtml(it.title)}
               </h4>
               <div class="flex items-center gap-2 text-[11px] text-purple-300/70 pt-1.5">
-                <span class="font-semibold text-emerald-300/80">👁 ${plays}</span>
+                <span class="font-semibold text-emerald-300/80">👁 ${escapeHtml(String(plays))}</span>
                 <span>&bull;</span>
-                <span class="truncate">${(it.tags || []).slice(0, 2).join(' · ')}</span>
+                <span class="truncate">${escapeHtml((it.tags || []).slice(0, 2).join(' · '))}</span>
               </div>
             </div>
           </div>
@@ -7028,7 +7112,8 @@
         try {
           fetch('/api/user/game-saves', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(),
+            credentials: 'include',
             body: JSON.stringify(payload)
           }).catch(() => {});
         } catch (e) {}
@@ -7084,6 +7169,10 @@
 
     function openGameModal(game, forceReload = false) {
       if (!game) return;
+      if (typeof canUserAccessItem === 'function' && !canUserAccessItem(game)) {
+        openProUpgradeModal(game);
+        return;
+      }
       const modal = document.getElementById('game-modal');
       const title = document.getElementById('game-modal-title');
       const badge = document.getElementById('game-modal-badge');
@@ -7094,7 +7183,8 @@
       if (!modal) return;
 
       const vs = (game.video_sources && game.video_sources[0]) || {};
-      const targetUrl = game.embed_url || game.swf_url || vs.embed_url || vs.swf_url || '';
+      const rawTargetUrl = game.embed_url || game.swf_url || vs.embed_url || vs.swf_url || '';
+      const targetUrl = isSafeClientUrl(rawTargetUrl) ? rawTargetUrl : '';
       const isFlash = (game.game_type === 'flash') || 
                       (vs.game_type === 'flash') || 
                       (vs.format === 'swf') || 
@@ -7115,9 +7205,10 @@
 
       const backdrop = document.getElementById('game-ambient-backdrop');
       if (backdrop) {
-        const coverImg = game.cover_url || game.thumbnail || '';
+        const rawCoverImg = game.cover_url || game.thumbnail || '';
+        const coverImg = isSafeClientUrl(rawCoverImg) ? rawCoverImg : '';
         if (coverImg) {
-          backdrop.style.backgroundImage = `url('${coverImg}')`;
+          backdrop.style.backgroundImage = `url(${JSON.stringify(coverImg)})`;
           backdrop.style.opacity = '0.35';
         } else {
           backdrop.style.backgroundImage = 'none';
@@ -7197,7 +7288,7 @@
                     <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4 max-w-md">
                       <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-400"></i>
                       <p class="text-sm font-bold">No se pudo cargar el emulador de Flash automáticamente.</p>
-                      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Abrir Archivo SWF</a>
+                      <a href="${escapeHtml(targetUrl || '#')}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Abrir Archivo SWF</a>
                     </div>
                   `;
                 }
@@ -7382,11 +7473,13 @@
             <!-- Botón Favorito Flotante -->
             <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               <button
-                onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
+                type="button"
+                data-card-key="${escapeHtml(registerCardActionItem(it))}"
+                onclick="handleCardFavoriteClick(this, event)"
                 class="card-fav-btn w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
-                data-fav-source="${it.source || ''}"
-                data-fav-source-id="${it.source_id || ''}"
-                data-fav-id="${it.id || ''}"
+                data-fav-source="${escapeHtml(it.source || '')}"
+                data-fav-source-id="${escapeHtml(it.source_id || '')}"
+                data-fav-id="${escapeHtml(it.id || '')}"
                 title="Favorito"
               >
                 <i class="${isFav ? 'fa-solid text-[#ff2d95]' : 'fa-regular text-lav/70'} fa-heart"></i>
@@ -7513,17 +7606,19 @@
 
             <!-- Duration Badge Bottom-Right -->
             <span class="absolute bottom-2 right-2 bg-[#090414]/90 text-white px-2 py-0.5 rounded-md text-[10px] font-black tabular-nums border border-white/10">
-              <i class="fa-solid fa-clock text-[8px] mr-1 text-[#ff4da8]"></i>${duration}
+              <i class="fa-solid fa-clock text-[8px] mr-1 text-[#ff4da8]"></i>${escapeHtml(duration)}
             </span>
 
             <!-- Favorite Heart Button Top-Right -->
             <div class="absolute top-2 right-2 z-10">
               <button
-                onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
+                type="button"
+                data-card-key="${escapeHtml(registerCardActionItem(it))}"
+                onclick="handleCardFavoriteClick(this, event)"
                 class="card-fav-btn w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
-                data-fav-source="${it.source || ''}"
-                data-fav-source-id="${it.source_id || ''}"
-                data-fav-id="${it.id || ''}"
+                data-fav-source="${escapeHtml(it.source || '')}"
+                data-fav-source-id="${escapeHtml(it.source_id || '')}"
+                data-fav-id="${escapeHtml(it.id || '')}"
                 title="Favorito"
               >
                 <i class="${isFav ? 'fa-solid text-[#ff2d95]' : 'fa-regular text-white/70'} fa-heart"></i>
@@ -7539,7 +7634,7 @@
               </h4>
               <div class="flex items-center gap-2 text-[11px] text-purple-300/70 pt-1.5">
                 <span class="font-semibold text-pink-300/80 truncate">${escapeHtml(performerName)}</span>
-                ${viewsCount ? `<span>&bull;</span><span>${viewsCount}</span>` : ''}
+                ${viewsCount ? `<span>&bull;</span><span>${escapeHtml(viewsCount)}</span>` : ''}
               </div>
             </div>
           </div>
@@ -8882,22 +8977,33 @@
     }
 
     function hasFullAccess() {
-      if (!state.currentUser) return false;
-      if (state.currentUser.role === 'admin' || state.currentUser.role === 'member') return true;
-      if (state.currentUser.is_pro || state.currentUser.tier_level === 'pro') return true;
-      return false;
+      const u = state.currentUser;
+      if (!u) return false;
+      if (window.VelvetStore && typeof window.VelvetStore.getSubscriptionInfo === 'function') {
+        const storeUser = window.VelvetStore.getCurrentUser();
+        if (storeUser && String(storeUser.id || '') === String(u.id || '')) {
+          return window.VelvetStore.hasFullAccess();
+        }
+      }
+      const status = String(u.subscription_status || '').toLowerCase();
+      if (u.is_suspended === true || status === 'suspended') return false;
+      if (u.role === 'admin' || status === 'admin') return true;
+      if (u.is_lifetime === true) return true;
+      if (u.subscription_expires_at) {
+        const expMs = Date.parse(u.subscription_expires_at);
+        if (!Number.isNaN(expMs)) return expMs > Date.now();
+      }
+      if (status === 'expired' || status === 'inactive') return false;
+      if (u.has_active_subscription === false || u.is_pro === false) return false;
+      return Boolean(u.has_active_subscription === true || u.is_pro === true || u.is_vip === true || u.tier_level === 'pro');
     }
 
-    function isItemLockedForUser(it, idx = null) {
+    function isItemLockedForUser(it, _idx = null) {
       if (hasFullAccess()) return false;
       if (!it) return false;
-      if (typeof idx === 'number' && idx >= 0) {
-        const pattern = [false, true, false, true, true, false, true, false];
-        return pattern[idx % pattern.length];
-      }
       let num = parseInt(it.id, 10);
       if (!num || isNaN(num)) {
-        const str = String(it.source || '') + ':' + String(it.source_id || it.title || '');
+        const str = String(it.source || '') + ':' + String(it.source_id || it.sourceId || it.title || '');
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
           hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -8915,14 +9021,77 @@
     function openProUpgradeModal(it = null) {
       const modal = document.getElementById('pro-upgrade-modal');
       const desc = document.getElementById('pro-upgrade-desc');
+      const quickRedeem = document.getElementById('pro-upgrade-quick-redeem');
+      const isExpired = Boolean(state.currentUser && (state.currentUser.subscription_status === 'expired' || (state.currentUser.subscription_expires_at && Date.parse(state.currentUser.subscription_expires_at) <= Date.now())));
       if (desc) {
-        if (it && it.title) {
-          desc.innerHTML = `<strong>${escapeHtml(it.title)}</strong> está reservado para miembros VIP. Desbloquea el 100% de la página por solo <strong>$5.99 USD</strong> o con tu Llave de Acceso.`;
+        if (isExpired) {
+          desc.innerHTML = `Tu suscripción VIP ha vencido. Canjea una nueva llave mensual o reconecta Patreon para seguir viendo ${it && it.title ? `<strong>${escapeHtml(it.title)}</strong>` : 'todo el catálogo'}.`;
+        } else if (it && it.title) {
+          desc.innerHTML = `<strong>${escapeHtml(it.title)}</strong> está reservado para miembros con suscripción VIP activa. Desbloquea el 100% de la página por solo <strong>$5.99 USD / mes</strong> o con tu Llave de Acceso.`;
         } else {
           desc.innerHTML = `Acceso exclusivo reservado para miembros con membresía de <strong>Patreon ($5.99 USD)</strong> o <strong>Llave de Acceso VIP</strong>.`;
         }
       }
+      if (quickRedeem) {
+        quickRedeem.classList.toggle('hidden', !state.currentUser);
+      }
       if (modal) modal.classList.remove('hidden');
+    }
+
+    function openUpgradeKeyFlow() {
+      closeProUpgradeModal();
+      if (state.currentUser) {
+        if (window.VelvetRouter && typeof window.VelvetRouter.navigate === 'function') {
+          window.VelvetRouter.navigate('/cuenta');
+        } else if (typeof openVaultModal === 'function') {
+          openVaultModal('account');
+        }
+        setTimeout(() => {
+          const inp = document.getElementById('vault-redeem-key-input');
+          if (inp) { inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); inp.focus(); }
+        }, 120);
+      } else {
+        openAuthModal('register');
+      }
+    }
+
+    async function handleProUpgradeQuickRedeem() {
+      const inp = document.getElementById('pro-upgrade-key-input');
+      const keyVal = inp ? inp.value.trim().toUpperCase() : '';
+      if (!keyVal) {
+        showToast('Introduce tu Llave VIP para activar tu acceso', 'warning');
+        return;
+      }
+      if (!state.currentUser) {
+        openUpgradeKeyFlow();
+        return;
+      }
+      try {
+        const res = await fetch('/api/redeem', {
+          method: 'POST',
+          headers: authHeaders(),
+          credentials: 'include',
+          body: JSON.stringify({ code: keyVal, key: keyVal })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.user) {
+          rememberSession(data.user, data.token || getAuthToken(), null, null, null);
+          loadStorage();
+          updateUserUI();
+          if (inp) inp.value = '';
+          closeProUpgradeModal();
+          showToast(data.message || 'Suscripción VIP activada', 'success');
+          renderContinueShelf();
+          if (state.catalogCache && state.catalogCache.length > 0) {
+            renderFeedData({ items: state.catalogCache, page: state.page || 1, total_pages: state.totalPages || 1 });
+          }
+          if (state.heroItems && state.heroItems.length > 0) setupHeroCarousel(state.heroItems);
+        } else {
+          showToast(data.detail || data.error || 'Llave inválida o ya utilizada', 'error');
+        }
+      } catch (e) {
+        showToast('Error de conexión al canjear llave', 'error');
+      }
     }
 
     function closeProUpgradeModal() {
@@ -9038,7 +9207,7 @@
         optBtn.className = `px-2.5 py-1.5 rounded-lg text-left hover:bg-white/[0.08] transition-colors flex items-center justify-between ${
           idx === 0 ? 'text-[#ff2d95] font-semibold' : 'text-white/80'
         }`;
-        optBtn.innerHTML = `<span>${vs.quality || 'Opción ' + (idx + 1)}</span> ${idx === 0 ? '<i class="fa-solid fa-check text-[10px] text-[#ff2d95]"></i>' : ''}`;
+        optBtn.innerHTML = `<span>${escapeHtml(vs.quality || 'Opción ' + (idx + 1))}</span> ${idx === 0 ? '<i class="fa-solid fa-check text-[10px] text-[#ff2d95]"></i>' : ''}`;
         optBtn.onclick = (e) => {
           if (e) e.stopPropagation();
           playVideoSource(vs, qBtn, true);
@@ -9146,17 +9315,23 @@
       }
 
       try {
+        const detailOpts = { signal: ticket.signal, headers: authHeaders(), credentials: 'include' };
         let detailUrl = (itemId || (source === 'id' && sourceId)) ? `/api/items/id/${itemId || sourceId}` : `/api/items/${source}/${encodeURIComponent(sourceId)}`;
-        let resp = await fetch(detailUrl, { signal: ticket.signal });
+        let resp = await fetch(detailUrl, detailOpts);
         if (!videoGuard.matches(ticket.token)) return;
-        if (!resp.ok && source && sourceId && source !== 'id') {
-          resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`, { signal: ticket.signal });
+        if (resp.status !== 403 && !resp.ok && source && sourceId && source !== 'id') {
+          resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`, detailOpts);
         }
         if (!videoGuard.matches(ticket.token)) return;
-        if (!resp.ok && itemId && /^[a-f0-9]{24}$/i.test(itemId)) {
-          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`, { signal: ticket.signal });
+        if (resp.status !== 403 && !resp.ok && itemId && /^[a-f0-9]{24}$/i.test(itemId)) {
+          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`, detailOpts);
         }
         if (!videoGuard.matches(ticket.token)) return;
+        if (resp.status === 403) {
+          closeVideoPlayer(false);
+          openProUpgradeModal({ id: itemId, source, source_id: sourceId, title: initialTitle, media_type: 'video' });
+          return;
+        }
         if (!resp.ok) throw new Error('No se pudo obtener el detalle del video');
         const item = await resp.json();
         if (!videoGuard.matches(ticket.token)) return;
@@ -9260,10 +9435,10 @@
         const rawLabel = opt.querySelector('span')?.textContent || opt.textContent.trim();
         if (isActive) {
           opt.className = 'px-2.5 py-1.5 rounded-lg text-left bg-white/[0.08] text-[#ff2d95] font-semibold transition-colors flex items-center justify-between';
-          opt.innerHTML = `<span>${rawLabel}</span> <i class="fa-solid fa-check text-[10px] text-[#ff2d95]"></i>`;
+          opt.innerHTML = `<span>${escapeHtml(rawLabel)}</span> <i class="fa-solid fa-check text-[10px] text-[#ff2d95]"></i>`;
         } else {
           opt.className = 'px-2.5 py-1.5 rounded-lg text-left hover:bg-white/[0.08] text-white/80 transition-colors flex items-center justify-between';
-          opt.innerHTML = `<span>${rawLabel}</span>`;
+          opt.innerHTML = `<span>${escapeHtml(rawLabel)}</span>`;
         }
       });
 
@@ -9738,7 +9913,7 @@
               onerror="handleCardImageError(this, 'video')"
             />
             <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 text-[10px] font-mono text-white/90">
-              ${duration}
+              ${escapeHtml(duration)}
             </span>
           </div>
           <div class="flex-1 flex flex-col justify-center min-w-0 pr-1 gap-1">
@@ -9746,7 +9921,7 @@
               ${escapeHtml(r.title)}
             </h4>
             <div class="flex items-center gap-2 text-[11px] text-white/50">
-              <span class="px-1.5 py-0.2 rounded bg-white/[0.04] text-white/70">${badgeText}</span>
+              <span class="px-1.5 py-0.2 rounded bg-white/[0.04] text-white/70">${escapeHtml(badgeText)}</span>
               <span>&bull;</span>
               <span class="text-white/40">1080p</span>
             </div>
@@ -9842,7 +10017,7 @@
                 onerror="handleCardImageError(this, 'video')"
               />
               <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 text-[10px] font-mono text-white/90">
-                ${duration}
+                ${escapeHtml(duration)}
               </span>
             </div>
             <div class="p-2 flex flex-col gap-0.5">
@@ -9862,7 +10037,7 @@
         popTags.forEach(t => {
           const btn = document.createElement('button');
           btn.className = 'px-3 py-1 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-[#ff2d95]/40 text-xs font-medium text-white/80 hover:text-white transition-all cursor-pointer shrink-0';
-          btn.innerHTML = `<span class="text-[#ff2d95] font-semibold mr-0.5">#</span>${t}`;
+          btn.innerHTML = `<span class="text-[#ff2d95] font-semibold mr-0.5">#</span>${escapeHtml(t)}`;
           btn.onclick = () => {
             closeVideoPlayer();
             state.mode = 'videos';
@@ -10267,7 +10442,7 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               data-media-type="${state.mode === 'galleries' ? 'gallery' : 'comic'}"
-              data-cover-fallback="${it.cover_fallback ? getStealthImageUrl(it.cover_fallback, it.url || '', 0, 70) : ''}"
+              data-cover-fallback="${escapeHtml(it.cover_fallback ? getStealthImageUrl(it.cover_fallback, it.url || '', 0, 70) : '')}"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
               onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, '${state.mode === 'galleries' ? 'gallery' : 'comic'}')"
@@ -10285,7 +10460,7 @@
 
             <!-- Badge Superior Izquierda -->
             <span class="absolute top-2 left-2 ${fmt.color} border px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-[#090414]/90">
-              ${fmt.label}
+              ${escapeHtml(fmt.label)}
             </span>
 
             <!-- Indicador Bloqueado VIP -->
@@ -10298,17 +10473,21 @@
             <!-- Botones de Acción Rápida Flotantes -->
             <div class="absolute top-2 right-2 flex flex-col gap-1.5 z-10">
               <button
-                onclick="toggleFavorite(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
+                type="button"
+                data-card-key="${escapeHtml(registerCardActionItem(it))}"
+                onclick="handleCardFavoriteClick(this, event)"
                 class="card-fav-btn w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform cursor-pointer"
-                data-fav-source="${it.source || ''}"
-                data-fav-source-id="${it.source_id || ''}"
-                data-fav-id="${it.id || ''}"
+                data-fav-source="${escapeHtml(it.source || '')}"
+                data-fav-source-id="${escapeHtml(it.source_id || '')}"
+                data-fav-id="${escapeHtml(it.id || '')}"
                 title="Favorito"
               >
                 <i class="${isFav ? 'fa-solid text-[#ff2d95]' : 'fa-regular text-lav/70'} fa-heart"></i>
               </button>
               <button
-                onclick="toggleWatchlist(${JSON.stringify(it).replace(/"/g, '&quot;')}, event)"
+                type="button"
+                data-card-key="${escapeHtml(registerCardActionItem(it))}"
+                onclick="handleCardWatchlistClick(this, event)"
                 class="w-7 h-7 rounded-lg bg-[#090414]/90 border border-white/15 flex items-center justify-center text-xs hover:scale-110 active:scale-90 transition-transform text-lav/70 hover:text-white"
                 title="Lista de seguimiento"
               >
@@ -10430,7 +10609,7 @@
       }
 
       const heroBackdrop = document.getElementById('hero-backdrop');
-      if (heroBackdrop) heroBackdrop.style.backgroundImage = `url('${coverSrc}')`;
+      if (heroBackdrop) heroBackdrop.style.backgroundImage = isSafeClientUrl(coverSrc) ? `url(${JSON.stringify(coverSrc)})` : 'none';
 
       const coverContainer = document.getElementById('hero-cover-container');
       if (coverContainer) {
@@ -10475,16 +10654,16 @@
       if (viewsBadge) {
         if (isGame) {
           const plays = (item.plays) ? (item.plays > 1000 ? `${(item.plays/1000).toFixed(1)}K` : item.plays) : '9.5K';
-          viewsBadge.innerHTML = `<i class="fa-solid fa-gamepad text-emerald-400 mr-1"></i>9.9 · <i class="fa-solid fa-play ml-1 mr-0.5 text-emerald-300"></i>${plays} Jugadas`;
+          viewsBadge.innerHTML = `<i class="fa-solid fa-gamepad text-emerald-400 mr-1"></i>9.9 · <i class="fa-solid fa-play ml-1 mr-0.5 text-emerald-300"></i>${escapeHtml(String(plays))} Jugadas`;
         } else if (isVid) {
           const views = (item.extra && item.extra.views) ? `${item.extra.views} Vistas` : '120K Vistas';
-          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-eye ml-1 mr-0.5 text-pink-400"></i>${views}`;
+          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-eye ml-1 mr-0.5 text-pink-400"></i>${escapeHtml(String(views))}`;
         } else if (isGallery) {
           const photos = item.page_count ? `${item.page_count} Fotos` : 'Galería VIP';
-          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-camera ml-1 mr-0.5 text-pink-400"></i>${photos}`;
+          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-camera ml-1 mr-0.5 text-pink-400"></i>${escapeHtml(String(photos))}`;
         } else {
           const reads = item.page_count ? `${item.page_count} Páginas` : '58.4K Lecturas';
-          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-book-open ml-1 mr-0.5 text-purple-400"></i>${reads}`;
+          viewsBadge.innerHTML = `<i class="fa-solid fa-star text-amber-300 mr-1"></i>9.9 · <i class="fa-solid fa-book-open ml-1 mr-0.5 text-purple-400"></i>${escapeHtml(String(reads))}`;
         }
       }
 
@@ -10756,8 +10935,9 @@
             </button>
 
             <!-- Overlay con icono de acción -->
-            <a href="${itemUrl}"
-               ${isGame ? `onclick="event.preventDefault(); openGameModal(${escapeHtml(JSON.stringify(h))});"` : (isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : '')}
+            <a href="${escapeHtml(itemUrl)}"
+               data-card-key="${escapeHtml(registerCardActionItem(h))}"
+               ${(isGame || isLocked) ? `onclick="handleContinueCardAction(this, event, '${isGame ? 'game' : 'locked'}')"` : ''}
                class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                aria-label="Continuar ${escapeHtml(h.title || '')}">
               <span class="w-10 h-10 rounded-full ${isGame ? 'bg-emerald-600/90' : 'bg-pink-600/90'} text-white flex items-center justify-center shadow-lg">
@@ -10768,8 +10948,9 @@
 
           <!-- Información y Barra Fina de Progreso -->
           <div class="mt-2 flex-1 flex flex-col justify-between">
-            <a href="${itemUrl}"
-               ${isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : ''}
+            <a href="${escapeHtml(itemUrl)}"
+               data-card-key="${escapeHtml(registerCardActionItem(h))}"
+               ${isLocked ? `onclick="handleContinueCardAction(this, event, 'locked')"` : ''}
                class="block">
               <h5 class="text-xs font-bold text-white group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug min-h-[32px]" title="${escapeHtml(h.title)}">
                 ${escapeHtml(h.title)}
@@ -10778,17 +10959,18 @@
 
             <div class="mt-2">
               <div class="flex items-center justify-between text-[10px] text-pink-400 font-bold mb-1">
-                <span>${progressLabel}</span>
-                <span>${pct}%</span>
+                <span>${escapeHtml(progressLabel)}</span>
+                <span>${escapeHtml(String(pct))}%</span>
               </div>
               <div class="w-full bg-black/60 rounded-full h-1 overflow-hidden border border-white/10">
-                <div class="bg-[#ff2d95] h-full rounded-full transition-all duration-300" style="width: ${pct}%"></div>
+                <div class="bg-[#ff2d95] h-full rounded-full transition-all duration-300" style="width: ${Number(pct) || 0}%"></div>
               </div>
             </div>
 
             <!-- Botón Pequeño 'Continuar / Reanudar' -->
-            <a href="${itemUrl}"
-               ${isGame ? `onclick="event.preventDefault(); openGameModal(${escapeHtml(JSON.stringify(h))});"` : (isLocked ? `onclick="event.preventDefault(); openProUpgradeModal(${escapeHtml(JSON.stringify(h))});"` : '')}
+            <a href="${escapeHtml(itemUrl)}"
+               data-card-key="${escapeHtml(registerCardActionItem(h))}"
+               ${(isGame || isLocked) ? `onclick="handleContinueCardAction(this, event, '${isGame ? 'game' : 'locked'}')"` : ''}
                class="mt-2 w-full py-1.5 px-2 rounded-lg ${isGame ? 'bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300' : 'bg-white/[0.06] hover:bg-gradient-to-r hover:from-pink-500 hover:to-purple-600 text-white/90'} border border-white/10 hover:border-transparent hover:text-white text-[11px] font-black flex items-center justify-center gap-1.5 transition-all shadow-sm">
               <i class="fa-solid ${isGame ? 'fa-gamepad' : (isVid ? 'fa-play' : 'fa-book-open')} text-[10px]"></i>
               <span>Continuar</span>
@@ -11032,15 +11214,22 @@
           return;
         }
 
+        const detailOpts = { headers: authHeaders(), credentials: 'include' };
         const detailUrl = (itemId || (source === 'id' && sourceId) || (/^\d+$/.test(sourceId) && !source))
           ? `/api/items/id/${itemId || sourceId}`
           : (source && sourceId ? `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}` : `/api/items/id/${itemId || sourceId}`);
-        let resp = await fetch(detailUrl);
-        if (!resp.ok && source && sourceId && source !== 'id') {
-          resp = await fetch(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`);
+        let resp = await fetch(detailUrl, detailOpts);
+        if (resp.status !== 403 && !resp.ok && source && sourceId && source !== 'id') {
+          resp = await fetch(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`, detailOpts);
         }
-        if (!resp.ok && (itemId || sourceId)) {
-          resp = await fetch(`/api/items/id/${itemId || sourceId}`);
+        if (resp.status !== 403 && !resp.ok && (itemId || sourceId)) {
+          resp = await fetch(`/api/items/id/${itemId || sourceId}`, detailOpts);
+        }
+
+        if (resp.status === 403) {
+          closeReader(false);
+          openProUpgradeModal({ id: itemId, source, source_id: sourceId, media_type: 'comic' });
+          return;
         }
 
         if (!resp.ok) {
@@ -12371,15 +12560,79 @@
     }
 
     // Favoritos & Lista de Seguimiento
+    const _velvetCardItems = new Map();
+
+    function buildCardActionKey(it) {
+      if (!it) return '';
+      if (it.source && it.source_id != null && it.source_id !== '') {
+        return `${String(it.source)}:${String(it.source_id)}`;
+      }
+      return String(it.id || it.item_id || '');
+    }
+
+    function registerCardActionItem(it) {
+      const key = buildCardActionKey(it);
+      if (!key) return '';
+      if (_velvetCardItems.size > 1000) {
+        const firstKey = _velvetCardItems.keys().next().value;
+        if (firstKey !== undefined) _velvetCardItems.delete(firstKey);
+      }
+      _velvetCardItems.set(key, it);
+      return key;
+    }
+
+    function resolveCardActionItem(btn) {
+      if (!btn) return null;
+      const key = btn.getAttribute('data-card-key') || '';
+      if (key && _velvetCardItems.has(key)) return _velvetCardItems.get(key);
+      const id = btn.getAttribute('data-fav-id') || null;
+      const source = btn.getAttribute('data-fav-source') || '';
+      const sourceId = btn.getAttribute('data-fav-source-id') || '';
+      const card = btn.closest('[data-item-id]') || btn.parentElement?.parentElement;
+      const titleEl = card ? card.querySelector('h3, h4') : null;
+      return (state.catalogCache || []).find(c =>
+        (id && c.id && String(c.id) === String(id)) ||
+        (source && sourceId && c.source === source && String(c.source_id) === String(sourceId))
+      ) || { id: id || sourceId, source, source_id: sourceId, title: titleEl ? titleEl.textContent.trim() : '' };
+    }
+
+    function isSafeClientUrl(u) {
+      const s = String(u || '').trim();
+      if (!s) return false;
+      if (s.startsWith('/') && !s.startsWith('//')) return true;
+      if (s.startsWith('data:image/svg+xml')) return true;
+      return /^https?:\/\//i.test(s);
+    }
+
+    function handleContinueCardAction(el, event, mode) {
+      if (event) event.preventDefault();
+      const item = resolveCardActionItem(el);
+      if (!item) return;
+      if (mode === 'game') return openGameModal(item);
+      return openProUpgradeModal(item);
+    }
+
+    function handleCardFavoriteClick(btn, event) {
+      const item = resolveCardActionItem(btn);
+      if (item) return toggleFavorite(item, event);
+    }
+
+    function handleCardWatchlistClick(btn, event) {
+      const item = resolveCardActionItem(btn);
+      if (item) return toggleWatchlist(item, event);
+    }
 
     function isFavorite(source, sourceId, itemId = null) {
-      if (!state.favorites || !Array.isArray(state.favorites)) return false;
-      const numId = itemId ? Number(itemId) : null;
-      return state.favorites.some(f => {
+      const inState = Array.isArray(state.favorites) && state.favorites.some(f => {
         if (!f) return false;
-        if (numId && f.id && Number(f.id) === numId) return true;
-        return f.source === source && String(f.source_id) === String(sourceId);
+        if (itemId != null && itemId !== '' && f.id != null && String(f.id) === String(itemId)) return true;
+        return Boolean(source && sourceId != null && sourceId !== '' && f.source === source && String(f.source_id) === String(sourceId));
       });
+      if (inState) return true;
+      if (window.VelvetPersonalData && typeof window.VelvetPersonalData.isFavorite === 'function') {
+        return window.VelvetPersonalData.isFavorite(itemId, source, sourceId);
+      }
+      return false;
     }
 
     function updateAllFeedFavoriteIcons() {
@@ -12607,6 +12860,16 @@
           return;
         }
 
+        if (resp.status === 403) {
+          dropSession();
+          loadStorage();
+          renderContinueShelf();
+          updateVaultCounts();
+          updateUserUI();
+          showToast('Tu cuenta se encuentra suspendida. Contacta al administrador.', 'error');
+          return;
+        }
+
         if (!resp.ok) {
           console.warn('[AUTH] Error verificando sesión en servidor (' + resp.status + '), manteniendo sesión local');
           updateUserUI();
@@ -12621,13 +12884,52 @@
         await loadCloudFavorites();
         await loadCloudHistory();
 
+        if (attempt === 0 && typeof window !== 'undefined' && window.location && window.location.search) {
+          try {
+            const usp = new URLSearchParams(window.location.search);
+            if (usp.get('patreon') === 'connected') {
+              showToast('Patreon conectado y suscripción VIP activada', 'success');
+              usp.delete('patreon');
+              const cleanQs = usp.toString();
+              history.replaceState(history.state, '', window.location.pathname + (cleanQs ? '?' + cleanQs : ''));
+            } else if (usp.get('patreon_error')) {
+              const pErr = usp.get('patreon_error');
+              const msg = pErr === 'not_active_patron'
+                ? 'No se detectó una membresía activa de Patreon ($5.99).'
+                : 'No se pudo completar la conexión con Patreon.';
+              showToast(msg, 'warning');
+              usp.delete('patreon_error');
+              const cleanQs = usp.toString();
+              history.replaceState(history.state, '', window.location.pathname + (cleanQs ? '?' + cleanQs : ''));
+            }
+          } catch (e) {}
+        }
+
         if (state.catalogCache && state.catalogCache.length > 0) {
           renderFeedData({ items: state.catalogCache, page: state.page || 1, total_pages: state.totalPages || 1 });
+        }
+        if (state.heroItems && state.heroItems.length > 0) {
+          setupHeroCarousel(state.heroItems);
         }
       } catch (e) {
         console.warn('[AUTH] Error verificando sesión:', e);
         updateUserUI();
       }
+    }
+
+    function parseStrictPositiveFavInt(val) {
+      const s = String(val ?? '').trim();
+      if (!/^\d{1,15}$/.test(s)) return null;
+      const n = Number(s);
+      return Number.isSafeInteger(n) && n > 0 ? n : null;
+    }
+
+    function getFavoriteDedupKey(it) {
+      if (!it) return '';
+      if (it.source && it.source_id != null && it.source_id !== '') {
+        return `${String(it.source).toLowerCase()}:${String(it.source_id)}`;
+      }
+      return String(it.id || it.item_id || '');
     }
 
     async function loadCloudFavorites() {
@@ -12639,25 +12941,37 @@
         if (!idData || idData.degraded) return;
 
         let ids = Array.isArray(idData.ids)
-          ? idData.ids.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0)
+          ? idData.ids.map(parseStrictPositiveFavInt).filter(n => n !== null)
           : [];
-        const refs = Array.isArray(idData.refs) ? idData.refs : [];
+        let refs = Array.isArray(idData.refs) ? idData.refs : [];
         const localCompact = (state.favorites || []).map(compactFavoriteRecord).filter(Boolean);
-        const serverSet = new Set(ids.map(String));
-        const missing = localCompact.filter(f => f.id && !serverSet.has(String(f.id)));
+        const serverKeySet = new Set([
+          ...ids.map(String),
+          ...refs.map(getFavoriteDedupKey)
+        ].filter(Boolean));
+        const missing = localCompact.filter(f => {
+          const numId = parseStrictPositiveFavInt(f.id || f.item_id);
+          if (numId && serverKeySet.has(String(numId))) return false;
+          const k = getFavoriteDedupKey(f);
+          if (k && serverKeySet.has(k)) return false;
+          return Boolean(numId || k);
+        });
         const serverEmpty = ids.length === 0 && refs.length === 0;
-        if ((serverEmpty && localCompact.some(f => f.id)) || missing.length > 0) {
-          const payloadSrc = serverEmpty ? localCompact.filter(f => f.id) : missing;
+        if ((serverEmpty && localCompact.length > 0) || missing.length > 0) {
+          const payloadSrc = serverEmpty ? localCompact : missing;
           const sync = await fetch('/api/user/favorites', {
             method: 'POST',
             headers: { ...authHeaders(), 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
               items: payloadSrc.slice(0, 2000).map(f => ({
-                id: f.id,
-                item_id: f.id,
+                id: f.id || f.item_id || null,
+                item_id: f.item_id || f.id || null,
                 source: f.source || '',
                 source_id: f.source_id || '',
+                title: f.title || '',
+                cover_url: f.cover_url || '',
+                url: f.url || '',
                 media_type: f.media_type || ''
               }))
             })
@@ -12667,13 +12981,15 @@
             if (again.ok) {
               const againData = await again.json();
               if (againData && !againData.degraded && Array.isArray(againData.ids)) {
-                ids = againData.ids.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
+                ids = againData.ids.map(parseStrictPositiveFavInt).filter(n => n !== null);
+                refs = Array.isArray(againData.refs) ? againData.refs : refs;
               }
             }
           }
         }
 
-        const details = new Map();
+        const detailsById = new Map();
+        const detailsByKey = new Map();
         let page = 1;
         let totalPages = 1;
         while (page <= totalPages && page <= 8) {
@@ -12683,16 +12999,32 @@
           if (!data || data.degraded) break;
           totalPages = data.totalPages || 1;
           (data.items || []).forEach(it => {
-            const n = parseInt(it.id || it.item_id, 10);
-            if (n > 0) details.set(String(n), it);
+            const n = parseStrictPositiveFavInt(it.id || it.item_id);
+            if (n) detailsById.set(String(n), it);
+            const k = getFavoriteDedupKey(it);
+            if (k) detailsByKey.set(k, it);
           });
           page++;
         }
 
-        let merged = ids.map(id => details.get(String(id)) || { id, item_id: id });
+        let merged = [];
+        const seenMerged = new Set();
+        const pushMerged = (entry) => {
+          if (!entry) return;
+          const k = getFavoriteDedupKey(entry);
+          const idKey = entry.id != null ? String(entry.id) : '';
+          if ((k && seenMerged.has(k)) || (idKey && seenMerged.has(`id:${idKey}`))) return;
+          if (k) seenMerged.add(k);
+          if (idKey) seenMerged.add(`id:${idKey}`);
+          merged.push(entry);
+        };
+
+        for (const it of detailsByKey.values()) pushMerged(it);
+        ids.forEach(id => pushMerged(detailsById.get(String(id)) || { id, item_id: id }));
         refs.forEach(ref => {
-          const slim = compactFavoriteRecord(ref);
-          if (slim) merged.push(slim);
+          const k = getFavoriteDedupKey(ref);
+          const hydrated = (k && detailsByKey.get(k)) || compactFavoriteRecord(ref) || ref;
+          pushMerged(hydrated);
         });
 
         // Fusión no destructiva: si el servidor devolvió vacío pero localmente hay favoritos,
@@ -12700,14 +13032,14 @@
         if (merged.length === 0 && localCompact.length > 0) {
           merged = localCompact;
           try {
-            fetch('/api/user/favorites', {
+            await fetch('/api/user/favorites', {
               method: 'POST',
               headers: { ...authHeaders(), 'Content-Type': 'application/json' },
               credentials: 'include',
               body: JSON.stringify({
                 items: localCompact.slice(0, 2000).map(f => ({
-                  id: f.id,
-                  item_id: f.id,
+                  id: f.id || f.item_id || null,
+                  item_id: f.item_id || f.id || null,
                   source: f.source || '',
                   source_id: f.source_id || '',
                   title: f.title || '',
@@ -12719,21 +13051,19 @@
             }).catch(() => {});
           } catch (syncErr) {}
         } else if (localCompact.length > 0) {
-          const mergedKeySet = new Set(merged.map(m => (m.source && m.source_id) ? `${m.source}:${m.source_id}` : String(m.id || m.item_id)));
-          localCompact.forEach(loc => {
-            const k = (loc.source && loc.source_id) ? `${loc.source}:${loc.source_id}` : String(loc.id || loc.item_id);
-            if (!mergedKeySet.has(k)) {
-              mergedKeySet.add(k);
-              merged.push(loc);
-            }
-          });
+          localCompact.forEach(loc => pushMerged(loc));
         }
 
         state.favorites = merged;
         saveStorage();
         updateVaultFavCountBadge();
+        updateVaultCounts();
         renderVaultFavoritesPro();
         updateAllFeedFavoriteIcons();
+        updateVideoFavIcon();
+        if (window.VelvetVault && typeof window.VelvetVault.renderFavorites === 'function') {
+          window.VelvetVault.renderFavorites();
+        }
         if (window.VelvetPersonalData && typeof window.VelvetPersonalData.updateAllCounters === 'function') {
           window.VelvetPersonalData.updateAllCounters();
         }
@@ -12750,12 +13080,19 @@
         const data = await resp.json();
         if (!data || data.degraded) return;
         let cloud = Array.isArray(data.items) ? data.items : [];
-        const byId = new Map(cloud.map(h => [String(h.item_id || h.id), h]));
+        const byId = new Map();
+        const byKey = new Map();
+        cloud.forEach(h => {
+          const n = parseStrictPositiveFavInt(h.item_id || h.id);
+          if (n) byId.set(String(n), h);
+          const k = getFavoriteDedupKey(h);
+          if (k) byKey.set(k, h);
+        });
         const localSlim = (state.history || []).map(compactHistoryRecord).filter(Boolean);
         const toPush = localSlim.filter(h => {
-          const n = parseInt(h.id || h.item_id, 10);
-          if (!Number.isInteger(n) || n <= 0) return true;
-          const cur = byId.get(String(n));
+          const n = parseStrictPositiveFavInt(h.id || h.item_id);
+          const k = getFavoriteDedupKey(h);
+          const cur = (n && byId.get(String(n))) || (k && byKey.get(k)) || null;
           if (!cur) return true;
           return (h.at || 0) > (Number(cur.at) || 0);
         });
@@ -13076,9 +13413,7 @@
 
         rememberSession(data.user, data.token, data.refresh_token, data.expires_at, data.device_token);
         loadStorage();
-        loadCloudFavorites();
         updateUserUI();
-        renderContinueShelf();
 
         const nameDisplay = document.getElementById('user-name-display');
         const dropUser = document.getElementById('dropdown-username');
@@ -13099,22 +13434,18 @@
           if (adminBtn) adminBtn.classList.add('hidden');
         }
 
-        // Si el usuario tenía favoritos en caché local antes de loguearse, sincronizarlos
-        if (state.favorites && state.favorites.length > 0) {
-          try {
-            await fetch('/api/user/favorites/sync', {
-              method: 'POST',
-              headers: authHeaders(),
-              body: JSON.stringify({ items: state.favorites })
-            });
-          } catch (e) {}
-        }
-
         closeAuthModal();
         showToast('Sesión iniciada', 'success');
 
-        // Sincronización en segundo plano de sesión
-        initAuth().catch(() => {});
+        try {
+          if (window.VelvetPersonalData && typeof window.VelvetPersonalData.migrateLocalDataToServer === 'function') {
+            await window.VelvetPersonalData.migrateLocalDataToServer();
+          }
+        } catch (e) {}
+        await loadCloudFavorites();
+        await loadCloudHistory();
+        renderContinueShelf();
+        updateAllFeedFavoriteIcons();
 
       } catch (err) {
 
@@ -13196,7 +13527,7 @@
 
       }
 
-      if (btn) btn.innerHTML = '<div class="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> <span>Validando Llave VIP...</span>';
+      if (btn) btn.innerHTML = '<div class="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></div> <span>Creando cuenta...</span>';
 
       try {
 
@@ -13212,19 +13543,19 @@
 
         });
 
-        const data = await resp.json();
+        const data = await resp.json().catch(() => ({}));
 
         if (!resp.ok) {
 
           if (errBox && errText) {
 
-            errText.textContent = data.detail || 'Llave de acceso no válida o ya utilizada.';
+            errText.textContent = data.detail || 'No se pudo completar el registro. Verifica tus datos o llave VIP.';
 
             errBox.classList.remove('hidden');
 
           }
 
-          if (btn) btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> <span>Crear Mi Cuenta VIP</span>';
+          if (btn) btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> <span>Crear Mi Cuenta</span>';
 
           return;
 
@@ -13257,9 +13588,16 @@
 
         await initAuth();
 
+        if (state.catalogCache && state.catalogCache.length > 0) {
+          renderFeedData({ items: state.catalogCache, page: state.page || 1, total_pages: state.totalPages || 1 });
+        }
+        if (state.heroItems && state.heroItems.length > 0) {
+          setupHeroCarousel(state.heroItems);
+        }
+
         closeAuthModal();
 
-        showToast('Cuenta lista', 'success');
+        showToast(access_key ? 'Cuenta creada y suscripción VIP activada' : 'Cuenta gratuita creada con éxito', 'success');
 
       } catch (err) {
 
@@ -13273,7 +13611,7 @@
 
       } finally {
 
-        if (btn) btn.innerHTML = '<i class="fa-solid fa-unlock-keyhole"></i> <span>Canjear Llave y Activar Cuenta</span>';
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-user-plus"></i> <span>Crear Mi Cuenta</span>';
 
       }
 
@@ -13281,18 +13619,28 @@
 
     let _selectedAvatar = 'crown';
     let _selectedAvatarBg = 'from-pink-600 to-purple-600';
+    const ALLOWED_PROFILE_AVATARS = new Set(['crown', 'gem', 'bolt', 'fire', 'gamepad', 'heart']);
+    const ALLOWED_PROFILE_BGS = new Set([
+      'from-pink-600 to-purple-600',
+      'from-amber-500 to-rose-600',
+      'from-cyan-500 to-blue-600',
+      'from-emerald-500 to-teal-700',
+      'from-purple-600 to-indigo-800',
+      'from-rose-600 to-pink-700'
+    ]);
 
     function selectProfileAvatar(iconName) {
-      _selectedAvatar = iconName;
+      const safeIcon = ALLOWED_PROFILE_AVATARS.has(iconName) ? iconName : 'crown';
+      _selectedAvatar = safeIcon;
       const box = document.getElementById('vault-acc-avatar-icon');
-      if (box) box.className = `fa-solid fa-${iconName} text-amber-300`;
+      if (box) box.className = `fa-solid fa-${safeIcon} text-amber-300`;
       const svg = document.getElementById('vault-acc-avatar-svg');
       if (svg && window.VelvetVault && typeof window.VelvetVault.getAvatarSvg === 'function') {
-        svg.outerHTML = window.VelvetVault.getAvatarSvg(iconName);
+        svg.outerHTML = window.VelvetVault.getAvatarSvg(safeIcon);
       }
       const btns = document.querySelectorAll('#profile-avatar-selector button');
       btns.forEach(b => {
-        if (b.getAttribute('data-avatar') === iconName) {
+        if (b.getAttribute('data-avatar') === safeIcon) {
           b.className = b.className.replace('border-purple-500/30', 'border-pink-500/80').replace('bg-purple-950/60', 'bg-pink-600/30');
         } else {
           b.className = b.className.replace('border-pink-500/80', 'border-purple-500/30').replace('bg-pink-600/30', 'bg-purple-950/60');
@@ -13301,12 +13649,13 @@
     }
 
     function selectProfileBg(bgClass) {
-      _selectedAvatarBg = bgClass;
+      const safeBg = ALLOWED_PROFILE_BGS.has(bgClass) ? bgClass : 'from-pink-600 to-purple-600';
+      _selectedAvatarBg = safeBg;
       const box = document.getElementById('vault-acc-avatar-box');
-      if (box) box.className = `w-16 h-16 rounded-2xl bg-gradient-to-tr ${bgClass} flex items-center justify-center text-2xl text-white font-black shadow-[0_0_20px_rgba(255,45,149,0.35)] shrink-0`;
+      if (box) box.className = `w-16 h-16 rounded-2xl bg-gradient-to-tr ${safeBg} flex items-center justify-center text-2xl text-white font-black shadow-[0_0_20px_rgba(255,45,149,0.35)] shrink-0`;
       const btns = document.querySelectorAll('#profile-bg-selector button');
       btns.forEach(b => {
-        if (b.getAttribute('data-bg') === bgClass) {
+        if (b.getAttribute('data-bg') === safeBg) {
           b.classList.remove('border-transparent');
           b.classList.add('border-white/90');
         } else {
@@ -13331,6 +13680,7 @@
       try {
         const res = await fetch('/api/user/profile', {
           method: 'POST',
+          credentials: 'include',
           headers: authHeaders(),
           body: JSON.stringify({
             username,
@@ -13343,22 +13693,16 @@
           showToast(data.error || 'Error al guardar perfil', 'error');
         } else {
           showToast('Perfil guardado', 'success');
-          if (state.currentUser) {
-            state.currentUser.username = data.user.username;
-            state.currentUser.avatar = data.user.avatar;
-            state.currentUser.avatarBg = data.user.avatarBg;
-          }
-          localStorage.setItem('velvet_current_user', JSON.stringify(state.currentUser));
-          localStorage.setItem('velvet_user', JSON.stringify(state.currentUser));
-          if (window.VelvetStore && typeof window.VelvetStore.setCurrentUser === 'function') {
-            window.VelvetStore.setCurrentUser(state.currentUser);
+          if (state.currentUser && data.user) {
+            const merged = { ...state.currentUser, ...data.user };
+            rememberSession(merged, getAuthToken(), null, null, null);
           }
           if (window.VelvetVault && typeof window.VelvetVault.renderAccount === 'function') {
             window.VelvetVault.renderAccount();
           }
           updateUserUI();
           const accUsername = document.getElementById('vault-acc-username');
-          if (accUsername) accUsername.textContent = data.user.username;
+          if (accUsername && data.user?.username) accUsername.textContent = data.user.username;
         }
       } catch (err) {
         showToast('Error de red al actualizar perfil', 'error');
@@ -13539,12 +13883,12 @@
           row.innerHTML = `
             <div class="flex items-center gap-3 overflow-hidden flex-1">
               <div class="w-12 h-12 rounded-xl bg-black overflow-hidden shrink-0 border border-purple-500/30">
-                <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+                <img src="${escapeHtml(isSafeClientUrl(coverSrc) ? coverSrc : COMIC_FALLBACK_SVG)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
               </div>
               <div class="truncate">
                 <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300 transition-colors">${escapeHtml(titleText)}</span>
                 <div class="flex items-center gap-2 text-[10px] text-purple-300/70 pt-0.5">
-                  <span class="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-500/30 font-black uppercase text-[9px]">${badge}</span>
+                  <span class="px-1.5 py-0.2 rounded bg-purple-950 border border-purple-500/30 font-black uppercase text-[9px]">${escapeHtml(badge)}</span>
                   <span class="text-pink-400/80 font-bold flex items-center gap-1"><i class="fa-solid fa-crown text-[8px] text-amber-400"></i> Morbo VIP</span>
                 </div>
               </div>
@@ -13622,7 +13966,7 @@
           row.innerHTML = `
             <div class="flex items-center gap-3 truncate flex-1 min-w-0">
               <div class="w-10 h-10 rounded-lg bg-black overflow-hidden shrink-0 border border-purple-500/30">
-                <img src="${coverSrc}" class="w-full h-full object-cover" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+                <img src="${escapeHtml(isSafeClientUrl(coverSrc) ? coverSrc : COMIC_FALLBACK_SVG)}" class="w-full h-full object-cover" onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
               </div>
               <div class="truncate flex-1 min-w-0">
                 <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(titleText)}</span>
@@ -13632,7 +13976,7 @@
             <div class="flex items-center gap-2 shrink-0">
               ${isCompleted
                 ? `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-black flex items-center gap-1"><i class="fa-solid fa-check"></i> ${isVid ? 'Visto' : 'Leído'}</span>`
-                : `<span class="px-2.5 py-1 rounded-lg bg-hot/20 text-hot border border-hot/30 text-[10px] font-bold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left"></i> ${isVid ? `${pct}%` : `Pág ${p ? p.page : 1}/${p ? p.total : '?'}`}</span>`
+                : `<span class="px-2.5 py-1 rounded-lg bg-hot/20 text-hot border border-hot/30 text-[10px] font-bold flex items-center gap-1"><i class="fa-solid fa-clock-rotate-left"></i> ${isVid ? `${escapeHtml(String(pct))}%` : `Pág ${escapeHtml(String(p ? p.page : 1))}/${escapeHtml(String(p ? p.total : '?'))}`}</span>`
               }
               <button class="vault-hist-del-btn w-6 h-6 rounded-lg bg-black/40 hover:bg-rose-600 text-purple-300 hover:text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-all cursor-pointer" title="Eliminar de mi historial">
                 <i class="fa-solid fa-trash-can text-[10px]"></i>
@@ -13679,24 +14023,40 @@
 
     function renderVaultAccountPro() {
       if (!state.currentUser) return;
+      const u = state.currentUser;
       const uEl = document.getElementById('vault-account-username');
       const rBadge = document.getElementById('vault-account-role-badge');
       const kEl = document.getElementById('vault-account-key');
       const cEl = document.getElementById('vault-account-created-at');
-      if (uEl) uEl.textContent = state.currentUser.username;
+      const subInfo = window.VelvetStore?.getSubscriptionInfo?.() || { active: hasFullAccess(), status: u.subscription_status || 'inactive' };
+      if (uEl) uEl.textContent = u.username;
       if (rBadge) {
-        if (state.currentUser.role === 'admin') {
+        if (u.role === 'admin') {
           rBadge.textContent = 'ADMINISTRADOR / DUEÑO';
           rBadge.className = 'px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40';
-        } else {
-          rBadge.textContent = 'MIEMBRO VIP ILIMITADO';
+        } else if (subInfo.active) {
+          rBadge.textContent = subInfo.isLifetime ? 'VIP PERMANENTE' : (subInfo.daysRemaining != null ? `VIP ACTIVO (${subInfo.daysRemaining}D)` : 'MIEMBRO VIP');
           rBadge.className = 'px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40';
+        } else if (subInfo.status === 'expired') {
+          rBadge.textContent = 'SUSCRIPCIÓN VENCIDA';
+          rBadge.className = 'px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        } else {
+          rBadge.textContent = 'CUENTA GRATUITA';
+          rBadge.className = 'px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-white/10 text-white/70 border border-white/20';
         }
       }
-      if (kEl) kEl.textContent = state.currentUser.registered_with_key || 'Llave Maestra';
+      if (kEl) kEl.textContent = u.registered_with_key || (u.patron_status === 'active_patron' ? 'Patreon VIP' : 'Sin llave');
       if (cEl) {
-        const dateStr = state.currentUser.created_at ? new Date(state.currentUser.created_at).toLocaleDateString() : 'Activa';
-        cEl.textContent = `Miembro registrado el ${dateStr}`;
+        const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Reciente';
+        if (subInfo.active && subInfo.expiresAt) {
+          const expStr = new Date(subInfo.expiresAt).toLocaleDateString();
+          cEl.textContent = `Registro: ${dateStr} • Vence: ${expStr}`;
+        } else if (subInfo.status === 'expired' && subInfo.expiresAt) {
+          const expStr = new Date(subInfo.expiresAt).toLocaleDateString();
+          cEl.textContent = `Venció el ${expStr} — Renueva tu VIP`;
+        } else {
+          cEl.textContent = `Miembro registrado el ${dateStr}`;
+        }
       }
     }
 
@@ -13723,10 +14083,15 @@
 
       if (state.currentUser) {
         try {
-          const deleteUrl = itemId
-            ? `/api/user/favorites/${itemId}`
-            : `/api/user/favorites/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`;
-          await fetch(deleteUrl, { method: 'DELETE', headers: authHeaders() });
+          if (window.VelvetPersonalData && typeof window.VelvetPersonalData.removeFavorite === 'function' && window.VelvetPersonalData.isAuthenticated()) {
+            await window.VelvetPersonalData.removeFavorite({ id: itemId, source, source_id: sourceId });
+          } else {
+            const qp = new URLSearchParams();
+            if (itemId) qp.set('id', String(itemId));
+            if (source) qp.set('source', String(source));
+            if (sourceId) qp.set('source_id', String(sourceId));
+            await fetch(`/api/user/favorites?${qp.toString()}`, { method: 'DELETE', headers: authHeaders(), credentials: 'include' });
+          }
         } catch (e) {}
       }
       showToast('Quitado de tu bóveda', 'info');
@@ -13741,7 +14106,7 @@
 
       if (state.currentUser) {
         try {
-          await fetch('/api/user/history', { method: 'DELETE', headers: authHeaders() });
+          await fetch('/api/user/history', { method: 'DELETE', headers: authHeaders(), credentials: 'include' });
         } catch (e) {}
       }
       showToast('Historial borrado', 'info');
@@ -13749,100 +14114,109 @@
 
     async function toggleFavorite(item, event) {
       if (event) {
-        event.preventDefault();
-        event.stopPropagation();
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
       }
       if (!item) return;
 
-      const itemId = item.id || null;
+      const itemId = item.id || item.item_id || null;
       const idx = state.favorites.findIndex(f => {
-        if (itemId && f.id && Number(f.id) === Number(itemId)) return true;
-        return f.source === item.source && String(f.source_id) === String(item.source_id);
+        if (!f) return false;
+        if (itemId != null && itemId !== '' && f.id != null && String(f.id) === String(itemId)) return true;
+        return Boolean(item.source && item.source_id != null && f.source === item.source && String(f.source_id) === String(item.source_id));
       });
 
       const isFav = idx !== -1;
+      const prevFavorites = [...state.favorites];
+      const clickedBtn = event ? (event.currentTarget || (event.target && event.target.closest('button'))) : null;
+
+      const favEntry = {
+        id: itemId || `${item.source || 'ext'}:${item.source_id || ''}`,
+        item_id: itemId || `${item.source || 'ext'}:${item.source_id || ''}`,
+        source: item.source || '',
+        source_id: item.source_id != null ? String(item.source_id) : '',
+        title: item.title || '',
+        cover_url: item.cover_url || '',
+        url: item.url || '',
+        media_type: item.media_type || (state.mode === 'videos' ? 'video' : (state.mode === 'galleries' ? 'gallery' : (state.mode === 'games' ? 'game' : 'comic'))),
+        created_at: new Date().toISOString()
+      };
 
       if (isFav) {
         state.favorites.splice(idx, 1);
-        showToast('Quitado de tu bóveda', 'info');
-
-        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.removeFavorite === 'function') {
-          window.VelvetPersonalData.removeFavorite(itemId || item.source_id);
-        }
-
-        if (state.currentUser) {
-          try {
-            const delUrl = itemId
-              ? `/api/user/favorites/${itemId}`
-              : `/api/user/favorites/${encodeURIComponent(item.source)}/${encodeURIComponent(item.source_id)}`;
-            fetch(delUrl, { method: 'DELETE', headers: authHeaders(), credentials: 'include' }).catch(() => {});
-          } catch (e) {}
-        }
       } else {
-        const favEntry = {
-          id: itemId,
-          source: item.source || '',
-          source_id: item.source_id || '',
-          title: item.title || '',
-          cover_url: item.cover_url || '',
-          url: item.url || '',
-          media_type: item.media_type || (state.mode === 'videos' ? 'video' : (state.mode === 'galleries' ? 'gallery' : 'comic')),
-          created_at: new Date().toISOString()
-        };
         state.favorites.unshift(favEntry);
-        showToast('Guardado en tu bóveda', 'success');
-
-        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.addFavorite === 'function') {
-          window.VelvetPersonalData.addFavorite(favEntry);
-        }
-
-        if (state.currentUser) {
-          try {
-            fetch('/api/user/favorites', {
-              method: 'POST',
-              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                id: itemId,
-                item_id: itemId,
-                source: item.source || '',
-                source_id: item.source_id || '',
-                title: favEntry.title || '',
-                cover_url: favEntry.cover_url || '',
-                url: favEntry.url || '',
-                media_type: favEntry.media_type
-              })
-            }).catch(() => {});
-          } catch (e) {}
-        }
       }
+
+      const paintFavUI = (nowFav) => {
+        if (clickedBtn) {
+          const icon = clickedBtn.querySelector('i.fa-heart');
+          if (icon) {
+            icon.className = (nowFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70') + ' fa-heart';
+          }
+        }
+        saveStorage();
+        updateAllFeedFavoriteIcons();
+        updateVaultFavCountBadge();
+        updateVideoFavIcon();
+        updateVaultCounts();
+        renderContinueShelf();
+        if (window.VelvetVault && typeof window.VelvetVault.renderFavorites === 'function') {
+          window.VelvetVault.renderFavorites();
+        }
+        if (document.getElementById('vault-modal') && !document.getElementById('vault-modal').classList.contains('hidden')) {
+          renderVaultFavoritesPro();
+        }
+      };
+
+      paintFavUI(!isFav);
+      showToast(isFav ? 'Quitado de tu bóveda' : 'Guardado en tu bóveda', isFav ? 'info' : 'success');
 
       try {
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: state.favorites }));
       } catch (e) {}
 
-      // Actualizar inmediatamente botón clickeado
-      if (event) {
-        const btn = event.currentTarget || (event.target && event.target.closest('button'));
-        if (btn) {
-          const icon = btn.querySelector('i.fa-heart');
-          if (icon) {
-            icon.className = (!isFav ? 'fa-solid text-hot' : 'fa-regular text-lav/70') + ' fa-heart';
+      let syncedOk = true;
+      const usePersonalEngine = Boolean(window.VelvetPersonalData && (
+        (typeof window.VelvetPersonalData.isAuthenticated === 'function' && window.VelvetPersonalData.isAuthenticated()) ||
+        !state.currentUser
+      ));
+
+      if (usePersonalEngine) {
+        if (isFav && typeof window.VelvetPersonalData.removeFavorite === 'function') {
+          const res = await window.VelvetPersonalData.removeFavorite(item);
+          if (res === false) syncedOk = false;
+        } else if (!isFav && typeof window.VelvetPersonalData.addFavorite === 'function') {
+          const res = await window.VelvetPersonalData.addFavorite(favEntry);
+          if (res === false) syncedOk = false;
+        }
+      } else if (state.currentUser) {
+        try {
+          if (isFav) {
+            const qp = new URLSearchParams();
+            if (itemId) qp.set('id', String(itemId));
+            if (item.source) qp.set('source', String(item.source));
+            if (item.source_id != null) qp.set('source_id', String(item.source_id));
+            const resp = await fetch(`/api/user/favorites?${qp.toString()}`, { method: 'DELETE', headers: authHeaders(), credentials: 'include' });
+            if (!resp.ok) syncedOk = false;
+          } else {
+            const resp = await fetch('/api/user/favorites', {
+              method: 'POST',
+              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(favEntry)
+            });
+            if (!resp.ok) syncedOk = false;
           }
+        } catch (e) {
+          syncedOk = false;
         }
       }
 
-      saveStorage();
-      updateAllFeedFavoriteIcons();
-      updateVaultFavCountBadge();
-      updateVideoFavIcon();
-      updateVaultCounts();
-      renderContinueShelf();
-      if (window.VelvetVault && typeof window.VelvetVault.renderFavorites === 'function') {
-        window.VelvetVault.renderFavorites();
-      }
-      if (document.getElementById('vault-modal') && !document.getElementById('vault-modal').classList.contains('hidden')) {
-        renderVaultFavoritesPro();
+      if (!syncedOk && state.currentUser) {
+        state.favorites = prevFavorites;
+        paintFavUI(isFav);
+        showToast('No se pudo sincronizar el favorito con tu cuenta. Intenta de nuevo.', 'error');
       }
     }
 
@@ -13966,13 +14340,13 @@
 
       currentAdminKeyFilter = f;
 
-      ['all', 'avail', 'used'].forEach(id => {
+      ['all', 'avail', 'used', 'revoked'].forEach(id => {
 
         const btn = document.getElementById(`btn-kf-${id}`);
 
         if (!btn) return;
 
-        const matches = (id === 'all' && f === 'all') || (id === 'avail' && f === 'available') || (id === 'used' && f === 'used');
+        const matches = (id === 'all' && f === 'all') || (id === 'avail' && f === 'available') || (id === 'used' && f === 'used') || (id === 'revoked' && f === 'revoked');
 
         btn.className = matches
 
@@ -13996,7 +14370,7 @@
 
       if (!keys || keys.length === 0) {
 
-        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-xs text-purple-300/50">No hay llaves en esta categoría.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-xs text-purple-300/50">No hay llaves en esta categoría.</td></tr>';
 
         return;
 
@@ -14008,37 +14382,57 @@
 
         tr.className = 'hover:bg-purple-950/20 transition-colors';
 
-        const isUsed = k.is_used;
+        const keyCode = k.key || k.code || '';
 
-        const statusBadge = isUsed
+        const isUsed = Boolean(k.is_used || k.used_at);
 
-          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-800 text-slate-300 border border-slate-700">CONSUMIDA</span>'
+        const isRevoked = Boolean(k.revoked || k.status === 'revoked');
 
-          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-950 text-emerald-400 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]">DISPONIBLE</span>';
+        const isExpired = Boolean(k.status === 'expired');
+
+        const statusBadge = isRevoked
+
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-950 text-rose-300 border border-rose-500/40">REVOCADA</span>'
+
+          : isUsed
+
+            ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-800 text-slate-300 border border-slate-700">CONSUMIDA</span>'
+
+            : isExpired
+
+              ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-950 text-amber-300 border border-amber-500/40">CADUCADA</span>'
+
+              : '<span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-950 text-emerald-400 border border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]">DISPONIBLE</span>';
+
+        const durDays = k.duration_days !== undefined && k.duration_days !== null ? Number(k.duration_days) : 30;
+
+        const durLabel = durDays === 0 ? 'Permanente' : `${durDays} días`;
 
         const createdDate = k.created_at ? new Date(k.created_at).toLocaleDateString() : '';
 
-        const usedBy = isUsed ? `<span class="font-bold text-white">${escapeHtml(k.used_by_username || 'Usuario')}</span>` : '<span class="text-purple-300/40">---</span>';
+        const usedBy = isUsed ? `<span class="font-bold text-white">${escapeHtml(k.used_by_username || k.used_email || 'Usuario')}</span>` : '<span class="text-purple-300/40">---</span>';
 
-        const delBtn = !isUsed
+        const delBtn = (!isUsed && !isRevoked)
 
-          ? `<button onclick="handleAdminDeleteKey(${k.id})" class="px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-[11px] font-bold border border-rose-800/40 cursor-pointer transition-colors" title="Revocar llave">Eliminar</button>`
+          ? `<button onclick="handleAdminDeleteKey('${escapeHtml(keyCode)}')" class="px-2 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-[11px] font-bold border border-rose-800/40 cursor-pointer transition-colors" title="Revocar llave">Revocar</button>`
 
-          : '<span class="text-purple-300/40 text-[11px]">Canjeada</span>';
+          : `<span class="text-purple-300/40 text-[11px]">${isRevoked ? 'Revocada' : 'Canjeada'}</span>`;
 
         tr.innerHTML = `
 
           <td class="p-3 font-mono font-bold text-pink-400 flex items-center gap-2">
 
-            <span>${k.key}</span>
+            <span>${escapeHtml(keyCode)}</span>
 
-            <button onclick="copyKeyText('${k.key}')" class="text-purple-400 hover:text-white transition-colors cursor-pointer" title="Copiar llave">
+            <button onclick="copyKeyText('${escapeHtml(keyCode)}')" class="text-purple-400 hover:text-white transition-colors cursor-pointer" title="Copiar llave">
 
               <i class="fa-regular fa-copy"></i>
 
             </button>
 
           </td>
+
+          <td class="p-3 font-bold text-amber-300">${escapeHtml(durLabel)}</td>
 
           <td class="p-3">${statusBadge}</td>
 
@@ -14062,6 +14456,8 @@
 
       const count = parseInt(document.getElementById('admin-gen-count').value || '1', 10);
 
+      const duration_days = parseInt(document.getElementById('admin-gen-duration')?.value ?? '30', 10);
+
       const prefix = document.getElementById('admin-gen-prefix').value.trim() || 'VELVET';
 
       const note = document.getElementById('admin-gen-note').value.trim();
@@ -14074,7 +14470,7 @@
 
           headers: authHeaders(),
 
-          body: JSON.stringify({ count, prefix, note })
+          body: JSON.stringify({ count, duration_days, prefix, note })
 
         });
 
@@ -14082,7 +14478,7 @@
 
         if (resp.ok && data.keys) {
 
-          generatedKeysCache = data.keys.map(k => k.key);
+          generatedKeysCache = data.keys.map(k => k.key || k.code);
 
           const box = document.getElementById('admin-generated-box');
 
@@ -14094,7 +14490,11 @@
 
             list.innerHTML = '';
 
+            const planBadge = duration_days === 0 ? 'VIP Permanente' : `${duration_days} días`;
+
             data.keys.forEach(k => {
+
+              const codeVal = k.key || k.code;
 
               const item = document.createElement('div');
 
@@ -14102,9 +14502,15 @@
 
               item.innerHTML = `
 
-                <span class="font-black text-emerald-300">${k.key}</span>
+                <div class="flex items-center gap-2">
 
-                <button onclick="copyKeyText('${k.key}')" class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-800 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 cursor-pointer flex items-center gap-1">
+                  <span class="font-black text-emerald-300">${escapeHtml(codeVal)}</span>
+
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">${escapeHtml(planBadge)}</span>
+
+                </div>
+
+                <button onclick="copyKeyText('${escapeHtml(codeVal)}')" class="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-800 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 cursor-pointer flex items-center gap-1">
 
                   <i class="fa-solid fa-copy"></i> Copiar
 
@@ -14118,7 +14524,7 @@
 
           }
 
-          showToast(`${data.count} llaves generadas`, 'success');
+          showToast(`${data.count} llaves generadas (${duration_days === 0 ? 'Permanente' : duration_days + ' días'})`, 'success');
 
           loadAdminStats();
 
@@ -14160,11 +14566,11 @@
 
     async function handleAdminDeleteKey(keyId) {
 
-      if (!confirm('¿Deseas revocar y eliminar esta llave de acceso?')) return;
+      if (!confirm('¿Deseas revocar esta llave de acceso? No podrá volver a usarse.')) return;
 
       try {
 
-        const resp = await fetch(`/api/admin/keys/${keyId}`, {
+        const resp = await fetch(`/api/admin/keys/${encodeURIComponent(keyId)}`, {
 
           method: 'DELETE',
 
@@ -14238,39 +14644,89 @@
 
         const isAdmin = u.role === 'admin';
 
+        const subStatus = u.subscription_status || 'inactive';
+
+        const isActiveVip = u.has_active_subscription || isAdmin;
+
         const roleBadge = isAdmin
 
           ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40">ADMIN</span>'
 
-          : '<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">VIP</span>';
+          : u.is_lifetime
 
-        const statusBadge = u.status === 'active'
+            ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40">VIP PERM</span>'
 
-          ? '<span class="text-emerald-400 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Activo</span>'
+            : isActiveVip
 
-          : '<span class="text-rose-400 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Suspendido</span>';
+              ? `<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">VIP ${u.days_remaining != null ? u.days_remaining + 'D' : ''}</span>`
+
+              : subStatus === 'expired'
+
+                ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-950/70 text-amber-300 border border-amber-500/40">VENCIDO</span>'
+
+                : '<span class="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-white/10 text-white/60 border border-white/20">GRATIS</span>';
+
+        const statusBadge = u.status === 'suspended' || u.is_suspended
+
+          ? '<span class="text-rose-400 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span> Suspendido</span>'
+
+          : subStatus === 'expired'
+
+            ? '<span class="text-amber-400 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Vencido</span>'
+
+            : isActiveVip
+
+              ? '<span class="text-emerald-400 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Activo</span>'
+
+              : '<span class="text-purple-300/70 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-purple-400"></span> Sin Plan</span>';
+
+        const expCell = isAdmin || u.is_lifetime
+
+          ? '<span class="text-emerald-300/80 font-bold">Sin vencimiento</span>'
+
+          : u.subscription_expires_at
+
+            ? `<span class="${isActiveVip ? 'text-emerald-300' : 'text-amber-300'}">${new Date(u.subscription_expires_at).toLocaleDateString()}</span>`
+
+            : '<span class="text-purple-300/40">---</span>';
+
+        const uidEsc = escapeHtml(String(u.id || ''));
+
+        const curStatEsc = escapeHtml(String(u.status || 'active'));
 
         const toggleBtn = !isAdmin
 
-          ? `<button onclick="handleAdminToggleUserStatus(${u.id}, '${u.status}')" class="px-2.5 py-1 rounded-lg ${u.status === 'active' ? 'bg-rose-950/40 text-rose-300 hover:bg-rose-900/60' : 'bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60'} text-[11px] font-bold border border-white/10 cursor-pointer transition-colors">
+          ? `<div class="flex items-center justify-end gap-1 flex-wrap">
 
-              ${u.status === 'active' ? 'Suspender' : 'Reactivar'}
+              <button onclick="handleAdminUserSubscription('${uidEsc}', 'extend', 30)" class="px-2 py-1 rounded-lg bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 cursor-pointer transition-colors" title="Sumar 30 días">+30d</button>
 
-            </button>`
+              ${isActiveVip ? `<button onclick="handleAdminUserSubscription('${uidEsc}', 'expire')" class="px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 text-amber-300 text-[10px] font-bold border border-amber-500/30 cursor-pointer transition-colors" title="Vencer suscripción ahora">Vencer</button>` : ''}
+
+              <button onclick="handleAdminToggleUserStatus('${uidEsc}', '${curStatEsc}')" class="px-2 py-1 rounded-lg ${u.status !== 'suspended' ? 'bg-rose-950/40 text-rose-300 hover:bg-rose-900/60' : 'bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60'} text-[10px] font-bold border border-white/10 cursor-pointer transition-colors">
+
+                ${u.status !== 'suspended' ? 'Suspender' : 'Reactivar'}
+
+              </button>
+
+            </div>`
 
           : '<span class="text-purple-300/40 text-[11px]">Dueño</span>';
 
-        const regDate = u.created_at ? new Date(u.created_at).toLocaleDateString() : '';
-
         tr.innerHTML = `
 
-          <td class="p-3 font-bold text-white">${escapeHtml(u.username)}</td>
+          <td class="p-3 font-bold text-white">
+
+            <div>${escapeHtml(u.username || 'Usuario')}</div>
+
+            <div class="text-[10px] font-normal text-purple-300/50">${escapeHtml(u.email || '')}</div>
+
+          </td>
 
           <td class="p-3">${roleBadge}</td>
 
-          <td class="p-3 font-mono text-pink-400 text-xs">${escapeHtml(u.registered_with_key || '---')}</td>
+          <td class="p-3 font-mono text-pink-400 text-xs">${escapeHtml(u.registered_with_key || (u.patreon_id ? 'Patreon' : '---'))}</td>
 
-          <td class="p-3 text-purple-300/60">${regDate}</td>
+          <td class="p-3">${expCell}</td>
 
           <td class="p-3 text-purple-200">${u.favorites_count || 0} favs &bull; ${u.history_count || 0} vistos</td>
 
@@ -14286,13 +14742,51 @@
 
     }
 
+    async function handleAdminUserSubscription(userId, action, days = 30) {
+
+      try {
+
+        const resp = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/subscription`, {
+
+          method: 'POST',
+
+          headers: authHeaders(),
+
+          body: JSON.stringify({ action, days })
+
+        });
+
+        const d = await resp.json().catch(() => ({}));
+
+        if (resp.ok) {
+
+          showToast(action === 'expire' ? 'Suscripción marcada como vencida' : `Suscripción extendida (+${days} días)`, 'success');
+
+          loadAdminStats();
+
+          loadAdminUsers();
+
+        } else {
+
+          showToast(d.detail || 'Error al actualizar suscripción', 'error');
+
+        }
+
+      } catch (e) {
+
+        showToast('Error de conexión', 'error');
+
+      }
+
+    }
+
     async function handleAdminToggleUserStatus(userId, currentStatus) {
 
       const nextStatus = currentStatus === 'active' ? 'suspended' : 'active';
 
       try {
 
-        const resp = await fetch(`/api/admin/users/${userId}/status`, {
+        const resp = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
 
           method: 'POST',
 

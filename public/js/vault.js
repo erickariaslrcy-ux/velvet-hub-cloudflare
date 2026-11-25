@@ -37,6 +37,20 @@
       .replace(/'/g, '&#39;');
   }
 
+  const ALLOWED_VAULT_AVATAR_BGS = new Set([
+    'from-pink-600 to-purple-600',
+    'from-amber-500 to-rose-600',
+    'from-cyan-500 to-blue-600',
+    'from-emerald-500 to-teal-700',
+    'from-purple-600 to-indigo-800',
+    'from-rose-600 to-pink-700'
+  ]);
+
+  function safeVaultAvatarBg(raw) {
+    const clean = String(raw || '').trim();
+    return ALLOWED_VAULT_AVATAR_BGS.has(clean) ? clean : 'from-pink-600 to-purple-600';
+  }
+
   function formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return '0:00';
     const s = Math.floor(seconds);
@@ -419,13 +433,13 @@
               <!-- Checkbox multi-select si está activo -->
               ${isMultiSelectMode ? `
                 <div class="absolute top-2 left-2 z-20" onclick="event.preventDefault(); event.stopPropagation();">
-                  <input type="checkbox" class="w-4 h-4 rounded accent-pink-500 cursor-pointer fav-select-cb" data-fav-id="${itemId}" ${selectedFavIds.has(itemId) ? 'checked' : ''} onchange="window.VelvetVault.toggleSelectFav('${itemId}')">
+                  <input type="checkbox" class="w-4 h-4 rounded accent-pink-500 cursor-pointer fav-select-cb" data-fav-id="${escapeHtml(itemId)}" ${selectedFavIds.has(itemId) ? 'checked' : ''} onchange="window.VelvetVault.toggleSelectFav(this.dataset.favId)">
                 </div>
               ` : ''}
 
               <!-- Badge tipo -->
               <span class="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/85 text-[9px] font-black uppercase text-pink-300 border border-pink-500/30">
-                ${badgeText}
+                ${escapeHtml(badgeText)}
               </span>
 
               <!-- Botón quitar favorito -->
@@ -468,14 +482,14 @@
           row.innerHTML = `
             <div class="flex items-center gap-3 overflow-hidden flex-1">
               ${isMultiSelectMode ? `
-                <input type="checkbox" class="w-4 h-4 rounded accent-pink-500 cursor-pointer shrink-0" data-fav-id="${itemId}" ${selectedFavIds.has(itemId) ? 'checked' : ''} onclick="event.stopPropagation();" onchange="window.VelvetVault.toggleSelectFav('${itemId}')">
+                <input type="checkbox" class="w-4 h-4 rounded accent-pink-500 cursor-pointer shrink-0" data-fav-id="${escapeHtml(itemId)}" ${selectedFavIds.has(itemId) ? 'checked' : ''} onclick="event.stopPropagation();" onchange="window.VelvetVault.toggleSelectFav(this.dataset.favId)">
               ` : ''}
               <div class="w-12 h-12 rounded-xl bg-black overflow-hidden shrink-0 border border-purple-500/30">
-                <img src="${coverSrc}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='/velvet_logo.png'" />
+                <img src="${escapeHtml(coverSrc)}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='/velvet_logo.png'" />
               </div>
               <div class="truncate">
                 <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(it.title || 'Sin título')}</span>
-                <span class="text-[10px] text-lav/70 font-mono">${badgeText}</span>
+                <span class="text-[10px] text-lav/70 font-mono">${escapeHtml(badgeText)}</span>
               </div>
             </div>
             <button
@@ -792,7 +806,7 @@
       if (editUserInput && !editUserInput.value && isAuth) editUserInput.value = uname;
 
       const userAvatar = user?.avatar || 'crown';
-      const userBg = user?.avatarBg || 'from-pink-600 to-purple-600';
+      const userBg = safeVaultAvatarBg(user?.avatarBg);
       if (avatarBox) {
         avatarBox.className = `w-16 h-16 rounded-2xl bg-gradient-to-tr ${userBg} flex items-center justify-center text-2xl text-white font-black shadow-[0_0_20px_rgba(255,45,149,0.35)] shrink-0 transition-all`;
       }
@@ -818,13 +832,30 @@
       if (gamesEl) gamesEl.textContent = Array.isArray(saves) ? saves.length : 0;
       if (window.VelvetPersonalData?.updateAllCounters) window.VelvetPersonalData.updateAllCounters();
 
+      const subInfo = window.VelvetStore?.getSubscriptionInfo?.() || { active: false, status: isAuth ? 'inactive' : 'guest' };
+      const expiryEl = document.getElementById('vault-acc-expiry');
+
       if (badgeEl) {
-        if (window.VelvetStore?.hasFullAccess?.()) {
+        if (subInfo.status === 'suspended') {
+          badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-500/20 text-rose-300 border border-rose-500/40';
+          badgeEl.textContent = 'CUENTA SUSPENDIDA';
+        } else if (subInfo.active) {
           badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-pink-500/20 text-pink-300 border border-pink-500/40';
-          badgeEl.textContent = user?.role === 'admin' ? 'ADMINISTRADOR' : 'MIEMBRO VIP ILIMITADO';
+          if (subInfo.isAdmin) {
+            badgeEl.textContent = 'ADMINISTRADOR';
+          } else if (subInfo.isLifetime) {
+            badgeEl.textContent = 'VIP PERMANENTE';
+          } else if (subInfo.daysRemaining != null) {
+            badgeEl.textContent = `VIP ACTIVO (${subInfo.daysRemaining}D)`;
+          } else {
+            badgeEl.textContent = 'MIEMBRO VIP';
+          }
+        } else if (isAuth && subInfo.status === 'expired') {
+          badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40';
+          badgeEl.textContent = 'SUSCRIPCIÓN VENCIDA';
         } else if (isAuth) {
           badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/70 border border-white/20';
-          badgeEl.textContent = 'CUENTA REGISTRADA';
+          badgeEl.textContent = 'CUENTA GRATUITA';
         } else {
           badgeEl.className = 'whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-white/10 text-white/50 border border-white/10';
           badgeEl.textContent = 'INVITADO';
@@ -832,10 +863,33 @@
       }
       if (registeredEl) {
         const date = user?.created_at ? new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Activo recientemente';
-        registeredEl.textContent = isAuth ? date : 'Navegación local';
+        registeredEl.textContent = isAuth ? `Miembro desde ${date}` : 'Navegación local';
+      }
+      if (expiryEl) {
+        if (!isAuth) {
+          expiryEl.className = 'text-[11px] text-lav/60 mt-0.5';
+          expiryEl.textContent = 'Inicia sesión para gestionar tu suscripción';
+        } else if (subInfo.status === 'suspended') {
+          expiryEl.className = 'text-[11px] font-bold text-rose-400 mt-0.5';
+          expiryEl.textContent = 'Acceso suspendido por el administrador';
+        } else if (subInfo.isAdmin || subInfo.isLifetime) {
+          expiryEl.className = 'text-[11px] font-bold text-emerald-300 mt-0.5';
+          expiryEl.textContent = 'Acceso VIP permanente (sin vencimiento)';
+        } else if (subInfo.active && subInfo.expiresAt) {
+          const expFmt = new Date(subInfo.expiresAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' });
+          expiryEl.className = 'text-[11px] font-bold text-emerald-300 mt-0.5';
+          expiryEl.textContent = `Vence el ${expFmt} (${subInfo.daysRemaining} día${subInfo.daysRemaining === 1 ? '' : 's'} restante${subInfo.daysRemaining === 1 ? '' : 's'})`;
+        } else if (subInfo.status === 'expired') {
+          const expFmt = subInfo.expiresAt ? new Date(subInfo.expiresAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' }) : 'recientemente';
+          expiryEl.className = 'text-[11px] font-bold text-amber-300 mt-0.5';
+          expiryEl.textContent = `Tu suscripción venció el ${expFmt} — Canjea una nueva llave mensual`;
+        } else {
+          expiryEl.className = 'text-[11px] text-lav/70 mt-0.5';
+          expiryEl.textContent = 'Sin suscripción activa — Canjea una llave VIP abajo';
+        }
       }
       if (vipKeyEl) {
-        vipKeyEl.textContent = isAuth ? (user?.registered_with_key || 'VIP Permanente') : '---';
+        vipKeyEl.textContent = isAuth ? (user?.registered_with_key || (user?.patron_status === 'active_patron' ? 'Patreon VIP' : 'Sin llave aún')) : '---';
       }
 
       // Sincronizar switches de preferencias con los valores de VelvetStore

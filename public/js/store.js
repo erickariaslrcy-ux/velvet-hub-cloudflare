@@ -26,15 +26,25 @@
   const PROGRESS_KEY = 'velvet_progress';
   const FAVORITES_KEY = 'velvet_favorites';
 
+  function parseStrictStoreInt(val) {
+    const s = String(val == null ? '' : val).trim();
+    if (!/^\d{1,15}$/.test(s)) return null;
+    const n = Number(s);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  }
+
   function compactStoredFavorite(f) {
     if (!f || typeof f !== 'object') return null;
-    const id = parseInt(f.id || f.item_id, 10);
-    const hasId = Number.isInteger(id) && id > 0;
-    if (!hasId && !(f.source && f.source_id)) return null;
+    const id = parseStrictStoreInt(f.id != null ? f.id : f.item_id);
+    const hasId = id !== null;
+    const rawStrId = String(f.id || f.item_id || f.source_id || '').trim();
+    if (!hasId && !(f.source && f.source_id) && !rawStrId) return null;
     const out = {};
     if (hasId) {
       out.id = id;
       out.item_id = id;
+    } else if (rawStrId) {
+      out.id = rawStrId.slice(0, 80);
     }
     if (f.source) out.source = String(f.source).slice(0, 40);
     if (f.source_id != null && f.source_id !== '') out.source_id = String(f.source_id).slice(0, 80);
@@ -45,9 +55,10 @@
 
   function compactStoredHistory(h) {
     if (!h || typeof h !== 'object') return null;
-    const id = parseInt(h.id || h.item_id, 10);
-    const hasId = Number.isInteger(id) && id > 0;
-    if (!hasId && !(h.source && h.source_id)) return null;
+    const id = parseStrictStoreInt(h.id != null ? h.id : h.item_id);
+    const hasId = id !== null;
+    const rawStrId = String(h.id || h.item_id || h.source_id || '').trim();
+    if (!hasId && !(h.source && h.source_id) && !rawStrId) return null;
     const out = {
       media_type: String(h.media_type || '').slice(0, 16),
       position: Math.max(0, parseInt(h.position || h.page || h.currentTime || 0, 10) || 0),
@@ -58,6 +69,8 @@
     if (hasId) {
       out.id = id;
       out.item_id = id;
+    } else if (rawStrId) {
+      out.id = rawStrId.slice(0, 80);
     }
     if (h.source) out.source = String(h.source).slice(0, 40);
     if (h.source_id != null && h.source_id !== '') out.source_id = String(h.source_id).slice(0, 80);
@@ -306,19 +319,60 @@
       }
     },
 
-    hasFullAccess() {
+    getSubscriptionInfo() {
       const u = this.getCurrentUser();
-      if (!u) return false;
-      const tier = (u.tier || '').toLowerCase();
-      const role = (u.role || '').toLowerCase();
-      return (
+      if (!u) {
+        return { active: false, status: 'guest', isAdmin: false, isLifetime: false, expiresAt: null, daysRemaining: 0 };
+      }
+      const role = String(u.role || '').toLowerCase();
+      const status = String(u.subscription_status || '').toLowerCase();
+      const tier = String(u.tier || '').toLowerCase();
+      const tierLevel = String(u.tier_level || '').toLowerCase();
+      const isSuspended = Boolean(u.is_suspended === true || status === 'suspended');
+      if (isSuspended) {
+        return { active: false, status: 'suspended', isAdmin: false, isLifetime: false, expiresAt: u.subscription_expires_at || null, daysRemaining: 0 };
+      }
+      const isAdmin = role === 'admin' || tier === 'dueño' || tier === 'admin' || status === 'admin';
+      const isLifetime = Boolean(u.is_lifetime === true);
+      if (isAdmin || isLifetime) {
+        return { active: true, status: isAdmin ? 'admin' : 'active', isAdmin, isLifetime, expiresAt: null, daysRemaining: null };
+      }
+      const expIso = u.subscription_expires_at || null;
+      if (expIso) {
+        const expMs = Date.parse(expIso);
+        const nowMs = Date.now();
+        if (!Number.isNaN(expMs)) {
+          if (expMs <= nowMs) {
+            return { active: false, status: 'expired', isAdmin: false, isLifetime: false, expiresAt: expIso, daysRemaining: 0 };
+          }
+          const daysRemaining = Math.max(1, Math.ceil((expMs - nowMs) / 86400000));
+          return { active: true, status: 'active', isAdmin: false, isLifetime: false, expiresAt: expIso, daysRemaining };
+        }
+      }
+      if (status === 'expired') {
+        return { active: false, status: 'expired', isAdmin: false, isLifetime: false, expiresAt: expIso, daysRemaining: 0 };
+      }
+      if (status === 'inactive' || tierLevel === 'free' || u.has_active_subscription === false || u.is_pro === false) {
+        return { active: false, status: status || 'inactive', isAdmin: false, isLifetime: false, expiresAt: expIso, daysRemaining: 0 };
+      }
+      const legacyActive =
+        u.has_active_subscription === true ||
+        u.is_pro === true ||
+        u.is_vip === true ||
         tier === 'vip' ||
-        tier === 'patreon' ||
-        tier === 'admin' ||
-        role === 'admin' ||
-        role === 'vip' ||
-        u.is_vip === true
-      );
+        tier === 'patreon';
+      return {
+        active: legacyActive,
+        status: legacyActive ? 'active' : 'inactive',
+        isAdmin: false,
+        isLifetime: false,
+        expiresAt: expIso,
+        daysRemaining: null
+      };
+    },
+
+    hasFullAccess() {
+      return Boolean(this.getSubscriptionInfo().active);
     },
 
     // --- HISTORIAL Y PROGRESO ---
@@ -414,22 +468,27 @@
 
       // Sincronizar en la nube con Supabase si está autenticado
       const token = this.getAuthToken();
-      if (token) {
+      if (token || this.getCurrentUser()) {
         try {
+          const reqHeaders = { 'Content-Type': 'application/json' };
+          if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
           fetch('/api/user/history', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
+            credentials: 'include',
+            headers: reqHeaders,
             body: JSON.stringify({
-            item_id: item.id || item.item_id,
-            media_type: newEntry.media_type,
-            position: newEntry.currentTime || newEntry.page || 0,
-            duration: newEntry.duration || newEntry.total || 0,
-            completed: !!newEntry.completed,
-            client_timestamp: newEntry.at
-          })
+              id: item.id || item.item_id || item.source_id || null,
+              item_id: item.id || item.item_id || null,
+              source: item.source || '',
+              source_id: item.source_id || '',
+              title: item.title || '',
+              cover_url: item.cover_url || '',
+              media_type: newEntry.media_type,
+              position: newEntry.currentTime || newEntry.page || 0,
+              duration: newEntry.duration || newEntry.total || 0,
+              completed: !!newEntry.completed,
+              client_timestamp: newEntry.at
+            })
           }).catch(() => {});
         } catch (e) {}
       }
@@ -451,14 +510,18 @@
 
       // Sync backend deletion
       const token = this.getAuthToken();
-      if (token) {
+      if (token || this.getCurrentUser()) {
         try {
-          const deleteUrl = itemId
-            ? `/api/user/history?id=${itemId}`
-            : `/api/user/history?source=${encodeURIComponent(source)}&source_id=${encodeURIComponent(sourceId)}`;
+          const qs = [];
+          if (itemId) qs.push(`id=${encodeURIComponent(itemId)}`);
+          if (source) qs.push(`source=${encodeURIComponent(source)}`);
+          if (sourceId) qs.push(`source_id=${encodeURIComponent(sourceId)}`);
+          const deleteUrl = `/api/user/history?${qs.join('&')}`;
+          const reqHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
           fetch(deleteUrl, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+            credentials: 'include',
+            headers: reqHeaders
           }).catch(() => {});
         } catch (e) {}
       }
@@ -486,11 +549,12 @@
       }
 
       const token = this.getAuthToken();
-      if (token && range === 'all') {
+      if ((token || this.getCurrentUser()) && range === 'all') {
         try {
-          fetch('/api/user/history', {
+          fetch('/api/user/history?clear=all', {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+            credentials: 'include',
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
           }).catch(() => {});
         } catch (e) {}
       }
@@ -499,11 +563,12 @@
     // --- FAVORITOS ---
     getFavorites() {
       if (window.VelvetPersonalData) {
-        const favs = window.VelvetPersonalData.getFavoritesState().items;
-        if (favs && favs.length > 0) return favs;
+        return window.VelvetPersonalData.getFavoritesState().items || [];
       }
       try {
-        const raw = localStorage.getItem(FAVORITES_KEY) || localStorage.getItem('velvet_guest_favs') || localStorage.getItem('velvet_favs');
+        const u = this.getCurrentUser();
+        const key = (u && u.id) ? `${FAVORITES_KEY}_${u.id}` : FAVORITES_KEY;
+        const raw = localStorage.getItem(key) || ((!u || !u.id) ? (localStorage.getItem('velvet_guest_favs') || localStorage.getItem('velvet_favs')) : null);
         if (raw) return JSON.parse(raw);
         if (window.state && Array.isArray(window.state.favorites) && window.state.favorites.length > 0) {
           return window.state.favorites;
@@ -518,10 +583,15 @@
       try {
         const list = Array.isArray(favs) ? favs : [];
         const serialized = JSON.stringify(list.map(compactStoredFavorite).filter(Boolean));
-        localStorage.setItem(FAVORITES_KEY, serialized);
-        localStorage.setItem('velvet_guest_favs', serialized);
-        localStorage.setItem('velvet_favs', serialized);
-        localStorage.setItem('velvet_fav_ids', serialized);
+        const u = this.getCurrentUser();
+        if (u && u.id) {
+          localStorage.setItem(`${FAVORITES_KEY}_${u.id}`, serialized);
+        } else {
+          localStorage.setItem(FAVORITES_KEY, serialized);
+          localStorage.setItem('velvet_guest_favs', serialized);
+          localStorage.setItem('velvet_favs', serialized);
+          localStorage.setItem('velvet_fav_ids', serialized);
+        }
         if (window.state) window.state.favorites = list;
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: list }));
       } catch (e) {}
@@ -538,7 +608,7 @@
     addFavorite(item) {
       if (!item) return;
       if (window.VelvetPersonalData) {
-        window.VelvetPersonalData.addFavorite(item);
+        return window.VelvetPersonalData.addFavorite(item);
       }
       const favs = this.getFavorites();
       const exists = favs.some((f) => {
@@ -562,21 +632,23 @@
       this.setFavorites(favs);
 
       const token = this.getAuthToken();
-      if (token) {
+      if (token || this.getCurrentUser()) {
         try {
+          const reqHeaders = { 'Content-Type': 'application/json' };
+          if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
           fetch('/api/user/favorites', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
+            credentials: 'include',
+            headers: reqHeaders,
             body: JSON.stringify({
-            id: item.id || null,
-            item_id: item.id || null,
-            source: item.source || '',
-            source_id: item.source_id || '',
-            media_type: item.media_type || 'comic'
-          })
+              id: item.id || null,
+              item_id: item.id || null,
+              source: item.source || '',
+              source_id: item.source_id || '',
+              title: item.title || '',
+              cover_url: item.cover_url || '',
+              media_type: item.media_type || 'comic'
+            })
           }).catch(() => {});
         } catch (e) {}
       }
@@ -584,7 +656,8 @@
 
     removeFavorite(source, sourceId, id = null) {
       if (window.VelvetPersonalData) {
-        window.VelvetPersonalData.removeFavorite(id || sourceId);
+        window.VelvetPersonalData.removeFavorite(id || sourceId, source, sourceId);
+        return;
       }
       let favs = this.getFavorites();
       const removedItem = favs.find((f) => {
@@ -599,14 +672,15 @@
       this.setFavorites(favs);
 
       const token = this.getAuthToken();
-      if (token) {
+      if (token || this.getCurrentUser()) {
         try {
           const deleteUrl = id
-            ? `/api/user/favorites/${id}`
+            ? `/api/user/favorites/${encodeURIComponent(id)}`
             : `/api/user/favorites/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`;
           fetch(deleteUrl, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+            credentials: 'include',
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
           }).catch(() => {});
         } catch (e) {}
       }

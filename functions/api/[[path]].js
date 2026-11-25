@@ -835,6 +835,40 @@ function decodeJwtPayload(token) {
   }
 }
 
+async function verifySupabaseJwtHS256(token, secret) {
+  try {
+    if (!secret || typeof token !== "string") return null;
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const [hdrB64, payB64, sigB64] = parts;
+    if (!hdrB64 || !payB64 || !sigB64) return null;
+    const header = JSON.parse(fromBase64Url(hdrB64));
+    if (!header || header.alg !== "HS256") return null;
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      enc.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    let b64 = sigB64.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const sigBin = atob(b64);
+    const sigBytes = new Uint8Array(sigBin.length);
+    for (let i = 0; i < sigBin.length; i++) sigBytes[i] = sigBin.charCodeAt(i);
+    const ok = await crypto.subtle.verify("HMAC", key, sigBytes, enc.encode(`${hdrB64}.${payB64}`));
+    if (!ok) return null;
+    const payload = JSON.parse(fromBase64Url(payB64));
+    if (!payload || typeof payload !== "object" || !payload.sub) return null;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!payload.exp || Number(payload.exp) <= nowSec) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
 function isDeadUpstreamError(status, detail) {
   const text = String(detail || "");
   const code = Number(status) || 0;
@@ -1107,7 +1141,8 @@ async function maskVideoItem(it, secret) {
   const rawCover = it.cover_url || "";
   const rawVideo = it.video_url || (it.video_sources && it.video_sources[0] && it.video_sources[0].url) || "";
   const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", secret) : "";
-  const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", secret) : "";
+  const vipLocked = isItemVIPGated(it);
+  const videoToken = (!vipLocked && rawVideo) ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", secret) : "";
   return {
     id: it.id,
     source: it.source || "pmvhaven",
@@ -1117,9 +1152,10 @@ async function maskVideoItem(it, secret) {
     media_type: "video",
     tags: it.tags || [],
     artists: it.artists || [],
-    url: it.url || `https://pmvhaven.com/video?v=${it.id}`,
+    url: "",
+    vip_locked: vipLocked,
     page_count: 0,
-    video_sources: rawVideo ? [
+    video_sources: (!vipLocked && rawVideo) ? [
       {
         quality: "1080p HD",
         url: videoToken ? `/api/media?t=${videoToken}` : "",
@@ -1403,8 +1439,9 @@ async function fetchPmvShuffleItems({ page, pageSize, seed, category, q, encodeT
   for (const v of picked) {
     const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
     const rawVideo = v.videoUrl || "";
+    const vipLocked = isItemVIPGated({ id: v._id || v.id, source: "pmvhaven", source_id: v._id || v.id, title: v.title });
     const coverToken = rawCover && encodeToken ? await encodeToken(rawCover, "https://pmvhaven.com/") : "";
-    const videoToken = rawVideo && encodeToken ? await encodeToken(rawVideo, "https://pmvhaven.com/") : "";
+    const videoToken = (!vipLocked && rawVideo && encodeToken) ? await encodeToken(rawVideo, "https://pmvhaven.com/") : "";
     items.push({
       id: v._id || v.id,
       source: "pmvhaven",
@@ -1414,9 +1451,10 @@ async function fetchPmvShuffleItems({ page, pageSize, seed, category, q, encodeT
       media_type: "video",
       tags: v.tags || [],
       artists: v.uploaderUsername ? [v.uploaderUsername] : [],
-      url: `https://pmvhaven.com/video?v=${v._id || v.id}`,
+      url: "",
+      vip_locked: vipLocked,
       page_count: 0,
-      video_sources: rawVideo ? [{
+      video_sources: (!vipLocked && rawVideo) ? [{
         quality: "1080p HD",
         url: videoToken ? `/api/media?t=${videoToken}` : "",
         format: "mp4"
@@ -1453,19 +1491,68 @@ function isAllowedOrigin(origin) {
 
 function getCorsHeaders(origin = "") {
   const allowed = isAllowedOrigin(origin);
-  const allowOrigin = allowed ? origin : (origin || "https://morbohub.pages.dev");
+  const allowOrigin = allowed ? origin : (origin === "*" ? "*" : "https://morbohub.pages.dev");
   const headers = {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, Range, X-Requested-With, X-Refresh-Token, X-Device-Token, x-velvet-client",
-    "Server": "Velvet-Cloud",
-    "X-Powered-By": "Velvet-Native-Cloudflare-Engine/3.0",
     "Vary": "Origin"
   };
   if (allowed) {
     headers["Access-Control-Allow-Credentials"] = "true";
   }
   return headers;
+}
+
+const AUTH_RATE_LIMIT_MAP = new Map();
+function getClientIp(request) {
+  try {
+    return (
+      request.headers.get("cf-connecting-ip") ||
+      (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
+      "unknown"
+    ).slice(0, 64);
+  } catch (e) {
+    return "unknown";
+  }
+}
+
+function checkAuthRateLimit(request, bucket, maxPerMin = 15) {
+  const ip = getClientIp(request);
+  const key = `${bucket}:${ip}`;
+  const now = Date.now();
+  let entry = AUTH_RATE_LIMIT_MAP.get(key);
+  if (!entry || now - entry.windowStart > 60000) {
+    entry = { windowStart: now, count: 1 };
+    AUTH_RATE_LIMIT_MAP.set(key, entry);
+    if (AUTH_RATE_LIMIT_MAP.size > 3000) {
+      const oldest = AUTH_RATE_LIMIT_MAP.keys().next().value;
+      AUTH_RATE_LIMIT_MAP.delete(oldest);
+    }
+    return true;
+  }
+  entry.count++;
+  return entry.count <= maxPerMin;
+}
+
+const ALLOWED_AVATAR_ICONS = new Set(["crown", "gem", "bolt", "fire", "gamepad", "heart"]);
+const ALLOWED_AVATAR_BGS = new Set([
+  "from-pink-600 to-purple-600",
+  "from-amber-500 to-rose-600",
+  "from-cyan-500 to-blue-600",
+  "from-emerald-500 to-teal-700",
+  "from-purple-600 to-indigo-800",
+  "from-rose-600 to-pink-700"
+]);
+
+function sanitizeProfileAvatar(raw) {
+  const clean = String(raw || "").trim().toLowerCase();
+  return ALLOWED_AVATAR_ICONS.has(clean) ? clean : "crown";
+}
+
+function sanitizeProfileAvatarBg(raw) {
+  const clean = String(raw || "").trim();
+  return ALLOWED_AVATAR_BGS.has(clean) ? clean : "from-pink-600 to-purple-600";
 }
 
 // Memoria RAM Isolate Cache (Nivel 1: < 1ms de latencia en el Edge de Cloudflare)
@@ -1612,16 +1699,18 @@ function sanitizeAuthAlias(input) {
 
 // Resuelve la sesión SIN consumir el refresh token. El canje vive solo en /api/auth/refresh
 // para que las peticiones paralelas de favoritos/historial no revoquen la sesión.
-async function resolveAuthUser(request, sbUrl, sbKey) {
+let _activeJwtSecret = "";
+async function resolveAuthUser(request, sbUrl, sbKey, jwtSecret) {
   const activeUrl = sbUrl || _activeSupabaseUrl || (typeof SUPABASE_URL !== "undefined" ? SUPABASE_URL : "");
   const activeKey = sbKey || _activeSupabaseKey || (typeof SUPABASE_KEY !== "undefined" ? SUPABASE_KEY : "");
+  const activeJwtSecret = jwtSecret || _activeJwtSecret || "";
   const authHeader = request.headers.get("authorization") || "";
   let token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!token || token === "velvet_token" || token === "null" || token === "undefined") {
     token = readRequestCookie(request, "velvet_access") || "";
   }
   if (!token || token === "velvet_token" || token === "null" || token === "undefined") {
-    return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
+    return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
   }
 
   let upstreamStatus = 0;
@@ -1633,44 +1722,66 @@ async function resolveAuthUser(request, sbUrl, sbKey) {
     if (userRes.ok) {
       const user = await userRes.json();
       if (user && user.id) {
-        return { user, token, newToken: null, newRefreshToken: null, unavailable: false };
+        return { user, token, newToken: null, newRefreshToken: null, unavailable: false, verified: true, degraded: false };
       }
     }
     // 401/403: token inválido o caducado. El cliente refresca. No es un 503.
     if (userRes.status === 401 || userRes.status === 403) {
-      return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
+      return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
     }
   } catch (e) {
     upstreamStatus = 503;
   }
 
-  // GoTrue caído o inalcanzable no debe vaciar la bóveda si el JWT sigue vigente.
-  // PostgREST valida el mismo token con RLS (auth.uid()).
-  const payload = decodeJwtPayload(token);
-  const nowSec = Math.floor(Date.now() / 1000);
-  if (payload && payload.sub && payload.exp && Number(payload.exp) <= nowSec) {
-    return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
-  }
-  if (payload && payload.sub) {
+  // Si hay SUPABASE_JWT_SECRET configurado, validar criptográficamente la firma HS256 del JWT.
+  if (activeJwtSecret) {
+    const verifiedPayload = await verifySupabaseJwtHS256(token, activeJwtSecret);
+    if (!verifiedPayload) {
+      return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
+    }
     return {
       user: {
-        id: payload.sub,
-        email: payload.email || "",
-        user_metadata: payload.user_metadata || {},
-        role: payload.role || "authenticated"
+        id: verifiedPayload.sub,
+        email: verifiedPayload.email || "",
+        user_metadata: verifiedPayload.user_metadata || {},
+        role: verifiedPayload.role || "authenticated"
       },
       token,
       newToken: null,
       newRefreshToken: null,
       unavailable: false,
-      degraded: true
+      verified: true,
+      degraded: false
     };
   }
 
-  if (upstreamStatus >= 500 || upstreamStatus === 0) {
-    return { user: null, token, newToken: null, newRefreshToken: null, unavailable: true };
+  // Sin SUPABASE_JWT_SECRET: solo fallback degradado de solo lectura cuando GoTrue falla,
+  // exigiendo claim exp válido y sin autorizar acciones privilegiadas ni fallback admin.
+  const payload = decodeJwtPayload(token);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (!payload || !payload.sub) {
+    if (upstreamStatus >= 500 || upstreamStatus === 0) {
+      return { user: null, token, newToken: null, newRefreshToken: null, unavailable: true, verified: false };
+    }
+    return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
   }
-  return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false };
+  if (!payload.exp || Number(payload.exp) <= nowSec) {
+    return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
+  }
+  return {
+    user: {
+      id: payload.sub,
+      email: payload.email || "",
+      user_metadata: payload.user_metadata || {},
+      role: payload.role || "authenticated"
+    },
+    token,
+    newToken: null,
+    newRefreshToken: null,
+    unavailable: false,
+    verified: false,
+    degraded: true
+  };
 }
 
 // Helper para guardar user_metadata en Supabase de forma atómica e infalible
@@ -1731,6 +1842,371 @@ async function syncSqlFavorite(userId, itemId, isAdd, sbUrl, sbKey) {
   } catch (e) {}
 }
 
+const SUBSCRIPTION_PROFILE_SELECT =
+  "id,email,username,is_admin,avatar,avatar_bg,subscription_tier,subscription_status,subscription_expires_at,is_lifetime,registered_with_key,last_redeemed_at,patreon_id,patron_status,is_suspended,created_at,updated_at";
+
+function sanitizeUsername(raw) {
+  const cleaned = String(raw || "").trim().replace(/[^a-zA-Z0-9_.-]/g, "");
+  return cleaned.slice(0, 32);
+}
+
+function sanitizeKeyCode(raw) {
+  return String(raw || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 64);
+}
+
+function generateVipKeyCode(prefix = "VIP") {
+  const cleanPrefix = String(prefix || "VIP").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "VIP";
+  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  const seg = (start) => {
+    let out = "";
+    for (let i = 0; i < 4; i++) out += alphabet[bytes[start + i] % alphabet.length];
+    return out;
+  };
+  return `${cleanPrefix}-${seg(0)}-${seg(4)}-${seg(8)}`;
+}
+
+function constantTimeEqual(a, b) {
+  const sa = String(a || "");
+  const sb = String(b || "");
+  if (sa.length !== sb.length || sa.length === 0) return false;
+  let diff = 0;
+  for (let i = 0; i < sa.length; i++) {
+    diff |= sa.charCodeAt(i) ^ sb.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+function parseRangeCount(contentRange) {
+  if (!contentRange) return 0;
+  const m = String(contentRange).match(/\/(\d+)$/);
+  return m ? parseInt(m[1], 10) || 0 : 0;
+}
+
+async function fetchUserProfile(sbUrl, adminKey, anonKey, userId, userToken = null) {
+  if (!userId || !sbUrl) return null;
+  const authHeader = (adminKey && adminKey !== anonKey) ? adminKey : (userToken || anonKey || adminKey);
+  const apiKey = (adminKey && adminKey !== anonKey) ? adminKey : (anonKey || adminKey);
+  if (!apiKey || !authHeader) return null;
+
+  try {
+    let res = await fetch(
+      `${sbUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=${encodeURIComponent(SUBSCRIPTION_PROFILE_SELECT)}&limit=1`,
+      {
+        headers: {
+          "apikey": apiKey,
+          "Authorization": `Bearer ${authHeader}`
+        }
+      }
+    );
+    if (!res.ok && res.status === 400) {
+      res = await fetch(
+        `${sbUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_admin&limit=1`,
+        {
+          headers: {
+            "apikey": apiKey,
+            "Authorization": `Bearer ${authHeader}`
+          }
+        }
+      );
+    }
+    if (!res.ok) return null;
+    const rows = await res.json().catch(() => []);
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function syncProfileExpiryIfNeeded(sbUrl, adminKey, userId) {
+  if (!sbUrl || !adminKey || !userId) return;
+  try {
+    await fetch(`${sbUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+      method: "PATCH",
+      headers: {
+        "apikey": adminKey,
+        "Authorization": `Bearer ${adminKey}`,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify({
+        subscription_status: "expired",
+        updated_at: new Date().toISOString()
+      })
+    });
+  } catch (e) {}
+}
+
+function buildUserSubscriptionView(profile, authUser, env) {
+  const p = profile || {};
+  const meta = authUser?.user_metadata || {};
+  const email = String(p.email || authUser?.email || "").trim().toLowerCase();
+  const isAdmin = Boolean(p.is_admin === true);
+  const bannedUntilMs = authUser?.banned_until ? Date.parse(authUser.banned_until) : null;
+  const isSuspended = Boolean(p.is_suspended === true || (bannedUntilMs && !Number.isNaN(bannedUntilMs) && bannedUntilMs > Date.now()));
+  const isLifetime = Boolean(p.is_lifetime === true);
+
+  const expIso = p.subscription_expires_at || meta.subscription_expires_at || null;
+  const expMs = expIso ? Date.parse(expIso) : null;
+  const nowMs = Date.now();
+  const hasValidExpiry = Boolean(expMs && !Number.isNaN(expMs));
+  const hasFutureExpiry = Boolean(hasValidExpiry && expMs > nowMs);
+  const hadExpiredExpiry = Boolean(hasValidExpiry && expMs <= nowMs);
+  const patronStatus = p.patron_status || meta.patron_status || null;
+  const patreonActive = patronStatus === "active_patron" && p.subscription_status === "active" && !hadExpiredExpiry;
+
+  let subscription_status = "inactive";
+  let is_pro = false;
+  let has_active_subscription = false;
+  let tier = "Cuenta Gratuita";
+  let tier_level = "free";
+  let days_remaining = 0;
+
+  if (isSuspended) {
+    subscription_status = "suspended";
+    tier = "Cuenta Suspendida";
+    tier_level = "suspended";
+  } else if (isAdmin) {
+    subscription_status = "admin";
+    is_pro = true;
+    has_active_subscription = true;
+    tier = "Dueño";
+    tier_level = "pro";
+    days_remaining = null;
+  } else if (isLifetime) {
+    subscription_status = "active";
+    is_pro = true;
+    has_active_subscription = true;
+    tier = "Morbo VIP Permanente";
+    tier_level = "pro";
+    days_remaining = null;
+  } else if (hasFutureExpiry) {
+    subscription_status = "active";
+    is_pro = true;
+    has_active_subscription = true;
+    tier = p.subscription_tier === "patreon" ? "Patreon VIP" : "Morbo VIP";
+    tier_level = "pro";
+    days_remaining = Math.max(1, Math.ceil((expMs - nowMs) / 86400000));
+  } else if (patreonActive) {
+    subscription_status = "active";
+    is_pro = true;
+    has_active_subscription = true;
+    tier = "Patreon VIP";
+    tier_level = "pro";
+    days_remaining = null;
+  } else if (hadExpiredExpiry || p.subscription_status === "expired") {
+    subscription_status = "expired";
+    tier = "Suscripción Vencida";
+    tier_level = "free";
+    days_remaining = 0;
+  }
+
+  const displayName =
+    p.username ||
+    meta.username ||
+    meta.full_name ||
+    meta.display_name ||
+    (email ? email.split("@")[0] : "Usuario");
+
+  const needsExpirySync = Boolean(
+    !isSuspended && !isAdmin && !isLifetime && hadExpiredExpiry && p.subscription_status === "active"
+  );
+
+  return {
+    id: authUser?.id || p.id,
+    username: displayName,
+    email: authUser?.email || p.email || "",
+    role: isAdmin ? "admin" : "member",
+    tier,
+    tier_level,
+    is_pro,
+    is_vip: is_pro,
+    has_active_subscription,
+    subscription_status,
+    subscription_tier: isAdmin ? "admin" : (p.subscription_tier || (is_pro ? "vip" : "free")),
+    subscription_expires_at: expIso,
+    days_remaining,
+    is_lifetime: isLifetime,
+    is_suspended: isSuspended,
+    registered_with_key: p.registered_with_key || meta.registered_with_key || null,
+    last_redeemed_at: p.last_redeemed_at || null,
+    patreon_id: p.patreon_id || meta.patreon_id || null,
+    patron_status: patronStatus,
+    avatar: p.avatar || meta.avatar || "crown",
+    avatarBg: p.avatar_bg || meta.avatarBg || "from-pink-600 to-purple-600",
+    created_at: p.created_at || authUser?.created_at || null,
+    max_devices: 10,
+    needsExpirySync
+  };
+}
+
+function publicUserPayload(view) {
+  if (!view) return null;
+  const copy = { ...view };
+  delete copy.needsExpirySync;
+  return copy;
+}
+
+function isItemVIPGated(item, fallbackId = null) {
+  const rawId = item && item.id != null ? item.id : fallbackId;
+  let num = parseInt(rawId, 10);
+  if (!num || Number.isNaN(num)) {
+    const str = String(item?.source || "") + ":" + String(item?.source_id || item?.title || rawId || "");
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    num = Math.abs(hash);
+  }
+  return (num % 2) === 1;
+}
+
+async function checkDetailVipAccess(context, itemObj, sbUrl, sbKey, sbAdminKey, env, origin) {
+  if (!isItemVIPGated(itemObj)) return { allowed: true, vipGated: false };
+  const { user, token, unavailable, degraded, verified } = await resolveAuthUser(context.request, sbUrl, sbKey);
+  if (unavailable || degraded || (user && !verified)) {
+    return {
+      allowed: false,
+      vipGated: true,
+      response: new Response(JSON.stringify({ detail: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      })
+    };
+  }
+  if (!user || !token) {
+    return {
+      allowed: false,
+      vipGated: true,
+      response: new Response(JSON.stringify({
+        error: "vip_required",
+        subscription_required: true,
+        subscription_status: "guest",
+        detail: "Inicia sesión y activa tu suscripción VIP para ver este contenido."
+      }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", ...getCorsHeaders(origin) }
+      })
+    };
+  }
+  const profile = await fetchUserProfile(sbUrl, sbAdminKey, sbKey, user.id, token);
+  const view = buildUserSubscriptionView(profile, user, env);
+  if (view.needsExpirySync) {
+    context.waitUntil?.(syncProfileExpiryIfNeeded(sbUrl, sbAdminKey, user.id));
+  }
+  if (!view.has_active_subscription) {
+    const detailMsg = view.is_suspended
+      ? "Tu cuenta se encuentra suspendida."
+      : view.subscription_status === "expired"
+        ? "Tu suscripción VIP venció. Canjea una nueva llave mensual para recuperar el acceso."
+        : "Este contenido es exclusivo para miembros con suscripción VIP activa.";
+    return {
+      allowed: false,
+      vipGated: true,
+      response: new Response(JSON.stringify({
+        error: "vip_required",
+        subscription_required: true,
+        subscription_status: view.subscription_status,
+        detail: detailMsg
+      }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", ...getCorsHeaders(origin) }
+      })
+    };
+  }
+  return { allowed: true, vipGated: true };
+}
+
+async function requireAdminContext(request, sbUrl, sbKey, sbAdminKey, origin) {
+  const { user, token, unavailable, degraded, verified } = await resolveAuthUser(request, sbUrl, sbKey);
+  if (unavailable || degraded || (user && !verified)) {
+    return {
+      errorResponse: new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      })
+    };
+  }
+  if (!user || !token) {
+    return {
+      errorResponse: new Response(JSON.stringify({ error: "No autenticado" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      })
+    };
+  }
+  const profile = await fetchUserProfile(sbUrl, sbAdminKey, sbKey, user.id, token);
+  if (!profile || profile.is_admin !== true) {
+    return {
+      errorResponse: new Response(JSON.stringify({ error: "Acceso denegado: Se requieren permisos de administrador" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      })
+    };
+  }
+  return { user, token, profile };
+}
+
+async function resolveLoginEmail(rawUser, sbUrl, serviceKey, env) {
+  const rawLower = String(rawUser || "").trim().toLowerCase();
+  if (rawLower.includes("@")) return { email: rawLower, invalid: false };
+  const alias = sanitizeAuthAlias(rawLower);
+  if (!alias) return { email: null, invalid: true };
+  const master = String(env?.MASTER_EMAIL || "erickariaslrcy@gmail.com").trim().toLowerCase();
+  if (alias === "admin" || alias === "erick" || alias === "master") {
+    return { email: master, invalid: false };
+  }
+  if (serviceKey && sbUrl) {
+    try {
+      const exactUserRes = await fetch(
+        `${sbUrl}/rest/v1/profiles?select=email,username&username=ilike.${encodeURIComponent(alias)}&limit=1`,
+        { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } }
+      );
+      if (exactUserRes.ok) {
+        const rows = await exactUserRes.json().catch(() => []);
+        if (Array.isArray(rows) && rows[0] && rows[0].email) {
+          return { email: rows[0].email.toLowerCase(), invalid: false };
+        }
+      }
+      const prefixRes = await fetch(
+        `${sbUrl}/rest/v1/profiles?select=email&email=ilike.${encodeURIComponent(alias + "@%")}&limit=5`,
+        { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } }
+      );
+      if (prefixRes.ok) {
+        const rows = await prefixRes.json().catch(() => []);
+        const exactPrefix = (Array.isArray(rows) ? rows : []).find(
+          (r) => String(r.email || "").toLowerCase().split("@")[0] === alias
+        );
+        if (exactPrefix && exactPrefix.email) {
+          return { email: exactPrefix.email.toLowerCase(), invalid: false };
+        }
+      }
+    } catch (e) {}
+  }
+  return { email: `${alias}@velvet.local`, invalid: false };
+}
+
+async function fetchAuthUserById(sbUrl, adminKey, userId) {
+  if (!sbUrl || !adminKey || !userId) return null;
+  try {
+    const res = await fetch(`${sbUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+      headers: { "apikey": adminKey, "Authorization": `Bearer ${adminKey}` }
+    });
+    if (!res.ok) return null;
+    return await res.json().catch(() => null);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function patchAuthUserLightMeta(sbUrl, adminKey, userId, existingMeta, patch) {
+  if (!sbUrl || !adminKey || !userId) return false;
+  const merged = { ...(existingMeta || {}), ...patch };
+  return await updateSupabaseUserMetadata(userId, merged, sbUrl, adminKey);
+}
+
 export async function onRequest(context) {
   const env = context.env || {};
   const SUPABASE_URL = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || "https://qnmcejlxoufheisgkuyo.supabase.co";
@@ -1781,6 +2257,7 @@ export async function onRequest(context) {
   _activeSupabaseUrl = SUPABASE_URL;
   _activeSupabaseKey = SUPABASE_KEY;
   _activeSupabaseServiceKey = SUPABASE_ADMIN_KEY;
+  _activeJwtSecret = env.SUPABASE_JWT_SECRET || env.JWT_SECRET || "";
 
   const url = new URL(context.request.url);
   const origin = context.request.headers.get("origin") || "*";
@@ -1797,16 +2274,11 @@ export async function onRequest(context) {
   if (url.pathname === "/api/version" && (method === "GET" || method === "HEAD")) {
     const versionPayload = {
       version: "3.1.0",
-      cache_version: "v11-velvet-turbo",
       commit: "fix/auditoria-completa",
-      env: env.ENVIRONMENT || "production",
       engine: "Cloudflare-Pages-Functions",
-      build_time: "2026-11-15T12:00:00Z",
       env_check: {
         all_required_set: missingRequired.length === 0,
-        missing_required: missingRequired,
-        missing_optional: missingOptional,
-        configured_count: configuredKeys.length
+        missing_required: missingRequired.map((_, idx) => `required_${idx + 1}`)
       }
     };
     return new Response(method === "HEAD" ? null : JSON.stringify(versionPayload), {
@@ -1923,7 +2395,6 @@ export async function onRequest(context) {
     const normUrl = new URL(url.origin + url.pathname);
     normUrl.searchParams.set("mv", "2");
     if (tParam) normUrl.searchParams.set("t", tParam);
-    else if (urlParam) normUrl.searchParams.set("url", urlParam);
     if (targetWidth) normUrl.searchParams.set("w", String(targetWidth));
     if (targetQuality) normUrl.searchParams.set("q", String(targetQuality));
     normUrl.searchParams.set("fmt", targetFormat);
@@ -1942,8 +2413,7 @@ export async function onRequest(context) {
         if (cached) {
           const ch = new Headers(cached.headers);
           ch.set("X-Media-Cache", "HIT-CLOUDFLARE");
-          ch.set("X-Powered-By", "Velvet-Media-Engine/3.0");
-          ch.set("Server", "Velvet-Cloud");
+          ch.delete("X-Powered-By");
           ch.set("Access-Control-Allow-Origin", "*");
           ch.set("ETag", etag);
           ch.set("Vary", "Accept");
@@ -2025,16 +2495,39 @@ export async function onRequest(context) {
       };
 
       let upstream;
+      let finalVideoUrl = targetMediaUrl;
       let servedFrom = "";
       if (isVideo) {
-        upstream = await fetch(targetMediaUrl, {
-          method,
-          headers: buildUpstreamHeaders(spoofedReferer, true, targetMediaUrl),
-          redirect: "follow",
-          cf: { cacheTtl: 0, cacheEverything: false }
-        });
-        if (!upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
-          return Response.redirect(targetMediaUrl, 307);
+        let curVideo = targetMediaUrl;
+        for (let hop = 0; hop < 4; hop++) {
+          upstream = await fetch(curVideo, {
+            method,
+            headers: buildUpstreamHeaders(spoofedReferer, true, curVideo),
+            redirect: "manual",
+            signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined,
+            cf: { cacheTtl: 0, cacheEverything: false }
+          });
+          if (upstream.status >= 300 && upstream.status < 400) {
+            const loc = upstream.headers.get("location");
+            if (!loc) break;
+            let nextUrl = "";
+            try { nextUrl = new URL(loc, curVideo).href; } catch (e) { break; }
+            if (!isFollowableMediaRedirect(nextUrl, curVideo)) {
+              return new Response("Redirect upstream no permitido", {
+                status: 502,
+                headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+              });
+            }
+            curVideo = nextUrl;
+            finalVideoUrl = curVideo;
+            continue;
+          }
+          break;
+        }
+        if (upstream && !upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
+          if (isSafeUpstreamUrl(finalVideoUrl)) {
+            return Response.redirect(finalVideoUrl, 307);
+          }
         }
       } else {
         const plan = galleryFetchPlan(targetMediaUrl, targetWidth);
@@ -2072,8 +2565,6 @@ export async function onRequest(context) {
       const respHeaders = new Headers();
       respHeaders.set("Content-Type", upstream.headers.get("content-type") || (isVideo ? "video/mp4" : "image/jpeg"));
       respHeaders.set("Access-Control-Allow-Origin", "*");
-      respHeaders.set("X-Powered-By", "Velvet-Media-Engine/3.0");
-      respHeaders.set("Server", "Velvet-Cloud");
       if (!isVideo && servedFrom && servedFrom !== normalizeUpstreamUrl(targetMediaUrl)) {
         respHeaders.set("X-Velvet-Media", "mirror");
       }
@@ -2095,12 +2586,12 @@ export async function onRequest(context) {
       }
 
       // Reescritura dinámica de listas M3U8 para resolver segmentos y sub-playlists relativos
-      const isM3u8 = targetMediaUrl.includes(".m3u8") || (upstream.headers.get("content-type") || "").toLowerCase().includes("mpegurl");
+      const isM3u8 = finalVideoUrl.includes(".m3u8") || (upstream.headers.get("content-type") || "").toLowerCase().includes("mpegurl");
       if (isM3u8 && upstream.ok) {
         try {
           const manifestText = await upstream.text();
-          const lastSlash = targetMediaUrl.lastIndexOf("/");
-          const baseUrl = lastSlash !== -1 ? targetMediaUrl.substring(0, lastSlash + 1) : targetMediaUrl + "/";
+          const lastSlash = finalVideoUrl.lastIndexOf("/");
+          const baseUrl = lastSlash !== -1 ? finalVideoUrl.substring(0, lastSlash + 1) : finalVideoUrl + "/";
           const lines = manifestText.split("\n");
           const rewritten = await Promise.all(lines.map(async line => {
             const trimmed = line.trim();
@@ -2111,6 +2602,7 @@ export async function onRequest(context) {
                 if (match && match[1]) {
                   const uri = match[1];
                   const abs = uri.startsWith("http") ? uri : new URL(uri, baseUrl).href;
+                  if (!isSafeUpstreamUrl(abs) && !isFollowableMediaRedirect(abs, finalVideoUrl)) return line;
                   const tok = await encodeMediaToken(abs, spoofedReferer, MEDIA_SECRET);
                   return line.replace(match[0], `URI="/api/media?t=${tok}"`);
                 }
@@ -2118,6 +2610,7 @@ export async function onRequest(context) {
               return line;
             }
             const abs = trimmed.startsWith("http") ? trimmed : new URL(trimmed, baseUrl).href;
+            if (!isSafeUpstreamUrl(abs) && !isFollowableMediaRedirect(abs, finalVideoUrl)) return "";
             const tok = await encodeMediaToken(abs, spoofedReferer, MEDIA_SECRET);
             return `/api/media?t=${tok}`;
           }));
@@ -2145,7 +2638,8 @@ export async function onRequest(context) {
 
       return clientResponse;
     } catch (err) {
-      return new Response(JSON.stringify({ error: `Media Engine Error: ${err.message}` }), {
+      console.error("[Velvet-Media] Error upstream:", err);
+      return new Response(JSON.stringify({ error: "Media upstream no disponible" }), {
         status: 502,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
       });
@@ -2157,19 +2651,29 @@ export async function onRequest(context) {
   // =========================================================================
   const itemDetailMatch = url.pathname.match(/^\/api\/items\/(?:id\/([^/]+)|([^/]+)\/([^/]+))$/);
   if (itemDetailMatch && method === "GET") {
-    const rawId = itemDetailMatch[1] ? itemDetailMatch[1].replace(/[^a-zA-Z0-9_\-]/g, "") : null;
+    const rawId = itemDetailMatch[1] ? itemDetailMatch[1].replace(/[^a-zA-Z0-9_\-]/g, "").slice(0, 64) : null;
     const rawSource = itemDetailMatch[2] ? sanitizeSlug(decodeURIComponent(itemDetailMatch[2])) : null;
-    const rawSourceId = itemDetailMatch[3] ? decodeURIComponent(itemDetailMatch[3]).replace(/[(),.*"&:;{}[\]\\]/g, "") : null;
+    const rawSourceId = itemDetailMatch[3] ? decodeURIComponent(itemDetailMatch[3]).replace(/[^a-zA-Z0-9_.\-:]/g, "").slice(0, 128) : null;
+    if (!rawId && (!rawSource || !rawSourceId)) {
+      return new Response(JSON.stringify({ detail: "Parámetros de elemento inválidos" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+      });
+    }
 
     // Cache L1 de Memoria RAM Isolate (0ms)
     const detailCacheKey = url.pathname;
     const l1Detail = getIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, 86400000);
     if (l1Detail && (!l1Detail.includes('"pages":[]') || l1Detail.includes('"chapters":['))) {
+      let parsedL1 = null;
+      try { parsedL1 = JSON.parse(l1Detail); } catch (e) {}
+      const vipL1 = await checkDetailVipAccess(context, parsedL1 || { id: rawId || rawSourceId, source: rawSource, source_id: rawSourceId }, SUPABASE_URL, SUPABASE_KEY, SUPABASE_ADMIN_KEY, env, origin);
+      if (!vipL1.allowed) return vipL1.response;
       return new Response(l1Detail, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+          "Cache-Control": vipL1.vipGated ? "private, no-store" : "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
           "X-Cloudflare-RAM-Cache": "HIT",
           "X-Cloudflare-Detail-Cache": "HIT",
           ...getCorsHeaders(origin)
@@ -2187,9 +2691,14 @@ export async function onRequest(context) {
           const bodyText = await cached.text();
           if (!bodyText.includes('"pages":[]') || bodyText.includes('"chapters":[')) {
             setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, bodyText);
+            let parsedL2 = null;
+            try { parsedL2 = JSON.parse(bodyText); } catch (e) {}
+            const vipL2 = await checkDetailVipAccess(context, parsedL2 || { id: rawId || rawSourceId, source: rawSource, source_id: rawSourceId }, SUPABASE_URL, SUPABASE_KEY, SUPABASE_ADMIN_KEY, env, origin);
+            if (!vipL2.allowed) return vipL2.response;
             const edgeHeaders = new Headers(cached.headers);
             edgeHeaders.set("X-Cloudflare-Detail-Cache", "HIT");
-            edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
+            for (const [k, v] of Object.entries(getCorsHeaders(origin))) edgeHeaders.set(k, v);
+            if (vipL2.vipGated) edgeHeaders.set("Cache-Control", "private, no-store");
             return new Response(bodyText, { status: 200, headers: edgeHeaders });
           }
         }
@@ -2200,6 +2709,7 @@ export async function onRequest(context) {
     if (rawSource === "pmvhaven" || (targetPmvId && /^[a-f0-9]{24}$/i.test(targetPmvId))) {
       try {
         const pmvRes = await fetch(`https://pmvhaven.com/api/videos/${targetPmvId}`, {
+          signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Referer": "https://pmvhaven.com/",
@@ -2243,11 +2753,13 @@ export async function onRequest(context) {
             };
             const jsonStr = JSON.stringify(detailPayload);
             setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, jsonStr);
+            const vipPmv = await checkDetailVipAccess(context, detailPayload, SUPABASE_URL, SUPABASE_KEY, SUPABASE_ADMIN_KEY, env, origin);
+            if (!vipPmv.allowed) return vipPmv.response;
             return new Response(jsonStr, {
               status: 200,
               headers: {
                 "Content-Type": "application/json; charset=utf-8",
-                "Cache-Control": "public, max-age=3600, s-maxage=86400",
+                "Cache-Control": vipPmv.vipGated ? "private, no-store" : "public, max-age=3600, s-maxage=86400",
                 ...getCorsHeaders(origin)
               }
             });
@@ -2287,11 +2799,13 @@ export async function onRequest(context) {
         const maskedGame = await maskGameItem(found, MEDIA_SECRET);
         const gameJson = JSON.stringify(maskedGame);
         setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, gameJson);
+        const vipGame = await checkDetailVipAccess(context, maskedGame, SUPABASE_URL, SUPABASE_KEY, SUPABASE_ADMIN_KEY, env, origin);
+        if (!vipGame.allowed) return vipGame.response;
         return new Response(gameJson, {
           status: 200,
           headers: {
             "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+            "Cache-Control": vipGame.vipGated ? "private, no-store" : "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
             ...getCorsHeaders(origin)
           }
         });
@@ -2317,11 +2831,13 @@ export async function onRequest(context) {
             chapters: []
           });
           setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, videoJson);
+          const vipVid = await checkDetailVipAccess(context, maskedVideo, SUPABASE_URL, SUPABASE_KEY, SUPABASE_ADMIN_KEY, env, origin);
+          if (!vipVid.allowed) return vipVid.response;
           return new Response(videoJson, {
             status: 200,
             headers: {
               "Content-Type": "application/json; charset=utf-8",
-              "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+              "Cache-Control": vipVid.vipGated ? "private, no-store" : "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
               ...getCorsHeaders(origin)
             }
           });
@@ -2334,7 +2850,7 @@ export async function onRequest(context) {
     try {
       const detailTargetUrl = SUPABASE_URL;
       const detailTargetKey = SUPABASE_ADMIN_KEY;
-      const spRes = await fetch(`${detailTargetUrl}/rest/v1/items?${queryParam}&limit=1`, {
+      const spRes = await fetch(`${detailTargetUrl}/rest/v1/items?${queryParam}&status=neq.blocked&real_people=is.false&limit=1`, {
         headers: { "apikey": detailTargetKey, "Authorization": `Bearer ${detailTargetKey}` }
       });
 
@@ -2354,6 +2870,12 @@ export async function onRequest(context) {
       }
 
       const it = items[0];
+      if (it.status === "blocked" || it.real_people === true) {
+        return new Response(JSON.stringify({ detail: "Elemento no encontrado" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
 
       // Función de limpieza estricta: elimina publicidad, banners VIP y miniaturas de posts relacionados (YARPP)
       const cleanComicPagesList = (pages) => {
@@ -2420,8 +2942,8 @@ export async function onRequest(context) {
               fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
                 method: "PATCH",
                 headers: {
-                  "apikey": SUPABASE_KEY,
-                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "apikey": SUPABASE_ADMIN_KEY,
+                  "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
                   "Content-Type": "application/json",
                   "Prefer": "return=minimal"
                 },
@@ -2456,8 +2978,8 @@ export async function onRequest(context) {
               fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
                 method: "PATCH",
                 headers: {
-                  "apikey": SUPABASE_KEY,
-                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "apikey": SUPABASE_ADMIN_KEY,
+                  "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
                   "Content-Type": "application/json",
                   "Prefer": "return=minimal"
                 },
@@ -2504,8 +3026,8 @@ export async function onRequest(context) {
                 fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
                   method: "PATCH",
                   headers: {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "apikey": SUPABASE_ADMIN_KEY,
+                    "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
                     "Content-Type": "application/json",
                     "Prefer": "return=minimal"
                   },
@@ -2514,10 +3036,11 @@ export async function onRequest(context) {
               );
             }
           }
-        } else if (it.url && it.url.startsWith("http")) {
+        } else if (it.url && it.url.startsWith("http") && isSafeUpstreamUrl(it.url)) {
           // Caso B: Cómics web / WordPress (melapelocondibujos, melapelacomics, reycomix, pornocomic, vercomicporno, etc.)
           try {
             const pageResp = await fetch(it.url, {
+              signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
                 "Referer": it.url
@@ -2572,8 +3095,8 @@ export async function onRequest(context) {
                     fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
                       method: "PATCH",
                       headers: {
-                        "apikey": SUPABASE_KEY,
-                        "Authorization": `Bearer ${SUPABASE_KEY}`,
+                        "apikey": SUPABASE_ADMIN_KEY,
+                        "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
                         "Content-Type": "application/json",
                         "Prefer": "return=minimal"
                       },
@@ -2608,6 +3131,7 @@ export async function onRequest(context) {
           if (pmvId) {
             try {
               const pmvRes = await fetch(`https://pmvhaven.com/api/videos/${pmvId}`, {
+                signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
                 headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "application/json" }
               });
               if (pmvRes.ok) {
@@ -2628,10 +3152,11 @@ export async function onRequest(context) {
         }
 
         // 2. Extractor Web JIT multi-sitio (PornOne, AnyPorn, RedPorn, Damplips, AlotPorn, PornHD, etc.)
-        if (streams.length === 0 && it.url && it.url.startsWith("http")) {
+        if (streams.length === 0 && it.url && it.url.startsWith("http") && isSafeUpstreamUrl(it.url.replace("es.anyporn.com", "anyporn.com"))) {
           try {
             const cleanUrl = it.url.replace("es.anyporn.com", "anyporn.com");
             const vResp = await fetch(cleanUrl, {
+              signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined,
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
                 "Referer": cleanUrl
@@ -2706,8 +3231,8 @@ export async function onRequest(context) {
               fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
                 method: "PATCH",
                 headers: {
-                  "apikey": SUPABASE_KEY,
-                  "Authorization": `Bearer ${SUPABASE_KEY}`,
+                  "apikey": SUPABASE_ADMIN_KEY,
+                  "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
                   "Content-Type": "application/json",
                   "Prefer": "return=minimal"
                 },
@@ -2750,16 +3275,22 @@ export async function onRequest(context) {
         setIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, jsonStr);
       }
 
+      const vipMain = await checkDetailVipAccess(context, masked, SUPABASE_URL, SUPABASE_KEY, SUPABASE_ADMIN_KEY, env, origin);
+      if (!vipMain.allowed) return vipMain.response;
+
+      const allowPublicEdge = shouldCache && !vipMain.vipGated;
       const resp = new Response(jsonStr, {
         status: 200,
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": shouldCache ? "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800" : "no-store, no-cache, must-revalidate",
+          "Cache-Control": vipMain.vipGated
+            ? "private, no-store"
+            : (allowPublicEdge ? "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800" : "no-store, no-cache, must-revalidate"),
           ...getCorsHeaders(origin)
         }
       });
 
-      if (cache && shouldCache && method === "GET") {
+      if (cache && allowPublicEdge && method === "GET") {
         try {
           context.waitUntil(cache.put(cacheKey, resp.clone()));
         } catch (e) {}
@@ -2767,7 +3298,8 @@ export async function onRequest(context) {
 
       return resp;
     } catch (err) {
-      return new Response(JSON.stringify({ detail: err.message }), {
+      console.error("[Velvet-Detail] Error cargando detalle:", err);
+      return new Response(JSON.stringify({ detail: "Error interno consultando elemento" }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
       });
@@ -2827,7 +3359,7 @@ export async function onRequest(context) {
           setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, bodyText);
           const edgeHeaders = new Headers(cached.headers);
           edgeHeaders.set("X-Cloudflare-Edge-Cache", "HIT");
-          edgeHeaders.set("Access-Control-Allow-Origin", origin || "*");
+          for (const [k, v] of Object.entries(getCorsHeaders(origin))) edgeHeaders.set(k, v);
           return new Response(method === "HEAD" ? null : bodyText, { status: 200, headers: edgeHeaders });
         }
       } catch (e) {}
@@ -2925,8 +3457,9 @@ export async function onRequest(context) {
             const items = await Promise.all(vList.map(async v => {
               const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
               const rawVideo = v.videoUrl || "";
+              const vipLocked = isItemVIPGated({ id: v._id, source: "pmvhaven", source_id: v._id, title: v.title });
               const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
-              const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+              const videoToken = (!vipLocked && rawVideo) ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
               return {
                 id: v._id,
                 source: "pmvhaven",
@@ -2936,9 +3469,10 @@ export async function onRequest(context) {
                 media_type: "video",
                 tags: v.tags || [],
                 artists: v.uploaderUsername ? [v.uploaderUsername] : [],
-                url: `https://pmvhaven.com/video?v=${v._id}`,
+                url: "",
+                vip_locked: vipLocked,
                 page_count: 0,
-                video_sources: rawVideo ? [
+                video_sources: (!vipLocked && rawVideo) ? [
                   {
                     quality: "1080p HD",
                     url: videoToken ? `/api/media?t=${videoToken}` : "",
@@ -3126,6 +3660,7 @@ export async function onRequest(context) {
     } else {
       filterQuery = "media_type=eq.comic&page_count=gt.0";
     }
+    filterQuery += "&status=neq.blocked&real_people=is.false";
 
     if (tag) {
       filterQuery += `&tags=cs.{${encodeURIComponent(tag)}}`;
@@ -3193,7 +3728,7 @@ export async function onRequest(context) {
     let filteredSpan = null;
     if (!q) {
       try {
-        filteredSpan = await fetchCatalogSpan(SUPABASE_URL, SUPABASE_KEY, filterQuery);
+        filteredSpan = await fetchCatalogSpan(SUPABASE_URL, SUPABASE_ADMIN_KEY, filterQuery);
       } catch (spanErr) {
         filteredSpan = null;
       }
@@ -3205,7 +3740,7 @@ export async function onRequest(context) {
         try {
           const sampled = await sampleSupabaseShuffle({
             supabaseUrl: SUPABASE_URL,
-            apiKey: SUPABASE_KEY,
+            apiKey: SUPABASE_ADMIN_KEY,
             filterQuery,
             selectFields,
             page: safePage,
@@ -3246,7 +3781,7 @@ export async function onRequest(context) {
         try {
           const probeUrl = `${SUPABASE_URL}/rest/v1/items?select=id&limit=1&offset=${offset}&order=id.desc&${filterQuery}`;
           const probeRes = await fetch(probeUrl, {
-            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+            headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
           });
           if (probeRes.ok) {
             const probeRows = await probeRes.json().catch(() => []);
@@ -3272,7 +3807,7 @@ export async function onRequest(context) {
 
       // Optimización PostgREST: count=exact para búsquedas/tags; count=planned para catálogos masivos (0ms vs timeout)
       const preferCount = (q || tag) ? "count=exact" : "";
-      const activeQueryKey = SUPABASE_KEY;
+      const activeQueryKey = SUPABASE_ADMIN_KEY;
       const catalogHeaders = {
         "apikey": activeQueryKey,
         "Authorization": `Bearer ${activeQueryKey}`,
@@ -3302,7 +3837,8 @@ export async function onRequest(context) {
         }
         if (spRes && !spRes.ok) {
           const finalErr = spRes === null ? errText : await spRes.text().catch(() => errText);
-          return new Response(JSON.stringify({ error: "Error consultando catálogo", detail: finalErr }), {
+          console.error("[Velvet-Items] PostgREST error:", finalErr);
+          return new Response(JSON.stringify({ error: "Error consultando catálogo" }), {
             status: 500,
             headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
           });
@@ -3327,13 +3863,16 @@ export async function onRequest(context) {
       }
       const items = await Promise.all((rawItems || []).map(async it => {
         const isGame = it.media_type === "game";
+        const vipLocked = isItemVIPGated(it);
         const maskedCover = isGame
           ? { cover_url: it.cover_url || "", cover_fallback: "" }
           : await maskCoverFields(it.cover_url, MEDIA_SECRET);
-        const videoSources = await Promise.all((it.video_sources || []).map(async vs => ({
-          ...vs,
-          url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
-        })));
+        const videoSources = (vipLocked && !isGame)
+          ? []
+          : await Promise.all((it.video_sources || []).map(async vs => ({
+              ...vs,
+              url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
+            })));
         const firstVs = (it.video_sources && it.video_sources[0]) || {};
         return {
           id: it.id,
@@ -3346,6 +3885,7 @@ export async function onRequest(context) {
           tags: it.tags || [],
           artists: it.artists || [],
           url: "", // Ocultar URL original
+          vip_locked: vipLocked,
           page_count: it.page_count || 0,
           video_sources: videoSources,
           has_cover: !!it.cover_url,
@@ -3394,7 +3934,8 @@ export async function onRequest(context) {
 
       return resp;
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), {
+      console.error("[Velvet-Items] Error fatal en /api/items:", err);
+      return new Response(JSON.stringify({ error: "Error interno consultando catálogo" }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
       });
@@ -3423,8 +3964,9 @@ export async function onRequest(context) {
             if (vList.length > 0) {
               const items = await Promise.all(vList.map(async v => {
                 const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+                const vipLocked = isItemVIPGated({ id: v._id, source: "pmvhaven", source_id: v._id, title: v.title });
                 const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
-                const videoToken = v.videoUrl ? await encodeMediaToken(v.videoUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+                const videoToken = (!vipLocked && v.videoUrl) ? await encodeMediaToken(v.videoUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
                 return {
                   id: v._id,
                   source: "pmvhaven",
@@ -3434,7 +3976,8 @@ export async function onRequest(context) {
                   media_type: "video",
                   tags: v.tags || [],
                   artists: v.uploaderUsername ? [v.uploaderUsername] : [],
-                  url: `https://pmvhaven.com/video?v=${v._id}`,
+                  url: "",
+                  vip_locked: vipLocked,
                   page_count: 0,
                   video_sources: videoToken ? [{ quality: "1080p HD", url: `/api/media?t=${videoToken}`, format: "mp4" }] : []
                 };
@@ -3464,26 +4007,30 @@ export async function onRequest(context) {
 
     let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
     if (mediaType === "gallery") {
-      queryParam += "&media_type=eq.gallery&id=gte.370000&source=neq.leakgallery&order=id.desc";
+      queryParam += "&media_type=eq.gallery&id=gte.370000&source=neq.leakgallery&status=neq.blocked&real_people=is.false&order=id.desc";
     } else {
-      queryParam += "&media_type=eq.comic&page_count=gt.0&order=id.desc";
+      queryParam += "&media_type=eq.comic&page_count=gt.0&status=neq.blocked&real_people=is.false&order=id.desc";
     }
 
     try {
       const spRes = await fetch(`${SUPABASE_URL}/rest/v1/items?${queryParam}`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
       });
 
       const rawItems = await spRes.json();
       const items = await Promise.all((rawItems || []).map(async it => {
         const coverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
-        const videoSources = await Promise.all((it.video_sources || []).map(async vs => ({
-          ...vs,
-          url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
-        })));
+        const vipLocked = isItemVIPGated(it);
+        const videoSources = vipLocked
+          ? []
+          : await Promise.all((it.video_sources || []).map(async vs => ({
+              ...vs,
+              url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
+            })));
         return {
           ...it,
           url: "",
+          vip_locked: vipLocked,
           cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
           video_sources: videoSources
         };
@@ -3505,8 +4052,14 @@ export async function onRequest(context) {
   // 5. AUTENTICACIÓN: LOGIN (/api/auth/login)
   // =========================================================================
   if (url.pathname === "/api/auth/login" && method === "POST") {
+    if (!checkAuthRateLimit(context.request, "login", 15)) {
+      return new Response(JSON.stringify({ detail: "Demasiados intentos de inicio de sesión. Espera un minuto." }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "60", ...getCorsHeaders(origin) }
+      });
+    }
     try {
-      const body = await context.request.json();
+      const body = await context.request.json().catch(() => ({}));
       const rawUser = (body.username || "").trim();
       const password = body.password || "";
 
@@ -3517,33 +4070,14 @@ export async function onRequest(context) {
         });
       }
 
-      let email = rawUser.toLowerCase();
-      if (!email.includes("@")) {
-        const alias = sanitizeAuthAlias(email);
-        const master = "erickariaslrcy@gmail.com";
-        if (alias === "admin" || alias === "erick" || alias === "master") {
-          email = master;
-        } else if (!alias) {
-          return new Response(JSON.stringify({ detail: "Usuario no válido" }), {
-            status: 400,
-            headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
-          });
-        } else if (SUPABASE_SERVICE_ROLE_KEY) {
-          // La política RLS de profiles solo deja leer el perfil propio. El alias
-          // se resuelve con la service role y un filtro ya saneado (sin metacaracteres PostgREST).
-          const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=email&or=(email.ilike.*${alias}@*,email.ilike.*${alias}*)&limit=1`, {
-            headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` }
-          });
-          const profData = await profRes.json().catch(() => []);
-          if (profData && profData.length > 0 && profData[0].email) {
-            email = profData[0].email;
-          } else {
-            email = `${alias}@velvet.local`;
-          }
-        } else {
-          email = `${alias}@velvet.local`;
-        }
+      const resolvedLogin = await resolveLoginEmail(rawUser, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, env);
+      if (resolvedLogin.invalid || !resolvedLogin.email) {
+        return new Response(JSON.stringify({ detail: "Usuario no válido" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
       }
+      const email = resolvedLogin.email;
 
       // Conexión directa a Supabase Auth
       const authRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -3552,8 +4086,8 @@ export async function onRequest(context) {
         body: JSON.stringify({ email, password })
       });
 
-      const authData = await authRes.json();
-      if (!authRes.ok || !authData.user) {
+      const authData = await authRes.json().catch(() => ({}));
+      if (!authRes.ok || !authData.user || !authData.access_token) {
         const msg = authData?.error_description || authData?.msg || "Credenciales incorrectas";
         return new Response(JSON.stringify({ detail: msg }), {
           status: 401,
@@ -3561,30 +4095,28 @@ export async function onRequest(context) {
         });
       }
 
-      // Obtener perfil y rol admin
-      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(authData.user.id)}&select=is_admin&limit=1`, {
-        headers: { "apikey": SUPABASE_ANON_KEY || SUPABASE_KEY, "Authorization": `Bearer ${authData.access_token}` }
-      });
-      const profs = await profRes.json().catch(() => []);
-      const isAdmin = profs && profs[0] && profs[0].is_admin;
-      const role = isAdmin ? "admin" : "member";
-      const meta = authData.user.user_metadata || {};
-      const displayName = meta.username || meta.full_name || meta.display_name || email.split("@")[0];
+      const profile = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, authData.user.id, authData.access_token);
+      const view = buildUserSubscriptionView(profile, authData.user, env);
+      if (view.is_suspended) {
+        const suspendedResp = new Response(JSON.stringify({
+          detail: "Tu cuenta está suspendida. Contacta al administrador.",
+          suspended: true
+        }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+        return withSessionCookies(suspendedResp, clearSessionCookies(context.request));
+      }
+      if (view.needsExpirySync) {
+        context.waitUntil?.(syncProfileExpiryIfNeeded(SUPABASE_URL, SUPABASE_ADMIN_KEY, authData.user.id));
+      }
 
       const respData = {
         token: authData.access_token,
         refresh_token: authData.refresh_token,
         expires_at: authData.expires_at,
-        device_token: "dev_" + Math.random().toString(36).substring(2),
-        user: {
-          id: authData.user.id,
-          username: displayName,
-          email: authData.user.email,
-          role,
-          tier: isAdmin ? "Dueño" : "Morbo VIP ($5.99)",
-          tier_level: "pro",
-          is_pro: true
-        }
+        device_token: "dev_" + generateVipKeyCode("DV").toLowerCase(),
+        user: publicUserPayload(view)
       };
 
       const loginResponse = new Response(JSON.stringify(respData), {
@@ -3600,7 +4132,8 @@ export async function onRequest(context) {
         buildSessionCookies(context.request, authData.access_token, authData.refresh_token, authData.expires_at)
       );
     } catch (err) {
-      return new Response(JSON.stringify({ detail: err.message || "Error al procesar login" }), {
+      console.error("[Velvet-Auth] Error en login:", err);
+      return new Response(JSON.stringify({ detail: "Error al procesar login" }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
       });
@@ -3611,9 +4144,9 @@ export async function onRequest(context) {
   // 6. AUTENTICACIÓN: VERIFICAR SESIÓN (/api/auth/me)
   // =========================================================================
   if (url.pathname === "/api/auth/me" && method === "GET") {
-    const { user, token, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
 
-    if (unavailable) {
+    if (unavailable || degraded || (user && !verified)) {
       return new Response(JSON.stringify({ detail: "Servicio de sesión no disponible" }), {
         status: 503,
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
@@ -3628,14 +4161,19 @@ export async function onRequest(context) {
     }
 
     try {
-      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=is_admin&limit=1`, {
-        headers: { "apikey": SUPABASE_ANON_KEY || SUPABASE_KEY, "Authorization": `Bearer ${token}` }
-      });
-      const profs = await profRes.json().catch(() => []);
-      const isAdmin = profs && profs[0] && profs[0].is_admin;
-      const role = isAdmin ? "admin" : "member";
-      const meta = user.user_metadata || {};
-      const displayName = meta.username || meta.full_name || meta.display_name || user.email?.split("@")[0] || "Usuario VIP";
+      const profile = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, user.id, token);
+      const view = buildUserSubscriptionView(profile, user, env);
+      if (view.is_suspended) {
+        const suspendedResp = new Response(JSON.stringify({ detail: "Cuenta suspendida", suspended: true }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+        return withSessionCookies(suspendedResp, clearSessionCookies(context.request));
+      }
+      if (view.needsExpirySync) {
+        context.waitUntil?.(syncProfileExpiryIfNeeded(SUPABASE_URL, SUPABASE_ADMIN_KEY, user.id));
+      }
+
       let expiresAt = null;
       try {
         const part = token.split(".")[1];
@@ -3645,17 +4183,12 @@ export async function onRequest(context) {
         }
       } catch (e) {}
 
+      const cleanUser = publicUserPayload(view);
       const respData = {
-        id: user.id,
-        username: displayName,
-        email: user.email,
-        role,
-        tier: isAdmin ? "Dueño" : "Morbo VIP ($5.99)",
-        tier_level: "pro",
-        is_pro: true,
-        max_devices: 10,
+        ...cleanUser,
         token,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        user: cleanUser
       };
 
       return new Response(JSON.stringify(respData), {
@@ -3674,6 +4207,12 @@ export async function onRequest(context) {
   // 6.1 AUTENTICACIÓN: REFRESCAR SESIÓN (/api/auth/refresh)
   // =========================================================================
   if (url.pathname === "/api/auth/refresh" && method === "POST") {
+    if (!checkAuthRateLimit(context.request, "refresh", 30)) {
+      return new Response(JSON.stringify({ detail: "Demasiadas peticiones de actualización de sesión." }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "60", ...getCorsHeaders(origin) }
+      });
+    }
     try {
       const originHeader = context.request.headers.get("origin");
       if (originHeader && !isAllowedOrigin(originHeader)) {
@@ -3699,7 +4238,7 @@ export async function onRequest(context) {
 
       const exchanged = await exchangeRefreshToken(refreshToken, SUPABASE_URL, SUPABASE_KEY);
       const refData = exchanged && exchanged.data ? exchanged.data : {};
-      if (!exchanged || !exchanged.ok || !refData.access_token) {
+      if (!exchanged || !exchanged.ok || !refData.access_token || !refData.user) {
         const status = exchanged && exchanged.status >= 500 ? 503 : 401;
         return new Response(JSON.stringify({ detail: refData?.error_description || refData?.msg || "Sesión expirada" }), {
           status,
@@ -3708,28 +4247,24 @@ export async function onRequest(context) {
       }
 
       const user = refData.user;
-      const meta = user?.user_metadata || {};
-      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=is_admin&limit=1`, {
-        headers: { "apikey": SUPABASE_ANON_KEY || SUPABASE_KEY, "Authorization": `Bearer ${refData.access_token}` }
-      });
-      const profs = await profRes.json().catch(() => []);
-      const isAdmin = profs && profs[0] && profs[0].is_admin;
-      const role = isAdmin ? "admin" : "member";
-      const displayName = meta.username || meta.full_name || meta.display_name || user.email?.split("@")[0] || "Usuario VIP";
+      const profile = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, user.id, refData.access_token);
+      const view = buildUserSubscriptionView(profile, user, env);
+      if (view.is_suspended) {
+        const suspendedResp = new Response(JSON.stringify({ detail: "Cuenta suspendida", suspended: true }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+        return withSessionCookies(suspendedResp, clearSessionCookies(context.request));
+      }
+      if (view.needsExpirySync) {
+        context.waitUntil?.(syncProfileExpiryIfNeeded(SUPABASE_URL, SUPABASE_ADMIN_KEY, user.id));
+      }
 
       const respData = {
         token: refData.access_token,
         refresh_token: refData.refresh_token,
         expires_at: refData.expires_at,
-        user: {
-          id: user.id,
-          username: displayName,
-          email: user.email,
-          role,
-          tier: isAdmin ? "Dueño" : "Morbo VIP ($5.99)",
-          tier_level: "pro",
-          is_pro: true
-        }
+        user: publicUserPayload(view)
       };
 
       const refreshResponse = new Response(JSON.stringify(respData), {
@@ -3745,7 +4280,8 @@ export async function onRequest(context) {
         buildSessionCookies(context.request, refData.access_token, refData.refresh_token, refData.expires_at)
       );
     } catch (err) {
-      return new Response(JSON.stringify({ detail: err.message || "Error al refrescar sesión" }), {
+      console.error("[Velvet-Auth] Error al refrescar sesión:", err);
+      return new Response(JSON.stringify({ detail: "Error al refrescar sesión" }), {
         status: 500,
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
       });
@@ -3771,110 +4307,444 @@ export async function onRequest(context) {
   }
 
   // =========================================================================
-  // 7. AUTENTICACIÓN: REGISTRO EXCLUSIVO CON LLAVE VIP (/api/auth/register)
+  // 6.3 AUTENTICACIÓN PATREON OAUTH (/api/auth/patreon & /callback)
+  // =========================================================================
+  if (url.pathname === "/api/auth/patreon" && method === "GET") {
+    const clientId = env.PATREON_CLIENT_ID;
+    const siteOrigin = env.SITE_URL || env.NEXT_PUBLIC_SITE_URL || url.origin;
+    if (!clientId) {
+      return Response.redirect(`${siteOrigin}/?patreon_error=patreon_not_configured`, 302);
+    }
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const state = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const redirectUri = `${siteOrigin}/api/auth/patreon/callback`;
+    const patreonUrl =
+      `https://www.patreon.com/oauth2/authorize?response_type=code` +
+      `&client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&scope=${encodeURIComponent("identity identity[email] identity.memberships")}` +
+      `&state=${encodeURIComponent(state)}`;
+    const secure = requestIsSecure(context.request);
+    return new Response(null, {
+      status: 302,
+      headers: {
+        "Location": patreonUrl,
+        "Cache-Control": "no-store",
+        "Set-Cookie": sessionCookie("velvet_patreon_state", state, 600, secure)
+      }
+    });
+  }
+
+  if (url.pathname === "/api/auth/patreon/callback" && method === "GET") {
+    const siteOrigin = env.SITE_URL || env.NEXT_PUBLIC_SITE_URL || url.origin;
+    const secure = requestIsSecure(context.request);
+    const clearPatreonCookie = sessionCookie("velvet_patreon_state", "", 0, secure);
+    const errRedirect = (reason) => new Response(null, {
+      status: 302,
+      headers: {
+        "Location": `${siteOrigin}/?patreon_error=${encodeURIComponent(reason)}`,
+        "Cache-Control": "no-store",
+        "Set-Cookie": clearPatreonCookie
+      }
+    });
+
+    try {
+      const clientId = env.PATREON_CLIENT_ID;
+      const clientSecret = env.PATREON_CLIENT_SECRET;
+      const campaignId = String(env.PATREON_CAMPAIGN_ID || "");
+      const masterEmail = String(env.MASTER_EMAIL || "erickariaslrcy@gmail.com").trim().toLowerCase();
+      const code = url.searchParams.get("code") || "";
+      const stateParam = url.searchParams.get("state") || "";
+      const stateCookie = readRequestCookie(context.request, "velvet_patreon_state") || "";
+
+      if (!clientId || !clientSecret || !SUPABASE_SERVICE_ROLE_KEY) {
+        return errRedirect("patreon_not_configured");
+      }
+      if (!code || !stateParam || !stateCookie || !constantTimeEqual(stateParam, stateCookie)) {
+        return errRedirect("invalid_state");
+      }
+
+      const redirectUri = `${siteOrigin}/api/auth/patreon/callback`;
+      const tokRes = await fetch("https://www.patreon.com/api/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          grant_type: "authorization_code",
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri
+        }).toString()
+      });
+      if (!tokRes.ok) return errRedirect("token_exchange_failed");
+      const tokData = await tokRes.json().catch(() => ({}));
+      if (!tokData.access_token) return errRedirect("missing_token");
+
+      const idRes = await fetch(
+        "https://www.patreon.com/api/oauth2/v2/identity?include=memberships&fields%5Buser%5D=email,full_name,image_url&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,next_charge_date",
+        { headers: { "Authorization": `Bearer ${tokData.access_token}` } }
+      );
+      if (!idRes.ok) return errRedirect("identity_failed");
+      const idData = await idRes.json().catch(() => ({}));
+      const patreonUser = idData?.data;
+      const email = String(patreonUser?.attributes?.email || "").trim().toLowerCase();
+      if (!email) return errRedirect("email_required");
+
+      const memberships = Array.isArray(idData?.included) ? idData.included.filter((i) => i.type === "member") : [];
+      const activeMember = memberships.find((m) => m.attributes?.patron_status === "active_patron");
+      const isMaster = masterEmail && email === masterEmail;
+      if (!isMaster && !activeMember) {
+        return errRedirect("not_active_patron");
+      }
+
+      const fullName = sanitizeUsername(patreonUser?.attributes?.full_name || email.split("@")[0]) || "patreon_vip";
+      const nextCharge = activeMember?.attributes?.next_charge_date;
+      const defaultExp = new Date(Date.now() + 32 * 86400000).toISOString();
+      const patreonExp = (nextCharge && Date.parse(nextCharge) > Date.now()) ? new Date(nextCharge).toISOString() : defaultExp;
+
+      // Buscar o crear cuenta en Supabase Auth
+      let supaUserId = null;
+      const profFind = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?email=eq.${encodeURIComponent(email)}&select=id,is_admin,is_suspended&limit=1`,
+        { headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+      );
+      if (profFind.ok) {
+        const foundRows = await profFind.json().catch(() => []);
+        if (foundRows && foundRows[0]) {
+          if (foundRows[0].is_suspended) return errRedirect("suspended");
+          supaUserId = foundRows[0].id;
+        }
+      }
+
+      if (!supaUserId) {
+        const randBytes = new Uint8Array(24);
+        crypto.getRandomValues(randBytes);
+        const randPass = Array.from(randBytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+        const createRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email,
+            password: randPass,
+            email_confirm: true,
+            user_metadata: {
+              username: fullName,
+              patreon_id: String(patreonUser?.id || ""),
+              patron_status: "active_patron",
+              campaign_id: campaignId
+            }
+          })
+        });
+        const created = await createRes.json().catch(() => ({}));
+        supaUserId = created?.id || created?.user?.id || null;
+      }
+
+      if (!supaUserId) return errRedirect("account_sync_failed");
+
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(supaUserId)}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify({
+          patreon_id: String(patreonUser?.id || ""),
+          patron_status: "active_patron",
+          subscription_tier: isMaster ? "admin" : "patreon",
+          subscription_status: isMaster ? "admin" : "active",
+          subscription_expires_at: isMaster ? null : patreonExp,
+          is_lifetime: isMaster ? true : false,
+          updated_at: new Date().toISOString()
+        })
+      });
+
+      const linkRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/generate_link`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ type: "magiclink", email })
+      });
+      const linkData = await linkRes.json().catch(() => ({}));
+      const hashedToken = linkData?.hashed_token || linkData?.properties?.hashed_token;
+      if (!linkRes.ok || !hashedToken) return errRedirect("session_link_failed");
+
+      const verifyRes = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ token_hash: hashedToken, type: "magiclink" })
+      });
+      const sessionData = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok || !sessionData.access_token) return errRedirect("session_verify_failed");
+
+      const redirectResp = new Response(null, {
+        status: 302,
+        headers: {
+          "Location": `${siteOrigin}/?patreon=connected`,
+          "Cache-Control": "no-store"
+        }
+      });
+      const cookies = buildSessionCookies(context.request, sessionData.access_token, sessionData.refresh_token, sessionData.expires_at);
+      cookies.push(clearPatreonCookie);
+      return withSessionCookies(redirectResp, cookies);
+    } catch (err) {
+      return errRedirect("patreon_error");
+    }
+  }
+
+  // =========================================================================
+  // 7. AUTENTICACIÓN: REGISTRO CON LLAVE VIP DE TIEMPO O CUENTA GRATUITA
   // =========================================================================
   if (url.pathname === "/api/auth/register" && method === "POST") {
+    if (!checkAuthRateLimit(context.request, "register", 10)) {
+      return new Response(JSON.stringify({ detail: "Demasiados intentos de registro. Espera un minuto." }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "60", ...getCorsHeaders(origin) }
+      });
+    }
     try {
-      const body = await context.request.json();
-      const username = (body.username || "").trim();
-      const email = (body.email || `${username}@velvet.local`).trim().toLowerCase();
-      const password = body.password || "";
-      const access_key = String(body.access_key || "").trim().toUpperCase();
+      const body = await context.request.json().catch(() => ({}));
+      const rawUsername = String(body.username || "").trim();
+      const username = sanitizeUsername(rawUsername);
+      const emailInput = String(body.email || "").trim().toLowerCase();
+      const password = String(body.password || "");
+      const access_key = sanitizeKeyCode(body.access_key || body.key || "");
 
-      if (!username || !password) {
+      if (!rawUsername || !password) {
         return new Response(JSON.stringify({ detail: "Nombre de usuario y contraseña requeridos" }), {
           status: 400,
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
       }
-
-      if (!access_key) {
-        return new Response(JSON.stringify({ detail: "Se requiere una Llave de Acceso VIP válida o ingresar con tu cuenta de Patreon." }), {
-          status: 403,
+      if (!username || username.length < 3) {
+        return new Response(JSON.stringify({ detail: "El nombre de usuario debe tener 3 a 32 caracteres válidos (letras, números, _ . -)" }), {
+          status: 400,
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
       }
-
-      // Validar Llave VIP:
-      // 1. Llaves maestras de sistema
-      // 2. Consulta en la tabla invite_keys de Supabase DB1
-      // 3. Patrones de llaves generadas (VELVET-, VIP-, PATREON-, CLIENTE-)
-      let keyValid = false;
-      let keyNote = "Llave VIP de Acceso";
-
-      const MASTER_KEYS = String(env.MASTER_INVITE_KEYS || "")
-        .split(",")
-        .map((s) => s.trim().toUpperCase())
-        .filter(Boolean);
-      if (MASTER_KEYS.includes(access_key)) {
-        keyValid = true;
-        keyNote = "Llave Maestra Morbo VIP";
-      } else {
-        try {
-          const keyCheckRes = await fetch(`${SUPABASE_URL}/rest/v1/invite_keys?code=eq.${encodeURIComponent(access_key)}&revoked=eq.false&select=*`, {
-            headers: {
-              "apikey": SUPABASE_ADMIN_KEY,
-              "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`
-            }
-          });
-          if (keyCheckRes.ok) {
-            const keysData = await keyCheckRes.json();
-            if (Array.isArray(keysData) && keysData.length > 0) {
-              const kObj = keysData[0];
-              if (!kObj.revoked) {
-                keyValid = true;
-                keyNote = kObj.note || "Llave VIP Invitación";
-              }
-            }
-          }
-        } catch (e) {
-          console.warn("Error consultando invite_keys:", e);
-        }
-
-        if (!keyValid && /^(VELVET|VIP|PATREON|CLIENTE)-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(access_key)) {
-          keyValid = true;
-          keyNote = `Llave VIP ${access_key.split('-')[0]}`;
-        }
-      }
-
-      if (!keyValid) {
-        return new Response(JSON.stringify({ detail: "Llave de acceso VIP no válida o revocada. Para acceder necesitas una llave VIP válida o tu cuenta de Patreon." }), {
-          status: 403,
-          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
-        });
-      }
-
-      // Registro en Supabase Auth
-      const regRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-        method: "POST",
-        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, data: { username, registered_with_key: access_key, vip_status: "active" } })
-      });
-
-      const regData = await regRes.json();
-      if (!regRes.ok || !regData.user) {
-        return new Response(JSON.stringify({ detail: regData?.msg || regData?.error_description || "Error al registrar cuenta en el sistema" }), {
+      if (password.length < 6) {
+        return new Response(JSON.stringify({ detail: "La contraseña debe tener al menos 6 caracteres" }), {
           status: 400,
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
       }
 
-      // Marcar llave como utilizada en invite_keys si existe
-      fetch(`${SUPABASE_URL}/rest/v1/invite_keys?code=eq.${encodeURIComponent(access_key)}`, {
-        method: "PATCH",
-        headers: {
-          "apikey": SUPABASE_ADMIN_KEY,
-          "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          used_by: regData.user.id,
-          used_email: email,
-          used_at: new Date().toISOString()
-        })
-      }).catch(() => {});
+      const email = emailInput || `${username.toLowerCase()}@velvet.local`;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return new Response(JSON.stringify({ detail: "El correo electrónico no tiene un formato válido" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
 
-      // Iniciar sesión inmediatamente
+      // 1. Verificar disponibilidad del nombre de usuario antes de crear usuario o consumir llave
+      if (SUPABASE_SERVICE_ROLE_KEY) {
+        const dupUserRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?select=id&username=ilike.${encodeURIComponent(username)}&limit=1`,
+          { headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+        );
+        if (dupUserRes.ok) {
+          const dupRows = await dupUserRes.json().catch(() => []);
+          if (Array.isArray(dupRows) && dupRows.length > 0) {
+            return new Response(JSON.stringify({ detail: "Ese nombre de usuario ya está en uso. Elige otro." }), {
+              status: 409,
+              headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+            });
+          }
+        }
+      }
+
+      // 2. Validar Llave VIP estrictamente contra la base de datos (sin bypass por regex)
+      const MASTER_KEYS = String(env.MASTER_INVITE_KEYS || "")
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+      let isMasterKey = false;
+
+      if (access_key) {
+        if (MASTER_KEYS.includes(access_key)) {
+          isMasterKey = true;
+        } else {
+          const keyCheckRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/invite_keys?code=eq.${encodeURIComponent(access_key)}&select=code,revoked,used_at,expires_at,duration_days,plan_label`,
+            {
+              headers: {
+                "apikey": SUPABASE_ADMIN_KEY,
+                "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`
+              }
+            }
+          );
+          if (!keyCheckRes.ok) {
+            return new Response(JSON.stringify({ detail: "No se pudo validar la llave en el servidor. Intenta nuevamente." }), {
+              status: 503,
+              headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+            });
+          }
+          const keysData = await keyCheckRes.json().catch(() => []);
+          if (!Array.isArray(keysData) || keysData.length === 0) {
+            return new Response(JSON.stringify({ detail: "La llave de acceso VIP no existe." }), {
+              status: 403,
+              headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+            });
+          }
+          const kObj = keysData[0];
+          if (kObj.revoked) {
+            return new Response(JSON.stringify({ detail: "Esta llave VIP fue revocada por el administrador." }), {
+              status: 403,
+              headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+            });
+          }
+          if (kObj.used_at) {
+            return new Response(JSON.stringify({ detail: "Esta llave VIP ya fue utilizada." }), {
+              status: 403,
+              headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+            });
+          }
+          if (kObj.expires_at && Date.parse(kObj.expires_at) <= Date.now()) {
+            return new Response(JSON.stringify({ detail: "Esta llave VIP caducó antes de ser canjeada." }), {
+              status: 403,
+              headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+            });
+          }
+        }
+      }
+
+      // 3. Crear usuario en Supabase Auth (confirmado automáticamente si hay service role)
+      let createdUser = null;
+      if (SUPABASE_SERVICE_ROLE_KEY) {
+        const regRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: {
+              username,
+              registered_with_key: access_key || null
+            }
+          })
+        });
+        const regData = await regRes.json().catch(() => ({}));
+        if (!regRes.ok || (!regData.id && !regData.user?.id)) {
+          return new Response(JSON.stringify({
+            detail: regData?.msg || regData?.message || regData?.error_description || "Ya existe una cuenta con ese usuario o correo."
+          }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          });
+        }
+        createdUser = regData.user || regData;
+      } else {
+        const regRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+          method: "POST",
+          headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password,
+            data: { username, registered_with_key: access_key || null }
+          })
+        });
+        const regData = await regRes.json().catch(() => ({}));
+        if (!regRes.ok || !regData.user) {
+          return new Response(JSON.stringify({
+            detail: regData?.msg || regData?.error_description || "Error al registrar cuenta en el sistema"
+          }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          });
+        }
+        createdUser = regData.user;
+      }
+
+      // Asegurar que profiles tenga username sincronizado incluso en entornos mock/latencia de trigger
+      if (SUPABASE_SERVICE_ROLE_KEY) {
+        await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=minimal"
+          },
+          body: JSON.stringify({
+            id: createdUser.id,
+            email,
+            username,
+            updated_at: new Date().toISOString()
+          })
+        }).catch(() => {});
+      }
+
+      // 4. Si proveyó llave, canjearla atómicamente vía RPC transaccional (con rollback si falla)
+      let redemptionInfo = null;
+      if (access_key) {
+        if (isMasterKey && SUPABASE_SERVICE_ROLE_KEY) {
+          const thirtyDaysExp = new Date(Date.now() + 30 * 86400000).toISOString();
+          await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(createdUser.id)}`, {
+            method: "PATCH",
+            headers: {
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              subscription_tier: "vip",
+              subscription_status: "active",
+              subscription_expires_at: thirtyDaysExp,
+              registered_with_key: access_key,
+              last_redeemed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+          redemptionInfo = { ok: true, duration_days: 30, subscription_expires_at: thirtyDaysExp };
+        } else {
+          const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/redeem_subscription_key`, {
+            method: "POST",
+            headers: {
+              "apikey": SUPABASE_ADMIN_KEY,
+              "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              p_code: access_key,
+              p_user_id: createdUser.id,
+              p_email: email
+            })
+          });
+          const rpcData = await rpcRes.json().catch(() => null);
+          if (!rpcRes.ok || !rpcData || rpcData.ok !== true) {
+            if (SUPABASE_SERVICE_ROLE_KEY) {
+              await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(createdUser.id)}`, {
+                method: "DELETE",
+                headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` }
+              }).catch(() => {});
+            }
+            return new Response(JSON.stringify({
+              detail: rpcData?.message || "La llave VIP no pudo canjearse (ya usada o expirada)."
+            }), {
+              status: 403,
+              headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+            });
+          }
+          redemptionInfo = rpcData;
+        }
+      }
+
+      // 5. Iniciar sesión inmediatamente
       const authRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
         method: "POST",
         headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
@@ -3890,20 +4760,28 @@ export async function onRequest(context) {
         });
       }
 
+      let profile = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, createdUser.id, authData.access_token);
+      if (!profile && redemptionInfo?.ok) {
+        profile = {
+          id: createdUser.id,
+          email,
+          username,
+          is_admin: false,
+          subscription_tier: "vip",
+          subscription_status: "active",
+          subscription_expires_at: redemptionInfo.subscription_expires_at || null,
+          is_lifetime: Boolean(redemptionInfo.is_lifetime),
+          registered_with_key: access_key
+        };
+      }
+      const view = buildUserSubscriptionView(profile, authData.user, env);
       const respData = {
         token: authData.access_token,
         refresh_token: authData.refresh_token || null,
         expires_at: authData.expires_at || null,
-        user: {
-          id: regData.user.id,
-          username,
-          email,
-          role: "member",
-          tier: "Morbo VIP ($5.99)",
-          tier_level: "pro",
-          is_pro: true,
-          registered_with_key: access_key
-        }
+        device_token: "dev_" + generateVipKeyCode("DV").toLowerCase(),
+        redemption: redemptionInfo,
+        user: publicUserPayload(view)
       };
 
       const registerResponse = new Response(JSON.stringify(respData), {
@@ -3919,11 +4797,626 @@ export async function onRequest(context) {
         buildSessionCookies(context.request, authData.access_token, authData.refresh_token, authData.expires_at)
       );
     } catch (err) {
-      return new Response(JSON.stringify({ detail: err.message }), {
+      console.error("[Velvet-Auth] Error en register:", err);
+      return new Response(JSON.stringify({ detail: "Error al registrar cuenta" }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
       });
     }
+  }
+
+  // =========================================================================
+  // 7.1 CANJE DE LLAVE VIP PARA USUARIO AUTENTICADO (/api/redeem y /api/user/redeem-key)
+  // =========================================================================
+  if ((url.pathname === "/api/redeem" || url.pathname === "/api/user/redeem-key") && method === "POST") {
+    if (!checkAuthRateLimit(context.request, "redeem", 10)) {
+      return new Response(JSON.stringify({ error: "Demasiados intentos de canje. Espera un minuto.", detail: "Demasiados intentos de canje. Espera un minuto." }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", "Retry-After": "60", ...getCorsHeaders(origin) }
+      });
+    }
+    const { user, token, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable || degraded || (user && !verified)) {
+      return new Response(JSON.stringify({ error: "Servicio de sesión no disponible", detail: "Servicio de sesión no disponible" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+    if (!user || !token) {
+      return new Response(JSON.stringify({ error: "Debes iniciar sesión para canjear una llave VIP", detail: "Debes iniciar sesión para canjear una llave VIP" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+
+    const body = await context.request.json().catch(() => ({}));
+    const keyCode = sanitizeKeyCode(body.code || body.key || body.access_key || "");
+    if (!keyCode) {
+      return new Response(JSON.stringify({ error: "Introduce una llave de acceso válida", detail: "Introduce una llave de acceso válida" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+
+    const MASTER_KEYS = String(env.MASTER_INVITE_KEYS || "")
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+
+    let resultData = null;
+    if (MASTER_KEYS.includes(keyCode) && SUPABASE_SERVICE_ROLE_KEY) {
+      const existingProf = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, user.id, token);
+      if (existingProf?.is_suspended) {
+        return new Response(JSON.stringify({ error: "Tu cuenta está suspendida", detail: "Tu cuenta está suspendida" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      }
+      const curMs = existingProf?.subscription_expires_at ? Date.parse(existingProf.subscription_expires_at) : 0;
+      const baseMs = curMs > Date.now() ? curMs : Date.now();
+      const newExpIso = new Date(baseMs + 30 * 86400000).toISOString();
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          subscription_tier: existingProf?.is_admin ? "admin" : "vip",
+          subscription_status: existingProf?.is_admin ? "admin" : "active",
+          subscription_expires_at: existingProf?.is_admin ? null : newExpIso,
+          registered_with_key: keyCode,
+          last_redeemed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+      });
+      resultData = { ok: true, code: keyCode, duration_days: 30, plan_label: "Morbo VIP 1 Mes", subscription_expires_at: newExpIso };
+    } else {
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/redeem_subscription_key`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_ADMIN_KEY,
+          "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          p_code: keyCode,
+          p_user_id: user.id,
+          p_email: user.email || ""
+        })
+      });
+      resultData = await rpcRes.json().catch(() => null);
+      if (!rpcRes.ok || !resultData || resultData.ok !== true) {
+        const msg = resultData?.message || "Llave inválida, expirada o ya utilizada.";
+        return new Response(JSON.stringify({ error: msg, detail: msg, code: resultData?.error || "redeem_failed" }), {
+          status: resultData?.error === "suspended" ? 403 : 400,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+
+    const updatedProfile = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, user.id, token);
+    const view = buildUserSubscriptionView(updatedProfile, user, env);
+    context.waitUntil?.(
+      patchAuthUserLightMeta(SUPABASE_URL, SUPABASE_ADMIN_KEY, user.id, user.user_metadata, {
+        registered_with_key: keyCode,
+        subscription_status: view.subscription_status,
+        subscription_expires_at: view.subscription_expires_at
+      })
+    );
+
+    const daysMsg = resultData.duration_days === 0
+      ? "Suscripción VIP Permanente activada"
+      : `Suscripción VIP activada (+${resultData.duration_days || 30} días)`;
+
+    return new Response(JSON.stringify({
+      ok: true,
+      success: true,
+      message: daysMsg,
+      code: keyCode,
+      duration_days: resultData.duration_days,
+      plan_label: resultData.plan_label || daysMsg,
+      subscription_expires_at: view.subscription_expires_at,
+      user: publicUserPayload(view),
+      token
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+    });
+  }
+
+  // =========================================================================
+  // 7.2 PANEL DE ADMINISTRADOR (/api/admin/*)
+  // =========================================================================
+  if (url.pathname.startsWith("/api/admin/")) {
+    const adminCtx = await requireAdminContext(context.request, SUPABASE_URL, SUPABASE_KEY, SUPABASE_ADMIN_KEY, origin);
+    if (adminCtx.errorResponse) return adminCtx.errorResponse;
+    const adminHeaders = {
+      "apikey": SUPABASE_ADMIN_KEY,
+      "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
+      "Content-Type": "application/json"
+    };
+
+    // GET /api/admin/stats
+    if (url.pathname === "/api/admin/stats" && method === "GET") {
+      try {
+        const [profRes, keysRes, favRes] = await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/profiles?select=is_admin,subscription_status,subscription_expires_at,is_lifetime,is_suspended,patron_status`, {
+            headers: adminHeaders
+          }),
+          fetch(`${SUPABASE_URL}/rest/v1/invite_keys?select=code,used_at,revoked,expires_at`, {
+            headers: adminHeaders
+          }),
+          fetch(`${SUPABASE_URL}/rest/v1/favorites?select=item_id`, {
+            method: "HEAD",
+            headers: { ...adminHeaders, "Prefer": "count=exact" }
+          })
+        ]);
+
+        const profiles = profRes.ok ? await profRes.json().catch(() => []) : [];
+        const keys = keysRes.ok ? await keysRes.json().catch(() => []) : [];
+        const nowMs = Date.now();
+        let activeSubs = 0;
+        let expiredSubs = 0;
+        for (const p of (Array.isArray(profiles) ? profiles : [])) {
+          const view = buildUserSubscriptionView(p, null, env);
+          if (view.has_active_subscription) activeSubs++;
+          else if (view.subscription_status === "expired") expiredSubs++;
+        }
+
+        let availKeys = 0;
+        let usedKeys = 0;
+        let revokedKeys = 0;
+        for (const k of (Array.isArray(keys) ? keys : [])) {
+          if (k.revoked) revokedKeys++;
+          else if (k.used_at) usedKeys++;
+          else if (k.expires_at && Date.parse(k.expires_at) <= nowMs) revokedKeys++;
+          else availKeys++;
+        }
+
+        const totalFavorites = parseRangeCount(favRes.headers.get("content-range"));
+        return new Response(JSON.stringify({
+          total_users: Array.isArray(profiles) ? profiles.length : 0,
+          active_subscriptions: activeSubs,
+          expired_subscriptions: expiredSubs,
+          available_keys: availKeys,
+          used_keys: usedKeys,
+          revoked_keys: revokedKeys,
+          total_favorites: totalFavorites
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      } catch (err) {
+        console.error("[Velvet-Admin] stats error:", err);
+        return new Response(JSON.stringify({ error: "Error consultando estadísticas" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+
+    // GET /api/admin/keys
+    if (url.pathname === "/api/admin/keys" && method === "GET") {
+      try {
+        const filterStatus = (url.searchParams.get("status") || "all").toLowerCase();
+        const kRes = await fetch(`${SUPABASE_URL}/rest/v1/invite_keys?select=*&order=created_at.desc&limit=500`, {
+          headers: adminHeaders
+        });
+        if (!kRes.ok) {
+          return new Response(JSON.stringify({ detail: "No se pudieron cargar las llaves" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          });
+        }
+        const rows = await kRes.json().catch(() => []);
+        const nowMs = Date.now();
+        const mapped = (Array.isArray(rows) ? rows : []).map((k) => {
+          const isUsed = Boolean(k.used_at);
+          const isRevoked = Boolean(k.revoked);
+          const isKeyExpired = Boolean(!isUsed && !isRevoked && k.expires_at && Date.parse(k.expires_at) <= nowMs);
+          const keyStatus = isRevoked ? "revoked" : (isUsed ? "used" : (isKeyExpired ? "expired" : "available"));
+          return {
+            id: k.code,
+            code: k.code,
+            key: k.code,
+            note: k.note || "",
+            duration_days: k.duration_days ?? 30,
+            plan_label: k.plan_label || (k.duration_days === 0 ? "VIP Permanente" : `Morbo VIP ${k.duration_days ?? 30} días`),
+            status: keyStatus,
+            is_used: isUsed,
+            revoked: isRevoked,
+            created_at: k.created_at,
+            expires_at: k.expires_at,
+            used_at: k.used_at,
+            used_by: k.used_by,
+            used_email: k.used_email,
+            used_by_username: k.used_email || null
+          };
+        }).filter((k) => {
+          if (filterStatus === "all") return true;
+          return k.status === filterStatus;
+        });
+
+        return new Response(JSON.stringify(mapped), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      } catch (err) {
+        console.error("[Velvet-Admin] keys error:", err);
+        return new Response(JSON.stringify({ detail: "Error consultando llaves" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+
+    // POST /api/admin/keys/generate o POST /api/admin/keys
+    if ((url.pathname === "/api/admin/keys/generate" || url.pathname === "/api/admin/keys") && method === "POST") {
+      try {
+        const body = await context.request.json().catch(() => ({}));
+        const count = Math.min(50, Math.max(1, parseInt(body.count, 10) || 1));
+        const prefix = String(body.prefix || "VELVET").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "VELVET";
+        const note = String(body.note || "").trim().slice(0, 200);
+        const rawDays = body.duration_days !== undefined ? parseInt(body.duration_days, 10) : 30;
+        const duration_days = Number.isNaN(rawDays) ? 30 : Math.min(3650, Math.max(0, rawDays));
+        const keyExpiresDays = body.key_expires_days ? Math.min(3650, Math.max(1, parseInt(body.key_expires_days, 10))) : null;
+        const expires_at = keyExpiresDays ? new Date(Date.now() + keyExpiresDays * 86400000).toISOString() : null;
+        const plan_label = String(
+          body.plan_label || (duration_days === 0 ? "VIP Permanente" : duration_days === 30 ? "Morbo VIP 1 Mes" : `Morbo VIP ${duration_days} días`)
+        ).slice(0, 80);
+
+        const toInsert = [];
+        const seen = new Set();
+        for (let i = 0; i < count; i++) {
+          let code = generateVipKeyCode(prefix);
+          while (seen.has(code)) code = generateVipKeyCode(prefix);
+          seen.add(code);
+          toInsert.push({
+            code,
+            note,
+            created_by: adminCtx.user.id,
+            duration_days,
+            plan_label,
+            expires_at
+          });
+        }
+
+        const insRes = await fetch(`${SUPABASE_URL}/rest/v1/invite_keys`, {
+          method: "POST",
+          headers: { ...adminHeaders, "Prefer": "return=representation" },
+          body: JSON.stringify(toInsert)
+        });
+        if (!insRes.ok) {
+          const errTxt = await insRes.text().catch(() => "");
+          console.error("[Velvet-Admin] Insert key error:", errTxt);
+          return new Response(JSON.stringify({ detail: "Error guardando llaves" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+          });
+        }
+        const createdRows = await insRes.json().catch(() => toInsert);
+        const formatted = (Array.isArray(createdRows) ? createdRows : toInsert).map((k) => ({
+          ...k,
+          id: k.code,
+          key: k.code
+        }));
+
+        return new Response(JSON.stringify({
+          ok: true,
+          count: formatted.length,
+          duration_days,
+          plan_label,
+          keys: formatted
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      } catch (err) {
+        console.error("[Velvet-Admin] keys error:", err);
+        return new Response(JSON.stringify({ detail: "Error consultando llaves" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+
+    // DELETE /api/admin/keys/:code
+    const delKeyMatch = url.pathname.match(/^\/api\/admin\/keys\/([^/]+)$/);
+    if (delKeyMatch && method === "DELETE") {
+      const rawCode = sanitizeKeyCode(decodeURIComponent(delKeyMatch[1]));
+      if (!rawCode) {
+        return new Response(JSON.stringify({ detail: "Código de llave inválido" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+      const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/invite_keys?code=eq.${encodeURIComponent(rawCode)}`, {
+        method: "PATCH",
+        headers: { ...adminHeaders, "Prefer": "return=representation" },
+        body: JSON.stringify({ revoked: true })
+      });
+      if (!patchRes.ok) {
+        return new Response(JSON.stringify({ detail: "No se pudo revocar la llave" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, code: rawCode }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+
+    // GET /api/admin/users
+    if (url.pathname === "/api/admin/users" && method === "GET") {
+      try {
+        const [profRes, authUsersRes, favsRes, customFavsRes, histRes, customHistRes] = await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/profiles?select=${encodeURIComponent(SUBSCRIPTION_PROFILE_SELECT)}&order=created_at.desc`, {
+            headers: adminHeaders
+          }),
+          fetch(`${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=200`, {
+            headers: adminHeaders
+          }),
+          fetch(`${SUPABASE_URL}/rest/v1/favorites?select=user_id&limit=10000`, {
+            headers: adminHeaders
+          }),
+          fetch(`${SUPABASE_URL}/rest/v1/user_custom_favorites?select=user_id&limit=10000`, {
+            headers: adminHeaders
+          }).catch(() => null),
+          fetch(`${SUPABASE_URL}/rest/v1/user_history?select=user_id&limit=10000`, {
+            headers: adminHeaders
+          }),
+          fetch(`${SUPABASE_URL}/rest/v1/user_custom_history?select=user_id&limit=10000`, {
+            headers: adminHeaders
+          }).catch(() => null)
+        ]);
+
+        const profiles = profRes.ok ? await profRes.json().catch(() => []) : [];
+        const authPayload = authUsersRes.ok ? await authUsersRes.json().catch(() => ({})) : {};
+        const authUsers = Array.isArray(authPayload?.users) ? authPayload.users : [];
+        const favRows = favsRes.ok ? await favsRes.json().catch(() => []) : [];
+        const customFavRows = customFavsRes && customFavsRes.ok ? await customFavsRes.json().catch(() => []) : [];
+        const histRows = histRes.ok ? await histRes.json().catch(() => []) : [];
+        const customHistRows = customHistRes && customHistRes.ok ? await customHistRes.json().catch(() => []) : [];
+
+        const favCounts = new Map();
+        for (const r of [...(Array.isArray(favRows) ? favRows : []), ...(Array.isArray(customFavRows) ? customFavRows : [])]) {
+          favCounts.set(r.user_id, (favCounts.get(r.user_id) || 0) + 1);
+        }
+        const histCounts = new Map();
+        for (const r of [...(Array.isArray(histRows) ? histRows : []), ...(Array.isArray(customHistRows) ? customHistRows : [])]) {
+          histCounts.set(r.user_id, (histCounts.get(r.user_id) || 0) + 1);
+        }
+
+        const authMap = new Map();
+        for (const au of authUsers) authMap.set(au.id, au);
+
+        const seenIds = new Set();
+        const combined = [];
+        for (const p of (Array.isArray(profiles) ? profiles : [])) {
+          seenIds.add(p.id);
+          const au = authMap.get(p.id) || null;
+          const view = buildUserSubscriptionView(p, au, env);
+          combined.push({
+            ...publicUserPayload(view),
+            status: view.is_suspended ? "suspended" : "active",
+            favorites_count: favCounts.get(p.id) || 0,
+            history_count: histCounts.get(p.id) || 0,
+            last_sign_in_at: au?.last_sign_in_at || null
+          });
+        }
+        for (const au of authUsers) {
+          if (seenIds.has(au.id)) continue;
+          const view = buildUserSubscriptionView(null, au, env);
+          combined.push({
+            ...publicUserPayload(view),
+            status: view.is_suspended ? "suspended" : "active",
+            favorites_count: favCounts.get(au.id) || 0,
+            history_count: histCounts.get(au.id) || 0,
+            last_sign_in_at: au?.last_sign_in_at || null
+          });
+        }
+
+        return new Response(JSON.stringify(combined), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      } catch (err) {
+        console.error("[Velvet-Admin] keys error:", err);
+        return new Response(JSON.stringify({ detail: "Error consultando llaves" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+    }
+
+    // POST /api/admin/users/:id/status (Suspender / Reactivar cuenta)
+    const userStatusMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/status$/);
+    if (userStatusMatch && method === "POST") {
+      const targetId = decodeURIComponent(userStatusMatch[1]);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+        return new Response(JSON.stringify({ detail: "ID de usuario inválido" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+      if (targetId === adminCtx.user.id) {
+        return new Response(JSON.stringify({ detail: "No puedes suspender tu propia cuenta de administrador" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+      const body = await context.request.json().catch(() => ({}));
+      const nextStatus = String(body.status || body.action || "").toLowerCase();
+      const shouldSuspend = nextStatus === "suspended" || nextStatus === "suspend" || nextStatus === "ban";
+      const curProf = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, targetId);
+      if (curProf?.is_admin) {
+        return new Response(JSON.stringify({ detail: "No se puede suspender a otro administrador" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const expMs = curProf?.subscription_expires_at ? Date.parse(curProf.subscription_expires_at) : 0;
+      const reactivatedSubStatus = curProf?.is_lifetime || expMs > Date.now()
+        ? "active"
+        : (expMs > 0 ? "expired" : "inactive");
+
+      await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(targetId)}`, {
+          method: "PATCH",
+          headers: adminHeaders,
+          body: JSON.stringify({
+            is_suspended: shouldSuspend,
+            subscription_status: shouldSuspend ? "suspended" : reactivatedSubStatus,
+            updated_at: new Date().toISOString()
+          })
+        }),
+        fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(targetId)}`, {
+          method: "PUT",
+          headers: adminHeaders,
+          body: JSON.stringify({
+            ban_duration: shouldSuspend ? "876000h" : "none"
+          })
+        })
+      ]);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        id: targetId,
+        status: shouldSuspend ? "suspended" : "active",
+        subscription_status: shouldSuspend ? "suspended" : reactivatedSubStatus
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+
+    // POST /api/admin/users/:id/subscription (Extender días, asignar días, vitalicio, vencer ahora)
+    const userSubMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/subscription$/);
+    if (userSubMatch && method === "POST") {
+      const targetId = decodeURIComponent(userSubMatch[1]);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+        return new Response(JSON.stringify({ detail: "ID de usuario inválido" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+      const body = await context.request.json().catch(() => ({}));
+      const action = String(body.action || "extend").toLowerCase();
+      const days = Math.min(3650, Math.max(1, parseInt(body.days, 10) || 30));
+
+      const curProf = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, targetId);
+      if (!curProf) {
+        return new Response(JSON.stringify({ detail: "Perfil de usuario no encontrado" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+      if (curProf.is_admin && action === "expire") {
+        return new Response(JSON.stringify({ detail: "No se puede vencer la cuenta del administrador" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const patchPayload = { updated_at: new Date().toISOString() };
+      if (action === "lifetime" || action === "set_lifetime") {
+        patchPayload.is_lifetime = true;
+        patchPayload.subscription_tier = curProf.is_admin ? "admin" : "vip";
+        patchPayload.subscription_status = curProf.is_admin ? "admin" : "active";
+        patchPayload.subscription_expires_at = null;
+      } else if (action === "expire" || action === "revoke") {
+        patchPayload.is_lifetime = false;
+        patchPayload.subscription_tier = "vip";
+        patchPayload.subscription_status = "expired";
+        patchPayload.subscription_expires_at = new Date(Date.now() - 1000).toISOString();
+      } else if (action === "set_days") {
+        patchPayload.is_lifetime = false;
+        patchPayload.subscription_tier = curProf.is_admin ? "admin" : "vip";
+        patchPayload.subscription_status = curProf.is_admin ? "admin" : "active";
+        patchPayload.subscription_expires_at = new Date(Date.now() + days * 86400000).toISOString();
+      } else {
+        // extend: suma desde max(ahora, expiración actual)
+        const curMs = curProf.subscription_expires_at ? Date.parse(curProf.subscription_expires_at) : 0;
+        const baseMs = curMs > Date.now() ? curMs : Date.now();
+        patchPayload.is_lifetime = false;
+        patchPayload.subscription_tier = curProf.is_admin ? "admin" : "vip";
+        patchPayload.subscription_status = curProf.is_admin ? "admin" : "active";
+        patchPayload.subscription_expires_at = new Date(baseMs + days * 86400000).toISOString();
+      }
+
+      const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(targetId)}`, {
+        method: "PATCH",
+        headers: { ...adminHeaders, "Prefer": "return=representation" },
+        body: JSON.stringify(patchPayload)
+      });
+      const updatedRows = await patchRes.json().catch(() => []);
+      const updated = (Array.isArray(updatedRows) && updatedRows[0]) ? updatedRows[0] : { ...curProf, ...patchPayload };
+      const view = buildUserSubscriptionView(updated, null, env);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        user: publicUserPayload(view)
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+
+    // POST /api/admin/change-password
+    if (url.pathname === "/api/admin/change-password" && method === "POST") {
+      const body = await context.request.json().catch(() => ({}));
+      const oldPassword = String(body.old_password || "");
+      const newPassword = String(body.new_password || "");
+      if (!oldPassword || !newPassword || newPassword.length < 6) {
+        return new Response(JSON.stringify({ detail: "Ingresa contraseña actual y nueva contraseña (mín. 6 caracteres)" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const verifyRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: adminCtx.user.email, password: oldPassword })
+      });
+      if (!verifyRes.ok) {
+        return new Response(JSON.stringify({ detail: "La contraseña actual es incorrecta" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      const upRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: "PUT",
+        headers: {
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${adminCtx.token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ password: newPassword })
+      });
+      if (!upRes.ok) {
+        const upErr = await upRes.json().catch(() => ({}));
+        return new Response(JSON.stringify({ detail: upErr?.msg || "No se pudo actualizar la contraseña" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true, message: "Contraseña actualizada con éxito" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Ruta admin no encontrada" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+    });
   }
 
   // Cabeceras estrictas para endpoints privados / personales (CERO caché en navegador ni proxies)
@@ -3943,6 +5436,212 @@ export async function onRequest(context) {
   // 8. FAVORITOS (/api/user/favorites, /api/favorites)
   // Persistencia atómica en PostgreSQL con paginación real de 24 en 24
   // =========================================================================
+  // Helpers compartidos para favoritos/historial en PostgreSQL (SQL + tablas custom)
+  const parseContentRangeTotal = (res) => {
+    if (!res || !res.headers) return 0;
+    const cr = res.headers.get("content-range") || "";
+    const slashIdx = cr.indexOf("/");
+    if (slashIdx === -1) return 0;
+    const totalPart = cr.substring(slashIdx + 1).trim();
+    if (!totalPart || totalPart === "*") return 0;
+    return parseInt(totalPart, 10) || 0;
+  };
+
+  const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || "").trim());
+
+  const canRetryAdmin = (res, userId, isVerified = false) =>
+    Boolean(isVerified === true && SUPABASE_ADMIN_KEY && isUuid(userId) && (!res || res.status === 401 || res.status === 403 || res.status >= 500));
+
+  const getUserRestHeaders = (token, extra = {}) => ({
+    "apikey": SUPABASE_KEY,
+    "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
+    ...extra
+  });
+
+  const getAdminRestHeaders = (extra = {}) => ({
+    "apikey": SUPABASE_ADMIN_KEY,
+    "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
+    ...extra
+  });
+
+  const restFetchWithAdminFallback = async (restUrl, initFactory, userId, isVerified = false) => {
+    let res = await fetch(restUrl, initFactory(false)).catch(() => null);
+    if (canRetryAdmin(res, userId, isVerified)) {
+      res = await fetch(restUrl, initFactory(true)).catch(() => null);
+    }
+    return res;
+  };
+
+  const inferPersonalMediaType = (item) => {
+    const raw = String(item?.media_type || "").trim().toLowerCase();
+    if (raw === "comic" || raw === "video" || raw === "gallery" || raw === "game") return raw;
+    const src = String(item?.source || "").trim().toLowerCase();
+    if (["pmvhaven", "spankbang", "xvideos", "eporner"].includes(src)) return "video";
+    if (["buondua", "mitaku"].includes(src)) return "gallery";
+    if (["gamcore"].includes(src)) return "game";
+    return "comic";
+  };
+
+  const buildCustomItemKey = (item) => {
+    const src = String(item?.source || "").trim().toLowerCase();
+    const srcId = String(item?.source_id || "").trim();
+    const rawId = String(item?.id || item?.item_id || "").trim();
+    if (src && srcId) return `${src}:${srcId}`.slice(0, 180);
+    if (rawId) return rawId.slice(0, 180);
+    return "";
+  };
+
+  const escapeFilterVal = (val) => String(val || "").replace(/[,()"]/g, "").trim();
+
+  const parseStrictPositiveInt = (val) => {
+    const s = String(val ?? "").trim();
+    if (!/^\d{1,15}$/.test(s)) return null;
+    const n = Number(s);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  };
+
+  const resolveSqlItemId = async (candidate, tokenVal, userId) => {
+    const rawNum = parseStrictPositiveInt(candidate?.id || candidate?.item_id);
+    if (rawNum) return rawNum;
+    const src = String(candidate?.source || "").trim();
+    const srcId = String(candidate?.source_id || "").trim();
+    if (!src || !srcId) return null;
+    try {
+      const lookupUrl = `${SUPABASE_URL}/rest/v1/items?source=eq.${encodeURIComponent(src)}&source_id=eq.${encodeURIComponent(srcId)}&status=neq.blocked&real_people=is.false&select=id&limit=1`;
+      const res = await fetch(lookupUrl, {
+        headers: SUPABASE_ADMIN_KEY ? getAdminRestHeaders() : getUserRestHeaders(tokenVal)
+      }).catch(() => null);
+      if (res && res.ok) {
+        const rows = await res.json().catch(() => []);
+        if (Array.isArray(rows) && rows[0]?.id) return parseStrictPositiveInt(rows[0].id);
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const createVideoCatalogLoader = () => {
+    let cached = null;
+    return async () => {
+      if (cached !== null) return cached;
+      try {
+        cached = (await loadVideoCatalog(context, url)) || [];
+      } catch (e) {
+        cached = [];
+      }
+      return cached;
+    };
+  };
+
+  const formatPersonalMediaEntry = async (entry, getVideoCatalog, fallbackTitle = "Contenido guardado") => {
+    const it = entry.items || {};
+    const meta = entry.meta || {};
+    let effectiveTitle = it.title || entry.title || meta.title || fallbackTitle;
+    let effectiveSource = it.source || entry.source || meta.source || "";
+    let effectiveSourceId = it.source_id || entry.source_id || meta.source_id || "";
+    const effectiveUrl = it.url || entry.url || meta.url || "";
+    const rawCover = it.cover_url || entry.cover_url || meta.cover_url || "";
+    const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
+    let finalCover = "/velvet_logo.png";
+    if (upstreamCover) {
+      const freshTok = await encodeToken(upstreamCover, effectiveUrl);
+      if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+    } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
+      finalCover = rawCover;
+    }
+
+    if (finalCover === "/velvet_logo.png" || effectiveTitle === fallbackTitle || effectiveTitle === "Guardado" || effectiveTitle === "Contenido visto") {
+      const target = String(entry.item_id || entry.id || entry.source_id || "");
+      const vCatalog = await getVideoCatalog();
+      const vMatch = vCatalog.find(
+        (v) =>
+          (target && (String(v.id) === target || String(v.source_id) === target)) ||
+          (effectiveTitle && effectiveTitle !== fallbackTitle && effectiveTitle !== "Guardado" && effectiveTitle !== "Contenido visto" && v.title && v.title.toLowerCase() === effectiveTitle.toLowerCase())
+      );
+      if (vMatch) {
+        effectiveTitle = vMatch.title || effectiveTitle;
+        effectiveSource = effectiveSource || "pmvhaven";
+        effectiveSourceId = effectiveSourceId || String(vMatch.id || "");
+        const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
+        if (vUpstream) {
+          const freshTok = await encodeToken(vUpstream, vMatch.url || "");
+          if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+        }
+      }
+    }
+    return { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover };
+  };
+
+  const upsertCustomFavoriteRow = async (userId, item, tokenVal, isVerified = false) => {
+    const itemKey = buildCustomItemKey(item);
+    if (!itemKey) return { ok: false, status: 400 };
+    const payload = {
+      user_id: userId,
+      item_key: itemKey,
+      item_id: String(item.id || item.item_id || item.source_id || itemKey).slice(0, 120),
+      source: String(item.source || "external").slice(0, 40),
+      source_id: String(item.source_id || item.id || "").slice(0, 120),
+      media_type: inferPersonalMediaType(item),
+      title: String(item.title || "Contenido guardado").slice(0, 300),
+      cover_url: String(extractRawMediaUrl(item.cover_url) || item.cover_url || "").slice(0, 1000),
+      url: String(item.url || "").slice(0, 1000),
+      created_at: new Date().toISOString()
+    };
+    const res = await restFetchWithAdminFallback(
+      `${SUPABASE_URL}/rest/v1/user_custom_favorites?on_conflict=user_id,item_key`,
+      (useAdmin) => ({
+        method: "POST",
+        headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(tokenVal, extra))({
+          "Content-Type": "application/json",
+          "Prefer": "resolution=merge-duplicates,return=minimal"
+        }),
+        body: JSON.stringify(payload)
+      }),
+      userId,
+      isVerified
+    );
+    return { ok: Boolean(res && res.ok), status: res ? res.status : 0, item_key: itemKey, item_id: payload.item_id };
+  };
+
+  const deleteCustomTableTarget = async (tableName, userId, target, tokenVal, isVerified = false) => {
+    const { clearAll, numId, rawId, source, sourceId, lastPart, secondLastPart } = target;
+    let queryUrl = `${SUPABASE_URL}/rest/v1/${tableName}?user_id=eq.${userId}`;
+    if (!clearAll) {
+      const clauses = [];
+      if (source && sourceId) {
+        clauses.push(`item_key.eq.${escapeFilterVal(`${source.toLowerCase()}:${sourceId}`)}`);
+      }
+      if (secondLastPart && lastPart && lastPart !== "favorites" && lastPart !== "history") {
+        clauses.push(`item_key.eq.${escapeFilterVal(`${secondLastPart.toLowerCase()}:${lastPart}`)}`);
+      }
+      if (rawId) {
+        const cleanRaw = escapeFilterVal(rawId);
+        if (cleanRaw) {
+          clauses.push(`item_key.eq.${cleanRaw}`, `item_id.eq.${cleanRaw}`, `source_id.eq.${cleanRaw}`);
+        }
+      }
+      if (Number.isInteger(numId) && numId > 0) {
+        clauses.push(`item_key.eq.${numId}`, `item_id.eq.${numId}`);
+      }
+      if (lastPart && lastPart !== "favorites" && lastPart !== "history") {
+        const cleanLast = escapeFilterVal(lastPart);
+        if (cleanLast) {
+          clauses.push(`item_key.eq.${cleanLast}`, `item_id.eq.${cleanLast}`, `source_id.eq.${cleanLast}`);
+        }
+      }
+      if (clauses.length === 0) return;
+      queryUrl += `&or=(${[...new Set(clauses)].join(",")})`;
+    }
+    await restFetchWithAdminFallback(
+      queryUrl,
+      (useAdmin) => ({
+        method: "DELETE",
+        headers: useAdmin ? getAdminRestHeaders() : getUserRestHeaders(tokenVal)
+      }),
+      userId,
+      isVerified
+    );
+  };
+
   const isFavoritesRoute =
     url.pathname === "/api/favorites" ||
     url.pathname === "/api/user/favorites" ||
@@ -3950,8 +5649,8 @@ export async function onRequest(context) {
     url.pathname.startsWith("/api/user/favorites/");
 
   if (isFavoritesRoute) {
-    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
-    if (unavailable) {
+    const { user, token, newToken, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable || ((method !== "GET") && (degraded || (user && !verified)))) {
       return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
         status: 503,
         headers: getPersonalHeaders(origin)
@@ -3964,64 +5663,98 @@ export async function onRequest(context) {
       });
     }
 
-    // --- GET ids: la lista completa de la cuenta, solo números ---
+    // --- GET ids: lista completa de IDs numéricos y referencias externas de la cuenta ---
     if (method === "GET" && url.searchParams.get("ids") === "1") {
-      const authHeaders = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`
-      };
       try {
+        const customUrl = `${SUPABASE_URL}/rest/v1/user_custom_favorites?user_id=eq.${user.id}&select=item_key,item_id,source,source_id,media_type,title,cover_url,url&order=created_at.desc&limit=500`;
+        const customPromise = restFetchWithAdminFallback(
+          customUrl,
+          (useAdmin) => ({ headers: useAdmin ? getAdminRestHeaders() : getUserRestHeaders(token) }),
+          user.id,
+          verified
+        );
+
         const ids = [];
-        const seen = new Set();
+        const seenIds = new Set();
+        let sqlOk = false;
         let offset = 0;
         const step = 1000;
         while (offset < 2000) {
-          const idsRes = await fetch(
+          const idsRes = await restFetchWithAdminFallback(
             `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id&order=created_at.desc,item_id.desc`,
-            { headers: { ...authHeaders, "Range": `${offset}-${offset + step - 1}` } }
+            (useAdmin) => ({
+              headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                "Range": `${offset}-${offset + step - 1}`
+              })
+            }),
+            user.id,
+            verified
           );
-          if (!idsRes.ok) {
-            return new Response(JSON.stringify({ ids: [], refs: [], total: 0, degraded: true }), {
-              status: 200,
-              headers: getPersonalHeaders(origin, newToken)
-            });
-          }
+          if (!idsRes || !idsRes.ok) break;
+          sqlOk = true;
           const rows = await idsRes.json().catch(() => []);
           if (!Array.isArray(rows) || rows.length === 0) break;
           for (const r of rows) {
-            const n = parseInt(r.item_id, 10);
-            if (Number.isInteger(n) && n > 0 && !seen.has(n)) {
-              seen.add(n);
+            const n = parseStrictPositiveInt(r.item_id);
+            if (n && !seenIds.has(n)) {
+              seenIds.add(n);
               ids.push(n);
             }
           }
           if (rows.length < step) break;
           offset += step;
         }
+
         const refs = [];
-        const custom = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
-        for (const cf of custom) {
-          const n = parseInt(cf && (cf.id || cf.item_id), 10);
-          if (Number.isInteger(n) && n > 0) {
-            if (!seen.has(n)) {
-              seen.add(n);
-              ids.push(n);
-            }
-            continue;
+        const seenRefs = new Set();
+        const pushRefEntry = (cf) => {
+          if (!cf) return;
+          const n = parseStrictPositiveInt(cf.id || cf.item_id);
+          if (n && !seenIds.has(n)) {
+            seenIds.add(n);
+            ids.push(n);
           }
-          if (cf && (cf.source && cf.source_id || cf.id)) {
-            refs.push({
-              id: cf.id || null,
-              source: String(cf.source || "external").slice(0, 40),
-              source_id: String(cf.source_id || cf.id || "").slice(0, 80),
-              media_type: String(cf.media_type || "").slice(0, 16),
-              title: String(cf.title || "Contenido guardado").slice(0, 80),
-              cover_url: cf.cover_url || "",
-              url: cf.url || ""
-            });
+          const src = String(cf.source || "external").slice(0, 40);
+          const srcId = String(cf.source_id || cf.item_id || cf.id || "").slice(0, 120);
+          const refKey = (src && srcId) ? `${src.toLowerCase()}:${srcId}` : String(cf.item_key || cf.id || srcId);
+          if (!refKey || seenRefs.has(refKey)) return;
+          seenRefs.add(refKey);
+          refs.push({
+            id: n || cf.id || cf.item_id || srcId || null,
+            item_key: cf.item_key || refKey,
+            source: src,
+            source_id: srcId,
+            media_type: inferPersonalMediaType(cf),
+            title: String(cf.title || "Contenido guardado").slice(0, 120),
+            cover_url: cf.cover_url || "",
+            url: cf.url || ""
+          });
+        };
+
+        const customRes = await customPromise;
+        if (customRes && customRes.ok) {
+          const customRows = await customRes.json().catch(() => []);
+          for (const cf of (Array.isArray(customRows) ? customRows : [])) {
+            pushRefEntry(cf);
           }
         }
-        return new Response(JSON.stringify({ ids, refs, total: ids.length + refs.length }), {
+
+        // Respaldo de compatibilidad si quedase metadata sin migrar
+        const legacyMetaFavs = [
+          ...(Array.isArray(user.user_metadata?.favorites) ? user.user_metadata.favorites : []),
+          ...(Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [])
+        ];
+        for (const mf of legacyMetaFavs) pushRefEntry(mf);
+
+        if (!sqlOk && refs.length === 0) {
+          return new Response(JSON.stringify({ ids: [], refs: [], total: 0, degraded: true }), {
+            status: 200,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
+
+        const customOnlyRefsCount = refs.filter((r) => !seenIds.has(parseStrictPositiveInt(r.id))).length;
+        return new Response(JSON.stringify({ ids, refs, total: seenIds.size + customOnlyRefsCount }), {
           status: 200,
           headers: getPersonalHeaders(origin, newToken)
         });
@@ -4033,34 +5766,74 @@ export async function onRequest(context) {
       }
     }
 
-    // --- GET FAVORITOS (Paginación determinista 24/página desde PostgreSQL) ---
+    // --- GET FAVORITOS (SQL + Custom unificado con paginación real 24/página) ---
     if (method === "GET") {
       const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
       const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") || String(PERSONAL_PAGE_SIZE), 10)));
       const offset = (page - 1) * pageSize;
       const to = offset + pageSize - 1;
-      const authHeaders = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-        "Prefer": "count=exact",
-        "Range": `${offset}-${to}`
-      };
+      const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
+      const hasTypeFilter = Boolean(typeFilter && ["comic", "video", "gallery", "game"].includes(typeFilter));
+      const getVideoCatalog = createVideoCatalogLoader();
 
       try {
-        let favQueryUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,url,page_count,video_sources,status)&order=created_at.desc,item_id.desc`;
-        const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
-        if (typeFilter && ["comic", "video", "gallery", "game"].includes(typeFilter)) {
-          favQueryUrl += `&items.media_type=eq.${typeFilter}`;
-        }
+        const favQueryUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,page_count,status,real_people)&order=created_at.desc,item_id.desc`;
+        const sqlRangeHeader = hasTypeFilter ? "0-499" : `${offset}-${to}`;
 
-        let favRes = await fetch(favQueryUrl, { headers: authHeaders });
+        let customUrl = `${SUPABASE_URL}/rest/v1/user_custom_favorites?user_id=eq.${user.id}&select=item_key,item_id,source,source_id,media_type,title,cover_url,url,created_at&order=created_at.desc&limit=500`;
+        if (hasTypeFilter) customUrl += `&media_type=eq.${typeFilter}`;
+
+        const [initialFavRes, customRes] = await Promise.all([
+          restFetchWithAdminFallback(
+            favQueryUrl,
+            (useAdmin) => ({
+              headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                "Prefer": "count=exact",
+                "Range": sqlRangeHeader
+              })
+            }),
+            user.id,
+            verified
+          ),
+          restFetchWithAdminFallback(
+            customUrl,
+            (useAdmin) => ({
+              headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                "Prefer": "count=exact"
+              })
+            }),
+            user.id,
+            verified
+          )
+        ]);
+
+        let favRes = initialFavRes;
         // El embed items(...) falla si la FK no está cacheada. Reintento plano.
-        if (!favRes.ok) {
+        if (!favRes || !favRes.ok) {
           const plainUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at&order=created_at.desc,item_id.desc`;
-          favRes = await fetch(plainUrl, { headers: authHeaders });
+          favRes = await restFetchWithAdminFallback(
+            plainUrl,
+            (useAdmin) => ({
+              headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                "Prefer": "count=exact",
+                "Range": sqlRangeHeader
+              })
+            }),
+            user.id,
+            verified
+          );
         }
 
-        if (!favRes.ok) {
+        const customRowsRaw = customRes && customRes.ok ? await customRes.json().catch(() => []) : [];
+        const customRows = Array.isArray(customRowsRaw) ? customRowsRaw : [];
+        const customTotal = customRows.length;
+
+        const legacyMetaFavs = [
+          ...(Array.isArray(user.user_metadata?.favorites) ? user.user_metadata.favorites : []),
+          ...(Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [])
+        ].filter((mf) => !hasTypeFilter || inferPersonalMediaType(mf) === typeFilter);
+
+        if ((!favRes || !favRes.ok) && customTotal === 0 && legacyMetaFavs.length === 0) {
           return new Response(JSON.stringify({
             items: [],
             total: 0,
@@ -4075,133 +5848,133 @@ export async function onRequest(context) {
           });
         }
 
-        let total = 0;
-        const cr = favRes.headers.get("content-range") || "";
-        const slashIdx = cr.indexOf("/");
-        if (slashIdx !== -1) {
-          const totalPart = cr.substring(slashIdx + 1);
-          if (totalPart && totalPart !== "*") {
-            total = parseInt(totalPart, 10) || 0;
+        const sqlTotal = favRes && favRes.ok ? parseContentRangeTotal(favRes) : 0;
+        let rawSqlRows = favRes && favRes.ok ? await favRes.json().catch(() => []) : [];
+        if (!Array.isArray(rawSqlRows)) rawSqlRows = [];
+
+        // Si existen favoritos custom + SQL paginados en más de 1 página, traer ventana suficiente para ordenar cronológicamente sin saltos
+        if ((customTotal > 0 || legacyMetaFavs.length > 0) && sqlTotal > rawSqlRows.length && sqlTotal <= 500 && rawSqlRows.length < sqlTotal) {
+          const fullWinTo = Math.min(499, Math.max(to, offset + pageSize + customTotal - 1));
+          const winUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,page_count,status,real_people)&order=created_at.desc,item_id.desc`;
+          const winRes = await restFetchWithAdminFallback(
+            winUrl,
+            (useAdmin) => ({
+              headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                "Range": `0-${fullWinTo}`
+              })
+            }),
+            user.id,
+            verified
+          );
+          if (winRes && winRes.ok) {
+            const winRows = await winRes.json().catch(() => []);
+            if (Array.isArray(winRows) && winRows.length > 0) rawSqlRows = winRows;
           }
         }
 
-        const rawRows = await favRes.json().catch(() => []);
-
-        // Si algún item_id no vino con items(...) poblado, buscarlo en la tabla items
-        const missingFavIds = (rawRows || [])
-          .filter(r => !r.items || !r.items.title)
-          .map(r => r.item_id)
-          .filter(id => Number.isInteger(id) && id > 0);
-        if (missingFavIds.length > 0) {
+        // Enriquecer filas SQL cuyo embed items(...) vino vacío
+        const missingFavIds = rawSqlRows
+          .filter((r) => !r.items || !r.items.title)
+          .map((r) => r.item_id)
+          .filter((id) => Number.isInteger(id) && id > 0);
+        if (missingFavIds.length > 0 && SUPABASE_ADMIN_KEY) {
           try {
-            const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${missingFavIds.join(",")})&select=id,title,cover_url,media_type,source,source_id,url,page_count,status`, {
-              headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
-            });
+            const itemsRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/items?id=in.(${missingFavIds.join(",")})&status=neq.blocked&real_people=is.false&select=id,title,cover_url,media_type,source,source_id,page_count,status,real_people`,
+              { headers: getAdminRestHeaders() }
+            );
             if (itemsRes.ok) {
               const fetched = await itemsRes.json().catch(() => []);
-              const itMap = new Map((fetched || []).map(it => [it.id, it]));
-              for (const r of rawRows) {
+              const itMap = new Map((Array.isArray(fetched) ? fetched : []).map((it) => [it.id, it]));
+              for (const r of rawSqlRows) {
                 if (!r.items || !r.items.title) {
                   const found = itMap.get(r.item_id);
                   if (found) r.items = found;
                 }
               }
             }
-          } catch(e) {}
+          } catch (e) {}
         }
 
-        const userMetaFavs = Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [];
-        const items = await Promise.all((rawRows || []).map(async (r) => {
-          let it = r.items || {};
-          const metaMatch = userMetaFavs.find(cf => String(cf.id) === String(r.item_id) || String(cf.source_id) === String(r.item_id));
-          let effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Guardado";
-          let effectiveSource = (it && it.source) || (metaMatch && metaMatch.source) || "";
-          let effectiveSourceId = (it && it.source_id) || (metaMatch && metaMatch.source_id) || "";
-          let rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
-          let upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
-          let finalCover = "/velvet_logo.png";
-          if (upstreamCover) {
-            const freshTok = await encodeToken(upstreamCover, (it && it.url) || (metaMatch && metaMatch.url) || "");
-            if (freshTok) finalCover = `/api/media?t=${freshTok}`;
-          } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
-            finalCover = rawCover;
-          }
-          if (finalCover === "/velvet_logo.png" || effectiveTitle === "Guardado") {
-            try {
-              const vCatalog = await loadVideoCatalog(context, url);
-              const target = String(r.item_id || (metaMatch && (metaMatch.id || metaMatch.source_id)) || "");
-              const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (effectiveTitle !== "Guardado" && v.title && v.title.toLowerCase() === effectiveTitle.toLowerCase()));
-              if (vMatch) {
-                effectiveTitle = vMatch.title || effectiveTitle;
-                effectiveSource = "pmvhaven";
-                effectiveSourceId = String(vMatch.id);
-                const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
-                if (vUpstream) {
-                  const freshTok = await encodeToken(vUpstream, vMatch.url || "");
-                  if (freshTok) finalCover = `/api/media?t=${freshTok}`;
-                }
-              }
-            } catch (e) {}
-          }
-          const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
-          return {
-            id: it.id || r.item_id,
-            item_id: r.item_id,
-            title: isAvailable ? effectiveTitle : "Contenido no disponible",
-            cover_url: finalCover,
-            media_type: (it && it.media_type) || (metaMatch && metaMatch.media_type) || "comic",
-            source: effectiveSource || (it && it.source) || (metaMatch && metaMatch.source) || "",
-            source_id: effectiveSourceId || (it && it.source_id) || (metaMatch && metaMatch.source_id) || "",
-            url: isAvailable ? ((it && it.url) || (metaMatch && metaMatch.url) || "") : "",
-            page_count: (it && it.page_count) || (metaMatch && metaMatch.page_count) || 0,
-            created_at: r.created_at,
-            available: isAvailable
-          };
-        }));
+        const formattedSql = await Promise.all(
+          rawSqlRows.map(async (r) => {
+            const it = r.items || {};
+            const metaMatch = legacyMetaFavs.find((cf) => String(cf.id) === String(r.item_id) || String(cf.source_id) === String(r.item_id));
+            const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+              await formatPersonalMediaEntry({ item_id: r.item_id, items: it, meta: metaMatch }, getVideoCatalog, "Guardado");
+            const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
+            return {
+              id: it.id || r.item_id,
+              item_id: r.item_id,
+              title: isAvailable ? effectiveTitle : "Contenido no disponible",
+              cover_url: finalCover,
+              media_type: it.media_type || (metaMatch && metaMatch.media_type) || "comic",
+              source: effectiveSource,
+              source_id: effectiveSourceId,
+              url: isAvailable ? effectiveUrl : "",
+              page_count: it.page_count || (metaMatch && metaMatch.page_count) || 0,
+              created_at: r.created_at,
+              available: isAvailable
+            };
+          })
+        );
 
-        let finalItems = [...items];
-        if (userMetaFavs.length > 0) {
-          const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id)));
-          for (const cf of userMetaFavs) {
-            const k = (cf.source && cf.source_id) ? `${cf.source}:${cf.source_id}` : String(cf.id);
-            if (!seen.has(k)) {
-              seen.add(k);
-              const rawCfCover = extractRawMediaUrl(cf.cover_url) || cf.cover_url || "";
-              let cfCover = "/velvet_logo.png";
-              if (rawCfCover && /^https?:\/\//i.test(rawCfCover)) {
-                const freshTok = await encodeToken(rawCfCover, cf.url || "");
-                if (freshTok) cfCover = `/api/media?t=${freshTok}`;
-              } else if (cf.cover_url && cf.cover_url.startsWith("/api/media?t=")) {
-                cfCover = cf.cover_url;
-              }
-              let cfTitle = cf.title || "Contenido guardado";
-              if (cfCover === "/velvet_logo.png" || cfTitle === "Contenido guardado") {
-                try {
-                  const vCatalog = await loadVideoCatalog(context, url);
-                  const target = String(cf.id || cf.item_id || cf.source_id || "");
-                  const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (cfTitle !== "Contenido guardado" && v.title && v.title.toLowerCase() === cfTitle.toLowerCase()));
-                  if (vMatch) {
-                    cfTitle = vMatch.title || cfTitle;
-                    const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
-                    if (vUpstream) {
-                      const freshTok = await encodeToken(vUpstream, vMatch.url || "");
-                      if (freshTok) cfCover = `/api/media?t=${freshTok}`;
-                    }
-                  }
-                } catch (e) {}
-              }
-              finalItems.push({
-                ...cf,
-                title: cfTitle,
-                cover_url: cfCover
-              });
-            }
-          }
+        const filteredSql = hasTypeFilter
+          ? formattedSql.filter((it) => it.media_type === typeFilter)
+          : formattedSql;
+
+        if (customTotal === 0 && legacyMetaFavs.length === 0) {
+          const totalOut = hasTypeFilter ? filteredSql.length : Math.max(sqlTotal, filteredSql.length);
+          const totalPages = Math.max(1, Math.ceil(totalOut / pageSize));
+          const sqlOutSlice = hasTypeFilter ? filteredSql.slice(offset, offset + pageSize) : filteredSql;
+          return new Response(JSON.stringify({ items: sqlOutSlice, total: totalOut, page, pageSize, totalPages }), {
+            status: 200,
+            headers: getPersonalHeaders(origin, newToken)
+          });
         }
 
-        const finalTotal = Math.max(total, finalItems.length);
-        const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
-        return new Response(JSON.stringify({ items: finalItems, total: finalTotal, page, pageSize, totalPages }), {
+        const formattedCustom = await Promise.all(
+          [...customRows, ...legacyMetaFavs].map(async (cf) => {
+            const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+              await formatPersonalMediaEntry(cf, getVideoCatalog, "Contenido guardado");
+            const numId = parseStrictPositiveInt(cf.item_id || cf.id);
+            const resolvedId = numId || (cf.id || cf.item_id || cf.source_id || cf.item_key);
+            return {
+              id: resolvedId,
+              item_id: resolvedId,
+              item_key: cf.item_key || buildCustomItemKey(cf),
+              title: effectiveTitle,
+              cover_url: finalCover,
+              media_type: inferPersonalMediaType(cf),
+              source: effectiveSource || "external",
+              source_id: effectiveSourceId || String(resolvedId || ""),
+              url: effectiveUrl,
+              page_count: cf.page_count || 0,
+              created_at: cf.created_at || new Date(0).toISOString(),
+              available: true,
+              is_custom: true
+            };
+          })
+        );
+
+        const seen = new Set();
+        const combined = [];
+        for (const entry of [...filteredSql, ...formattedCustom]) {
+          const dedupKey = (entry.source && entry.source_id)
+            ? `${entry.source.toLowerCase()}:${entry.source_id}`
+            : String(entry.item_key || entry.id || entry.item_id);
+          if (!dedupKey || seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+          combined.push(entry);
+        }
+
+        combined.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+        const totalCombined = Math.max(combined.length, (hasTypeFilter ? filteredSql.length : sqlTotal) + customTotal);
+        const totalPages = Math.max(1, Math.ceil(totalCombined / pageSize));
+        const pageSlice = combined.length > pageSize ? combined.slice(offset, offset + pageSize) : combined;
+
+        return new Response(JSON.stringify({ items: pageSlice, total: totalCombined, page, pageSize, totalPages }), {
           status: 200,
           headers: getPersonalHeaders(origin, newToken)
         });
@@ -4221,7 +5994,7 @@ export async function onRequest(context) {
       }
     }
 
-    // --- POST FAVORITOS (Agregar o Sincronización Idempotente) ---
+    // --- POST FAVORITOS (SQL favorites + user_custom_favorites, sin inflar JWT metadata) ---
     if (method === "POST") {
       if (!checkPersonalWriteRateLimit(user.id, 60)) {
         return new Response(JSON.stringify({ error: "Límite de peticiones excedido" }), {
@@ -4235,66 +6008,66 @@ export async function onRequest(context) {
 
         // Caso A: Sincronización masiva desde dispositivo o localStorage
         if (Array.isArray(body.items)) {
-          const validIds = body.items
-            .map((it) => parseInt(it.id || it.item_id, 10))
-            .filter((id) => Number.isInteger(id) && id > 0);
-          if (validIds.length > 0) {
-            const rows = validIds.slice(0, 2000).map((id) => ({ user_id: user.id, item_id: id }));
-            const batchRes = await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
-              method: "POST",
-              headers: {
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-                "Content-Type": "application/json",
-                "Prefer": "resolution=ignore-duplicates"
-              },
-              body: JSON.stringify(rows)
-            }).catch(() => null);
+          const numericCandidates = [];
+          const customCandidates = [];
+          for (const it of body.items.slice(0, 2000)) {
+            const num = parseStrictPositiveInt(it?.id || it?.item_id);
+            if (num) {
+              numericCandidates.push({ num, item: it });
+            } else if (it && (it.id || it.item_id || (it.source && it.source_id))) {
+              customCandidates.push(it);
+            }
+          }
 
-            // Si la inserción en bloque falló (ej. violación de FK si algún ID no existe en items)
-            if (!batchRes || !batchRes.ok) {
-              for (const singleId of validIds.slice(0, 200)) {
-                await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
-                  method: "POST",
-                  headers: {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-                    "Content-Type": "application/json",
-                    "Prefer": "resolution=ignore-duplicates"
-                  },
-                  body: JSON.stringify({ user_id: user.id, item_id: singleId })
-                }).catch(() => {});
+          let syncedCount = 0;
+          if (numericCandidates.length > 0) {
+            const rows = numericCandidates.map((c) => ({ user_id: user.id, item_id: c.num }));
+            const batchRes = await restFetchWithAdminFallback(
+              `${SUPABASE_URL}/rest/v1/favorites`,
+              (useAdmin) => ({
+                method: "POST",
+                headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                  "Content-Type": "application/json",
+                  "Prefer": "resolution=ignore-duplicates"
+                }),
+                body: JSON.stringify(rows)
+              }),
+              user.id,
+              verified
+            );
+
+            if (batchRes && batchRes.ok) {
+              syncedCount += numericCandidates.length;
+            } else {
+              for (const c of numericCandidates.slice(0, 200)) {
+                const singleRes = await restFetchWithAdminFallback(
+                  `${SUPABASE_URL}/rest/v1/favorites`,
+                  (useAdmin) => ({
+                    method: "POST",
+                    headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                      "Content-Type": "application/json",
+                      "Prefer": "resolution=ignore-duplicates"
+                    }),
+                    body: JSON.stringify({ user_id: user.id, item_id: c.num })
+                  }),
+                  user.id,
+                  verified
+                );
+                if (singleRes && singleRes.ok) {
+                  syncedCount++;
+                } else {
+                  customCandidates.push(c.item);
+                }
               }
             }
           }
 
-          // Guardar también cualquier ítem con ID no entero o externo en custom_favorites
-          const customItems = body.items.filter((it) => {
-            const num = parseInt(it.id || it.item_id, 10);
-            return !Number.isInteger(num) || num <= 0 || isNaN(num);
-          });
-          if (customItems.length > 0) {
-            const currentMeta = user.user_metadata || {};
-            const existingCustom = Array.isArray(currentMeta.custom_favorites) ? [...currentMeta.custom_favorites] : [];
-            for (const ci of customItems.slice(0, 50)) {
-              const k = (ci.source && ci.source_id) ? `${ci.source}:${ci.source_id}` : String(ci.id || "");
-              if (!existingCustom.some(ex => ((ex.source && ex.source_id) ? `${ex.source}:${ex.source_id}` : String(ex.id)) === k)) {
-                existingCustom.unshift({
-                  id: ci.id || ci.source_id || `custom_${Date.now()}`,
-                  source: ci.source || "external",
-                  source_id: String(ci.source_id || ci.id || ""),
-                  title: String(ci.title || "Contenido guardado").slice(0, 80),
-                  cover_url: extractRawMediaUrl(ci.cover_url) || ci.cover_url || "",
-                  url: ci.url || "",
-                  media_type: ci.media_type || "video"
-                });
-              }
-            }
-            if (existingCustom.length > 100) existingCustom.length = 100;
-            await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: existingCustom }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
+          for (const ci of customCandidates.slice(0, 100)) {
+            const cfRes = await upsertCustomFavoriteRow(user.id, ci, token, verified);
+            if (cfRes.ok) syncedCount++;
           }
 
-          return new Response(JSON.stringify({ ok: true, synced: validIds.length + customItems.length }), {
+          return new Response(JSON.stringify({ ok: true, synced: syncedCount }), {
             status: 200,
             headers: getPersonalHeaders(origin, newToken)
           });
@@ -4302,59 +6075,47 @@ export async function onRequest(context) {
 
         // Caso B: Toggle a falso si se envía favorite: false
         if (body.favorite === false) {
-          const removeId = parseInt(body.id || body.item_id, 10);
-          if (Number.isInteger(removeId) && removeId > 0) {
-            await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${removeId}`, {
-              method: "DELETE",
-              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
-            });
-          }
-          // Limpiar también de custom_favorites
-          const currentMeta = user.user_metadata || {};
-          if (Array.isArray(currentMeta.custom_favorites)) {
-            const updatedCustom = currentMeta.custom_favorites.filter(cf =>
-              String(cf.id) !== String(body.id) && String(cf.source_id) !== String(body.source_id || body.id)
+          const removeId = parseStrictPositiveInt(body.id || body.item_id);
+          if (removeId) {
+            await restFetchWithAdminFallback(
+              `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${removeId}`,
+              (useAdmin) => ({
+                method: "DELETE",
+                headers: useAdmin ? getAdminRestHeaders() : getUserRestHeaders(token)
+              }),
+              user.id,
+              verified
             );
-            if (updatedCustom.length !== currentMeta.custom_favorites.length) {
-              await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: updatedCustom }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
-            }
           }
+          await deleteCustomTableTarget("user_custom_favorites", user.id, {
+            numId: Number.isInteger(removeId) ? removeId : null,
+            rawId: body.id || body.item_id || null,
+            source: body.source || "",
+            sourceId: body.source_id || ""
+          }, token, verified);
           return new Response(JSON.stringify({ ok: true, removed: true }), {
             status: 200,
             headers: getPersonalHeaders(origin, newToken)
           });
         }
 
-        // Caso C: Agregar favorito individual (idempotente con ignore-duplicates)
-        let targetItemId = parseInt(body.id || body.item_id, 10);
+        // Caso C: Agregar favorito individual (SQL favorites -> fallback user_custom_favorites)
+        const targetItemId = await resolveSqlItemId(body, token, user.id);
 
-        // Si no es un entero directo pero tiene source y source_id, intentar resolverlo desde la tabla items
-        if ((!Number.isInteger(targetItemId) || targetItemId <= 0 || isNaN(targetItemId)) && body.source && body.source_id) {
-          try {
-            const lookupRes = await fetch(`${SUPABASE_URL}/rest/v1/items?source=eq.${encodeURIComponent(body.source)}&source_id=eq.${encodeURIComponent(body.source_id)}&select=id&limit=1`, {
-              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
-            });
-            if (lookupRes.ok) {
-              const rows = await lookupRes.json();
-              if (rows && rows.length > 0 && rows[0].id) {
-                targetItemId = rows[0].id;
-              }
-            }
-          } catch (e) {}
-        }
-
-        // Si tenemos un item_id entero válido para la tabla SQL
         if (Number.isInteger(targetItemId) && targetItemId > 0) {
-          const sqlFavRes = await fetch(`${SUPABASE_URL}/rest/v1/favorites`, {
-            method: "POST",
-            headers: {
-              "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-              "Content-Type": "application/json",
-              "Prefer": "resolution=ignore-duplicates"
-            },
-            body: JSON.stringify({ user_id: user.id, item_id: targetItemId })
-          }).catch(() => null);
+          const sqlFavRes = await restFetchWithAdminFallback(
+            `${SUPABASE_URL}/rest/v1/favorites`,
+            (useAdmin) => ({
+              method: "POST",
+              headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                "Content-Type": "application/json",
+                "Prefer": "resolution=ignore-duplicates"
+              }),
+              body: JSON.stringify({ user_id: user.id, item_id: targetItemId })
+            }),
+            user.id,
+            verified
+          );
 
           if (sqlFavRes && sqlFavRes.ok) {
             return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId }), {
@@ -4364,34 +6125,20 @@ export async function onRequest(context) {
           }
         }
 
-        // Si es un contenido dinámico/externo (ej: pmvhaven, juegos u otros sin registro SQL o fallo de FK)
-        if (body.source || body.source_id || body.title || body.id || targetItemId) {
-          const currentMeta = user.user_metadata || {};
-          const customFavs = Array.isArray(currentMeta.custom_favorites) ? [...currentMeta.custom_favorites] : [];
-          const customEntry = {
-            id: body.id || targetItemId || body.source_id || `custom_${Date.now()}`,
-            source: body.source || "external",
-            source_id: String(body.source_id || body.id || targetItemId || ""),
-            title: String(body.title || "Contenido guardado").slice(0, 80),
-            cover_url: extractRawMediaUrl(body.cover_url) || body.cover_url || "",
-            url: body.url || "",
-            media_type: body.media_type || "video"
-          };
-
-          const existingIdx = customFavs.findIndex(cf =>
-            (cf.source === customEntry.source && String(cf.source_id) === String(customEntry.source_id)) ||
-            (cf.id && String(cf.id) === String(customEntry.id))
+        if (body.source || body.source_id || body.title || body.id || body.item_id || targetItemId) {
+          const customWrite = await upsertCustomFavoriteRow(
+            user.id,
+            { ...body, id: body.id || targetItemId || body.item_id || body.source_id },
+            token,
+            verified
           );
-          if (existingIdx >= 0) {
-            customFavs[existingIdx] = { ...customFavs[existingIdx], ...customEntry };
-          } else {
-            customFavs.unshift(customEntry);
+          if (!customWrite.ok) {
+            return new Response(JSON.stringify({ error: "No se pudo guardar el favorito en la nube", detail: customWrite.status }), {
+              status: 502,
+              headers: getPersonalHeaders(origin, newToken)
+            });
           }
-
-          if (customFavs.length > 100) customFavs.length = 100;
-          await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: customFavs }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
-
-          return new Response(JSON.stringify({ ok: true, success: true, item_id: customEntry.id, is_custom: true }), {
+          return new Response(JSON.stringify({ ok: true, success: true, item_id: customWrite.item_id, item_key: customWrite.item_key, is_custom: true }), {
             status: 200,
             headers: getPersonalHeaders(origin, newToken)
           });
@@ -4421,35 +6168,47 @@ export async function onRequest(context) {
       const parts = url.pathname.split("/").filter(Boolean);
       const lastPart = parts[parts.length - 1];
       const secondLastPart = parts.length >= 4 ? parts[parts.length - 2] : null;
-
+      const isClearAll = url.searchParams.get("clear") === "all";
       const rawId = url.searchParams.get("id") || url.searchParams.get("item_id");
-      let targetId = parseInt(rawId, 10);
-      if (!targetId || isNaN(targetId)) {
-        if (/^\d+$/.test(lastPart)) targetId = parseInt(lastPart, 10);
+      const qSource = url.searchParams.get("source") || "";
+      const qSourceId = url.searchParams.get("source_id") || "";
+
+      let targetId = parseStrictPositiveInt(rawId);
+      if (!targetId) {
+        targetId = parseStrictPositiveInt(lastPart);
+      }
+      if (!targetId && qSource && qSourceId) {
+        targetId = await resolveSqlItemId({ source: qSource, source_id: qSourceId }, token, user.id);
       }
 
-      // Si tenemos un targetId entero válido, borrar de SQL
-      if (Number.isInteger(targetId) && targetId > 0) {
-        await fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
-          method: "DELETE",
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
-        });
-      }
+      const sqlDeletePromise = isClearAll
+        ? restFetchWithAdminFallback(
+            `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}`,
+            (useAdmin) => ({ method: "DELETE", headers: useAdmin ? getAdminRestHeaders() : getUserRestHeaders(token) }),
+            user.id,
+            verified
+          )
+        : (Number.isInteger(targetId) && targetId > 0
+            ? restFetchWithAdminFallback(
+                `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${targetId}`,
+                (useAdmin) => ({ method: "DELETE", headers: useAdmin ? getAdminRestHeaders() : getUserRestHeaders(token) }),
+                user.id,
+                verified
+              )
+            : Promise.resolve(null));
 
-      // Remover también de custom_favorites en metadata si existe
-      const currentMeta = user.user_metadata || {};
-      if (Array.isArray(currentMeta.custom_favorites) && currentMeta.custom_favorites.length > 0) {
-        const updatedCustom = currentMeta.custom_favorites.filter(cf => {
-          if (targetId && String(cf.id) === String(targetId)) return false;
-          if (rawId && (String(cf.id) === String(rawId) || String(cf.source_id) === String(rawId))) return false;
-          if (lastPart && lastPart !== "favorites" && (String(cf.id) === String(lastPart) || String(cf.source_id) === String(lastPart))) return false;
-          if (secondLastPart && cf.source === secondLastPart && String(cf.source_id) === String(lastPart)) return false;
-          return true;
-        });
-        if (updatedCustom.length !== currentMeta.custom_favorites.length) {
-          await updateUserMetadata(user.id, { ...currentMeta, custom_favorites: updatedCustom }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
-        }
-      }
+      await Promise.all([
+        sqlDeletePromise,
+        deleteCustomTableTarget("user_custom_favorites", user.id, {
+          clearAll: isClearAll,
+          numId: Number.isInteger(targetId) ? targetId : null,
+          rawId,
+          source: qSource,
+          sourceId: qSourceId,
+          lastPart,
+          secondLastPart
+        }, token, verified)
+      ]);
 
       return new Response(JSON.stringify({ ok: true, success: true, deleted: rawId || lastPart || targetId }), {
         status: 200,
@@ -4460,8 +6219,91 @@ export async function onRequest(context) {
 
   // =========================================================================
   // 9. HISTORIAL Y PROGRESO (/api/user/history, /api/history)
-  // Persistencia atómica en tabla user_history con resolución de concurrencia
+  // Persistencia atómica en user_history + user_custom_history (sin inflar JWT)
   // =========================================================================
+  const upsertSqlOrCustomHistory = async (userId, itemData, targetItemId, tokenVal, isVerified = false) => {
+    const mediaType = inferPersonalMediaType(itemData);
+    const sqlMedia = mediaType === "video" ? "video" : (mediaType === "gallery" ? "gallery" : "comic");
+    const pos = Math.max(0, parseInt(itemData.position || itemData.page || itemData.currentTime || 0, 10) || 0);
+    const dur = Math.max(0, parseInt(itemData.duration || itemData.total || 0, 10) || 0);
+    const comp = Boolean(itemData.completed);
+    const clientTs = parseInt(itemData.client_timestamp || itemData.at || Date.now(), 10) || Date.now();
+
+    if (Number.isInteger(targetItemId) && targetItemId > 0) {
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_history`, {
+        method: "POST",
+        headers: getUserRestHeaders(tokenVal, { "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          p_item_id: targetItemId,
+          p_media_type: sqlMedia,
+          p_position: pos,
+          p_duration: dur,
+          p_completed: comp,
+          p_client_timestamp: clientTs
+        })
+      }).catch(() => null);
+
+      if (rpcRes && rpcRes.ok) return true;
+
+      const postRes = await restFetchWithAdminFallback(
+        `${SUPABASE_URL}/rest/v1/user_history`,
+        (useAdmin) => ({
+          method: "POST",
+          headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(tokenVal, extra))({
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+          }),
+          body: JSON.stringify({
+            user_id: userId,
+            item_id: targetItemId,
+            media_type: sqlMedia,
+            position: pos,
+            duration: dur,
+            completed: comp,
+            last_activity: new Date().toISOString(),
+            client_timestamp: clientTs
+          })
+        }),
+        userId,
+        isVerified
+      );
+      if (postRes && postRes.ok) return true;
+    }
+
+    const itemKey = buildCustomItemKey(itemData);
+    if (!itemKey) return false;
+    const chPayload = {
+      user_id: userId,
+      item_key: itemKey,
+      item_id: String(targetItemId || itemData.id || itemData.item_id || itemData.source_id || itemKey).slice(0, 120),
+      source: String(itemData.source || "").slice(0, 40),
+      source_id: String(itemData.source_id || itemData.id || "").slice(0, 120),
+      media_type: mediaType,
+      title: String(itemData.title || "Contenido visto").slice(0, 300),
+      cover_url: String(extractRawMediaUrl(itemData.cover_url) || itemData.cover_url || "").slice(0, 1000),
+      url: String(itemData.url || "").slice(0, 1000),
+      position: pos,
+      duration: dur,
+      completed: comp,
+      client_timestamp: clientTs,
+      last_activity: new Date().toISOString()
+    };
+    const customRes = await restFetchWithAdminFallback(
+      `${SUPABASE_URL}/rest/v1/user_custom_history?on_conflict=user_id,item_key`,
+      (useAdmin) => ({
+        method: "POST",
+        headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(tokenVal, extra))({
+          "Content-Type": "application/json",
+          "Prefer": "resolution=merge-duplicates,return=minimal"
+        }),
+        body: JSON.stringify(chPayload)
+      }),
+      userId,
+      isVerified
+    );
+    return Boolean(customRes && customRes.ok);
+  };
+
   const isHistoryRoute =
     url.pathname === "/api/user/history" ||
     url.pathname.startsWith("/api/user/history/") ||
@@ -4469,8 +6311,8 @@ export async function onRequest(context) {
     url.pathname.startsWith("/api/history/");
 
   if (isHistoryRoute) {
-    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
-    if (unavailable) {
+    const { user, token, newToken, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable || ((method !== "GET") && (degraded || (user && !verified)))) {
       return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
         status: 503,
         headers: getPersonalHeaders(origin)
@@ -4483,55 +6325,67 @@ export async function onRequest(context) {
       });
     }
 
-    // --- GET HISTORIAL (Paginado determinista 24/página desde PostgreSQL) ---
+    // --- GET HISTORIAL (Paginado determinista 24/página desde SQL + Custom) ---
     if (method === "GET") {
       const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
       const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") || String(PERSONAL_PAGE_SIZE), 10)));
       const offset = (page - 1) * pageSize;
       const to = offset + pageSize - 1;
-
-      let histQueryUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,url,page_count,video_sources,status)&order=last_activity.desc,id.desc`;
       const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
+      const hasTypeFilter = Boolean(typeFilter && ["comic", "video", "gallery", "game"].includes(typeFilter));
+      const getVideoCatalog = createVideoCatalogLoader();
+
+      let histQueryUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,page_count,status,real_people)&order=last_activity.desc,id.desc`;
       if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
         histQueryUrl += `&media_type=eq.${typeFilter}`;
       }
 
-      const histRes = await fetch(histQueryUrl, {
-        headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-          "Prefer": "count=exact",
-          "Range": `${offset}-${to}`
-        }
-      }).catch(() => null);
+      let customHistUrl = `${SUPABASE_URL}/rest/v1/user_custom_history?user_id=eq.${user.id}&select=item_key,item_id,source,source_id,media_type,title,cover_url,url,position,duration,completed,client_timestamp,last_activity&order=last_activity.desc&limit=500`;
+      if (hasTypeFilter) customHistUrl += `&media_type=eq.${typeFilter}`;
 
-      let total = 0;
-      if (histRes && histRes.headers) {
-        const cr = histRes.headers.get("content-range") || "";
-        const slashIdx = cr.indexOf("/");
-        if (slashIdx !== -1) {
-          const totalPart = cr.substring(slashIdx + 1);
-          if (totalPart && totalPart !== "*") {
-            total = parseInt(totalPart, 10) || 0;
-          }
-        }
-      }
+      const [histRes, customHistRes] = await Promise.all([
+        restFetchWithAdminFallback(
+          histQueryUrl,
+          (useAdmin) => ({
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+              "Prefer": "count=exact",
+              "Range": `${offset}-${to}`
+            })
+          }),
+          user.id,
+          verified
+        ),
+        restFetchWithAdminFallback(
+          customHistUrl,
+          (useAdmin) => ({
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+              "Prefer": "count=exact"
+            })
+          }),
+          user.id,
+          verified
+        )
+      ]);
 
+      const sqlTotal = histRes && histRes.ok ? parseContentRangeTotal(histRes) : 0;
       const rawRows = histRes && histRes.ok ? await histRes.json().catch(() => []) : [];
+      const customRowsRaw = customHistRes && customHistRes.ok ? await customHistRes.json().catch(() => []) : [];
+      const customRows = Array.isArray(customRowsRaw) ? customRowsRaw : [];
 
       // Si algún item_id no vino con items(...) poblado, buscarlo en la tabla items
-      const missingHistIds = (rawRows || [])
-        .filter(r => !r.items || !r.items.title)
-        .map(r => r.item_id)
-        .filter(id => Number.isInteger(id) && id > 0);
-      if (missingHistIds.length > 0) {
+      const missingHistIds = (Array.isArray(rawRows) ? rawRows : [])
+        .filter((r) => !r.items || !r.items.title)
+        .map((r) => r.item_id)
+        .filter((id) => Number.isInteger(id) && id > 0);
+      if (missingHistIds.length > 0 && SUPABASE_ADMIN_KEY) {
         try {
-          const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${missingHistIds.join(",")})&select=id,title,cover_url,media_type,source,source_id,url,page_count,status`, {
-            headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
-          });
+          const itemsRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/items?id=in.(${missingHistIds.join(",")})&status=neq.blocked&real_people=is.false&select=id,title,cover_url,media_type,source,source_id,page_count,status,real_people`,
+            { headers: getAdminRestHeaders() }
+          );
           if (itemsRes.ok) {
             const fetched = await itemsRes.json().catch(() => []);
-            const itMap = new Map((fetched || []).map(it => [it.id, it]));
+            const itMap = new Map((Array.isArray(fetched) ? fetched : []).map((it) => [it.id, it]));
             for (const r of rawRows) {
               if (!r.items || !r.items.title) {
                 const found = itMap.get(r.item_id);
@@ -4539,115 +6393,91 @@ export async function onRequest(context) {
               }
             }
           }
-        } catch(e) {}
+        } catch (e) {}
       }
 
-      const metaHist = Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [];
-      const items = await Promise.all((rawRows || []).map(async (r) => {
-        const it = r.items || {};
-        const metaMatch = metaHist.find(mh => String(mh.id || mh.item_id) === String(r.item_id));
-        let effectiveTitle = (it && it.title) || (metaMatch && metaMatch.title) || "Contenido visto";
-        let effectiveSource = (it && it.source) || (metaMatch && metaMatch.source) || "";
-        let effectiveSourceId = (it && it.source_id) || (metaMatch && metaMatch.source_id) || "";
-        let rawCover = (it && it.cover_url) || (metaMatch && metaMatch.cover_url) || "";
-        let upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
-        let finalCover = "/velvet_logo.png";
-        if (upstreamCover) {
-          const freshTok = await encodeToken(upstreamCover, (it && it.url) || (metaMatch && metaMatch.url) || "");
-          if (freshTok) finalCover = `/api/media?t=${freshTok}`;
-        } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
-          finalCover = rawCover;
-        }
-        if (finalCover === "/velvet_logo.png" || effectiveTitle === "Contenido visto") {
-          try {
-            const vCatalog = await loadVideoCatalog(context, url);
-            const target = String(r.item_id || (metaMatch && (metaMatch.id || metaMatch.source_id)) || "");
-            const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (effectiveTitle !== "Contenido visto" && v.title && v.title.toLowerCase() === effectiveTitle.toLowerCase()));
-            if (vMatch) {
-              effectiveTitle = vMatch.title || effectiveTitle;
-              effectiveSource = "pmvhaven";
-              effectiveSourceId = String(vMatch.id);
-              const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
-              if (vUpstream) {
-                const freshTok = await encodeToken(vUpstream, vMatch.url || "");
-                if (freshTok) finalCover = `/api/media?t=${freshTok}`;
-              }
-            }
-          } catch (e) {}
-        }
-        const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
-        return {
-          id: it.id || r.item_id,
-          history_id: r.id,
-          item_id: r.item_id,
-          title: isAvailable ? effectiveTitle : "Contenido no disponible",
-          cover_url: finalCover,
-          media_type: r.media_type || it.media_type || (metaMatch && metaMatch.media_type) || "comic",
-          source: effectiveSource || (it && it.source) || (metaMatch && metaMatch.source) || "",
-          source_id: effectiveSourceId || (it && it.source_id) || (metaMatch && metaMatch.source_id) || "",
-          url: isAvailable ? ((it && it.url) || (metaMatch && metaMatch.url) || "") : "",
-          page_count: (it && it.page_count) || (metaMatch && metaMatch.page_count) || 0,
-          position: r.position || (metaMatch && (metaMatch.position || metaMatch.page || metaMatch.currentTime)) || 0,
-          duration: r.duration || (metaMatch && (metaMatch.duration || metaMatch.total)) || 0,
-          completed: Boolean(r.completed || (metaMatch && metaMatch.completed)),
-          last_activity: r.last_activity,
-          at: r.client_timestamp ? Number(r.client_timestamp) : (metaMatch && metaMatch.at ? Number(metaMatch.at) : new Date(r.last_activity).getTime()),
-          available: isAvailable
-        };
-      }));
+      const metaHist = (Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [])
+        .filter((mh) => !hasTypeFilter || inferPersonalMediaType(mh) === typeFilter);
 
-      // Fusionar con historial en user_metadata (para fuentes externas, juegos, o si user_history no existe aún en BD)
-      let finalItems = [...items];
-      if (metaHist.length > 0) {
-        const seen = new Set(finalItems.map(it => (it.source && it.source_id) ? `${it.source}:${it.source_id}` : String(it.id || it.item_id)));
-        for (const mh of metaHist) {
-          const k = (mh.source && mh.source_id) ? `${mh.source}:${mh.source_id}` : String(mh.id || mh.item_id);
-          if (!seen.has(k)) {
-            seen.add(k);
-            if (!typeFilter || typeFilter === "all" || mh.media_type === typeFilter) {
-              const rawMhCover = extractRawMediaUrl(mh.cover_url) || mh.cover_url || "";
-              let mhCover = "/velvet_logo.png";
-              if (rawMhCover && /^https?:\/\//i.test(rawMhCover)) {
-                const freshTok = await encodeToken(rawMhCover, mh.url || "");
-                if (freshTok) mhCover = `/api/media?t=${freshTok}`;
-              } else if (mh.cover_url && mh.cover_url.startsWith("/api/media?t=")) {
-                mhCover = mh.cover_url;
-              }
-              let mhTitle = mh.title || "Contenido visto";
-              if (mhCover === "/velvet_logo.png" || mhTitle === "Contenido visto") {
-                try {
-                  const vCatalog = await loadVideoCatalog(context, url);
-                  const target = String(mh.id || mh.item_id || mh.source_id || "");
-                  const vMatch = (vCatalog || []).find(v => String(v.id) === target || String(v.source_id) === target || (mhTitle !== "Contenido visto" && v.title && v.title.toLowerCase() === mhTitle.toLowerCase()));
-                  if (vMatch) {
-                    mhTitle = vMatch.title || mhTitle;
-                    const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
-                    if (vUpstream) {
-                      const freshTok = await encodeToken(vUpstream, vMatch.url || "");
-                      if (freshTok) mhCover = `/api/media?t=${freshTok}`;
-                    }
-                  }
-                } catch (e) {}
-              }
-              finalItems.push({
-                ...mh,
-                title: mhTitle,
-                cover_url: mhCover
-              });
-            }
-          }
-        }
+      const items = await Promise.all(
+        (Array.isArray(rawRows) ? rawRows : []).map(async (r) => {
+          const it = r.items || {};
+          const metaMatch = metaHist.find((mh) => String(mh.id || mh.item_id) === String(r.item_id));
+          const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+            await formatPersonalMediaEntry({ item_id: r.item_id, items: it, meta: metaMatch }, getVideoCatalog, "Contenido visto");
+          const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
+          return {
+            id: it.id || r.item_id,
+            history_id: r.id,
+            item_id: r.item_id,
+            title: isAvailable ? effectiveTitle : "Contenido no disponible",
+            cover_url: finalCover,
+            media_type: r.media_type || it.media_type || (metaMatch && metaMatch.media_type) || "comic",
+            source: effectiveSource,
+            source_id: effectiveSourceId,
+            url: isAvailable ? effectiveUrl : "",
+            page_count: it.page_count || (metaMatch && metaMatch.page_count) || 0,
+            position: r.position || (metaMatch && (metaMatch.position || metaMatch.page || metaMatch.currentTime)) || 0,
+            duration: r.duration || (metaMatch && (metaMatch.duration || metaMatch.total)) || 0,
+            completed: Boolean(r.completed || (metaMatch && metaMatch.completed)),
+            last_activity: r.last_activity,
+            at: r.client_timestamp ? Number(r.client_timestamp) : (metaMatch && metaMatch.at ? Number(metaMatch.at) : new Date(r.last_activity).getTime()),
+            available: isAvailable
+          };
+        })
+      );
+
+      const formattedCustomHist = await Promise.all(
+        [...customRows, ...metaHist].map(async (ch) => {
+          const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+            await formatPersonalMediaEntry(ch, getVideoCatalog, "Contenido visto");
+          const numId = parseInt(ch.item_id || ch.id, 10);
+          const resolvedId = Number.isInteger(numId) && numId > 0 ? numId : (ch.id || ch.item_id || ch.source_id || ch.item_key);
+          const atTs = ch.client_timestamp ? Number(ch.client_timestamp) : (ch.at ? Number(ch.at) : new Date(ch.last_activity || 0).getTime());
+          return {
+            ...ch,
+            id: resolvedId,
+            item_id: resolvedId,
+            title: effectiveTitle,
+            cover_url: finalCover,
+            media_type: inferPersonalMediaType(ch),
+            source: effectiveSource || ch.source || "",
+            source_id: effectiveSourceId || ch.source_id || String(resolvedId || ""),
+            url: effectiveUrl || ch.url || "",
+            position: ch.position || ch.page || ch.currentTime || 0,
+            duration: ch.duration || ch.total || 0,
+            completed: Boolean(ch.completed),
+            last_activity: ch.last_activity || new Date(atTs || Date.now()).toISOString(),
+            at: atTs,
+            available: true
+          };
+        })
+      );
+
+      const seenHist = new Set();
+      const mergedHist = [];
+      for (const h of [...items, ...formattedCustomHist]) {
+        const k = (h.source && h.source_id) ? `${h.source.toLowerCase()}:${h.source_id}` : String(h.item_key || h.id || h.item_id);
+        if (!k || seenHist.has(k)) continue;
+        seenHist.add(k);
+        mergedHist.push(h);
       }
 
-      const finalTotal = Math.max(total, finalItems.length);
+      if (formattedCustomHist.length > 0) {
+        mergedHist.sort((a, b) => (b.at || 0) - (a.at || 0));
+      }
+
+      const finalTotal = Math.max(sqlTotal + customRows.length, mergedHist.length);
       const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
-      return new Response(JSON.stringify({ items: finalItems.slice(0, pageSize), total: finalTotal, page, pageSize, totalPages }), {
+      const sliceOut = mergedHist.slice(0, pageSize);
+
+      return new Response(JSON.stringify({ items: sliceOut, total: finalTotal, page, pageSize, totalPages }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });
     }
 
-    // --- POST HISTORIAL (Registro o Fusión Idempotente con RPC upsert_history) ---
+    // --- POST HISTORIAL (SQL user_history + user_custom_history, sin inflar JWT metadata) ---
     if (method === "POST") {
       if (!checkPersonalWriteRateLimit(user.id, 60)) {
         return new Response(JSON.stringify({ error: "Límite de peticiones excedido" }), {
@@ -4663,53 +6493,9 @@ export async function onRequest(context) {
         if (Array.isArray(body.items)) {
           let synced = 0;
           for (const it of body.items.slice(0, 100)) {
-            const itId = parseInt(it.id || it.item_id, 10);
-            if (!Number.isInteger(itId) || itId <= 0) continue;
-            const mediaType = it.media_type === "video" ? "video" : (it.media_type === "gallery" ? "gallery" : "comic");
-            const pos = Math.max(0, parseInt(it.position || it.page || it.currentTime || 0, 10));
-            const dur = Math.max(0, parseInt(it.duration || it.total || 0, 10));
-            const comp = Boolean(it.completed);
-            const clientTs = parseInt(it.client_timestamp || it.at || Date.now(), 10);
-
-            const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_history`, {
-              method: "POST",
-              headers: {
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${token || SUPABASE_KEY}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                p_item_id: itId,
-                p_media_type: mediaType,
-                p_position: pos,
-                p_duration: dur,
-                p_completed: comp,
-                p_client_timestamp: clientTs
-              })
-            }).catch(() => null);
-
-            if (!rpcRes || !rpcRes.ok) {
-              await fetch(`${SUPABASE_URL}/rest/v1/user_history`, {
-                method: "POST",
-                headers: {
-                  "apikey": SUPABASE_KEY,
-                  "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-                  "Content-Type": "application/json",
-                  "Prefer": "resolution=merge-duplicates"
-                },
-                body: JSON.stringify({
-                  user_id: user.id,
-                  item_id: itId,
-                  media_type: mediaType,
-                  position: pos,
-                  duration: dur,
-                  completed: comp,
-                  last_activity: new Date().toISOString(),
-                  client_timestamp: clientTs
-                })
-              }).catch(() => {});
-            }
-            synced++;
+            const resolvedId = await resolveSqlItemId(it, token, user.id);
+            const ok = await upsertSqlOrCustomHistory(user.id, it, resolvedId, token, verified);
+            if (ok || (Number.isInteger(resolvedId) && resolvedId > 0)) synced++;
           }
           return new Response(JSON.stringify({ ok: true, synced }), {
             status: 200,
@@ -4719,99 +6505,10 @@ export async function onRequest(context) {
 
         // Caso B: Progreso individual
         const itemData = body.item || body;
-        let targetItemId = parseInt(itemData.id || itemData.item_id, 10);
-        if ((!Number.isInteger(targetItemId) || targetItemId <= 0) && itemData.source && itemData.source_id) {
-          try {
-            const lookup = await fetch(`${SUPABASE_URL}/rest/v1/items?source=eq.${encodeURIComponent(itemData.source)}&source_id=eq.${encodeURIComponent(itemData.source_id)}&select=id&limit=1`, {
-              headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_KEY}` }
-            });
-            if (lookup.ok) {
-              const rows = await lookup.json().catch(() => []);
-              if (rows && rows[0] && rows[0].id) targetItemId = rows[0].id;
-            }
-          } catch(e) {}
-        }
+        const targetItemId = await resolveSqlItemId(itemData, token, user.id);
+        const savedOk = await upsertSqlOrCustomHistory(user.id, itemData, targetItemId, token, verified);
 
-        const mediaType = itemData.media_type === "video" ? "video" : (itemData.media_type === "gallery" ? "gallery" : "comic");
-        const pos = Math.max(0, parseInt(itemData.position || itemData.page || itemData.currentTime || 0, 10));
-        const dur = Math.max(0, parseInt(itemData.duration || itemData.total || 0, 10));
-        const comp = Boolean(itemData.completed);
-        const clientTs = parseInt(itemData.client_timestamp || itemData.at || Date.now(), 10);
-
-        let sqlSuccess = false;
-        if (Number.isInteger(targetItemId) && targetItemId > 0) {
-          const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/upsert_history`, {
-            method: "POST",
-            headers: {
-              "apikey": SUPABASE_KEY,
-              "Authorization": `Bearer ${token || SUPABASE_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              p_item_id: targetItemId,
-              p_media_type: mediaType,
-              p_position: pos,
-              p_duration: dur,
-              p_completed: comp,
-              p_client_timestamp: clientTs
-            })
-          }).catch(() => null);
-
-          if (rpcRes && rpcRes.ok) {
-            sqlSuccess = true;
-          } else {
-            const postRes = await fetch(`${SUPABASE_URL}/rest/v1/user_history`, {
-              method: "POST",
-              headers: {
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates"
-              },
-              body: JSON.stringify({
-                user_id: user.id,
-                item_id: targetItemId,
-                media_type: mediaType,
-                position: pos,
-                duration: dur,
-                completed: comp,
-                last_activity: new Date().toISOString(),
-                client_timestamp: clientTs
-              })
-            }).catch(() => null);
-            if (postRes && postRes.ok) sqlSuccess = true;
-          }
-        }
-
-        // Respaldo de seguridad en user_metadata.history (últimos 50 items)
-        try {
-          const currentMeta = user.user_metadata || {};
-          const metaHist = Array.isArray(currentMeta.history) ? [...currentMeta.history] : [];
-          const histKey = (itemData.source && itemData.source_id) ? `${itemData.source}:${itemData.source_id}` : String(targetItemId || itemData.id || `hist_${Date.now()}`);
-          const newHistEntry = {
-            id: targetItemId || itemData.id || histKey,
-            item_id: targetItemId || itemData.id || null,
-            source: itemData.source || "",
-            source_id: itemData.source_id || "",
-            title: String(itemData.title || "Contenido visto").slice(0, 80),
-            cover_url: extractRawMediaUrl(itemData.cover_url) || itemData.cover_url || "",
-            url: itemData.url || "",
-            media_type: mediaType,
-            position: pos,
-            duration: dur,
-            completed: comp,
-            client_timestamp: clientTs,
-            last_activity: new Date().toISOString(),
-            at: clientTs
-          };
-          const nextHist = [newHistEntry, ...metaHist.filter(h => {
-            const k = (h.source && h.source_id) ? `${h.source}:${h.source_id}` : String(h.id || h.item_id);
-            return k !== histKey;
-          })].slice(0, 50);
-          await updateUserMetadata(user.id, { ...currentMeta, history: nextHist }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
-        } catch(mErr) {}
-
-        return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId || itemData.id, sql: sqlSuccess }), {
+        return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId || itemData.id, sql: savedOk }), {
           status: 200,
           headers: getPersonalHeaders(origin, newToken)
         });
@@ -4834,46 +6531,50 @@ export async function onRequest(context) {
 
       const isClearAll = url.searchParams.get("clear") === "all" || url.searchParams.get("action") === "clear";
       if (isClearAll) {
-        await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}`, {
-          method: "DELETE",
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
-        }).catch(() => {});
-        try {
-          const currentMeta = user.user_metadata || {};
-          await updateUserMetadata(user.id, { ...currentMeta, history: [] }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
-        } catch(e) {}
+        await Promise.all([
+          restFetchWithAdminFallback(
+            `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}`,
+            (useAdmin) => ({ method: "DELETE", headers: useAdmin ? getAdminRestHeaders() : getUserRestHeaders(token) }),
+            user.id,
+            verified
+          ),
+          deleteCustomTableTarget("user_custom_history", user.id, { clearAll: true }, token, verified)
+        ]);
         return new Response(JSON.stringify({ ok: true, cleared: true }), {
           status: 200,
           headers: getPersonalHeaders(origin, newToken)
         });
       }
 
-      let targetId = parseInt(url.searchParams.get("id") || url.searchParams.get("item_id"), 10);
+      const rawId = url.searchParams.get("id") || url.searchParams.get("item_id");
+      const qSource = url.searchParams.get("source") || "";
+      const qSourceId = url.searchParams.get("source_id") || "";
+      let targetId = parseStrictPositiveInt(rawId);
       const parts = url.pathname.split("/").filter(Boolean);
       const lastPart = parts[parts.length - 1];
-      if (!targetId || isNaN(targetId)) {
-        if (/^\d+$/.test(lastPart)) targetId = parseInt(lastPart, 10);
+      const secondLastPart = parts.length >= 4 ? parts[parts.length - 2] : null;
+      if (!targetId) {
+        targetId = parseStrictPositiveInt(lastPart);
       }
 
-      if (Number.isInteger(targetId) && targetId > 0) {
-        await fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&item_id=eq.${targetId}`, {
-          method: "DELETE",
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
-        }).catch(() => {});
-      }
-
-      try {
-        const currentMeta = user.user_metadata || {};
-        const metaHist = Array.isArray(currentMeta.history) ? currentMeta.history : [];
-        const nextHist = metaHist.filter(h => {
-          if (targetId && (String(h.id) === String(targetId) || String(h.item_id) === String(targetId))) return false;
-          if (lastPart && (String(h.id) === String(lastPart) || String(h.source_id) === String(lastPart))) return false;
-          return true;
-        });
-        if (nextHist.length !== metaHist.length) {
-          await updateUserMetadata(user.id, { ...currentMeta, history: nextHist }, SUPABASE_URL, SUPABASE_ADMIN_KEY);
-        }
-      } catch(e) {}
+      await Promise.all([
+        (Number.isInteger(targetId) && targetId > 0)
+          ? restFetchWithAdminFallback(
+              `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&item_id=eq.${targetId}`,
+              (useAdmin) => ({ method: "DELETE", headers: useAdmin ? getAdminRestHeaders() : getUserRestHeaders(token) }),
+              user.id,
+              verified
+            )
+          : Promise.resolve(null),
+        deleteCustomTableTarget("user_custom_history", user.id, {
+          numId: Number.isInteger(targetId) ? targetId : null,
+          rawId,
+          source: qSource,
+          sourceId: qSourceId,
+          lastPart,
+          secondLastPart
+        }, token, verified)
+      ]);
 
       return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId || lastPart }), {
         status: 200,
@@ -4887,8 +6588,8 @@ export async function onRequest(context) {
   // Persistencia segura en tabla user_preferences (aislada de profiles)
   // =========================================================================
   if (url.pathname === "/api/user/preferences") {
-    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
-    if (unavailable) {
+    const { user, token, newToken, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable || ((method !== "GET") && (degraded || (user && !verified)))) {
       return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
         status: 503,
         headers: getPersonalHeaders(origin)
@@ -4964,7 +6665,7 @@ export async function onRequest(context) {
   // 11. ESTADO DE SINCRONIZACIÓN (/api/user/sync-status)
   // =========================================================================
   if (url.pathname === "/api/user/sync-status" && method === "GET") {
-    const { user, token, newToken } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    const { user, token, newToken, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
     if (!user) {
       return new Response(JSON.stringify({ authenticated: false }), {
         status: 200,
@@ -4973,26 +6674,58 @@ export async function onRequest(context) {
     }
 
     try {
-      const [favRes, histRes, prefRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id`, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
-        }),
-        fetch(`${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id`, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`, "Prefer": "count=exact", "Range": "0-0" }
-        }),
+      const [favRes, customFavRes, histRes, customHistRes, prefRes] = await Promise.all([
+        restFetchWithAdminFallback(
+          `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id`,
+          (useAdmin) => ({
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+              "Prefer": "count=exact",
+              "Range": "0-0"
+            })
+          }),
+          user.id,
+          verified
+        ),
+        restFetchWithAdminFallback(
+          `${SUPABASE_URL}/rest/v1/user_custom_favorites?user_id=eq.${user.id}&select=item_key`,
+          (useAdmin) => ({
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+              "Prefer": "count=exact",
+              "Range": "0-0"
+            })
+          }),
+          user.id,
+          verified
+        ),
+        restFetchWithAdminFallback(
+          `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id`,
+          (useAdmin) => ({
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+              "Prefer": "count=exact",
+              "Range": "0-0"
+            })
+          }),
+          user.id,
+          verified
+        ),
+        restFetchWithAdminFallback(
+          `${SUPABASE_URL}/rest/v1/user_custom_history?user_id=eq.${user.id}&select=item_key`,
+          (useAdmin) => ({
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+              "Prefer": "count=exact",
+              "Range": "0-0"
+            })
+          }),
+          user.id,
+          verified
+        ),
         fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=updated_at&limit=1`, {
-          headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
+          headers: getUserRestHeaders(token)
         })
       ]);
 
-      const parseCount = (res) => {
-        const cr = res.headers.get("content-range") || "";
-        const s = cr.indexOf("/");
-        return s !== -1 ? parseInt(cr.substring(s + 1), 10) || 0 : 0;
-      };
-
-      const favCount = parseCount(favRes);
-      const histCount = parseCount(histRes);
+      const favCount = parseContentRangeTotal(favRes) + parseContentRangeTotal(customFavRes);
+      const histCount = parseContentRangeTotal(histRes) + parseContentRangeTotal(customHistRes);
       const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
       const prefUpdatedAt = prefData && prefData[0] ? prefData[0].updated_at : null;
 
@@ -5020,8 +6753,8 @@ export async function onRequest(context) {
   // Arquitectura Cross-DB: Respaldo en DB1 (Cuentas) referenciando catálogo DB2
   // =========================================================================
   if (url.pathname === "/api/user/game-saves" || url.pathname.startsWith("/api/user/game-saves/")) {
-    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
-    if (unavailable) {
+    const { user, token, newToken, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable || ((method !== "GET") && (degraded || (user && !verified)))) {
       return new Response(JSON.stringify({ error: "Servicio de sesión no disponible", authenticated: false }), {
         status: 503,
         headers: getPersonalHeaders(origin)
@@ -5097,8 +6830,14 @@ export async function onRequest(context) {
         });
       }
 
-      const slotName = String(body.slot_name || "auto").trim().slice(0, 32);
+      const slotName = String(body.slot_name || "auto").trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "auto";
       const saveData = String(body.save_data || "");
+      if (saveData.length > 8192) {
+        return new Response(JSON.stringify({ error: "El archivo de guardado excede el tamaño máximo permitido (8KB)" }), {
+          status: 413,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
       const gameTitle = String(body.game_title || "").slice(0, 200);
       const coverUrl = String(body.cover_url || "").slice(0, 500);
       const gameType = String(body.game_type || "html5").slice(0, 20);
@@ -5108,7 +6847,7 @@ export async function onRequest(context) {
 
       const savePayload = {
         user_id: user.id,
-        game_id: targetGameId,
+        game_id: targetGameId.slice(0, 120),
         slot_name: slotName,
         save_data: saveData,
         game_title: gameTitle,
@@ -5132,18 +6871,24 @@ export async function onRequest(context) {
       });
 
       if (!dbSaveRes.ok) {
-        // Fallback a user_preferences en DB1
+        // Fallback a user_preferences en DB1 (limitado a 16KB por constraint SQL)
         const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data&limit=1`, {
           headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
         });
         const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
         const currentData = (prefData && prefData[0] && prefData[0].data) || {};
         const gameSavesStore = currentData.game_saves || {};
-        gameSavesStore[targetGameId] = gameSavesStore[targetGameId] || {};
-        gameSavesStore[targetGameId][slotName] = savePayload;
+        gameSavesStore[savePayload.game_id] = gameSavesStore[savePayload.game_id] || {};
+        gameSavesStore[savePayload.game_id][slotName] = savePayload;
         currentData.game_saves = gameSavesStore;
+        if (JSON.stringify(currentData).length > 16384) {
+          return new Response(JSON.stringify({ error: "Espacio total de guardados en la nube lleno (16KB)" }), {
+            status: 413,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
 
-        await fetch(`${SUPABASE_URL}/rest/v1/user_preferences`, {
+        const prefWriteRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences`, {
           method: "POST",
           headers: {
             "apikey": SUPABASE_KEY,
@@ -5158,6 +6903,12 @@ export async function onRequest(context) {
             updated_at: nowIso
           })
         });
+        if (!prefWriteRes.ok) {
+          return new Response(JSON.stringify({ error: "No se pudo sincronizar la partida en la nube" }), {
+            status: 502,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
       }
 
       return new Response(JSON.stringify({ ok: true, success: true, save: savePayload }), {
@@ -5209,8 +6960,8 @@ export async function onRequest(context) {
   // 13. PERFIL DE USUARIO Y CAMBIO DE CONTRASEÑA (/api/user/profile & /api/user/change-password)
   // =========================================================================
   if (url.pathname === "/api/user/profile" && (method === "POST" || method === "PUT")) {
-    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
-    if (unavailable) {
+    const { user, token, newToken, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable || degraded || (user && !verified)) {
       return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
         status: 503,
         headers: getPersonalHeaders(origin)
@@ -5224,9 +6975,33 @@ export async function onRequest(context) {
     }
 
     const body = await context.request.json().catch(() => ({}));
-    const username = String(body.username || "").trim().slice(0, 50);
-    const avatar = String(body.avatar || "crown").slice(0, 30);
-    const avatarBg = String(body.avatarBg || "from-pink-600 to-purple-600").slice(0, 80);
+    const rawUsername = String(body.username || "").trim();
+    const username = rawUsername ? sanitizeUsername(rawUsername) : "";
+    const avatar = sanitizeProfileAvatar(body.avatar);
+    const avatarBg = sanitizeProfileAvatarBg(body.avatarBg);
+
+    if (rawUsername && (!username || username.length < 2)) {
+      return new Response(JSON.stringify({ error: "El nombre de usuario debe tener al menos 2 caracteres válidos" }), {
+        status: 400,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+
+    if (username && SUPABASE_SERVICE_ROLE_KEY) {
+      const dupRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?select=id&username=ilike.${encodeURIComponent(username)}&id=neq.${encodeURIComponent(user.id)}&limit=1`,
+        { headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+      );
+      if (dupRes.ok) {
+        const dupRows = await dupRes.json().catch(() => []);
+        if (Array.isArray(dupRows) && dupRows.length > 0) {
+          return new Response(JSON.stringify({ error: "Ese nombre de usuario ya está en uso por otro miembro" }), {
+            status: 409,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
+      }
+    }
 
     const userMetadata = { ...(user.user_metadata || {}) };
     if (username) userMetadata.username = username;
@@ -5242,31 +7017,44 @@ export async function onRequest(context) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ data: userMetadata })
-    });
+    }).catch(() => {});
 
-    // Actualizar username en profiles si existe la tabla
-    if (username) {
-      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`, {
-        method: "PATCH",
-        headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ username, updated_at: new Date().toISOString() })
-      }).catch(() => {});
-    }
+    // Actualizar perfil persistente en Postgres
+    const profPatch = {
+      avatar,
+      avatar_bg: avatarBg,
+      updated_at: new Date().toISOString()
+    };
+    if (username) profPatch.username = username;
+
+    const patchKey = (SUPABASE_SERVICE_ROLE_KEY && SUPABASE_SERVICE_ROLE_KEY !== SUPABASE_ANON_KEY)
+      ? SUPABASE_SERVICE_ROLE_KEY
+      : (token || SUPABASE_ANON_KEY || SUPABASE_KEY);
+    const patchApiKey = (SUPABASE_SERVICE_ROLE_KEY && SUPABASE_SERVICE_ROLE_KEY !== SUPABASE_ANON_KEY)
+      ? SUPABASE_SERVICE_ROLE_KEY
+      : (SUPABASE_ANON_KEY || SUPABASE_KEY);
+
+    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
+      method: "PATCH",
+      headers: {
+        "apikey": patchApiKey,
+        "Authorization": `Bearer ${patchKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(profPatch)
+    }).catch(() => {});
+
+    const updatedProfile = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, user.id, token);
+    const view = buildUserSubscriptionView(
+      updatedProfile || { id: user.id, email: user.email, username, avatar, avatar_bg: avatarBg },
+      { ...user, user_metadata: userMetadata },
+      env
+    );
 
     return new Response(JSON.stringify({
       ok: true,
       success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: userMetadata.username || username || user.email.split("@")[0],
-        avatar: userMetadata.avatar,
-        avatarBg: userMetadata.avatarBg
-      }
+      user: publicUserPayload(view)
     }), {
       status: 200,
       headers: getPersonalHeaders(origin, newToken)
@@ -5274,8 +7062,8 @@ export async function onRequest(context) {
   }
 
   if (url.pathname === "/api/user/change-password" && method === "POST") {
-    const { user, token, newToken, unavailable } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
-    if (unavailable) {
+    const { user, token, newToken, unavailable, degraded, verified } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
+    if (unavailable || degraded || (user && !verified)) {
       return new Response(JSON.stringify({ error: "Servicio de sesión no disponible" }), {
         status: 503,
         headers: getPersonalHeaders(origin)

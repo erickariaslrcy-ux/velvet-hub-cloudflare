@@ -40,6 +40,19 @@ export async function onRequest(context) {
     return Response.redirect(dest.toString(), 301);
   }
 
+  // Bloquear acceso público HTTP directo a los catálogos estáticos crudos (/data/*.json).
+  // El Worker interno los lee directamente vía env.ASSETS.fetch para enmascarar URLs y aplicar paywall VIP.
+  if (current.pathname.toLowerCase().startsWith("/data/")) {
+    return new Response(JSON.stringify({ error: "Not Found" }), {
+      status: 404,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow, noarchive"
+      }
+    });
+  }
+
   // Fast-path para rutas SPA de la aplicación (cómics, videos, galerías, juegos, bóveda)
   if (isSpaNavigation(current.pathname) && context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === "function") {
     const indexReq = new Request(new URL("/", context.request.url), context.request);

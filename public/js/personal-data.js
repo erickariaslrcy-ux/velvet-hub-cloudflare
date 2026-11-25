@@ -117,23 +117,30 @@
     try { return localStorage.getItem(key); } catch (e) { return null; }
   }
 
+  function parseStrictPositiveInt(val) {
+    const s = String(val ?? '').trim();
+    if (!/^\d{1,15}$/.test(s)) return null;
+    const n = Number(s);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  }
+
   function compactFavRecord(f) {
     if (!f || typeof f !== 'object') return null;
-    const id = parseInt(f.id || f.item_id, 10);
-    const hasId = Number.isInteger(id) && id > 0;
+    const id = parseStrictPositiveInt(f.id || f.item_id);
+    const hasId = id !== null;
     if (!hasId && !(f.source && f.source_id) && !(f.id || f.item_id)) return null;
     const out = {};
     if (hasId) {
       out.id = id;
       out.item_id = id;
     } else if (f.id || f.item_id) {
-      out.id = f.id || f.item_id;
-      out.item_id = f.item_id || f.id;
+      out.id = String(f.id || f.item_id).slice(0, 120);
+      out.item_id = String(f.item_id || f.id).slice(0, 120);
     }
     if (f.source) out.source = String(f.source).slice(0, 40);
     if (f.source_id != null && f.source_id !== '') out.source_id = String(f.source_id).slice(0, 80);
     if (f.media_type) out.media_type = String(f.media_type).slice(0, 16);
-    if (f.title) out.title = String(f.title).slice(0, 80);
+    if (f.title) out.title = String(f.title).slice(0, 120);
     if (f.cover_url) out.cover_url = String(f.cover_url).slice(0, 500);
     if (f.url) out.url = String(f.url).slice(0, 500);
     return out;
@@ -141,8 +148,8 @@
 
   function compactHistRecord(h) {
     if (!h || typeof h !== 'object') return null;
-    const id = parseInt(h.id || h.item_id, 10);
-    const hasId = Number.isInteger(id) && id > 0;
+    const id = parseStrictPositiveInt(h.id || h.item_id);
+    const hasId = id !== null;
     if (!hasId && !(h.source && h.source_id) && !(h.id || h.item_id)) return null;
     const isVid = h.media_type === 'video';
     const pos = Math.max(0, parseInt(h.position || h.page || h.currentTime || 0, 10) || 0);
@@ -421,6 +428,7 @@
       _favState.page = 1;
       _favState.totalPages = 1;
       _favState.error = null;
+      _favState._pushedLocal = false;
 
       _histState.items = [];
       _histState.total = 0;
@@ -456,7 +464,8 @@
     isAuthenticated() {
       const token = currentAccessToken();
       const refresh = _refreshToken || safeGet('velvet_refresh_token');
-      return !!(_currentUser && _currentUser.id && (token || refresh));
+      const hasCookie = typeof document !== 'undefined' && typeof document.cookie === 'string' && document.cookie.includes('velvet_auth_active=1');
+      return !!(_currentUser && _currentUser.id && (token || refresh || hasCookie));
     },
 
     async refreshSession() {
@@ -619,14 +628,12 @@
 
     hydrateCanonicalCache() {
       const uid = _currentUser && _currentUser.id;
-      const favKeys = [];
-      const histKeys = [];
-      if (uid) {
-        favKeys.push(`velvet_usr_${uid}_favs`, `velvet_${uid}_favs`);
-        histKeys.push(`velvet_usr_${uid}_history`);
-      }
-      favKeys.push('velvet_favorites', 'velvet_guest_favs', 'velvet_favs');
-      histKeys.push('velvet_history', 'velvet_guest_history');
+      const favKeys = uid
+        ? [`velvet_usr_${uid}_favs`, `velvet_${uid}_favs`]
+        : ['velvet_guest_favs', 'velvet_favorites', 'velvet_favs'];
+      const histKeys = uid
+        ? [`velvet_usr_${uid}_history`]
+        : ['velvet_guest_history', 'velvet_history'];
 
       const cachedFavs = readLocalCache('favs', null);
       const favList = (Array.isArray(cachedFavs) && cachedFavs.length ? cachedFavs : this.readLegacyList(favKeys))
@@ -634,7 +641,8 @@
         .filter(Boolean);
       if (favList.length) {
         _favState.items = favList;
-        _favState.ids = favList.map(f => parseInt(f.id, 10)).filter(n => Number.isInteger(n) && n > 0);
+        _favState.ids = favList.map(f => parseStrictPositiveInt(f.id)).filter(n => n !== null);
+        _favState.refs = favList.filter(f => !parseStrictPositiveInt(f.id));
         const storedTotal = Number(readLocalCache('favs_total', favList.length));
         _favState.total = storedTotal > 0 ? storedTotal : favList.length;
         _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
@@ -656,35 +664,46 @@
     },
 
     publishCanonical(kind) {
+      const isAuthedUser = !!(_currentUser && _currentUser.id);
       if (kind !== 'history') {
-        let compactFavs;
-        if (Array.isArray(_favState.ids) && _favState.ids.length) {
+        const seenKeys = new Set();
+        const compactFavs = [];
+        const pushCompact = (raw) => {
+          const slim = compactFavRecord(raw);
+          if (!slim) return;
+          const k = (slim.source && slim.source_id) ? `${slim.source}:${slim.source_id}` : String(slim.id || slim.item_id || '');
+          if (!k || seenKeys.has(k)) return;
+          seenKeys.add(k);
+          compactFavs.push(slim);
+        };
+        (_favState.items || []).forEach(pushCompact);
+        if (Array.isArray(_favState.ids)) {
           const byId = new Map((_favState.items || []).map(it => [String(it.id || it.item_id), it]));
-          compactFavs = _favState.ids.map(id => compactFavRecord(byId.get(String(id)) || { id, item_id: id })).filter(Boolean);
-          (_favState.refs || []).forEach(ref => {
-            const slim = compactFavRecord(ref);
-            if (slim && !slim.id) compactFavs.push(slim);
-          });
-        } else {
-          compactFavs = (_favState.items || []).map(compactFavRecord).filter(Boolean);
+          _favState.ids.forEach(id => pushCompact(byId.get(String(id)) || { id, item_id: id }));
         }
+        (_favState.refs || []).forEach(pushCompact);
+
         writeLocalCache('favs', compactFavs);
-        writeLocalCache('favs_total', compactFavs.length);
-        try {
-          const serialized = JSON.stringify(compactFavs);
-          localStorage.setItem('velvet_favorites', serialized);
-          localStorage.setItem('velvet_guest_favs', serialized);
-          localStorage.setItem('velvet_favs', serialized);
-          localStorage.setItem('velvet_fav_ids', serialized);
-        } catch (e) {}
+        writeLocalCache('favs_total', Math.max(_favState.total || 0, compactFavs.length));
+        if (!isAuthedUser) {
+          try {
+            const serialized = JSON.stringify(compactFavs);
+            localStorage.setItem('velvet_favorites', serialized);
+            localStorage.setItem('velvet_guest_favs', serialized);
+            localStorage.setItem('velvet_favs', serialized);
+            localStorage.setItem('velvet_fav_ids', serialized);
+          } catch (e) {}
+        }
       }
       if (kind !== 'favorites') {
         const compactHist = (_histState.items || []).map(compactHistRecord).filter(Boolean).slice(0, 50);
         writeLocalCache('history', compactHist);
-        writeLocalCache('history_total', compactHist.length);
-        try {
-          localStorage.setItem('velvet_history', JSON.stringify(compactHist));
-        } catch (e) {}
+        writeLocalCache('history_total', Math.max(_histState.total || 0, compactHist.length));
+        if (!isAuthedUser) {
+          try {
+            localStorage.setItem('velvet_history', JSON.stringify(compactHist));
+          } catch (e) {}
+        }
       }
       this.updateAllCounters();
     },
@@ -720,15 +739,24 @@
       const idData = await idRes.json();
       if (!idData || idData.degraded || !Array.isArray(idData.ids)) return 'degraded';
 
-      let serverIds = idData.ids.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
-      const refs = (Array.isArray(idData.refs) ? idData.refs : []).map(compactFavRecord).filter(Boolean);
+      let serverIds = idData.ids.map(parseStrictPositiveInt).filter(n => n !== null);
+      let refs = (Array.isArray(idData.refs) ? idData.refs : []).map(compactFavRecord).filter(Boolean);
       const localCompact = (_favState.items || []).map(compactFavRecord).filter(Boolean);
-      const serverSet = new Set(serverIds.map(String));
-      const missing = localCompact.filter(f => (f.id || f.item_id) && !serverSet.has(String(f.id || f.item_id)));
+      const serverSet = new Set([
+        ...serverIds.map(String),
+        ...refs.map(r => (r.source && r.source_id) ? `${r.source}:${r.source_id}` : String(r.id || r.item_id || ''))
+      ].filter(Boolean));
+      const missing = localCompact.filter(f => {
+        const numId = parseStrictPositiveInt(f.id || f.item_id);
+        if (numId && serverSet.has(String(numId))) return false;
+        const srcKey = (f.source && f.source_id) ? `${f.source}:${f.source_id}` : String(f.id || f.item_id || '');
+        if (srcKey && serverSet.has(srcKey)) return false;
+        return Boolean(numId || (f.source && f.source_id) || f.id || f.item_id);
+      });
       const serverEmpty = serverIds.length === 0 && refs.length === 0;
-      if ((serverEmpty && localCompact.some(f => f.id || f.item_id)) || missing.length > 0) {
+      if ((serverEmpty && localCompact.length > 0) || missing.length > 0) {
         if (!_favState._pushedLocal) {
-          const payloadSrc = serverEmpty ? localCompact.filter(f => f.id || f.item_id) : missing;
+          const payloadSrc = serverEmpty ? localCompact : missing;
           const syncRes = await this.fetchAuthed('/api/user/favorites', {
             method: 'POST',
             body: JSON.stringify({
@@ -750,7 +778,8 @@
             if (again && again.ok) {
               const againData = await again.json();
               if (againData && Array.isArray(againData.ids) && !againData.degraded) {
-                serverIds = againData.ids.map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
+                serverIds = againData.ids.map(parseStrictPositiveInt).filter(n => n !== null);
+                refs = (Array.isArray(againData.refs) ? againData.refs : []).map(compactFavRecord).filter(Boolean);
               }
             }
           }
@@ -758,7 +787,7 @@
       }
 
       _favState.ids = serverIds;
-      _favState.refs = refs.filter(ref => !ref.id);
+      _favState.refs = refs.filter(ref => !parseStrictPositiveInt(ref.id));
       return 'ok';
     },
 
@@ -917,17 +946,20 @@
     },
 
     async addFavorite(item) {
-      if (!item) return;
-      const itemId = item.id || item.item_id;
-      if (!itemId) return;
+      if (!item) return false;
+      const itemId = item.id || item.item_id || item.source_id || null;
+      const hasSourcePair = Boolean(item.source && item.source_id);
+      if (!itemId && !hasSourcePair) return false;
 
       // Optimistic UI: insertar arriba y subir contador
       const prevItems = [..._favState.items];
+      const prevIds = Array.isArray(_favState.ids) ? [..._favState.ids] : _favState.ids;
+      const prevRefs = Array.isArray(_favState.refs) ? [..._favState.refs] : [];
       const prevTotal = _favState.total;
 
       const optimisticItem = {
-        id: itemId,
-        item_id: itemId,
+        id: itemId || `${item.source}:${item.source_id}`,
+        item_id: itemId || `${item.source}:${item.source_id}`,
         title: item.title || 'Sin título',
         cover_url: item.cover_url || '/velvet_logo.png',
         media_type: item.media_type || 'comic',
@@ -938,31 +970,40 @@
         created_at: new Date().toISOString()
       };
 
-      const exists = _favState.items.some(f => String(f.id) === String(itemId) || String(f.item_id) === String(itemId));
+      const matchesSame = (f) => {
+        if (!f) return false;
+        if (itemId && (String(f.id) === String(itemId) || String(f.item_id) === String(itemId))) return true;
+        return hasSourcePair && f.source === item.source && String(f.source_id) === String(item.source_id);
+      };
+
+      const exists = _favState.items.some(matchesSame);
       if (!exists) {
         _favState.items.unshift(optimisticItem);
-        const n = parseInt(itemId, 10);
-        if (Number.isInteger(n) && n > 0) {
+        const n = parseStrictPositiveInt(itemId);
+        if (n) {
           _favState.ids = Array.isArray(_favState.ids) ? _favState.ids : [];
           if (!_favState.ids.some(id => String(id) === String(n))) _favState.ids.unshift(n);
+        } else {
+          _favState.refs = Array.isArray(_favState.refs) ? _favState.refs : [];
+          if (!_favState.refs.some(matchesSame)) _favState.refs.unshift(compactFavRecord(optimisticItem) || optimisticItem);
         }
         _favState.total++;
         _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
-        this.updateAllCounters();
+        this.publishCanonical('favorites');
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
       }
 
       if (!this.isAuthenticated()) {
         writeLocalCache('favs', _favState.items.map(compactFavRecord).filter(Boolean));
-        return;
+        return true;
       }
 
       try {
         const res = await this.fetchAuthed('/api/user/favorites', {
           method: 'POST',
           body: JSON.stringify({
-            id: itemId,
-            item_id: itemId,
+            id: item.id || item.item_id || null,
+            item_id: item.item_id || item.id || null,
             source: item.source || '',
             source_id: item.source_id || '',
             media_type: item.media_type || 'video',
@@ -971,34 +1012,56 @@
             url: item.url || ''
           })
         });
-        if (!res.ok) {
+        if (!res || !res.ok) {
           throw new Error('No se pudo guardar el favorito');
         }
+        this.publishCanonical('favorites');
+        return true;
       } catch (err) {
         // Rollback optimista en caso de fallo
         _favState.items = prevItems;
+        _favState.ids = prevIds;
+        _favState.refs = prevRefs;
         _favState.total = prevTotal;
         _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
-        this.updateAllCounters();
+        this.publishCanonical('favorites');
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
-        window.dispatchEvent(new CustomEvent('velvet:toast', { detail: { message: 'Error al conectar con la Bóveda', type: 'error' } }));
+        window.dispatchEvent(new CustomEvent('velvet:toast', { detail: { message: 'Error al guardar favorito en tu cuenta', type: 'error' } }));
+        return false;
       }
     },
 
-    async removeFavorite(itemId) {
-      if (!itemId) return null;
+    async removeFavorite(itemOrId) {
+      if (!itemOrId) return null;
+      const isObj = typeof itemOrId === 'object';
+      const itemId = isObj ? (itemOrId.id || itemOrId.item_id || null) : itemOrId;
+      const source = isObj ? (itemOrId.source || '') : '';
+      const sourceId = isObj ? (itemOrId.source_id || '') : '';
+      if (!itemId && !(source && sourceId)) return null;
+
       const prevItems = [..._favState.items];
+      const prevIds = Array.isArray(_favState.ids) ? [..._favState.ids] : _favState.ids;
+      const prevRefs = Array.isArray(_favState.refs) ? [..._favState.refs] : [];
       const prevTotal = _favState.total;
 
-      const removed = _favState.items.find(f => String(f.id) === String(itemId) || String(f.item_id) === String(itemId));
-      _favState.items = _favState.items.filter(f => String(f.id) !== String(itemId) && String(f.item_id) !== String(itemId));
-      if (Array.isArray(_favState.ids)) {
+      const matchesTarget = (f) => {
+        if (!f) return false;
+        if (itemId && (String(f.id) === String(itemId) || String(f.item_id) === String(itemId))) return true;
+        return Boolean(source && sourceId && f.source === source && String(f.source_id) === String(sourceId));
+      };
+
+      const removed = _favState.items.find(matchesTarget) || (isObj ? itemOrId : { id: itemId });
+      _favState.items = _favState.items.filter(f => !matchesTarget(f));
+      if (Array.isArray(_favState.ids) && itemId) {
         _favState.ids = _favState.ids.filter(id => String(id) !== String(itemId));
+      }
+      if (Array.isArray(_favState.refs)) {
+        _favState.refs = _favState.refs.filter(r => !matchesTarget(r));
       }
       _favState.total = Math.max(0, _favState.total - 1);
       _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
 
-      this.updateAllCounters();
+      this.publishCanonical('favorites');
       window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
 
       if (!this.isAuthenticated()) {
@@ -1007,21 +1070,29 @@
       }
 
       try {
-        const res = await this.fetchAuthed(`/api/user/favorites?id=${encodeURIComponent(itemId)}`, {
+        const qp = new URLSearchParams();
+        if (itemId) qp.set('id', String(itemId));
+        if (source) qp.set('source', String(source));
+        if (sourceId) qp.set('source_id', String(sourceId));
+        const res = await this.fetchAuthed(`/api/user/favorites?${qp.toString()}`, {
           method: 'DELETE'
         });
-        if (!res.ok) {
+        if (!res || !res.ok) {
           throw new Error('Fallo al eliminar');
         }
+        return removed;
       } catch (err) {
         // Rollback si falla la red
         _favState.items = prevItems;
+        _favState.ids = prevIds;
+        _favState.refs = prevRefs;
         _favState.total = prevTotal;
-        this.updateAllCounters();
+        _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
+        this.publishCanonical('favorites');
         window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
+        window.dispatchEvent(new CustomEvent('velvet:toast', { detail: { message: 'Error al quitar favorito en la nube', type: 'error' } }));
+        return false;
       }
-
-      return removed;
     },
 
     async removeFavoritesBatch(itemIds = []) {
@@ -1031,10 +1102,13 @@
       if (Array.isArray(_favState.ids)) {
         _favState.ids = _favState.ids.filter(id => !idSet.has(String(id)));
       }
+      if (Array.isArray(_favState.refs)) {
+        _favState.refs = _favState.refs.filter(r => !idSet.has(String(r.id)) && !idSet.has(String(r.item_id)));
+      }
       _favState.total = Math.max(0, _favState.total - itemIds.length);
       _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
 
-      this.updateAllCounters();
+      this.publishCanonical('favorites');
       window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
 
       if (!this.isAuthenticated()) {
@@ -1050,11 +1124,20 @@
       }));
     },
 
-    isFavorite(itemId) {
-      if (!itemId) return false;
-      const sId = String(itemId);
-      if (Array.isArray(_favState.ids) && _favState.ids.some(id => String(id) === sId)) return true;
-      return _favState.items.some(f => String(f.id) === sId || String(f.item_id) === sId);
+    isFavorite(itemOrId, source = '', sourceId = '') {
+      const isObj = itemOrId && typeof itemOrId === 'object';
+      const itemId = isObj ? (itemOrId.id || itemOrId.item_id || '') : (itemOrId || '');
+      const src = isObj ? (itemOrId.source || '') : (source || '');
+      const srcId = isObj ? (itemOrId.source_id || '') : (sourceId || '');
+      const sId = String(itemId || '');
+      if (sId && Array.isArray(_favState.ids) && _favState.ids.some(id => String(id) === sId)) return true;
+      const matchEntry = (f) => {
+        if (!f) return false;
+        if (sId && (String(f.id) === sId || String(f.item_id) === sId)) return true;
+        return Boolean(src && srcId && f.source === src && String(f.source_id) === String(srcId));
+      };
+      if (Array.isArray(_favState.refs) && _favState.refs.some(matchEntry)) return true;
+      return _favState.items.some(matchEntry);
     },
 
     // ------------------------------------------------------------------------
