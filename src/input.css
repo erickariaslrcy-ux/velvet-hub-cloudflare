@@ -491,10 +491,12 @@ body.drawer-open {
 }
 
 .card-cover-img,
-#hero-cover,
+#hero-cover {
+  transition: opacity 0.28s ease, transform 0.4s ease;
+}
 #slide-current-img,
 .reader-img {
-  transition: opacity 0.28s ease, transform 0.4s ease;
+  transition: opacity 0.24s ease;
 }
 
 @keyframes velvetLogoShimmer {

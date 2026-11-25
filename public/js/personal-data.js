@@ -698,11 +698,53 @@
         .slice(0, 100);
       if (histList.length) {
         _histState.items = histList;
+        this.indexProgressEntries(histList);
         const storedTotal = Number(readLocalCache('history_total', histList.length));
         _histState.total = storedTotal > 0 ? storedTotal : histList.length;
         _histState.totalPages = Math.max(1, Math.ceil(_histState.total / _histState.pageSize));
         _histState.error = null;
       }
+    },
+
+    indexProgressEntries(list) {
+      if (!Array.isArray(list)) return;
+      for (const h of list) {
+        if (!h) continue;
+        const pos = Math.max(0, parseInt(h.position ?? h.page ?? h.currentTime ?? 0, 10) || 0);
+        const dur = Math.max(0, parseInt(h.duration ?? h.total ?? h.page_count ?? 0, 10) || 0);
+        const prog = {
+          position: pos,
+          duration: dur,
+          page: h.media_type === 'video' ? 0 : pos,
+          total: h.media_type === 'video' ? 0 : dur,
+          currentTime: h.media_type === 'video' ? pos : 0,
+          completed: Boolean(h.completed),
+          at: Number(h.at || h.client_timestamp || 0) || Date.now()
+        };
+        if (h.id != null && h.id !== '') _progressMap.set(String(h.id), prog);
+        if (h.item_id != null && h.item_id !== '') _progressMap.set(String(h.item_id), prog);
+        if (h.source && h.source_id != null && h.source_id !== '') {
+          _progressMap.set(`${h.source}:${h.source_id}`, prog);
+          _progressMap.set(`${String(h.source).toLowerCase()}:${h.source_id}`, prog);
+        }
+      }
+    },
+
+    getProgressFor(item) {
+      if (!item) return null;
+      if (item.source && item.source_id != null && item.source_id !== '') {
+        const k1 = `${item.source}:${item.source_id}`;
+        const k2 = `${String(item.source).toLowerCase()}:${item.source_id}`;
+        if (_progressMap.has(k1)) return _progressMap.get(k1);
+        if (_progressMap.has(k2)) return _progressMap.get(k2);
+      }
+      if (item.id != null && item.id !== '' && _progressMap.has(String(item.id))) {
+        return _progressMap.get(String(item.id));
+      }
+      if (item.item_id != null && item.item_id !== '' && _progressMap.has(String(item.item_id))) {
+        return _progressMap.get(String(item.item_id));
+      }
+      return null;
     },
 
     publishCanonical(kind) {
@@ -1337,6 +1379,7 @@
           }
         }
         _histState.items = serverItems.slice(0, _histState.pageSize);
+        this.indexProgressEntries(serverItems);
         _histState.total = typeof data.total === 'number' ? data.total : _histState.items.length;
         _histState.totalPages = data.totalPages || Math.max(1, Math.ceil(_histState.total / _histState.pageSize));
         _histState.page = Math.min(_histState.page, _histState.totalPages);
@@ -1389,11 +1432,20 @@
       const dur = Math.max(0, parseInt(progressData.duration ?? progressData.total ?? 0, 10));
       const comp = Boolean(progressData.completed);
 
-      // Actualizar memoria inmediata
-      _progressMap.set(sId, { position: pos, duration: dur, completed: comp, at: now });
+      // Actualizar memoria inmediata bajo todas las llaves posibles (id + source:source_id)
+      const progRecord = { position: pos, duration: dur, completed: comp, at: now };
+      _progressMap.set(sId, progRecord);
+      if (item.source && item.source_id != null && item.source_id !== '') {
+        _progressMap.set(`${item.source}:${item.source_id}`, progRecord);
+        _progressMap.set(`${String(item.source).toLowerCase()}:${item.source_id}`, progRecord);
+      }
 
       // Actualizar primer item en lista de historial en memoria si está visible
-      const existingIdx = _histState.items.findIndex(h => String(h.id) === sId || String(h.item_id) === sId);
+      const existingIdx = _histState.items.findIndex(h =>
+        String(h.id) === sId ||
+        String(h.item_id) === sId ||
+        Boolean(item.source && item.source_id != null && h.source === item.source && String(h.source_id) === String(item.source_id))
+      );
       const newEntry = {
         id: itemId,
         item_id: itemId,
@@ -1708,7 +1760,11 @@
         } else {
           window.state.favorites = _favState.items;
         }
-        window.state.history = _histState.items;
+        if (typeof window.applyHistoryList === 'function' && (!window.state.history || !window.state.history.length) && _histState.items.length) {
+          window.applyHistoryList(_histState.items);
+        } else {
+          window.state.history = _histState.items;
+        }
       }
     },
 

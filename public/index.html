@@ -47,9 +47,7 @@
   <link rel="stylesheet" href="/css/tailwind.css?v=3.10.0">
   <link rel="stylesheet" href="/css/pagination.css?v=3.10.0">
 
-  <!-- Emulador Flash Ruffle WebAssembly Oficial -->
-  <script src="https://unpkg.com/@ruffle-rs/ruffle" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle';"></script>
-  <!-- Tailwind CSS Engine for Dynamic JavaScript Components -->
+  <!-- Tailwind CSS Engine for Dynamic JavaScript Components (Ruffle se carga bajo demanda en Flash) -->
   <script defer src="https://cdn.tailwindcss.com"></script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
@@ -116,13 +114,20 @@
       overflow: hidden;
       white-space: nowrap;
     }
-    #reader-scroll-content.reader-zoom-anim #reader-pages-vertical {
-      transition: width 0.22s ease, max-width 0.22s ease;
+    #reader-scroll-content.is-zoomed-vertical {
+      width: max-content;
+      min-width: 100%;
+      align-items: flex-start !important;
     }
     #reader-body.reader-zoomed {
-      overflow-x: auto;
+      overflow: auto;
       cursor: grab;
       touch-action: pan-x pan-y;
+      overscroll-behavior: contain;
+    }
+    #reader-body.reader-zoomed.reader-slide-active {
+      overflow: hidden;
+      touch-action: none;
     }
     #reader-body.reader-zoomed.is-panning {
       cursor: grabbing;
@@ -130,6 +135,23 @@
     #reader-body:not(.reader-zoomed) {
       overflow-x: hidden;
       touch-action: pan-y;
+      overscroll-behavior-y: contain;
+    }
+    #slide-stage {
+      position: relative;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      min-height: 55vh;
+    }
+    #reader-body.reader-zoomed #slide-stage {
+      touch-action: none;
+    }
+    #slide-current-img {
+      transform-origin: center center;
+      will-change: transform;
     }
 
     #video-player-loader {
@@ -1465,7 +1487,7 @@
 
     <!-- 1. HERO SPOTLIGHT CAROUSEL CINEMATOGRÁFICO (TOP 5 ESTRENOS) -->
 
-    <section id="hero-section" class="relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d061c] shadow-2xl group">
+    <section id="hero-section" class="hidden relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d061c] shadow-2xl group">
 
       <!-- Fondo Atmosférico con Desenfoque Dinámico -->
 
@@ -1477,7 +1499,7 @@
 
       <!-- Contenido del Hero Slide -->
 
-      <div class="relative z-10 p-4 sm:p-7 md:p-8 flex flex-col md:flex-row items-center gap-5 sm:gap-7 min-h-[300px] w-full max-w-full">
+      <div class="relative z-10 p-4 sm:p-7 md:p-8 flex flex-col md:flex-row items-center gap-5 sm:gap-7 min-h-[260px] w-full max-w-full">
 
         <!-- Portada Destacada con Zoom y Badges -->
 
@@ -1485,33 +1507,20 @@
 
           <div id="hero-cover-placeholder" class="velvet-logo-ph velvet-logo-ph-rich absolute inset-0" aria-hidden="true">
             <img src="/velvet_logo.png" alt="" class="velvet-logo-ph-mark" width="64" height="64" decoding="async">
-            <span class="velvet-logo-ph-caption">Cargando</span>
           </div>
           <img id="hero-cover" referrerpolicy="no-referrer" alt="Portada destacada" class="w-full h-full object-cover group-hover/cover:scale-105 transition-transform duration-500 opacity-0">
 
-          
-
-          
-
         </div>
 
-        <!-- Información y Metadata del Cómic Destacado -->
+        <!-- Información y Metadata del Contenido Destacado -->
 
         <div class="flex-1 text-center md:text-left space-y-3">
 
           <div class="flex flex-wrap items-center justify-center md:justify-start gap-2">
 
-            <span id="hero-format-badge" class="px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-400 border border-pink-500/30 shadow-sm">
+            <span id="hero-format-badge" class="px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pink-500/20 text-pink-400 border border-pink-500/30 shadow-sm"></span>
 
-              3D CGI NOVEL
-
-            </span>
-
-            <span id="hero-views-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 bg-black/60 border border-amber-500/30 shadow-sm">
-
-              <i class="fa-solid fa-star mr-1"></i>9.9 · Sin Censura
-
-            </span>
+            <span id="hero-views-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-amber-300 bg-black/60 border border-amber-500/30 shadow-sm"></span>
 
           </div>
 
@@ -1522,23 +1531,11 @@
             <span id="hero-author" class="text-pink-300 font-extrabold hover:underline"></span>
           </div>
 
-          <h1 id="hero-title" class="font-display text-2xl sm:text-3xl md:text-4xl text-white font-black leading-tight line-clamp-2 sm:line-clamp-3">
-
-            Cargando cómic destacado...
-
-          </h1>
+          <h1 id="hero-title" class="font-display text-2xl sm:text-3xl md:text-4xl text-white font-black leading-tight line-clamp-2 sm:line-clamp-3"></h1>
 
           <!-- Etiquetas Fetiche del Hero -->
 
-          <div id="hero-tags" class="flex flex-wrap items-center justify-center md:justify-start gap-1.5 text-xs text-purple-200/70 font-medium">
-
-            <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px]">#SinCensura</span>
-
-            <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px]">#FullColor</span>
-
-            <span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px]">#HD</span>
-
-          </div>
+          <div id="hero-tags" class="flex flex-wrap items-center justify-center md:justify-start gap-1.5 text-xs text-purple-200/70 font-medium"></div>
 
           <p id="hero-synopsis" class="hidden text-xs sm:text-sm text-purple-200/70 line-clamp-2 max-w-2xl font-light leading-relaxed"></p>
 
@@ -2763,11 +2760,12 @@
 
       <div id="reader-pages-slide" class="hidden w-full max-w-4xl flex-1 flex flex-col items-center justify-center relative min-h-[75vh] z-10">
 
-        <div id="slide-cover-placeholder" class="velvet-logo-ph velvet-logo-ph-rich absolute inset-x-8 top-6 bottom-24 rounded-2xl" aria-hidden="true">
-          <img src="/velvet_logo.png" alt="" class="velvet-logo-ph-mark" width="64" height="64" decoding="async">
-          <span class="velvet-logo-ph-caption">Cargando</span>
+        <div id="slide-stage" class="rounded-2xl">
+          <div id="slide-cover-placeholder" class="velvet-logo-ph velvet-logo-ph-rich absolute inset-x-8 top-6 bottom-6 rounded-2xl" aria-hidden="true">
+            <img src="/velvet_logo.png" alt="" class="velvet-logo-ph-mark" width="64" height="64" decoding="async">
+          </div>
+          <img id="slide-current-img" src="" alt="Página actual" draggable="false" class="relative z-[1] max-h-[82vh] w-auto max-w-full object-contain rounded-2xl shadow-2xl opacity-0 select-none">
         </div>
-        <img id="slide-current-img" src="" alt="Página actual" class="relative z-[1] max-h-[85vh] w-auto max-w-full object-contain rounded-2xl shadow-2xl opacity-0">
 
         <div class="mt-4 flex items-center gap-4">
 
@@ -4590,12 +4588,13 @@
         }
       }
 
-      // Actualizar inmediatamente encabezados de seccion y hero para la nueva pestana activa
+      // Actualizar inmediatamente encabezados de seccion para la nueva pestana activa
+      // Ocultar hero hasta que lleguen los slides reales de esta seccion (evita placeholders o contenido obsoleto)
+      const heroSec = document.getElementById("hero-section");
+      if (heroSec) heroSec.classList.add("hidden");
       const titleSec = document.getElementById("grid-section-title");
       const resCount = document.getElementById("results-count");
       const badgeEl = document.getElementById("grid-status-badge");
-      const heroTitle = document.getElementById("hero-title");
-      const heroBadge = document.getElementById("hero-format-badge");
       const readBtn = document.getElementById("hero-read-btn");
 
       if (mode === "games") {
@@ -4603,11 +4602,6 @@
         if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-gamepad text-emerald-400"></i> Juegos';
         if (resCount) resCount.textContent = "Actualizando catálogo de juegos...";
         if (badgeEl) badgeEl.textContent = "juegos listos para jugar";
-        if (heroTitle) heroTitle.textContent = "Avatar: Blood Legacy [Ch. 3.5]";
-        if (heroBadge) {
-          heroBadge.textContent = "JUEGO REN'PY HTML5";
-          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800";
-        }
         if (readBtn) {
           readBtn.innerHTML = '<i class="fa-solid fa-gamepad text-xs"></i> Jugar Ahora en HD';
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-xs sm:text-sm shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
@@ -4616,11 +4610,6 @@
         if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-film text-hot"></i> Videos';
         if (resCount) resCount.textContent = "Actualizando videos en streaming...";
         if (badgeEl) badgeEl.textContent = "videos en streaming directo";
-        if (heroTitle) heroTitle.textContent = "Cargando video destacado...";
-        if (heroBadge) {
-          heroBadge.textContent = "VIDEO STREAMING HD";
-          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800";
-        }
         if (readBtn) {
           readBtn.innerHTML = '<i class="fa-solid fa-circle-play text-xs"></i> Ver Video en HD';
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
@@ -4629,11 +4618,6 @@
         if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-camera-retro text-hot"></i> Modelos';
         if (resCount) resCount.textContent = "Actualizando galerías VIP...";
         if (badgeEl) badgeEl.textContent = "sets";
-        if (heroTitle) heroTitle.textContent = "Cargando galería destacada...";
-        if (heroBadge) {
-          heroBadge.textContent = "GALERÍA VIP 4K";
-          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-hot/20 text-hot border border-hot/30";
-        }
         if (readBtn) {
           readBtn.innerHTML = '<i class="fa-solid fa-camera-retro text-xs"></i> Ver Galería en HD';
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
@@ -4642,11 +4626,6 @@
         if (titleSec) titleSec.innerHTML = '<i class="fa-solid fa-book-open text-hot"></i> Cómics';
         if (resCount) resCount.textContent = "Actualizando catálogo...";
         if (badgeEl) badgeEl.textContent = "historias listas para leer";
-        if (heroTitle) heroTitle.textContent = "Cargando cómic destacado...";
-        if (heroBadge) {
-          heroBadge.textContent = "3D CGI NOVEL";
-          heroBadge.className = "px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-hot/25 text-hot border border-hot/40";
-        }
         if (readBtn) {
           readBtn.innerHTML = '<i class="fa-solid fa-play text-xs"></i> Comenzar a Leer';
           readBtn.className = "h-11 sm:h-12 px-6 sm:px-7 rounded-2xl bg-gradient-to-r from-hot via-magenta to-neon text-white font-extrabold text-xs sm:text-sm shadow-hot-glow hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2";
@@ -5260,10 +5239,7 @@
       } else if (tabParam === 'videos' || tabParam === 'comics' || tabParam === 'galleries' || tabParam === 'games' || tabParam === 'juegos') {
         state.mode = (tabParam === 'games' || tabParam === 'juegos') ? 'games' : tabParam;
       } else {
-        const savedMode = localStorage.getItem('velvet_mode');
-        if (savedMode === 'videos' || savedMode === 'comics' || savedMode === 'galleries' || savedMode === 'games') {
-          state.mode = savedMode;
-        }
+        state.mode = 'comics';
       }
 
       // Comprobar si se abrió una URL directa de Video, Cómic o Galería VIP
@@ -5303,7 +5279,7 @@
       const initRoute = window.VelvetRouter?.parsePath?.(window.location.pathname, window.location.search, window.location.hash);
       const hasLegacyModalMatch = Boolean(videoMatch || galleryMatch || comicMatch);
       const isCatalogStartup = !hasLegacyModalMatch && (!initRoute || initRoute.name === 'home' || initRoute.name === 'catalog');
-      if (isCatalogStartup) {
+      if (isCatalogStartup && !window.VelvetRouter) {
         setPortalMode(state.mode, false, {
           page: initPage,
           category: initCat || 'all',
@@ -5311,6 +5287,10 @@
           tag: initUrlParams.get('tag') || '',
           sort: initSort
         });
+      } else if (isCatalogStartup && initRoute) {
+        state.mode = initRoute.mode || state.mode || 'comics';
+        state._initialModePending = true;
+        updateModeButtonsUI(state.mode);
       } else {
         updateModeButtonsUI(state.mode);
       }
@@ -5703,6 +5683,11 @@
       if (readerModal && !readerModal.classList.contains('hidden')) {
         closeReader(false);
       }
+      const gameModal = document.getElementById('game-modal');
+      if (gameModal && !gameModal.classList.contains('hidden') && typeof closeGameModal === 'function') {
+        closeGameModal();
+      }
+      document.body.style.overflow = '';
     });
 
     window.addEventListener('velvet:route-render', function(e) {
@@ -5716,13 +5701,22 @@
       const mainContent = document.getElementById('home-view') || document.getElementById('main-content');
       const videoView = document.getElementById('video-view');
       const readerModal = document.getElementById('reader-modal');
+      const gameModal = document.getElementById('game-modal');
       const vaultView = document.getElementById('view-vault');
       const filterBar = document.getElementById('filter-bar');
       const mobNav = document.getElementById('mobile-navbar');
       const gHeader = document.getElementById('global-header');
 
+      const unlockScrollAndOverlays = () => {
+        document.body.style.overflow = '';
+        if (gameModal && !gameModal.classList.contains('hidden') && typeof closeGameModal === 'function') {
+          closeGameModal();
+        }
+      };
+
       // 1. Ruta Bóveda, Historial o Cuenta
       if (route.name === 'vault') {
+        unlockScrollAndOverlays();
         if (mainContent) mainContent.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
         if (readerModal) readerModal.classList.add('hidden');
@@ -5741,6 +5735,7 @@
 
       // 2. Ruta Inicio o Catálogos (/videos, /comics, /cosplay, /juegos)
       if (route.name === 'home' || route.name === 'catalog') {
+        unlockScrollAndOverlays();
         if (vaultView) vaultView.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
         if (readerModal) readerModal.classList.add('hidden');
@@ -5756,10 +5751,12 @@
         const targetTag = route.tag !== undefined ? route.tag : '';
         const targetSort = route.sort || '';
 
-        if (targetMode !== state.mode) {
-          setPortalMode(targetMode, true, {
+        const wasInitialPending = !!state._initialModePending;
+        state._initialModePending = false;
+        if (targetMode !== state.mode || wasInitialPending) {
+          setPortalMode(targetMode, !wasInitialPending, {
             page: targetPage,
-            keepPage: !!route.pageFromQuery,
+            keepPage: !!route.pageFromQuery || wasInitialPending,
             category: targetCat,
             query: targetQuery,
             tag: targetTag,
@@ -5931,11 +5928,12 @@
       const hasId = id !== null && Number.isSafeInteger(id) && id > 0;
       const hasStrId = !hasId && hs.length > 0;
       if (!hasId && !hasStrId && !(h.source && h.source_id)) return null;
-      const isVid = h.media_type === 'video';
+      const mType = inferHistoryMediaType(h);
+      const isVid = mType === 'video';
       const pos = Math.max(0, parseInt(h.position || h.page || h.currentTime || 0, 10) || 0);
-      const dur = Math.max(0, parseInt(h.duration || h.total || 0, 10) || 0);
+      const dur = Math.max(0, parseInt(h.duration || h.total || h.page_count || 0, 10) || 0);
       const out = {
-        media_type: String(h.media_type || (isVid ? 'video' : 'comic')).slice(0, 16),
+        media_type: String(mType).slice(0, 16),
         position: pos,
         duration: dur,
         completed: !!h.completed,
@@ -5950,20 +5948,78 @@
       }
       if (h.source) out.source = String(h.source).slice(0, 40);
       if (h.source_id != null && h.source_id !== '') out.source_id = String(h.source_id).slice(0, 80);
-      if (h.title) out.title = String(h.title).slice(0, 80);
+      if (h.title) out.title = String(h.title).slice(0, 120);
+      if (h.cover_url) out.cover_url = String(h.cover_url).slice(0, 500);
+      if (h.page_count) out.page_count = Number(h.page_count) || 0;
+      if (h.play_time) out.play_time = Number(h.play_time) || 0;
       if (!isVid && pos) out.page = pos;
       if (!isVid && dur) out.total = dur;
       if (isVid && pos) out.currentTime = pos;
       return out;
     }
 
+    function inferHistoryMediaType(h) {
+      if (!h) return 'comic';
+      const raw = String(h.media_type || '').trim().toLowerCase();
+      if (raw === 'video' || raw === 'game') return raw;
+      if (raw === 'gallery' || raw === 'cosplay') return 'gallery';
+      const src = String(h.source || '').trim().toLowerCase();
+      if (['pmvhaven', 'pornone', 'redporn', 'anyporn', 'alotporn', 'damplips', 'pornhd', 'spankbang', 'xvideos', 'eporner'].includes(src)) return 'video';
+      if (['buondua', '4khd', 'xasiat', 'leakgallery', 'mitaku'].includes(src)) return 'gallery';
+      if (['gamcore', 'games', 'flash', 'ruffle', 'renpy'].includes(src) || h.game_type) return 'game';
+      return 'comic';
+    }
+
+    function buildProgressKeys(item) {
+      const keys = [];
+      if (!item || typeof item !== 'object') return keys;
+      if (item.source && item.source_id != null && item.source_id !== '') {
+        keys.push(`${item.source}:${item.source_id}`);
+        const low = `${String(item.source).toLowerCase()}:${item.source_id}`;
+        if (low !== keys[0]) keys.push(low);
+      }
+      if (item.id != null && item.id !== '') keys.push(String(item.id));
+      if (item.item_id != null && item.item_id !== '' && String(item.item_id) !== String(item.id)) keys.push(String(item.item_id));
+      return keys;
+    }
+
+    function getSavedProgressFor(item) {
+      const keys = buildProgressKeys(item);
+      for (let i = 0; i < keys.length; i++) {
+        const hit = state.progress && state.progress[keys[i]];
+        if (hit) return hit;
+      }
+      if (window.VelvetPersonalData && typeof window.VelvetPersonalData.getProgressFor === 'function') {
+        return window.VelvetPersonalData.getProgressFor(item);
+      }
+      return null;
+    }
+
+    function storeProgressFor(item, progObj) {
+      if (!item || !progObj) return;
+      state.progress = state.progress || {};
+      const keys = buildProgressKeys(item);
+      for (let i = 0; i < keys.length; i++) {
+        state.progress[keys[i]] = progObj;
+      }
+    }
+
     function decorateServerHistory(h) {
       const slim = compactHistoryRecord(h) || {};
+      const mType = inferHistoryMediaType(h);
+      const pos = Number(h && (h.position ?? h.page ?? h.currentTime ?? slim.position) || 0) || 0;
+      const dur = Number(h && (h.duration ?? h.total ?? h.page_count ?? slim.duration) || 0) || 0;
       return {
         ...h,
         ...slim,
+        media_type: mType,
+        position: pos,
+        duration: dur,
+        page: mType === 'video' ? 0 : pos,
+        total: mType === 'video' ? 0 : dur,
+        currentTime: mType === 'video' ? pos : 0,
         title: (h && h.title) || slim.title || '',
-        cover_url: (h && h.cover_url) || '',
+        cover_url: (h && h.cover_url) || slim.cover_url || '',
         url: (h && h.url) || '',
         source: (h && h.source) || slim.source || '',
         source_id: (h && h.source_id) || slim.source_id || ''
@@ -5971,22 +6027,46 @@
     }
 
     function applyHistoryList(items) {
-      state.history = (items || []).map(decorateServerHistory).filter(h => h && (h.id || h.source_id)).slice(0, 50);
+      const seen = new Set();
+      const deduped = [];
+      for (const raw of (items || [])) {
+        const dec = decorateServerHistory(raw);
+        if (!dec || (!dec.id && !dec.source_id)) continue;
+        const dk = (dec.source && dec.source_id != null && dec.source_id !== '')
+          ? `${String(dec.source).toLowerCase()}:${dec.source_id}`
+          : String(dec.id || dec.item_id);
+        if (seen.has(dk)) continue;
+        seen.add(dk);
+        deduped.push(dec);
+        if (deduped.length >= 60) break;
+      }
+      state.history = deduped;
       const prog = {};
       state.history.forEach(h => {
-        const key = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
-        if (!key || key === ':') return;
-        prog[key] = {
-          page: h.page || h.position || 0,
-          total: h.total || h.duration || 0,
-          currentTime: h.media_type === 'video' ? (h.currentTime || h.position || 0) : 0,
-          duration: h.duration || 0,
+        const isVid = h.media_type === 'video';
+        const pos = Number(h.position || h.page || h.currentTime || 0) || 0;
+        const dur = Number(h.duration || h.total || h.page_count || 0) || 0;
+        const entry = {
+          page: isVid ? 0 : pos,
+          total: isVid ? 0 : dur,
+          currentTime: isVid ? pos : 0,
+          duration: dur,
+          position: pos,
           completed: !!h.completed,
+          play_time: Number(h.play_time || pos || 0) || 0,
           at: h.at || 0
         };
+        const keys = buildProgressKeys(h);
+        for (let i = 0; i < keys.length; i++) {
+          prog[keys[i]] = entry;
+        }
       });
       state.progress = prog;
+      if (window.VelvetPersonalData && typeof window.VelvetPersonalData.indexProgressEntries === 'function') {
+        window.VelvetPersonalData.indexProgressEntries(state.history);
+      }
     }
+    window.applyHistoryList = applyHistoryList;
 
     function readStoredList(keys) {
       for (let i = 0; i < keys.length; i++) {
@@ -6057,18 +6137,32 @@
           state.watchlist = w ? JSON.parse(w) : [];
 
           const userHist = readStoredList([prefix + 'history']);
-          state.history = userHist.map(compactHistoryRecord).filter(Boolean).slice(0, 50);
-
           const p = localStorage.getItem(prefix + 'progress');
-          state.progress = p ? JSON.parse(p) : {};
+          const parsedProg = p ? JSON.parse(p) : {};
+          applyHistoryList(userHist);
+          if (parsedProg && typeof parsedProg === 'object') {
+            state.progress = { ...(state.progress || {}), ...parsedProg };
+            state.history.forEach(h => {
+              const saved = getSavedProgressFor(h);
+              if (saved) storeProgressFor(h, saved);
+            });
+          }
         } else {
           state.user = { name: 'Invitado', avatar: '🔑', avatarBg: 'from-purple-900 to-slate-900', isVip: false };
           state.favorites = readStoredList(['velvet_guest_favs', 'velvet_fav_ids', 'velvet_favorites', 'velvet_favs']).map(compactFavoriteRecord).filter(Boolean);
           const w = localStorage.getItem('velvet_guest_watchlist') || localStorage.getItem('velvet_watchlist');
           state.watchlist = w ? JSON.parse(w) : [];
-          state.history = readStoredList(['velvet_guest_history', 'velvet_history']).map(compactHistoryRecord).filter(Boolean).slice(0, 50);
+          const guestHist = readStoredList(['velvet_guest_history', 'velvet_history']);
           const p = localStorage.getItem('velvet_guest_progress') || localStorage.getItem('velvet_progress');
-          state.progress = p ? JSON.parse(p) : {};
+          const parsedProg = p ? JSON.parse(p) : {};
+          applyHistoryList(guestHist);
+          if (parsedProg && typeof parsedProg === 'object') {
+            state.progress = { ...(state.progress || {}), ...parsedProg };
+            state.history.forEach(h => {
+              const saved = getSavedProgressFor(h);
+              if (saved) storeProgressFor(h, saved);
+            });
+          }
         }
 
         writeCompactPersonalCache();
@@ -6232,8 +6326,16 @@
     function showToast(msg, type = 'info') {
 
       const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const lastToast = container.lastElementChild;
+      if (lastToast && lastToast.dataset && lastToast.dataset.msg === String(msg)) return;
+      while (container.children.length >= 2) {
+        container.firstElementChild.remove();
+      }
 
       const toast = document.createElement('div');
+      toast.dataset.msg = String(msg);
 
       const icon = type === 'success' ? 'fa-circle-check text-emerald-400' :
 
@@ -6507,6 +6609,7 @@
     // Eliminado el listener invasivo de arrastre táctil para que el scroll sea 100% natural
 
     function renderFeedData(data, append = false) {
+      hideCatalogLoader();
 
       const grid = document.getElementById('comics-grid');
 
@@ -6963,6 +7066,7 @@
     }
 
     function showCatalogLoadError(err) {
+      hideCatalogLoader();
       const empty = document.getElementById('empty-state');
       const grid = document.getElementById('comics-grid');
       const resCount = document.getElementById('results-count');
@@ -7142,36 +7246,34 @@
       }
     }
 
+    function hideCatalogLoader() {
+      const loader = document.getElementById('catalog-inline-loader');
+      if (loader) loader.remove();
+      const grid = document.getElementById('comics-grid');
+      if (grid) {
+        grid.classList.remove('opacity-45', 'pointer-events-none');
+      }
+    }
+
     function renderSkeletons() {
       const grid = document.getElementById('comics-grid');
       if (!grid) return;
-      grid.innerHTML = '';
-      const isVideo = (state.mode === 'videos');
-      if (isVideo) {
-        grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6';
-      } else {
-        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6';
-      }
-      const skelCount = (typeof getAdaptivePageSize === 'function') ? getAdaptivePageSize() : (window.innerWidth < 768 ? 8 : 12);
-      const frag = document.createDocumentFragment();
-      for (let i = 0; i < skelCount; i++) {
-        const skel = document.createElement('div');
-        skel.className = 'flex flex-col bg-[#0f071c] border border-white/[0.08] rounded-2xl overflow-hidden animate-pulse';
-        skel.innerHTML = `
-          <div class="relative ${isVideo ? 'aspect-video' : 'aspect-[3/4]'} w-full bg-[#090312]">
-            ${velvetLogoPlaceholder()}
-          </div>
-          <div class="p-3 space-y-2">
-            <div class="h-3 bg-white/10 rounded w-3/4"></div>
-            <div class="h-2.5 bg-white/5 rounded w-1/2"></div>
-          </div>
-        `;
-        frag.appendChild(skel);
-      }
-      grid.appendChild(frag);
-      grid.classList.remove('hidden');
       const emptyState = document.getElementById('empty-state');
       if (emptyState) emptyState.classList.add('hidden');
+      const hasRenderedCards = grid.querySelector('[data-card-id]');
+      if (hasRenderedCards) {
+        // Si ya hay tarjetas reales visibles, atenuar sutilmente en lugar de reemplazar por cajas vacías
+        grid.classList.add('opacity-45', 'pointer-events-none', 'transition-opacity', 'duration-150');
+        return;
+      }
+      grid.className = 'w-full';
+      grid.innerHTML = `
+        <div id="catalog-inline-loader" class="w-full py-20 flex flex-col items-center justify-center gap-3 text-center select-none" aria-busy="true">
+          <div class="w-9 h-9 rounded-full border-2 border-purple-500/25 border-t-[#ff2d95] animate-spin"></div>
+          <span class="text-xs font-bold tracking-wider uppercase text-lav/65">Cargando contenido...</span>
+        </div>
+      `;
+      grid.classList.remove('hidden');
     }
 
     // =======================================================================
@@ -7423,21 +7525,49 @@
       }
     }
 
+    let _ruffleLoadPromise = null;
+    function ensureRuffleLoaded() {
+      if (window.RufflePlayer && typeof window.RufflePlayer.newest === 'function') {
+        return Promise.resolve(window.RufflePlayer);
+      }
+      if (_ruffleLoadPromise) return _ruffleLoadPromise;
+      _ruffleLoadPromise = new Promise((resolve, reject) => {
+        const loadUrl = (src, fallback) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.async = true;
+          s.onload = () => resolve(window.RufflePlayer);
+          s.onerror = () => {
+            if (fallback) loadUrl(fallback, null);
+            else { _ruffleLoadPromise = null; reject(new Error('Ruffle load failed')); }
+          };
+          document.head.appendChild(s);
+        };
+        loadUrl('https://unpkg.com/@ruffle-rs/ruffle', 'https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle');
+      });
+      return _ruffleLoadPromise;
+    }
+
     function recordGamePlayHistory(game) {
       if (!game) return;
       const itemId = game.id || null;
       const source = game.source || 'gamcore';
-      const sourceId = game.source_id || String(game.id || '');
+      const sourceId = String(game.source_id || game.id || '');
       const key = `${source}:${sourceId}`;
+
+      const prevProg = getSavedProgressFor({ id: itemId, source, source_id: sourceId }) || {};
+      const playMinutes = (prevProg.play_time || prevProg.position || 0) + 1;
+      const now = Date.now();
 
       if (!Array.isArray(state.history)) state.history = [];
       state.history = state.history.filter(h => {
         if (itemId && h.id && Number(h.id) === Number(itemId)) return false;
-        return !(h.source === source && h.source_id === sourceId);
+        return !(h.source === source && String(h.source_id) === sourceId);
       });
 
       const histItem = {
         id: itemId,
+        item_id: itemId,
         source: source,
         source_id: sourceId,
         title: game.title || 'Juego VIP',
@@ -7446,28 +7576,46 @@
         game_type: game.game_type || 'html5',
         engine: game.engine || 'Ren\'Py',
         url: window._activeGameTargetUrl || '',
-        at: Date.now()
+        position: playMinutes,
+        duration: 100,
+        completed: false,
+        play_time: playMinutes,
+        at: now
       };
       state.history.unshift(histItem);
-      if (state.history.length > 50) state.history.pop();
+      if (state.history.length > 60) state.history.pop();
 
-      state.progress = state.progress || {};
-      const prevProg = state.progress[key] || (itemId ? state.progress[String(itemId)] : {}) || {};
       const updatedProg = {
         media_type: 'game',
         source: source,
         source_id: sourceId,
         id: itemId,
-        played_at: Date.now(),
-        play_time: (prevProg.play_time || 0) + 1,
+        played_at: now,
+        play_time: playMinutes,
+        position: playMinutes,
+        duration: 100,
+        completed: false,
+        at: now,
         slot: 'auto'
       };
-      state.progress[key] = updatedProg;
-      if (itemId) state.progress[String(itemId)] = updatedProg;
+      storeProgressFor(histItem, updatedProg);
 
       saveStorage();
       renderContinueShelf();
       syncGameSaveProgress(game, 'auto');
+      if (state.currentUser) {
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.recordProgress === 'function') {
+          window.VelvetPersonalData.recordProgress(histItem, { position: playMinutes, duration: 100, completed: false }, true);
+        } else {
+          fetch('/api/user/history', {
+            method: 'POST',
+            credentials: 'include',
+            headers: authHeaders(),
+            keepalive: true,
+            body: JSON.stringify(histItem)
+          }).catch(() => {});
+        }
+      }
     }
 
     function openGameModal(game, forceReload = false) {
@@ -7581,22 +7729,21 @@
           };
 
           if (!launchRuffle()) {
-            let tries = 0;
-            const rInterval = setInterval(() => {
-              tries++;
-              if (launchRuffle() || tries > 40) {
-                clearInterval(rInterval);
-                if (tries > 40 && !ruffleWrap.querySelector('ruffle-player')) {
-                  ruffleWrap.innerHTML = `
-                    <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4 max-w-md">
-                      <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-400"></i>
-                      <p class="text-sm font-bold">No se pudo cargar el emulador de Flash automáticamente.</p>
-                      <a href="${escapeHtml(targetUrl || '#')}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Abrir Archivo SWF</a>
-                    </div>
-                  `;
-                }
+            ensureRuffleLoaded().then(() => {
+              if (!launchRuffle() && !ruffleWrap.querySelector('ruffle-player')) {
+                throw new Error('Ruffle unavailable');
               }
-            }, 100);
+            }).catch(() => {
+              if (!ruffleWrap.querySelector('ruffle-player')) {
+                ruffleWrap.innerHTML = `
+                  <div class="text-center p-8 text-white flex flex-col items-center justify-center gap-4 max-w-md">
+                    <i class="fa-solid fa-triangle-exclamation text-4xl text-amber-400"></i>
+                    <p class="text-sm font-bold">No se pudo cargar el emulador de Flash automáticamente.</p>
+                    <a href="${escapeHtml(targetUrl || '#')}" target="_blank" rel="noopener noreferrer" class="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-xs font-bold shadow-lg hover:scale-105 transition-all">Abrir Archivo SWF</a>
+                  </div>
+                `;
+              }
+            });
           }
         }
       } else {
@@ -9599,6 +9746,10 @@
         const displayBadge = getReliableBadge(cachedVid);
         srcBadge.innerHTML = displayBadge || 'Morbo VIP';
         updateVideoFavIcon();
+        const savedCachedProg = getSavedProgressFor(cachedVid) || getSavedProgressFor({ id: itemId, source, source_id: sourceId });
+        const resumeSec = Number(savedCachedProg?.currentTime || savedCachedProg?.position || savedCachedProg?.page || 0);
+        const resumeDur = Number(savedCachedProg?.duration || 0);
+        videoPendingSeekTime = (resumeSec > 2 && !savedCachedProg?.completed && (!resumeDur || resumeSec < (resumeDur - 15))) ? resumeSec : null;
         recordVideoHistory(cachedVid);
         if (pushRoute) {
           const effId = cachedVid.id || itemId;
@@ -9646,13 +9797,11 @@
         srcBadge.innerHTML = displayBadge || 'Morbo VIP';
 
         updateVideoFavIcon();
+        const savedProg = getSavedProgressFor(item) || getSavedProgressFor({ id: itemId, source, source_id: sourceId });
+        const resumeSec = Number(savedProg?.currentTime || savedProg?.position || savedProg?.page || 0);
+        const resumeDur = Number(savedProg?.duration || 0);
+        videoPendingSeekTime = (resumeSec > 2 && !savedProg?.completed && (!resumeDur || resumeSec < (resumeDur - 15))) ? resumeSec : null;
         recordVideoHistory(item);
-
-        const vKey = `${source}:${sourceId}`;
-        const savedProg = state.progress[vKey];
-        if (savedProg && savedProg.currentTime > 5 && !savedProg.completed && savedProg.duration && savedProg.currentTime < (savedProg.duration - 15)) {
-          videoPendingSeekTime = savedProg.currentTime;
-        }
 
         if (pushRoute) {
           const effId = item.id || itemId;
@@ -9969,6 +10118,7 @@
     }
 
     function closeVideoPlayer(pushRoute = true) {
+      document.body.style.overflow = '';
       videoLoadToken = videoGuard.stop();
       const player = document.getElementById('html5-video-player');
       if (player && player.currentTime > 0 && state.currentVideo && Number.isFinite(player.duration)) {
@@ -10075,82 +10225,138 @@
       _cloudProgDebounceTimer = setTimeout(() => {
         try {
           const itemId = item.id || null;
-          fetch('/api/user/history', {
-            method: 'POST',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-            keepalive: true,
-            body: JSON.stringify({
-              id: itemId,
-              source: item.source || '',
-              source_id: item.source_id || '',
-              title: item.title || '',
-              cover_url: item.cover_url || '',
-              url: item.url || '',
-              media_type: item.media_type || 'comic',
-              ...progressData
-            })
-          }).catch(() => {});
+          const mType = inferHistoryMediaType(item);
+          const pos = Math.max(0, Math.round(Number(progressData.position ?? progressData.currentTime ?? progressData.page ?? 0)) || 0);
+          const dur = Math.max(0, Math.round(Number(progressData.duration ?? progressData.total ?? item.page_count ?? 0)) || 0);
+          const payload = {
+            id: itemId,
+            item_id: itemId,
+            source: item.source || '',
+            source_id: item.source_id != null ? String(item.source_id) : '',
+            title: item.title || '',
+            cover_url: item.cover_url || '',
+            url: item.url || '',
+            media_type: mType,
+            position: pos,
+            duration: dur,
+            client_timestamp: Date.now(),
+            ...progressData
+          };
+          if (window.VelvetPersonalData && typeof window.VelvetPersonalData.fetchAuthed === 'function') {
+            window.VelvetPersonalData.fetchAuthed('/api/user/history', {
+              method: 'POST',
+              keepalive: true,
+              body: JSON.stringify(payload)
+            }).catch(() => {});
+          } else {
+            fetch('/api/user/history', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+              keepalive: true,
+              body: JSON.stringify(payload)
+            }).catch(() => {});
+          }
         } catch (e) {}
       }, 1200);
     }
 
     function saveVideoPlaybackProgress(currentTime, duration, completed = false) {
       if (!state.currentVideo) return;
-      const key = `${state.currentVideo.source}:${state.currentVideo.source_id}`;
-      state.progress[key] = {
-        currentTime,
-        duration,
-        page: Math.round(currentTime),
-        total: Math.round(duration),
-        completed,
-        at: Date.now()
+      const curSec = Math.max(0, Math.round(Number(currentTime) || 0));
+      const durSec = Math.max(0, Math.round(Number(duration) || 0));
+      const now = Date.now();
+      const progObj = {
+        currentTime: curSec,
+        duration: durSec,
+        position: curSec,
+        page: curSec,
+        total: durSec,
+        completed: !!completed,
+        at: now
       };
-      const histItem = state.history.find(h => h.source === state.currentVideo.source && h.source_id === state.currentVideo.source_id);
+      storeProgressFor(state.currentVideo, progObj);
+      const histItem = state.history.find(h =>
+        (state.currentVideo.id != null && h.id != null && String(h.id) === String(state.currentVideo.id)) ||
+        (state.currentVideo.source && h.source === state.currentVideo.source && String(h.source_id) === String(state.currentVideo.source_id))
+      );
       if (histItem) {
-        histItem.completed = completed;
-        histItem.currentTime = currentTime;
-        histItem.duration = duration;
+        histItem.completed = !!completed;
+        histItem.currentTime = curSec;
+        histItem.position = curSec;
+        histItem.duration = durSec;
+        histItem.at = now;
       }
       state.continueShelfDirty = true;
       debounceSaveStorage(1000);
-      syncProgressToCloudDebounced(state.currentVideo, { currentTime, duration, completed });
+      syncProgressToCloudDebounced(state.currentVideo, { currentTime: curSec, position: curSec, duration: durSec, completed: !!completed });
     }
 
     function recordVideoHistory(item) {
       if (!item) return;
       const itemId = item.id || (state.currentVideo ? state.currentVideo.id : null);
-      const key = itemId ? String(itemId) : `${item.source}:${item.source_id}`;
-      const existingProg = state.progress[key] || state.progress[`${item.source}:${item.source_id}`];
+      const existingProg = getSavedProgressFor(item) || getSavedProgressFor({ id: itemId, source: item.source, source_id: item.source_id });
+      const prevHist = state.history.find(h =>
+        (itemId && h.id && String(h.id) === String(itemId)) ||
+        (item.source && item.source_id && h.source === item.source && String(h.source_id) === String(item.source_id))
+      );
       state.history = state.history.filter(h => {
-        if (itemId && h.id && Number(h.id) === Number(itemId)) return false;
-        return !(h.source === item.source && h.source_id === item.source_id);
+        if (itemId && h.id && String(h.id) === String(itemId)) return false;
+        return !(item.source && item.source_id && h.source === item.source && String(h.source_id) === String(item.source_id));
       });
+      const curSec = Number(existingProg?.currentTime || existingProg?.position || prevHist?.currentTime || prevHist?.position || 0) || 0;
+      const durSec = Number(existingProg?.duration || prevHist?.duration || (item.extra && item.extra.durationSeconds) || 0) || 0;
+      const isComp = Boolean(existingProg?.completed ?? prevHist?.completed);
+      const now = Date.now();
       const histItem = {
         id: itemId,
+        item_id: itemId,
         source: item.source,
         source_id: item.source_id,
         title: item.title,
         cover_url: item.cover_url,
-        url: item.url,
+        url: item.url || '',
         media_type: 'video',
-        completed: existingProg ? existingProg.completed : false,
-        currentTime: existingProg ? existingProg.currentTime : 0,
-        duration: existingProg ? existingProg.duration : 0,
-        visited_at: new Date().toISOString()
+        completed: isComp,
+        position: curSec,
+        currentTime: curSec,
+        duration: durSec,
+        at: now,
+        visited_at: new Date(now).toISOString()
       };
       state.history.unshift(histItem);
-      if (state.history.length > 50) state.history.pop();
+      if (state.history.length > 60) state.history.pop();
+      if (curSec > 0 || durSec > 0) {
+        storeProgressFor(histItem, {
+          currentTime: curSec,
+          position: curSec,
+          page: curSec,
+          duration: durSec,
+          total: durSec,
+          completed: isComp,
+          at: now
+        });
+      }
       saveStorage();
       renderContinueShelf();
 
       if (state.currentUser) {
         try {
-          fetch('/api/user/history', {
-            method: 'POST',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-            keepalive: true,
-            body: JSON.stringify(histItem)
-          }).catch(() => {});
+          if (window.VelvetPersonalData && typeof window.VelvetPersonalData.fetchAuthed === 'function') {
+            window.VelvetPersonalData.fetchAuthed('/api/user/history', {
+              method: 'POST',
+              keepalive: true,
+              body: JSON.stringify(histItem)
+            }).catch(() => {});
+          } else {
+            fetch('/api/user/history', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+              keepalive: true,
+              body: JSON.stringify(histItem)
+            }).catch(() => {});
+          }
         } catch (e) {}
       }
     }
@@ -10879,14 +11085,18 @@
     }
 
     function setupHeroCarousel(items) {
-
-      if (!items || items.length === 0) return;
+      const heroSec = document.getElementById('hero-section');
+      if (!items || items.length === 0) {
+        if (heroSec) heroSec.classList.add('hidden');
+        return;
+      }
 
       state.heroItems = items;
 
       state.heroIndex = 0;
 
       renderHeroSlide(0);
+      if (heroSec) heroSec.classList.remove('hidden');
 
       // Pre-cargar solamente el siguiente slide para no saturar la red
       if (items.length > 1 && items[1].cover_url) {
@@ -11167,11 +11377,12 @@
       }
 
       const activeItems = (state.history || []).filter(h => {
-        const isVid = (h.media_type === 'video');
-        const isGal = (h.media_type === 'gallery');
-        const isGame = (h.media_type === 'game');
+        const mType = inferHistoryMediaType(h);
+        const isVid = (mType === 'video');
+        const isGal = (mType === 'gallery');
+        const isGame = (mType === 'game');
         if (isGameMode) {
-          return isGame;
+          if (!isGame) return false;
         } else if (isGalleryMode) {
           if (!isGal) return false;
         } else if (isVideoMode) {
@@ -11180,21 +11391,20 @@
           if (isVid || isGal || isGame) return false;
         }
 
-        const key = `${h.source}:${h.source_id}`;
-        const p = state.progress[key] || {};
-        if (isGame) return !(p.completed || h.completed);
-        if (!state.progress[key]) return false;
-        if (p.completed || h.completed) return false;
+        const p = getSavedProgressFor(h) || {};
+        const completed = Boolean(p.completed || h.completed);
+        if (completed) return false;
+        if (isGame) return true;
 
         if (isVid) {
-          const dur = p.duration || p.total || 0;
-          const cur = p.currentTime || p.page || 0;
-          if (dur <= 0 || cur < 3) return false;
+          const dur = Number(p.duration || p.total || h.duration || 0) || 0;
+          const cur = Number(p.currentTime || p.position || p.page || h.currentTime || h.position || 0) || 0;
+          if (dur <= 0 || cur < 2) return false;
           const pct = (cur / dur) * 100;
-          return pct > 2 && pct < 90;
+          return pct > 1 && pct < 92;
         } else {
-          const page = p.page || 1;
-          const total = p.total || 1;
+          const page = Number(p.page || p.position || h.page || h.position || 0) || 0;
+          const total = Number(p.total || p.duration || h.total || h.duration || h.page_count || 0) || 0;
           if (total <= 1) return false;
           return page > 0 && page < total;
         }
@@ -11207,26 +11417,28 @@
 
       section.classList.remove('hidden');
 
-      activeItems.slice(0, 10).forEach(h => {
-        const isVid = (h.media_type === 'video');
-        const key = `${h.source}:${h.source_id}`;
-        const p = state.progress[key] || {};
+      activeItems.slice(0, 12).forEach(h => {
+        const mType = inferHistoryMediaType(h);
+        const isVid = (mType === 'video');
+        const isGal = (mType === 'gallery');
+        const isGame = (mType === 'game');
+        const p = getSavedProgressFor(h) || {};
         let pct = 0;
         let progressLabel = '';
 
-        const isGame = (h.media_type === 'game');
         if (isGame) {
           pct = 100;
-          progressLabel = p.play_time ? `${p.play_time}m jugados` : 'Partida activa';
+          const mins = Number(p.play_time || h.play_time || p.position || h.position || 0) || 0;
+          progressLabel = mins ? `${mins}m jugados` : 'Partida activa';
         } else if (isVid) {
-          const dur = p.duration || p.total || 1;
-          const cur = p.currentTime || p.page || 0;
-          pct = Math.min(99, Math.round((cur / dur) * 100));
+          const dur = Number(p.duration || p.total || h.duration || 1) || 1;
+          const cur = Number(p.currentTime || p.position || p.page || h.currentTime || h.position || 0) || 0;
+          pct = Math.min(99, Math.max(1, Math.round((cur / dur) * 100)));
           progressLabel = `${formatVideoTime(cur)} / ${formatVideoTime(dur)}`;
         } else {
-          const total = p.total || 1;
-          const cur = p.page || 1;
-          pct = Math.min(99, Math.round((cur / total) * 100));
+          const total = Number(p.total || p.duration || h.total || h.duration || h.page_count || 1) || 1;
+          const cur = Number(p.page || p.position || h.page || h.position || 1) || 1;
+          pct = Math.min(99, Math.max(1, Math.round((cur / total) * 100)));
           progressLabel = `Pág. ${cur} de ${total}`;
         }
 
@@ -11235,9 +11447,10 @@
         const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(h) : '#';
         card.className = `group relative w-[155px] sm:w-[170px] shrink-0 snap-start bg-[#0e061e]/90 border border-white/10 hover:border-pink-500/60 rounded-2xl overflow-hidden shadow-lg p-2 flex flex-col justify-between transition-all hover:scale-[1.02] select-none`;
 
+        const coverType = isVid ? 'video' : (isGal ? 'gallery' : (isGame ? 'game' : 'comic'));
         const coverSrc = h.cover_url
           ? getStealthImageUrl(h.cover_url, h.url)
-          : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
+          : coverFallbackFor(coverType);
 
         const domColor = getCardDominantColor(h.id || (h.source + '_' + h.source_id));
 
@@ -11249,10 +11462,10 @@
             <img src="${coverSrc}"
                  alt="${escapeHtml(cleanContinueTitle)}"
                  loading="lazy"
-                 data-media-type="${isVid ? 'video' : 'comic'}"
+                 data-media-type="${coverType}"
                  class="card-cover-img w-full h-full object-cover opacity-0 transition-all duration-300 group-hover:scale-105"
                  onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton')||s.classList.contains('velvet-logo-ph'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
-                 onerror="handleCardImageError(this, '${isVid ? 'video' : 'comic'}')">
+                 onerror="handleCardImageError(this, '${coverType}')">
 
             <!-- Botón discreto (X) para remover con Deshacer -->
             <button type="button"
@@ -11321,7 +11534,7 @@
       if (idx === -1) return;
 
       const removedItem = state.history[idx];
-      const removedProgress = state.progress[`${source}:${sourceId}`];
+      const removedProgress = getSavedProgressFor(removedItem) || state.progress[`${source}:${sourceId}`];
 
       continueDismissUndoData = {
         item: removedItem,
@@ -11329,17 +11542,20 @@
         index: idx
       };
 
-      state.history.splice(idx, 1);
-      if (removedProgress) {
-        delete state.progress[`${source}:${sourceId}`];
-      }
+      const doneProg = {
+        ...(removedProgress || {}),
+        completed: true,
+        at: Date.now()
+      };
+      removedItem.completed = true;
+      storeProgressFor(removedItem, doneProg);
       saveStorage();
       renderContinueShelf();
 
-      showContinueUndoToast(removedItem.title || 'Elemento');
+      showContinueUndoToast(removedItem);
     }
 
-    function showContinueUndoToast(title) {
+    function showContinueUndoToast(item) {
       if (continueDismissUndoTimeout) {
         clearTimeout(continueDismissUndoTimeout);
       }
@@ -11362,19 +11578,28 @@
 
       continueDismissUndoTimeout = setTimeout(() => {
         toast.classList.add('hidden');
+        const pendingItem = continueDismissUndoData && continueDismissUndoData.item;
         continueDismissUndoData = null;
         continueDismissUndoTimeout = null;
+        if (pendingItem && state.currentUser) {
+          const donePos = Number(pendingItem.duration || pendingItem.total || pendingItem.page_count || pendingItem.position || 1) || 1;
+          if (window.VelvetPersonalData && typeof window.VelvetPersonalData.recordProgress === 'function') {
+            window.VelvetPersonalData.recordProgress(pendingItem, { position: donePos, duration: donePos, completed: true }, true);
+          }
+        }
       }, 5000);
     }
 
     function undoDismissContinue() {
       if (!continueDismissUndoData) return;
-      const { item, progress, index } = continueDismissUndoData;
+      const { item, progress } = continueDismissUndoData;
       if (item) {
-        state.history.splice(index, 0, item);
+        item.completed = Boolean(progress && progress.completed);
       }
       if (progress && item) {
-        state.progress[`${item.source}:${item.source_id}`] = progress;
+        storeProgressFor(item, progress);
+      } else if (item) {
+        storeProgressFor(item, { page: Number(item.page || item.position || 1), total: Number(item.total || item.duration || item.page_count || 1), completed: false, at: Date.now() });
       }
       saveStorage();
       renderContinueShelf();
@@ -11442,13 +11667,19 @@
 
     let _readerFetchCtrl = null;
     let _readerOpenSeq = 0;
+    let _readerInFlightKey = '';
 
     async function openReader(source, sourceId, pushRoute = true, itemId = null) {
+      const reqKey = itemId ? `id:${itemId}` : `${source || ''}:${sourceId || ''}`;
+      if (_readerFetchCtrl && !_readerFetchCtrl.signal.aborted && _readerInFlightKey === reqKey) {
+        return;
+      }
       const mySeq = ++_readerOpenSeq;
       if (_readerFetchCtrl) {
         try { _readerFetchCtrl.abort(); } catch (e) {}
       }
       _readerFetchCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      _readerInFlightKey = reqKey;
       const mySignal = _readerFetchCtrl ? _readerFetchCtrl.signal : undefined;
       state.currentChapters = [];
       state.currentSeries = null;
@@ -11541,6 +11772,10 @@
           metaEl.textContent = `• ${cachedItem.pages.length} páginas`;
           loading.classList.add('hidden');
           setupChapterNavigation(cachedItem);
+          const savedCached = getSavedProgressFor(cachedItem);
+          const resumePage = (savedCached && !savedCached.completed && Number(savedCached.page || savedCached.position) > 1)
+            ? Number(savedCached.page || savedCached.position)
+            : 1;
           addToHistory(cachedItem);
           if (pushRoute) {
             const effId = cachedItem.id || itemId;
@@ -11553,7 +11788,7 @@
             history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true, _fromFeedPush: homeWasOpen }, cachedHeading, canonicalUrl);
             document.title = `${cachedHeading} — MORBO HUB`;
           }
-          renderReaderPages(cachedItem.pages, cachedItem.url);
+          renderReaderPages(cachedItem.pages, cachedItem.url, resumePage);
           renderReaderRecommendations();
           return;
         }
@@ -11639,6 +11874,11 @@
 
         setupChapterNavigation(item);
 
+        const savedNet = getSavedProgressFor(item);
+        const resumePage = (savedNet && !savedNet.completed && Number(savedNet.page || savedNet.position) > 1)
+          ? Number(savedNet.page || savedNet.position)
+          : 1;
+
         addToHistory(item);
 
         if (pushRoute) {
@@ -11653,12 +11893,14 @@
         }
         document.title = `${headingTitle} — MORBO HUB`;
 
-        renderReaderPages(item.pages || [], item.url);
+        renderReaderPages(item.pages || [], item.url, resumePage);
 
         renderReaderRecommendations();
 
       } catch (err) {
-
+        if (mySeq !== _readerOpenSeq || (err && (err.name === 'AbortError' || /aborted/i.test(String(err.message || ''))))) {
+          return;
+        }
         loading.classList.add('hidden');
 
         setReaderHeading(readerIsGallery() ? 'No se pudo cargar la galería' : 'No se pudo cargar el cómic');
@@ -11685,6 +11927,11 @@
 
         showToast(err.message, 'error');
 
+      } finally {
+        if (mySeq === _readerOpenSeq) {
+          _readerFetchCtrl = null;
+          _readerInFlightKey = '';
+        }
       }
 
     }
@@ -11789,18 +12036,17 @@
       return (typeof window !== 'undefined' && window.innerWidth < 768) ? 3 : 4;
     }
 
-    function createReaderPageItem(p, idx, refererUrl) {
+    function createReaderPageItem(p, idx, refererUrl, highPriority = false) {
       const imgUrl = getStealthImageUrl(p.image_url, p.referer || refererUrl);
       const wrapper = document.createElement('div');
       wrapper.className = 'w-full flex flex-col items-center relative z-10 reader-page-item';
-      wrapper.style.minHeight = '650px';
+      wrapper.style.minHeight = '160px';
       wrapper.dataset.pageIndex = idx + 1;
 
       const skeleton = document.createElement('div');
-      skeleton.className = 'reader-skeleton velvet-logo-ph velvet-logo-ph-rich absolute inset-0 sm:rounded-2xl border border-pink-500/15 pointer-events-none transition-opacity duration-300';
+      skeleton.className = 'reader-skeleton velvet-logo-ph velvet-logo-ph-rich absolute inset-0 sm:rounded-2xl border border-pink-500/15 pointer-events-none transition-opacity duration-200';
       skeleton.innerHTML = `
-        <img src="/velvet_logo.png" alt="" class="velvet-logo-ph-mark" width="64" height="64" decoding="async">
-        <span class="velvet-logo-ph-caption">Pág ${p.index || idx + 1}</span>
+        <img src="/velvet_logo.png" alt="" class="velvet-logo-ph-mark" width="52" height="52" decoding="async">
       `;
       wrapper.appendChild(skeleton);
 
@@ -11808,7 +12054,7 @@
       img.alt = `Página ${p.index || idx + 1}`;
       img.referrerPolicy = 'no-referrer';
       img.setAttribute('referrerpolicy', 'no-referrer');
-      img.className = 'w-full reader-img bg-pitch sm:rounded-2xl sm:border sm:border-neon/15 cursor-pointer opacity-0 transition-opacity duration-300 select-none';
+      img.className = 'w-full reader-img bg-pitch sm:rounded-2xl sm:border sm:border-neon/15 cursor-pointer opacity-0 transition-opacity duration-200 select-none';
       img.decoding = 'async';
       img.style.userSelect = 'none';
       img.style.webkitUserSelect = 'none';
@@ -11819,15 +12065,9 @@
       shield.className = 'absolute inset-0 z-20 select-none cursor-pointer';
       shield.oncontextmenu = (e) => { e.preventDefault(); return false; };
       shield.ondragstart = (e) => { e.preventDefault(); return false; };
-      shield.ondblclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (Date.now() - _lastReaderTouchEndTime < 500) return;
-        toggleReaderZoomLevel({ x: e.clientX, y: e.clientY });
-      };
       wrapper.appendChild(shield);
 
-      if (idx === 0) {
+      if (highPriority || idx === 0) {
         img.setAttribute('fetchpriority', 'high');
         img.loading = 'eager';
       } else if (idx === 1) {
@@ -11839,6 +12079,7 @@
       }
 
       const revealReaderImage = (instant) => {
+        wrapper.style.minHeight = '';
         if (instant) img.style.transition = 'none';
         img.classList.remove('opacity-0');
         img.classList.add('opacity-100');
@@ -11848,7 +12089,7 @@
           try { skeleton.remove(); } catch (e) {}
         } else {
           skeleton.style.opacity = '0';
-          setTimeout(() => { try { skeleton.remove(); } catch (e) {} }, 220);
+          setTimeout(() => { try { skeleton.remove(); } catch (e) {} }, 180);
         }
         if (idx + 1 < _readerAllPages.length) {
           preloadSinglePage(idx + 1);
@@ -11955,7 +12196,9 @@
       _readerChunkObserver.observe(sentinel);
     }
 
-    function renderReaderPages(pages, refererUrl) {
+    let _readerRestoringPageUntil = 0;
+
+    function renderReaderPages(pages, refererUrl, resumePage = 1) {
       const vContainer = document.getElementById('reader-pages-vertical');
       const readerBody = document.getElementById('reader-body');
       if (readerBody) {
@@ -12016,34 +12259,35 @@
       const thumbbar = document.getElementById('reader-thumbbar');
       if (thumbbar) thumbbar.classList.remove('hidden');
 
-      state.slideIndex = 0;
+      const targetPage = Math.min(Math.max(1, parseInt(resumePage, 10) || 1), cleanPages.length);
+      state.slideIndex = Math.max(0, targetPage - 1);
       if (state.currentItem) state.currentItem.pages = cleanPages;
-      updateReaderProgress(1, cleanPages.length);
+      updateReaderProgress(targetPage, cleanPages.length);
 
       _readerAllPages = cleanPages;
       _readerRefererUrl = refererUrl;
       _readerRenderedIndex = 0;
       _readerIsRenderingChunk = false;
 
-      // Renderizar inmediatamente SOLO el lote inicial que cabe en pantalla
-      const initialChunk = getReaderChunkSize();
+      // Renderizar inmediatamente hasta cubrir la página de reanudación (si venía de Seguir Viendo)
+      const initialChunk = Math.max(getReaderChunkSize(), targetPage > 1 ? Math.min(cleanPages.length, targetPage + 2) : getReaderChunkSize());
       const firstEnd = Math.min(initialChunk, cleanPages.length);
       const frag = document.createDocumentFragment();
       for (let i = 0; i < firstEnd; i++) {
-        frag.appendChild(createReaderPageItem(cleanPages[i], i, refererUrl));
+        const isPriority = Math.abs((i + 1) - targetPage) <= 1;
+        frag.appendChild(createReaderPageItem(cleanPages[i], i, refererUrl, isPriority));
       }
       vContainer.appendChild(frag);
       _readerRenderedIndex = firstEnd;
 
-      // Precargar la siguiente página de forma secuencial
-      preloadSinglePage(firstEnd);
+      preloadSinglePage(targetPage < firstEnd ? targetPage : firstEnd);
 
       // Si hay más fotos, añadir centinela para auto-carga fluida al bajar
       if (_readerRenderedIndex < cleanPages.length) {
         const sentinel = document.createElement('div');
         sentinel.id = 'reader-page-sentinel';
-        sentinel.className = 'w-full py-8 flex items-center justify-center text-lav/40 text-xs gap-2 select-none';
-        sentinel.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-hot"></i><span>Cargando más fotos...</span>`;
+        sentinel.className = 'w-full py-6 flex items-center justify-center text-lav/40 text-xs gap-2 select-none';
+        sentinel.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-hot"></i><span>Cargando más páginas...</span>`;
         vContainer.appendChild(sentinel);
         initReaderChunkObserver();
       } else {
@@ -12051,6 +12295,17 @@
         if (endCard) endCard.classList.remove('hidden');
       }
 
+      if (targetPage > 1) {
+        _readerRestoringPageUntil = Date.now() + 700;
+        requestAnimationFrame(() => {
+          const targetEl = vContainer.querySelector(`[data-page-index="${targetPage}"]`);
+          if (targetEl && readerBody && state.readerMode === 'vertical') {
+            readerBody.scrollTop = Math.max(0, targetEl.offsetTop - 72);
+          }
+        });
+      }
+
+      saveReadingProgress(targetPage, cleanPages.length);
       updateSlideView();
       setupIntersectionObserver();
     }
@@ -12183,7 +12438,7 @@
           }
         });
 
-        if (bestEntry) {
+        if (bestEntry && Date.now() >= _readerRestoringPageUntil) {
           const pIndex = parseInt(bestEntry.target.dataset.pageIndex, 10);
           if (pIndex) {
             updateReaderProgress(pIndex, totalPagesCount);
@@ -12251,24 +12506,42 @@
 
     function saveReadingProgress(page, total) {
       if (!state.currentItem) return;
-      const key = `${state.currentItem.source}:${state.currentItem.source_id}`;
-      const completed = (page >= total && total > 1);
-      state.progress[key] = { page, total, completed, at: Date.now() };
+      const pNum = Math.max(1, parseInt(page, 10) || 1);
+      const tNum = Math.max(1, parseInt(total, 10) || Number(state.currentItem.page_count || state.currentItem.pages?.length || 1) || 1);
+      const completed = (pNum >= tNum && tNum > 1);
+      const now = Date.now();
+      const progObj = {
+        page: pNum,
+        total: tNum,
+        position: pNum,
+        duration: tNum,
+        completed,
+        at: now
+      };
+      storeProgressFor(state.currentItem, progObj);
 
-      const histItem = state.history.find(h => h.source === state.currentItem.source && h.source_id === state.currentItem.source_id);
+      const histItem = state.history.find(h =>
+        (state.currentItem.id != null && h.id != null && String(h.id) === String(state.currentItem.id)) ||
+        (state.currentItem.source && h.source === state.currentItem.source && String(h.source_id) === String(state.currentItem.source_id))
+      );
       if (histItem) {
         histItem.completed = completed;
-        histItem.page = page;
-        histItem.total = total;
+        histItem.page = pNum;
+        histItem.position = pNum;
+        histItem.total = tNum;
+        histItem.duration = tNum;
+        histItem.page_count = tNum;
+        histItem.at = now;
       }
       state.continueShelfDirty = true;
       debounceSaveStorage(1200);
-      syncProgressToCloudDebounced(state.currentItem, { page, total, completed });
+      syncProgressToCloudDebounced(state.currentItem, { page: pNum, position: pNum, total: tNum, duration: tNum, completed });
     }
 
     function addToHistory(item) {
       if (!item) return;
       const itemId = item.id || (state.currentItem ? state.currentItem.id : null);
+      const savedPrev = getSavedProgressFor({ ...item, id: itemId });
       const existing = state.history.findIndex(h => {
         if (itemId != null && itemId !== '' && h.id != null && h.id !== '' && String(h.id) === String(itemId)) return true;
         return Boolean(item.source && item.source_id != null && h.source === item.source && String(h.source_id) === String(item.source_id));
@@ -12278,21 +12551,44 @@
         prevProg = state.history[existing];
         state.history.splice(existing, 1);
       }
+      const mType = inferHistoryMediaType(item);
+      const resolvedTotal = Math.max(
+        1,
+        Number((item.pages && item.pages.length) || item.page_count || savedPrev?.total || savedPrev?.duration || prevProg?.total || prevProg?.duration || 0) || 1
+      );
+      const resolvedPage = Math.min(
+        resolvedTotal,
+        Math.max(1, Number(savedPrev?.page || savedPrev?.position || prevProg?.page || prevProg?.position || 1) || 1)
+      );
+      const resolvedCompleted = Boolean(savedPrev?.completed ?? prevProg?.completed ?? false);
+      const now = Date.now();
       const histItem = {
         id: itemId,
-        source: item.source,
-        source_id: item.source_id,
-        title: item.title,
-        cover_url: item.cover_url,
+        item_id: itemId,
+        source: item.source || (mType === 'gallery' ? 'velvet' : 'comics'),
+        source_id: item.source_id != null && item.source_id !== '' ? String(item.source_id) : String(itemId || ''),
+        title: item.title || 'Contenido VIP',
+        cover_url: item.cover_url || '',
         url: item.url || '',
-        media_type: item.media_type || 'comic',
-        completed: prevProg ? prevProg.completed : false,
-        page: prevProg ? prevProg.page : 1,
-        total: prevProg ? prevProg.total : 1,
-        at: Date.now()
+        media_type: mType,
+        page_count: resolvedTotal,
+        completed: resolvedCompleted,
+        position: resolvedPage,
+        duration: resolvedTotal,
+        page: resolvedPage,
+        total: resolvedTotal,
+        at: now
       };
       state.history.unshift(histItem);
-      if (state.history.length > 50) state.history.pop();
+      if (state.history.length > 60) state.history.pop();
+      storeProgressFor(histItem, {
+        page: resolvedPage,
+        total: resolvedTotal,
+        position: resolvedPage,
+        duration: resolvedTotal,
+        completed: resolvedCompleted,
+        at: now
+      });
       saveStorage();
       renderContinueShelf();
 
@@ -12450,33 +12746,111 @@
     // Zoom del visor. El doble toque sube a 150% y el siguiente vuelve al mismo sitio.
     state.readerZoom = 1.0;
     let _readerZoomPlace = null;
+    let _slidePanX = 0;
+    let _slidePanY = 0;
+    let _lastReaderPanEndTime = 0;
+    let _pinchZoomRaf = null;
+    let _pendingPinchArgs = null;
+
+    function clampSlidePan(zoomVal, rawX, rawY) {
+      const slideImg = document.getElementById('slide-current-img');
+      const slideStage = document.getElementById('slide-stage') || document.getElementById('reader-pages-slide');
+      if (!slideImg || !slideStage || zoomVal <= 1.01) return { x: 0, y: 0 };
+      const baseW = slideImg.offsetWidth || slideImg.clientWidth || 0;
+      const baseH = slideImg.offsetHeight || slideImg.clientHeight || 0;
+      const stageW = slideStage.clientWidth || window.innerWidth;
+      const stageH = slideStage.clientHeight || (window.innerHeight * 0.8);
+      const maxX = Math.max(0, ((baseW * zoomVal) - stageW) / 2);
+      const maxY = Math.max(0, ((baseH * zoomVal) - stageH) / 2);
+      return {
+        x: Math.min(maxX, Math.max(-maxX, Number(rawX) || 0)),
+        y: Math.min(maxY, Math.max(-maxY, Number(rawY) || 0))
+      };
+    }
+
+    function applySlideTransform(zoomVal, panX, panY, animate) {
+      const slideImg = document.getElementById('slide-current-img');
+      if (!slideImg) return;
+      slideImg.style.transition = animate ? 'transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease' : 'opacity 0.24s ease';
+      if (zoomVal <= 1.01) {
+        slideImg.style.transform = '';
+      } else {
+        slideImg.style.transformOrigin = 'center center';
+        slideImg.style.transform = `translate3d(${Math.round(panX * 10) / 10}px, ${Math.round(panY * 10) / 10}px, 0) scale(${zoomVal})`;
+      }
+    }
 
     function setReaderZoom(zoom, focal, opts) {
       const animate = !!(opts && opts.animate);
+      const isSlide = state.readerMode === 'slide';
       const oldZoom = state.readerZoom || 1;
-      const clamped = Math.min(3, Math.max(0.5, Math.round(Number(zoom) * 100) / 100));
+      const minZ = isSlide ? 1.0 : 0.6;
+      const maxZ = isSlide ? 3.5 : 3.0;
+      let clamped = Math.min(maxZ, Math.max(minZ, Math.round(Number(zoom) * 100) / 100));
+      if (Math.abs(clamped - 1) <= 0.025) clamped = 1;
       state.readerZoom = clamped;
 
       const readerBody = document.getElementById('reader-body');
       const scrollContent = document.getElementById('reader-scroll-content');
       const vContainer = document.getElementById('reader-pages-vertical');
       const slideImg = document.getElementById('slide-current-img');
+      const slideStage = document.getElementById('slide-stage') || document.getElementById('reader-pages-slide');
       const badge = document.getElementById('reader-zoom-btn');
       const pct = Math.round(clamped * 100);
       if (badge) badge.textContent = pct + '%';
 
       const rect = readerBody ? readerBody.getBoundingClientRect() : null;
-      const fx = focal && focal.x != null ? focal.x : (rect ? rect.left + rect.width / 2 : 0);
-      const fy = focal && focal.y != null ? focal.y : (rect ? rect.top + (readerBody.clientHeight / 2) : 0);
+      const fx = focal && focal.x != null ? focal.x : (rect ? rect.left + rect.width / 2 : window.innerWidth / 2);
+      const fy = focal && focal.y != null ? focal.y : (rect ? rect.top + (readerBody.clientHeight / 2) : window.innerHeight / 2);
+
+      if (readerBody) {
+        readerBody.classList.toggle('reader-slide-active', isSlide);
+        readerBody.classList.toggle('reader-zoomed', clamped > 1.01);
+      }
+
+      if (isSlide) {
+        if (scrollContent) scrollContent.classList.remove('is-zoomed-vertical');
+        if (clamped <= 1.01) {
+          _slidePanX = 0;
+          _slidePanY = 0;
+        } else {
+          const sRect = (slideStage || readerBody)?.getBoundingClientRect() || { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+          const centerX = sRect.left + sRect.width / 2;
+          const centerY = sRect.top + sRect.height / 2;
+          const ux = fx - centerX;
+          const uy = fy - centerY;
+          const ratio = clamped / (oldZoom || 1);
+          const nextPx = (focal && focal.x != null) ? (ux - (ux - _slidePanX) * ratio) : (_slidePanX * ratio);
+          const nextPy = (focal && focal.y != null) ? (uy - (uy - _slidePanY) * ratio) : (_slidePanY * ratio);
+          const clampedPan = clampSlidePan(clamped, nextPx, nextPy);
+          _slidePanX = clampedPan.x;
+          _slidePanY = clampedPan.y;
+        }
+        if (slideImg) {
+          applySlideTransform(clamped, _slidePanX, _slidePanY, animate);
+        }
+        if (readerBody) {
+          readerBody.style.overflowX = 'hidden';
+          readerBody.scrollLeft = 0;
+        }
+        return;
+      }
+
+      // MODO CASCADA VERTICAL
+      _slidePanX = 0;
+      _slidePanY = 0;
+      if (slideImg) applySlideTransform(1, 0, 0, false);
+
       const relX = readerBody && oldZoom ? (readerBody.scrollLeft + (fx - (rect ? rect.left : 0))) / oldZoom : 0;
       const relY = readerBody && oldZoom ? (readerBody.scrollTop + (fy - (rect ? rect.top : 0))) / oldZoom : 0;
 
-      if (scrollContent) {
-        scrollContent.classList.toggle('reader-zoom-anim', animate);
-      }
-
       if (oldZoom <= 1.02 && clamped > 1.02 && readerBody && !_readerZoomPlace) {
         _readerZoomPlace = { scrollTop: readerBody.scrollTop || 0, scrollLeft: readerBody.scrollLeft || 0 };
+      }
+
+      const bodyClientW = readerBody ? readerBody.clientWidth : window.innerWidth;
+      if (scrollContent) {
+        scrollContent.classList.toggle('is-zoomed-vertical', clamped > 1.01);
       }
 
       if (vContainer) {
@@ -12485,55 +12859,39 @@
           vContainer.style.maxWidth = '56rem';
           vContainer.style.margin = '0 auto';
           vContainer.style.transform = '';
-          vContainer.style.transformOrigin = 'top center';
         } else if (clamped < 1) {
           vContainer.style.width = pct + '%';
           vContainer.style.maxWidth = Math.round(56 * clamped) + 'rem';
           vContainer.style.margin = '0 auto';
           vContainer.style.transform = '';
-          vContainer.style.transformOrigin = 'top center';
         } else {
-          const base = Math.min((readerBody ? readerBody.clientWidth : window.innerWidth) - 8, 896);
-          vContainer.style.width = Math.round(base * clamped) + 'px';
+          const pad = window.innerWidth >= 640 ? 32 : 0;
+          const base = Math.min(Math.max(240, bodyClientW - pad), 896);
+          const targetW = Math.round(base * clamped);
+          vContainer.style.width = targetW + 'px';
           vContainer.style.maxWidth = 'none';
-          vContainer.style.margin = '0 auto';
+          vContainer.style.margin = targetW <= bodyClientW ? '0 auto' : '0';
           vContainer.style.transform = '';
-          vContainer.style.transformOrigin = 'top center';
         }
       }
 
-      if (slideImg) {
-        slideImg.style.transition = animate ? 'transform 0.22s ease' : 'none';
-        slideImg.style.transform = 'scale(' + clamped + ')';
-        slideImg.style.transformOrigin = 'center center';
-      }
-
       if (readerBody) {
-        readerBody.classList.toggle('reader-zoomed', clamped > 1.01);
         if (clamped <= 1.01) {
           readerBody.style.overflowX = 'hidden';
           const place = _readerZoomPlace;
           _readerZoomPlace = null;
-          const top = place ? place.scrollTop : readerBody.scrollTop;
+          const targetTop = place ? place.scrollTop : Math.max(0, relY - (fy - (rect ? rect.top : 0)));
           readerBody.scrollLeft = 0;
-          const putBack = () => {
-            const maxTop = Math.max(0, readerBody.scrollHeight - readerBody.clientHeight);
-            readerBody.scrollTop = Math.min(Math.max(0, top), maxTop);
-          };
-          putBack();
-          requestAnimationFrame(putBack);
+          const maxTop = Math.max(0, readerBody.scrollHeight - readerBody.clientHeight);
+          readerBody.scrollTop = Math.min(Math.max(0, targetTop), maxTop);
         } else {
           readerBody.style.overflowX = 'auto';
           const nextLeft = relX * clamped - (fx - (rect ? rect.left : 0));
           const nextTop = relY * clamped - (fy - (rect ? rect.top : 0));
-          const putZoom = () => {
-            const maxTop = Math.max(0, readerBody.scrollHeight - readerBody.clientHeight);
-            const maxLeft = Math.max(0, readerBody.scrollWidth - readerBody.clientWidth);
-            readerBody.scrollLeft = Math.min(Math.max(0, nextLeft), maxLeft);
-            readerBody.scrollTop = Math.min(Math.max(0, nextTop), maxTop);
-          };
-          putZoom();
-          requestAnimationFrame(putZoom);
+          const maxTop = Math.max(0, readerBody.scrollHeight - readerBody.clientHeight);
+          const maxLeft = Math.max(0, readerBody.scrollWidth - readerBody.clientWidth);
+          readerBody.scrollLeft = Math.min(Math.max(0, nextLeft), maxLeft);
+          readerBody.scrollTop = Math.min(Math.max(0, nextTop), maxTop);
         }
       }
     }
@@ -12541,11 +12899,14 @@
     function changeReaderZoom(delta, focal) {
       const current = state.readerZoom || 1;
       const next = Math.round((current + delta) * 100) / 100;
-      setReaderZoom(next, focal, { animate: true });
+      setReaderZoom(next, focal, { animate: state.readerMode === 'slide' });
     }
 
     function resetReaderZoom() {
-      setReaderZoom(1, null, { animate: true });
+      _readerZoomPlace = null;
+      _slidePanX = 0;
+      _slidePanY = 0;
+      setReaderZoom(1, null, { animate: false });
     }
 
     function toggleReaderZoomLevel(focal) {
@@ -12557,8 +12918,9 @@
     let _lastReaderTouchEndTime = 0;
 
     function handleReaderContainerClick(e) {
-      if (e && e.type === 'click' && Date.now() - _lastReaderTouchEndTime < 450) {
-        return; // Suprimir click sintético fantasma en Android
+      if (e && e.type === 'click') {
+        if (Date.now() - _lastReaderTouchEndTime < 450) return;
+        if (Date.now() - _lastReaderPanEndTime < 350) return;
       }
       if (e && e.target && e.target.closest('button, a, input, select, #reader-hud-top, #reader-thumbbar, #reader-end-card, #reader-loading, .no-hud-toggle')) {
         return;
@@ -12619,11 +12981,15 @@
       if (!body || body._gesturesInitialized) return;
       body._gesturesInitialized = true;
 
+      let _slideTouchStartPanX = 0;
+      let _slideTouchStartPanY = 0;
+
       body.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
           // Pellizco con 2 dedos (Pinch)
           _readerIsPinching = true;
           _readerTouchMoved = true;
+          body.style.touchAction = 'none';
           if (_singleTapTimer) {
             clearTimeout(_singleTapTimer);
             _singleTapTimer = null;
@@ -12640,6 +13006,8 @@
           _readerTouchStartY = e.touches[0].clientY;
           _readerTouchStartTime = Date.now();
           _readerTouchMoved = false;
+          _slideTouchStartPanX = _slidePanX;
+          _slideTouchStartPanY = _slidePanY;
         }
       }, { passive: true });
 
@@ -12654,30 +13022,59 @@
             const ratio = _touchCurrentDist / _touchInitialDist;
             const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
             const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-            setReaderZoom(_touchInitialZoom * ratio, { x: midX, y: midY }, { animate: false });
+            _pendingPinchArgs = { z: _touchInitialZoom * ratio, x: midX, y: midY };
+            if (!_pinchZoomRaf) {
+              _pinchZoomRaf = requestAnimationFrame(() => {
+                _pinchZoomRaf = null;
+                if (_pendingPinchArgs) {
+                  setReaderZoom(_pendingPinchArgs.z, { x: _pendingPinchArgs.x, y: _pendingPinchArgs.y }, { animate: false });
+                  _pendingPinchArgs = null;
+                }
+              });
+            }
           }
         } else if (e.touches.length === 1) {
-          const dx = Math.abs(e.touches[0].clientX - _readerTouchStartX);
-          const dy = Math.abs(e.touches[0].clientY - _readerTouchStartY);
-          if (dx > 8 || dy > 8) {
+          const dxRaw = e.touches[0].clientX - _readerTouchStartX;
+          const dyRaw = e.touches[0].clientY - _readerTouchStartY;
+          if (Math.abs(dxRaw) > 6 || Math.abs(dyRaw) > 6) {
             _readerTouchMoved = true;
+          }
+          if (state.readerMode === 'slide' && (state.readerZoom || 1) > 1.02) {
+            if (e.cancelable) e.preventDefault();
+            const clampedPan = clampSlidePan(state.readerZoom, _slideTouchStartPanX + dxRaw, _slideTouchStartPanY + dyRaw);
+            _slidePanX = clampedPan.x;
+            _slidePanY = clampedPan.y;
+            applySlideTransform(state.readerZoom, _slidePanX, _slidePanY, false);
           }
         }
       }, { passive: false });
 
       body.addEventListener('touchend', (e) => {
         _lastReaderTouchEndTime = Date.now();
+        if (body.style.touchAction === 'none' && (!e.touches || e.touches.length < 2)) {
+          body.style.touchAction = '';
+        }
 
         // 1. Manejar fin de pellizco (Pinch-to-zoom)
         if (_readerIsPinching) {
-          _readerIsPinching = false;
-          _touchInitialDist = 0;
-          _touchCurrentDist = 0;
+          if (_pinchZoomRaf) {
+            cancelAnimationFrame(_pinchZoomRaf);
+            _pinchZoomRaf = null;
+          }
+          if (_pendingPinchArgs) {
+            setReaderZoom(_pendingPinchArgs.z, { x: _pendingPinchArgs.x, y: _pendingPinchArgs.y }, { animate: false });
+            _pendingPinchArgs = null;
+          }
+          if (!e.touches || e.touches.length === 0) {
+            _readerIsPinching = false;
+            _touchInitialDist = 0;
+            _touchCurrentDist = 0;
+          }
           return;
         }
 
-        // 2. Swipe horizontal táctil en modo paginado (Slide)
-        if (state.readerMode === 'slide' && e.changedTouches && e.changedTouches.length === 1) {
+        // 2. Swipe horizontal táctil en modo paginado (Slide) SOLO cuando NO está en zoom
+        if (state.readerMode === 'slide' && (state.readerZoom || 1) <= 1.03 && e.changedTouches && e.changedTouches.length === 1) {
           const dx = e.changedTouches[0].clientX - _readerTouchStartX;
           const dy = e.changedTouches[0].clientY - _readerTouchStartY;
           if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.3) {
@@ -12700,7 +13097,6 @@
           const distFromLastTap = Math.hypot(touch.clientX - _lastTapX, touch.clientY - _lastTapY);
 
           if (now - _lastTapTime < 320 && distFromLastTap < 35) {
-            // Doble tap detectado
             if (_singleTapTimer) {
               clearTimeout(_singleTapTimer);
               _singleTapTimer = null;
@@ -12708,7 +13104,6 @@
             _lastTapTime = 0;
             toggleReaderZoomLevel({ x: touch.clientX, y: touch.clientY });
           } else {
-            // Primer tap -> esperar por si viene un segundo tap antes de alternar el HUD
             _lastTapTime = now;
             _lastTapX = touch.clientX;
             _lastTapY = touch.clientY;
@@ -12724,13 +13119,14 @@
       body.addEventListener('wheel', (e) => {
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          changeReaderZoom(e.deltaY < 0 ? 0.1 : -0.1, { x: e.clientX, y: e.clientY });
+          const delta = e.deltaY < 0 ? 0.15 : -0.15;
+          setReaderZoom((state.readerZoom || 1) + delta, { x: e.clientX, y: e.clientY }, { animate: false });
         }
       }, { passive: false });
 
       body.addEventListener('dblclick', (e) => {
         if (Date.now() - _lastReaderTouchEndTime < 500) return;
-        if (e.target && e.target.closest('button, a, input, select, #reader-end-card, #reader-hud-top, #reader-thumbbar')) return;
+        if (e.target && e.target.closest('button, a, input, select, #reader-end-card, #reader-hud-top, #reader-thumbbar, .no-hud-toggle')) return;
         e.preventDefault();
         toggleReaderZoomLevel({ x: e.clientX, y: e.clientY });
       });
@@ -12740,28 +13136,47 @@
       let panY = 0;
       let panLeft = 0;
       let panTop = 0;
+      let panSlideX = 0;
+      let panSlideY = 0;
+      let panMovedDist = 0;
       body.addEventListener('pointerdown', (e) => {
         if ((state.readerZoom || 1) <= 1.01) return;
         if (e.pointerType === 'touch' || e.button !== 0) return;
-        if (e.target && e.target.closest('button, a, input, select')) return;
+        if (e.target && e.target.closest('button, a, input, select, #reader-hud-top, #reader-thumbbar')) return;
         panning = true;
+        panMovedDist = 0;
         panX = e.clientX;
         panY = e.clientY;
         panLeft = body.scrollLeft;
         panTop = body.scrollTop;
+        panSlideX = _slidePanX;
+        panSlideY = _slidePanY;
         body.classList.add('is-panning');
         try { body.setPointerCapture(e.pointerId); } catch (err) {}
       });
       body.addEventListener('pointermove', (e) => {
         if (!panning) return;
-        body.scrollLeft = panLeft - (e.clientX - panX);
-        body.scrollTop = panTop - (e.clientY - panY);
+        const dx = e.clientX - panX;
+        const dy = e.clientY - panY;
+        panMovedDist = Math.max(panMovedDist, Math.hypot(dx, dy));
+        if (state.readerMode === 'slide') {
+          const clampedPan = clampSlidePan(state.readerZoom, panSlideX + dx, panSlideY + dy);
+          _slidePanX = clampedPan.x;
+          _slidePanY = clampedPan.y;
+          applySlideTransform(state.readerZoom, _slidePanX, _slidePanY, false);
+        } else {
+          body.scrollLeft = panLeft - dx;
+          body.scrollTop = panTop - dy;
+        }
       });
       const endPan = () => {
         if (!panning) return;
         panning = false;
         body.classList.remove('is-panning');
-        _readerTouchMoved = true;
+        if (panMovedDist > 4) {
+          _readerTouchMoved = true;
+          _lastReaderPanEndTime = Date.now();
+        }
       };
       body.addEventListener('pointerup', endPan);
       body.addEventListener('pointercancel', endPan);
@@ -12772,8 +13187,11 @@
     });
 
     function toggleReaderMode() {
-
+      resetReaderZoom();
       state.readerMode = state.readerMode === 'vertical' ? 'slide' : 'vertical';
+
+      const readerBody = document.getElementById('reader-body');
+      if (readerBody) readerBody.classList.toggle('reader-slide-active', state.readerMode === 'slide');
 
       const vContainer = document.getElementById('reader-pages-vertical');
 
@@ -12836,33 +13254,31 @@
     }
 
     function prevSlide() {
-
+      if ((state.readerZoom || 1) > 1.01) resetReaderZoom();
       if (state.slideIndex > 0) {
-
         state.slideIndex--;
-
         updateSlideView();
-
       }
-
     }
 
     function nextSlide() {
-
+      if ((state.readerZoom || 1) > 1.01) resetReaderZoom();
       const pages = (_readerAllPages && _readerAllPages.length > 0) ? _readerAllPages : ((state.currentItem && state.currentItem.pages) || []);
       if (pages && state.slideIndex < pages.length - 1) {
-
         state.slideIndex++;
-
         updateSlideView();
-
       }
-
     }
 
     function closeReader(pushRoute = true) {
-
+      if (_readerFetchCtrl) {
+        try { _readerFetchCtrl.abort(); } catch (e) {}
+      }
+      _readerFetchCtrl = null;
+      _readerInFlightKey = '';
+      document.body.style.overflow = '';
       stopAutoScrollLoop();
+      resetReaderZoom();
 
       if (window._readerObserver) {
         window._readerObserver.disconnect();
@@ -13241,8 +13657,8 @@
             loadStorage();
             updateUserUI();
             if (attempt === 0) consumePatreonQueryBanner();
-            await loadCloudFavorites();
-            await loadCloudHistory();
+            await Promise.all([loadCloudFavorites(), loadCloudHistory()]);
+            renderContinueShelf();
             if (window.VelvetVault && typeof window.VelvetVault.render === 'function') window.VelvetVault.render();
             return;
           }
@@ -13310,8 +13726,8 @@
         loadStorage();
         renderContinueShelf();
         updateUserUI();
-        await loadCloudFavorites();
-        await loadCloudHistory();
+        await Promise.all([loadCloudFavorites(), loadCloudHistory()]);
+        renderContinueShelf();
 
         if (attempt === 0) consumePatreonQueryBanner();
 
@@ -13359,34 +13775,30 @@
     async function loadCloudFavorites() {
       if (!state.currentUser) return;
       try {
-        const idResp = await fetch('/api/user/favorites?ids=1', { headers: authHeaders(), credentials: 'include' });
-        if (!idResp.ok) return;
-        const idData = await idResp.json();
-        if (!idData || idData.degraded) return;
+        const favPs = getPersonalVaultPageSize();
+        const [idResp, page1Resp] = await Promise.all([
+          fetch('/api/user/favorites?ids=1', { headers: authHeaders(), credentials: 'include' }),
+          fetch(`/api/user/favorites?page=1&pageSize=${favPs}`, { headers: authHeaders(), credentials: 'include' })
+        ]);
+        if (!idResp.ok && !page1Resp.ok) return;
+        const idData = idResp.ok ? await idResp.json().catch(() => null) : null;
+        const page1Data = page1Resp.ok ? await page1Resp.json().catch(() => null) : null;
+        if ((!idData || idData.degraded) && (!page1Data || page1Data.degraded)) return;
 
-        let ids = Array.isArray(idData.ids)
+        let ids = Array.isArray(idData?.ids)
           ? idData.ids.map(parseStrictPositiveFavInt).filter(n => n !== null)
           : [];
-        let refs = Array.isArray(idData.refs) ? idData.refs : [];
+        let refs = Array.isArray(idData?.refs) ? idData.refs : [];
 
-        const favPs = getPersonalVaultPageSize();
         const detailsById = new Map();
         const detailsByKey = new Map();
-        let page = 1;
-        let totalPages = 1;
-        while (page <= totalPages && page <= 15) {
-          const resp = await fetch(`/api/user/favorites?page=${page}&pageSize=${favPs}`, { headers: authHeaders(), credentials: 'include' });
-          if (!resp.ok) break;
-          const data = await resp.json();
-          if (!data || data.degraded) break;
-          totalPages = data.totalPages || 1;
-          (data.items || []).forEach(it => {
+        if (page1Data && !page1Data.degraded) {
+          (page1Data.items || []).forEach(it => {
             const n = parseStrictPositiveFavInt(it.id || it.item_id);
             if (n) detailsById.set(String(n), it);
             const k = getFavoriteDedupKey(it);
             if (k) detailsByKey.set(k, it);
           });
-          page++;
         }
 
         const merged = [];
@@ -13430,15 +13842,57 @@
       }
     }
 
+    let _applyingPersonalHistoryEvent = false;
+    window.addEventListener('velvet:history-updated', (e) => {
+      if (_applyingPersonalHistoryEvent) return;
+      const detail = e && e.detail;
+      if (!detail || !Array.isArray(detail.items)) return;
+      const existingUnfinished = (state.history || []).filter(h => !h.completed);
+      if (detail.items.length === 0 && (detail.total || 0) === 0) {
+        applyHistoryList([]);
+        saveStorage();
+        renderContinueShelf();
+        return;
+      }
+      // Preservar elementos no completados de Continuar Viendo al paginar en Bóveda
+      if (detail.page === 1) {
+        applyHistoryList([...detail.items, ...existingUnfinished.filter(u => {
+          const uk = (u.source && u.source_id) ? `${String(u.source).toLowerCase()}:${u.source_id}` : String(u.id || '');
+          return !detail.items.some(di => ((di.source && di.source_id) ? `${String(di.source).toLowerCase()}:${di.source_id}` : String(di.id || '')) === uk);
+        })]);
+        renderContinueShelf();
+      }
+    });
+
     async function loadCloudHistory() {
       if (!state.currentUser) return;
       try {
         const histPs = getPersonalVaultPageSize();
-        const resp = await fetch(`/api/user/history?page=1&pageSize=${histPs}`, { headers: authHeaders(), credentials: 'include' });
-        if (!resp.ok) return;
-        let data = await resp.json();
-        if (!data || data.degraded) return;
-        let cloud = Array.isArray(data.items) ? data.items : [];
+        const [resp, unfinishedResp] = await Promise.all([
+          fetch(`/api/user/history?page=1&pageSize=${histPs}`, { headers: authHeaders(), credentials: 'include' }),
+          fetch(`/api/user/history?unfinished=1&pageSize=48`, { headers: authHeaders(), credentials: 'include' }).catch(() => null)
+        ]);
+        if (!resp.ok && (!unfinishedResp || !unfinishedResp.ok)) return;
+        let data = resp.ok ? await resp.json().catch(() => null) : null;
+        const unfinishedData = (unfinishedResp && unfinishedResp.ok) ? await unfinishedResp.json().catch(() => null) : null;
+        if ((!data || data.degraded) && (!unfinishedData || unfinishedData.degraded)) return;
+
+        const page1Items = Array.isArray(data?.items) ? data.items : [];
+        const activeItems = Array.isArray(unfinishedData?.items) ? unfinishedData.items : [];
+        const combinedMap = new Map();
+        const mergeServerItem = (h) => {
+          if (!h) return;
+          const k = (h.source && h.source_id) ? `${String(h.source).toLowerCase()}:${h.source_id}` : String(h.id || h.item_id || '');
+          if (!k) return;
+          const prev = combinedMap.get(k);
+          if (!prev || Number(h.at || 0) > Number(prev.at || 0) || (!h.completed && prev.completed && Number(h.position || 0) > 0)) {
+            combinedMap.set(k, h);
+          }
+        };
+        activeItems.forEach(mergeServerItem);
+        page1Items.forEach(mergeServerItem);
+        let cloud = Array.from(combinedMap.values()).sort((a, b) => (Number(b.at || 0) - Number(a.at || 0)));
+
         const byId = new Map();
         const byKey = new Map();
         cloud.forEach(h => {
@@ -13447,6 +13901,7 @@
           const k = getFavoriteDedupKey(h);
           if (k) byKey.set(k, h);
         });
+
         const localSlim = (state.history || []).map(compactHistoryRecord).filter(Boolean);
         const toPush = localSlim.filter(h => {
           const n = parseStrictPositiveFavInt(h.id || h.item_id);
@@ -13456,47 +13911,34 @@
           return (h.at || 0) > (Number(cur.at) || 0);
         });
         if (toPush.length > 0) {
-          const sync = await fetch('/api/user/history', {
+          await fetch('/api/user/history', {
             method: 'POST',
             headers: { ...authHeaders(), 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ items: toPush.slice(0, 100) })
+            body: JSON.stringify({ items: toPush.slice(0, 50) })
+          }).catch(() => {});
+          localSlim.forEach(lh => {
+            if (toPush.includes(lh)) mergeServerItem(lh);
           });
-          if (sync.ok) {
-            const again = await fetch(`/api/user/history?page=1&pageSize=${histPs}`, { headers: authHeaders(), credentials: 'include' });
-            if (again.ok) {
-              const againData = await again.json();
-              if (againData && !againData.degraded && Array.isArray(againData.items)) {
-                cloud = againData.items;
-                data = againData;
-              }
-            }
-          }
+          cloud = Array.from(combinedMap.values()).sort((a, b) => (Number(b.at || 0) - Number(a.at || 0)));
         }
 
-        // Fusión no destructiva: si la nube está vacía pero hay historial local, no destruirlo
         if (cloud.length === 0 && localSlim.length > 0) {
           cloud = localSlim;
-        } else if (localSlim.length > 0) {
-          const cloudKeySet = new Set(cloud.map(c => (c.source && c.source_id) ? `${c.source}:${c.source_id}` : String(c.id || c.item_id)));
-          localSlim.forEach(lh => {
-            const k = (lh.source && lh.source_id) ? `${lh.source}:${lh.source_id}` : String(lh.id || lh.item_id);
-            if (!cloudKeySet.has(k)) {
-              cloudKeySet.add(k);
-              cloud.push(lh);
-            }
-          });
         }
 
-        state.vaultHistProTotal = typeof data.total === 'number' ? data.total : cloud.length;
-        state.vaultHistProTotalPages = Math.max(1, data.totalPages || Math.ceil(state.vaultHistProTotal / histPs));
+        state.vaultHistProTotal = typeof data?.total === 'number' ? data.total : cloud.length;
+        state.vaultHistProTotalPages = Math.max(1, data?.totalPages || Math.ceil(state.vaultHistProTotal / histPs));
         vaultHistProCache.clear();
         vaultHistProPage = 1;
+        _applyingPersonalHistoryEvent = true;
         applyHistoryList(cloud);
+        _applyingPersonalHistoryEvent = false;
         saveStorage();
         renderContinueShelf();
         renderVaultHistoryPro();
       } catch (e) {
+        _applyingPersonalHistoryEvent = false;
         console.warn('[HISTORIAL] Error cargando historial de la nube:', e);
       }
     }
@@ -13808,8 +14250,7 @@
             await window.VelvetPersonalData.migrateLocalDataToServer();
           }
         } catch (e) {}
-        await loadCloudFavorites();
-        await loadCloudHistory();
+        await Promise.all([loadCloudFavorites(), loadCloudHistory()]);
         renderContinueShelf();
         updateAllFeedFavoriteIcons();
 
@@ -15787,8 +16228,9 @@
     // =========================================================================
     if ('serviceWorker' in navigator) {
       let refreshing = false;
+      const hadSwController = Boolean(navigator.serviceWorker.controller);
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
+        if (hadSwController && !refreshing) {
           refreshing = true;
           window.location.reload();
         }
@@ -15839,7 +16281,7 @@
       }
 
       const el = e.target.closest('[data-action]');
-      if (!el) return;
+      if (!el || el.hasAttribute('onclick')) return;
       const act = el.getAttribute('data-action');
 
       // Paginación Velvet (Respaldo en Documento)

@@ -1,10 +1,12 @@
 # =======================================================================
-# CLOUDFLARE PAGES REDIRECTS & REWRITES (VELVET HUB SPA + REAL URLS)
+# CLOUDFLARE PAGES REDIRECTS (VELVET HUB LEGACY ALIASES)
+# Nota: Las reescrituras 200 de rutas SPA viven en functions/_middleware.js
+# para evitar redirecciones canónicas 308 de Cloudflare Pages hacia "/".
 # =======================================================================
 
 # 1. Alias y redirecciones legadas (301 permanente)
-/velvet              /index.html        301
-/velvet.html         /index.html        301
+/velvet              /                  301
+/velvet.html         /                  301
 /favoritos           /boveda/favoritos  301
 /historial           /boveda/historial  301
 /galeria/*           /g/:splat          301
@@ -15,23 +17,3 @@
 /game/*              /j/:splat          301
 /games               /juegos            301
 /modelos             /cosplay           301
-
-# 2. Rutas dinámicas de la aplicación (Rewrite 200 al shell SPA)
-/                    /index.html        200
-/videos              /index.html        200
-/comics              /index.html        200
-/cosplay             /index.html        200
-/juegos              /index.html        200
-/v/*                 /index.html        200
-/c/*                 /index.html        200
-/g/*                 /index.html        200
-/j/*                 /index.html        200
-/boveda              /index.html        200
-/boveda/favoritos    /index.html        200
-/boveda/historial    /index.html        200
-/boveda/*            /index.html        200
-/cuenta              /index.html        200
-/acceso              /index.html        200
-
-# 3. Fallback global SPA para cualquier ruta no estática (200 OK)
-/*                   /index.html        200

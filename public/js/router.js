@@ -327,16 +327,18 @@
     },
 
     executeRoute(route, preserveScroll = false) {
-      // 1. Limpieza de memoria y recursos de la vista anterior
+      // 1. Limpieza de memoria y recursos de la vista anterior (evita vistas congeladas o scroll bloqueado)
       window.dispatchEvent(new CustomEvent('velvet:route-leave', { detail: { from: this.currentRoute, to: route } }));
+      if (typeof document !== 'undefined' && document.body && (!route || (route.name !== 'reader' && route.name !== 'comic' && route.name !== 'gallery' && route.name !== 'game'))) {
+        document.body.style.overflow = '';
+      }
 
       // 2. Actualizar estado interno
       this.currentRoute = route;
       const instant = !!this._instantNav;
       this._instantNav = false;
 
-      // 3. Transición de vista con View Transitions API si está disponible.
-      // La barra inferior y el drawer cambian de sección al instante, sin animación de vista.
+      // 3. Renderizado fluido sin congelar el compositor táctil con startViewTransition en móvil/modales
       const render = () => {
         window.dispatchEvent(new CustomEvent('velvet:route-render', { detail: route }));
         this.updateDocumentMeta(route);
@@ -347,8 +349,15 @@
         }
       };
 
-      if (!instant && document.startViewTransition && !document.documentElement.classList.contains('reduce-motion')) {
-        document.startViewTransition(() => render());
+      const isMobileViewport = typeof window !== 'undefined' && window.innerWidth < 1024;
+      const isMediaOverlay = route && (route.name === 'video' || route.name === 'comic' || route.name === 'gallery' || route.name === 'reader' || route.name === 'game');
+      if (!instant && !isMobileViewport && !isMediaOverlay && document.startViewTransition && !document.documentElement.classList.contains('reduce-motion')) {
+        try {
+          const vt = document.startViewTransition(() => render());
+          if (vt && vt.finished && typeof vt.finished.catch === 'function') vt.finished.catch(() => {});
+        } catch (err) {
+          render();
+        }
       } else {
         render();
       }

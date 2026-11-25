@@ -14,8 +14,11 @@ function isSpaNavigation(pathname) {
     p === "/videos" ||
     p === "/comics" ||
     p === "/cosplay" ||
+    p === "/modelos" ||
     p === "/juegos" ||
     p === "/games" ||
+    p === "/favoritos" ||
+    p === "/historial" ||
     p === "/cuenta" ||
     p === "/acceso" ||
     p === "/perfil" ||

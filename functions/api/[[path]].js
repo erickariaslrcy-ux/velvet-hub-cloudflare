@@ -1246,9 +1246,35 @@ function buildVideoCatalogPage(videos, opts) {
 
 let LOCAL_VIDEOS_CACHE = null;
 let LOCAL_VIDEOS_CACHE_AT = 0;
+let LOCAL_VIDEOS_BY_ID = null;
+
+function indexLocalVideosCatalog(list) {
+  const byId = new Map();
+  if (Array.isArray(list)) {
+    for (const v of list) {
+      if (!v) continue;
+      if (v.id !== undefined && v.id !== null) byId.set(String(v.id), v);
+      if (v.source_id !== undefined && v.source_id !== null) byId.set(String(v.source_id), v);
+    }
+  }
+  LOCAL_VIDEOS_BY_ID = byId;
+}
+
+function findLocalVideoFast(targetId, titleFallback) {
+  if (targetId && LOCAL_VIDEOS_BY_ID) {
+    const hit = LOCAL_VIDEOS_BY_ID.get(String(targetId));
+    if (hit) return hit;
+  }
+  if (titleFallback && Array.isArray(LOCAL_VIDEOS_CACHE)) {
+    const low = String(titleFallback).toLowerCase();
+    return LOCAL_VIDEOS_CACHE.find((v) => v && v.title && v.title.toLowerCase() === low) || null;
+  }
+  return null;
+}
 
 async function loadVideoCatalog(context, pageUrl) {
   if (LOCAL_VIDEOS_CACHE && (Date.now() - LOCAL_VIDEOS_CACHE_AT) < 60 * 60 * 1000) {
+    if (!LOCAL_VIDEOS_BY_ID) indexLocalVideosCatalog(LOCAL_VIDEOS_CACHE);
     return LOCAL_VIDEOS_CACHE;
   }
   const origin = (pageUrl && pageUrl.origin) || "https://www.morbohub.com";
@@ -1274,6 +1300,7 @@ async function loadVideoCatalog(context, pageUrl) {
       if (Array.isArray(data)) {
         LOCAL_VIDEOS_CACHE = data;
         LOCAL_VIDEOS_CACHE_AT = Date.now();
+        indexLocalVideosCatalog(data);
         return LOCAL_VIDEOS_CACHE;
       }
     } catch (e) {}
@@ -1294,6 +1321,7 @@ async function loadVideoCatalog(context, pageUrl) {
           if (Array.isArray(parsed)) {
             LOCAL_VIDEOS_CACHE = parsed;
             LOCAL_VIDEOS_CACHE_AT = Date.now();
+            indexLocalVideosCatalog(parsed);
             return LOCAL_VIDEOS_CACHE;
           }
         }
@@ -2021,6 +2049,13 @@ function enforceCookieMutationOrigin(request, corsOrigin) {
   const hasSessionCookies = Boolean(
     readRequestCookie(request, "velvet_access") || readRequestCookie(request, "velvet_refresh")
   );
+  const secFetchSite = String(request.headers.get("sec-fetch-site") || "").toLowerCase();
+  if (secFetchSite === "cross-site") {
+    return new Response(JSON.stringify({ error: "Origen cross-site no permitido", detail: "Origen cross-site no permitido" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(corsOrigin) }
+    });
+  }
   const originHdr = request.headers.get("origin");
   if (originHdr && !isAllowedOrigin(originHdr)) {
     return new Response(JSON.stringify({ error: "Origen no permitido", detail: "Origen no permitido" }), {
@@ -2029,10 +2064,11 @@ function enforceCookieMutationOrigin(request, corsOrigin) {
     });
   }
   if (!hasExplicitBearer && hasSessionCookies && !originHdr) {
-    const refHdr = request.headers.get("referer") || "";
-    const refOrigin = refererOrigin(refHdr);
-    if (refOrigin && !isAllowedOrigin(refOrigin)) {
-      return new Response(JSON.stringify({ error: "Referer no permitido", detail: "Referer no permitido" }), {
+    const refOrigin = refererOrigin(request.headers.get("referer") || "");
+    const secOk = secFetchSite === "same-origin" || secFetchSite === "same-site";
+    const refOk = Boolean(refOrigin && isAllowedOrigin(refOrigin));
+    if ((refOrigin && !refOk) || (!secOk && !refOk)) {
+      return new Response(JSON.stringify({ error: "Solicitud CSRF bloqueada", detail: "Solicitud CSRF bloqueada" }), {
         status: 403,
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(corsOrigin) }
       });
@@ -2044,6 +2080,16 @@ function enforceCookieMutationOrigin(request, corsOrigin) {
 // Resuelve la sesión SIN consumir el refresh token. El canje vive solo en /api/auth/refresh
 // para que las peticiones paralelas de favoritos/historial no revoquen la sesión.
 let _activeJwtSecret = "";
+const ISOLATE_AUTH_CACHE = new Map();
+const ISOLATE_AUTH_TTL_MS = 15000;
+
+function evictIsolateAuthToken(token) {
+  if (!token) return;
+  for (const k of ISOLATE_AUTH_CACHE.keys()) {
+    if (k.endsWith("|" + token)) ISOLATE_AUTH_CACHE.delete(k);
+  }
+}
+
 async function resolveAuthUser(request, sbUrl, sbKey, jwtSecret) {
   const activeUrl = sbUrl || _activeSupabaseUrl || (typeof SUPABASE_URL !== "undefined" ? SUPABASE_URL : "");
   const activeKey = sbKey || _activeSupabaseKey || (typeof SUPABASE_KEY !== "undefined" ? SUPABASE_KEY : "");
@@ -2057,6 +2103,43 @@ async function resolveAuthUser(request, sbUrl, sbKey, jwtSecret) {
     return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
   }
 
+  let reqPath = "";
+  try { reqPath = new URL(request.url).pathname; } catch (e) {}
+  const requireLiveCheck = !reqPath || reqPath === "/api/auth/me" || reqPath === "/api/auth/logout" || reqPath.startsWith("/api/admin/");
+
+  if (!requireLiveCheck && activeJwtSecret && token.split(".").length === 3) {
+    const fastJwt = await verifySupabaseJwtHS256(token, activeJwtSecret);
+    if (!fastJwt) {
+      return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
+    }
+    return {
+      user: {
+        id: fastJwt.sub,
+        email: fastJwt.email || "",
+        user_metadata: fastJwt.user_metadata || {},
+        role: fastJwt.role || "authenticated"
+      },
+      token,
+      newToken: null,
+      newRefreshToken: null,
+      unavailable: false,
+      verified: true,
+      degraded: false
+    };
+  }
+
+  const authCacheKey = `${activeUrl}|${token}`;
+  if (!requireLiveCheck) {
+    const cachedAuth = ISOLATE_AUTH_CACHE.get(authCacheKey);
+    if (cachedAuth && (Date.now() - cachedAuth.ts) < ISOLATE_AUTH_TTL_MS) {
+      const exp = Number(cachedAuth.exp || 0);
+      if (!exp || exp > Math.floor(Date.now() / 1000)) {
+        return { user: cachedAuth.user, token, newToken: null, newRefreshToken: null, unavailable: false, verified: true, degraded: false };
+      }
+      ISOLATE_AUTH_CACHE.delete(authCacheKey);
+    }
+  }
+
   let upstreamStatus = 0;
   try {
     const userRes = await fetch(`${activeUrl}/auth/v1/user`, {
@@ -2066,11 +2149,18 @@ async function resolveAuthUser(request, sbUrl, sbKey, jwtSecret) {
     if (userRes.ok) {
       const user = await userRes.json();
       if (user && user.id) {
+        if (ISOLATE_AUTH_CACHE.size > 500) {
+          const oldestKey = ISOLATE_AUTH_CACHE.keys().next().value;
+          if (oldestKey !== undefined) ISOLATE_AUTH_CACHE.delete(oldestKey);
+        }
+        const pExp = decodeJwtPayload(token)?.exp || 0;
+        ISOLATE_AUTH_CACHE.set(authCacheKey, { ts: Date.now(), exp: pExp, user });
         return { user, token, newToken: null, newRefreshToken: null, unavailable: false, verified: true, degraded: false };
       }
     }
     // 401/403: token inválido o caducado. El cliente refresca. No es un 503.
     if (userRes.status === 401 || userRes.status === 403) {
+      ISOLATE_AUTH_CACHE.delete(authCacheKey);
       return { user: null, token: null, newToken: null, newRefreshToken: null, unavailable: false, verified: false };
     }
   } catch (e) {
@@ -2872,14 +2962,12 @@ export async function onRequest(context) {
           }
           break;
         }
-        if (upstream && !upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
-          if (isSafeUpstreamUrl(finalVideoUrl)) {
-              if (resp.status >= 400 || !resp.body) {
-              return new Response("Video upstream error", {
-                status: resp.status || 502,
-                headers: { "Cache-Control": "no-store", ...getCorsHeaders(origin) }
-              });
-            }
+        if (!upstream || (!upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503))) {
+          if (!upstream || (isSafeUpstreamUrl(finalVideoUrl) && (upstream.status >= 400 || !upstream.body))) {
+            return new Response("Video upstream error", {
+              status: (upstream && upstream.status) || 502,
+              headers: { "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+            });
           }
         }
       } else {
@@ -4696,6 +4784,7 @@ export async function onRequest(context) {
   if (url.pathname === "/api/auth/logout" && method === "POST") {
     const { token } = await resolveAuthUser(context.request, SUPABASE_URL, SUPABASE_KEY);
     if (token) {
+      evictIsolateAuthToken(token);
       fetch(`${SUPABASE_URL}/auth/v1/logout`, {
         method: "POST",
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
@@ -5922,11 +6011,12 @@ export async function onRequest(context) {
 
   const inferPersonalMediaType = (item) => {
     const raw = String(item?.media_type || "").trim().toLowerCase();
-    if (raw === "comic" || raw === "video" || raw === "gallery" || raw === "game") return raw;
+    if (raw === "comic" || raw === "video" || raw === "game") return raw;
+    if (raw === "gallery" || raw === "cosplay") return "gallery";
     const src = String(item?.source || "").trim().toLowerCase();
-    if (["pmvhaven", "spankbang", "xvideos", "eporner"].includes(src)) return "video";
-    if (["buondua", "mitaku"].includes(src)) return "gallery";
-    if (["gamcore"].includes(src)) return "game";
+    if (["pmvhaven", "pornone", "redporn", "anyporn", "alotporn", "damplips", "pornhd", "spankbang", "xvideos", "eporner"].includes(src)) return "video";
+    if (["buondua", "4khd", "xasiat", "leakgallery", "mitaku"].includes(src)) return "gallery";
+    if (["gamcore", "games", "flash", "ruffle", "renpy"].includes(src) || item?.game_type) return "game";
     return "comic";
   };
 
@@ -6002,11 +6092,10 @@ export async function onRequest(context) {
 
     if (finalCover === "/velvet_logo.png" || effectiveTitle === fallbackTitle || effectiveTitle === "Guardado" || effectiveTitle === "Contenido visto") {
       const target = String(entry.item_id || entry.id || entry.source_id || "");
-      const vCatalog = await getVideoCatalog();
-      const vMatch = vCatalog.find(
-        (v) =>
-          (target && (String(v.id) === target || String(v.source_id) === target)) ||
-          (effectiveTitle && effectiveTitle !== fallbackTitle && effectiveTitle !== "Guardado" && effectiveTitle !== "Contenido visto" && v.title && v.title.toLowerCase() === effectiveTitle.toLowerCase())
+      await getVideoCatalog();
+      const vMatch = findLocalVideoFast(
+        target,
+        (effectiveTitle && effectiveTitle !== fallbackTitle && effectiveTitle !== "Guardado" && effectiveTitle !== "Contenido visto") ? effectiveTitle : ""
       );
       if (vMatch) {
         effectiveTitle = cleanPublicTitle(vMatch.title) || effectiveTitle;
@@ -6847,8 +6936,10 @@ export async function onRequest(context) {
     if (method === "GET") {
       const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
       const pageSize = resolvePersonalPageSize(context.request, url);
-      const offset = (page - 1) * pageSize;
-      const to = offset + pageSize - 1;
+      const onlyUnfinished = url.searchParams.get("unfinished") === "1";
+      const effectiveSize = onlyUnfinished ? Math.max(pageSize, Math.min(60, parseInt(url.searchParams.get("pageSize") || "48", 10) || 48)) : pageSize;
+      const offset = onlyUnfinished ? 0 : (page - 1) * pageSize;
+      const to = offset + effectiveSize - 1;
       const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
       const hasTypeFilter = Boolean(typeFilter && ["comic", "video", "gallery", "game"].includes(typeFilter));
       const getVideoCatalog = createVideoCatalogLoader();
@@ -6857,6 +6948,7 @@ export async function onRequest(context) {
         ? Promise.resolve(null)
         : (async () => {
             let histQueryUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,page_count,status)&order=last_activity.desc,id.desc`;
+            if (onlyUnfinished) histQueryUrl += "&completed=is.false";
             if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
               histQueryUrl += `&media_type=eq.${typeFilter}`;
             }
@@ -6873,6 +6965,7 @@ export async function onRequest(context) {
             );
             if (!r || !r.ok) {
               let plainHistUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp&order=last_activity.desc,id.desc`;
+              if (onlyUnfinished) plainHistUrl += "&completed=is.false";
               if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
                 plainHistUrl += `&media_type=eq.${typeFilter}`;
               }
@@ -6892,6 +6985,7 @@ export async function onRequest(context) {
           })();
 
       let customHistUrl = `${SUPABASE_URL}/rest/v1/user_custom_history?user_id=eq.${user.id}&select=item_key,item_id,source,source_id,media_type,title,cover_url,url,position,duration,completed,client_timestamp,last_activity&order=last_activity.desc&limit=500`;
+      if (onlyUnfinished) customHistUrl += "&completed=is.false";
       if (hasTypeFilter) customHistUrl += `&media_type=eq.${typeFilter}`;
 
       const [histRes, customHistRes] = await Promise.all([
@@ -6911,7 +7005,7 @@ export async function onRequest(context) {
       const customRowsRaw = customHistRes && customHistRes.ok ? await customHistRes.json().catch(() => []) : [];
       const customRows = Array.isArray(customRowsRaw) ? customRowsRaw : [];
       const metaHist = (Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [])
-        .filter((mh) => !hasTypeFilter || inferPersonalMediaType(mh) === typeFilter);
+        .filter((mh) => (!hasTypeFilter || inferPersonalMediaType(mh) === typeFilter) && (!onlyUnfinished || !mh.completed));
 
       if (typeFilter !== "game" && (!histRes || !histRes.ok) && customRows.length === 0 && metaHist.length === 0) {
         return new Response(JSON.stringify({
@@ -6934,7 +7028,7 @@ export async function onRequest(context) {
       const needsCombinedWindow = typeFilter !== "game" && (customRows.length > 0 || metaHist.length > 0);
 
       // Si hay historial custom + SQL en más de 1 página, cargar ventana combinada para paginar correctamente sin repetir pág 1
-      if (needsCombinedWindow && sqlTotal > rawRows.length && rawRows.length < sqlTotal) {
+      if (!onlyUnfinished && needsCombinedWindow && sqlTotal > rawRows.length && rawRows.length < sqlTotal) {
         const fullWinTo = Math.min(999, Math.max(to, offset + pageSize + customRows.length + metaHist.length - 1));
         let winHistUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,page_count,status)&order=last_activity.desc,id.desc`;
         if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
@@ -6987,20 +7081,27 @@ export async function onRequest(context) {
           const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover } =
             await formatPersonalMediaEntry({ item_id: r.item_id, items: it, meta: metaMatch }, getVideoCatalog, "Contenido visto");
           const isAvailable = Boolean((it && it.id && it.status !== "blocked" && it.real_people !== true) || metaMatch);
+          const mType = r.media_type || it.media_type || (metaMatch && metaMatch.media_type) || "comic";
+          const pos = Number(r.position || (metaMatch && (metaMatch.position || metaMatch.page || metaMatch.currentTime)) || 0) || 0;
+          const dur = Number(r.duration || (metaMatch && (metaMatch.duration || metaMatch.total)) || it.page_count || 0) || 0;
+          const isComp = Boolean(r.completed || (metaMatch && metaMatch.completed));
           return {
             id: it.id || r.item_id,
             history_id: r.id,
             item_id: r.item_id,
             title: isAvailable ? effectiveTitle : "Contenido no disponible",
             cover_url: finalCover,
-            media_type: r.media_type || it.media_type || (metaMatch && metaMatch.media_type) || "comic",
-            source: effectiveSource,
-            source_id: effectiveSourceId,
+            media_type: mType,
+            source: effectiveSource || (mType === "video" ? "pmvhaven" : ""),
+            source_id: effectiveSourceId || String(it.id || r.item_id || ""),
             url: "",
-            page_count: it.page_count || (metaMatch && metaMatch.page_count) || 0,
-            position: r.position || (metaMatch && (metaMatch.position || metaMatch.page || metaMatch.currentTime)) || 0,
-            duration: r.duration || (metaMatch && (metaMatch.duration || metaMatch.total)) || 0,
-            completed: Boolean(r.completed || (metaMatch && metaMatch.completed)),
+            page_count: it.page_count || (metaMatch && metaMatch.page_count) || (mType !== "video" ? dur : 0) || 0,
+            position: pos,
+            duration: dur,
+            page: mType === "video" ? 0 : pos,
+            total: mType === "video" ? 0 : (dur || it.page_count || 0),
+            currentTime: mType === "video" ? pos : 0,
+            completed: isComp,
             last_activity: r.last_activity,
             at: r.client_timestamp ? Number(r.client_timestamp) : (metaMatch && metaMatch.at ? Number(metaMatch.at) : new Date(r.last_activity).getTime()),
             available: isAvailable
@@ -7012,21 +7113,28 @@ export async function onRequest(context) {
         [...customRows, ...metaHist].map(async (ch) => {
           const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover } =
             await formatPersonalMediaEntry(ch, getVideoCatalog, "Contenido visto");
+          const mType = inferPersonalMediaType(ch);
           const numId = parseStrictPositiveInt(ch.item_id || ch.id);
-          const resolvedId = (numId && inferPersonalMediaType(ch) !== "game") ? numId : (ch.id || ch.item_id || ch.source_id || ch.item_key);
+          const resolvedId = (numId && mType !== "game") ? numId : (ch.id || ch.item_id || ch.source_id || ch.item_key);
           const atTs = ch.client_timestamp ? Number(ch.client_timestamp) : (ch.at ? Number(ch.at) : new Date(ch.last_activity || 0).getTime());
+          const pos = Number(ch.position || ch.page || ch.currentTime || 0) || 0;
+          const dur = Number(ch.duration || ch.total || ch.page_count || 0) || 0;
           return {
             id: resolvedId,
             item_id: resolvedId,
             item_key: ch.item_key || buildCustomItemKey(ch),
             title: effectiveTitle,
             cover_url: finalCover,
-            media_type: inferPersonalMediaType(ch),
+            media_type: mType,
             source: effectiveSource || ch.source || "",
             source_id: effectiveSourceId || ch.source_id || String(resolvedId || ""),
             url: "",
-            position: ch.position || ch.page || ch.currentTime || 0,
-            duration: ch.duration || ch.total || 0,
+            page_count: ch.page_count || (mType !== "video" ? dur : 0) || 0,
+            position: pos,
+            duration: dur,
+            page: mType === "video" ? 0 : pos,
+            total: mType === "video" ? 0 : dur,
+            currentTime: mType === "video" ? pos : 0,
             completed: Boolean(ch.completed),
             last_activity: ch.last_activity || new Date(atTs || Date.now()).toISOString(),
             at: atTs,
@@ -7038,21 +7146,24 @@ export async function onRequest(context) {
       const seenHist = new Set();
       const mergedHist = [];
       for (const h of [...items, ...formattedCustomHist]) {
+        if (onlyUnfinished && h.completed) continue;
         const k = (h.source && h.source_id) ? `${h.source.toLowerCase()}:${h.source_id}` : String(h.item_key || h.id || h.item_id);
         if (!k || seenHist.has(k)) continue;
         seenHist.add(k);
         mergedHist.push(h);
       }
 
-      if (formattedCustomHist.length > 0) {
+      if (formattedCustomHist.length > 0 || onlyUnfinished) {
         mergedHist.sort((a, b) => (b.at || 0) - (a.at || 0));
       }
 
-      const finalTotal = Math.max(sqlTotal + customRows.length, mergedHist.length);
-      const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
-      const sliceOut = needsCombinedWindow ? mergedHist.slice(offset, offset + pageSize) : mergedHist.slice(0, pageSize);
+      const finalTotal = onlyUnfinished ? mergedHist.length : Math.max(sqlTotal + customRows.length, mergedHist.length);
+      const totalPages = onlyUnfinished ? 1 : Math.max(1, Math.ceil(finalTotal / pageSize));
+      const sliceOut = onlyUnfinished
+        ? mergedHist.slice(0, effectiveSize)
+        : (needsCombinedWindow ? mergedHist.slice(offset, offset + pageSize) : mergedHist.slice(0, pageSize));
 
-      return new Response(JSON.stringify({ items: sliceOut, total: finalTotal, page, pageSize, totalPages }), {
+      return new Response(JSON.stringify({ items: sliceOut, total: finalTotal, page: onlyUnfinished ? 1 : page, pageSize: onlyUnfinished ? effectiveSize : pageSize, totalPages }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });
