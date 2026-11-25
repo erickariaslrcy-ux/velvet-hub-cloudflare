@@ -529,7 +529,12 @@
       if (source && sourceId) delete prog[`${source}:${sourceId}`];
       this.setProgressMap(prog);
 
-      // Sync backend deletion
+      if (window.VelvetPersonalData && typeof window.VelvetPersonalData.removeHistoryItem === 'function') {
+        window.VelvetPersonalData.removeHistoryItem(itemId || null, source || '', sourceId || '');
+        return;
+      }
+
+      // Respaldo solo si VelvetPersonalData no está cargado
       const token = this.getAuthToken();
       if (token || this.getCurrentUser()) {
         try {
@@ -554,19 +559,36 @@
       const ONE_WEEK = ONE_DAY * 7;
 
       let hist = this.getHistory();
+      let removedItems = [];
       if (range === 'today') {
         const startOfDay = new Date().setHours(0, 0, 0, 0);
+        removedItems = hist.filter((h) => (h.at || 0) >= startOfDay);
         hist = hist.filter((h) => (h.at || 0) < startOfDay);
       } else if (range === 'week') {
         const cutOff = now - ONE_WEEK;
+        removedItems = hist.filter((h) => (h.at || 0) >= cutOff);
         hist = hist.filter((h) => (h.at || 0) < cutOff);
       } else {
+        removedItems = hist.slice();
         hist = [];
       }
 
       this.setHistory(hist);
       if (range === 'all') {
         this.setProgressMap({});
+      }
+
+      if (window.VelvetPersonalData) {
+        if (range === 'all' && typeof window.VelvetPersonalData.clearAllHistory === 'function') {
+          window.VelvetPersonalData.clearAllHistory();
+          return;
+        }
+        if (typeof window.VelvetPersonalData.removeHistoryItem === 'function') {
+          removedItems.forEach((h) => {
+            window.VelvetPersonalData.removeHistoryItem(h.id || h.item_id || null, h.source || '', h.source_id || '');
+          });
+          return;
+        }
       }
 
       const token = this.getAuthToken();
@@ -676,17 +698,20 @@
     },
 
     removeFavorite(source, sourceId, id = null) {
-      if (window.VelvetPersonalData) {
-        window.VelvetPersonalData.removeFavorite(id || sourceId, source, sourceId);
-        return;
-      }
       let favs = this.getFavorites();
       const removedItem = favs.find((f) => {
-        if (id && f.id && String(f.id) === String(id)) return true;
-        return f.source === source && String(f.source_id) === String(sourceId);
-      });
+        if (!f) return false;
+        if (id && (String(f.id) === String(id) || String(f.item_id) === String(id))) return true;
+        return Boolean(source && sourceId && f.source === source && String(f.source_id) === String(sourceId));
+      }) || (source && sourceId ? { id: id || null, source, source_id: sourceId } : (id ? { id } : null));
+
+      if (window.VelvetPersonalData) {
+        window.VelvetPersonalData.removeFavorite(id || null, source || '', sourceId || '');
+        return removedItem;
+      }
 
       favs = favs.filter((f) => {
+        if (!f) return false;
         if (id && f.id && String(f.id) === String(id)) return false;
         return !(f.source === source && String(f.source_id) === String(sourceId));
       });

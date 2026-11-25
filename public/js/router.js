@@ -83,7 +83,7 @@
         const rawSrc = String(item.source).toLowerCase();
         const safeSrc = SOURCE_TO_ALIAS[rawSrc] || (URL_NOISE_RE.test(rawSrc) ? 'mx' : rawSrc);
         URL_NOISE_RE.lastIndex = 0;
-        idPart = `${safeSrc}--${encodeURIComponent(item.source_id)}`;
+        idPart = `${safeSrc}--${encodeURIComponent(String(item.source_id)).replace(/-/g, '%2D')}`;
       } else {
         idPart = 'item';
       }
@@ -161,32 +161,44 @@
       // 2. Manejo de parámetros query legados (ej: ?tab=vault, ?tab=videos, /favoritos)
       const q = new URLSearchParams(s);
       const tabParam = q.get('tab');
+      const makeCatalogRoute = (mode, canonical, isHome = false) => ({
+        name: isHome ? 'home' : 'catalog',
+        mode,
+        category: q.get('cat') || 'all',
+        tag: q.get('tag') || '',
+        page: Number(q.get('page')) || 1,
+        pageFromQuery: q.has('page'),
+        query: q.get('q') || '',
+        sort: q.get('sort') || '',
+        shuffle: q.get('shuffle') || q.get('seed') || '',
+        canonical
+      });
       if (path === '/favoritos' || tabParam === 'vault') {
         return { name: 'vault', tab: 'favorites', canonical: '/boveda/favoritos' };
       }
       if (path === '/historial') {
         return { name: 'vault', tab: 'history', canonical: '/boveda/historial' };
       }
-      if (tabParam === 'videos' && (path === '/' || path === '/videos')) return { name: 'catalog', mode: 'videos', canonical: '/videos' };
-      if (tabParam === 'comics' && (path === '/' || path === '/comics')) return { name: 'catalog', mode: 'comics', canonical: '/comics' };
-      if (tabParam === 'galleries' && (path === '/' || path === '/cosplay')) return { name: 'catalog', mode: 'galleries', canonical: '/cosplay' };
-      if ((tabParam === 'juegos' || tabParam === 'games')) return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/juegos' };
+      if (tabParam === 'videos' && (path === '/' || path === '/videos')) return makeCatalogRoute('videos', '/videos');
+      if (tabParam === 'comics' && (path === '/' || path === '/comics')) return makeCatalogRoute('comics', '/comics');
+      if (tabParam === 'galleries' && (path === '/' || path === '/cosplay')) return makeCatalogRoute('galleries', '/cosplay');
+      if (tabParam === 'juegos' || tabParam === 'games') return makeCatalogRoute('games', '/juegos');
 
       // 3. Rutas canónicas del nuevo sistema
       if (path === '/' || path === '/index.html') {
-        return { name: 'home', mode: 'comics', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/' };
+        return makeCatalogRoute('comics', '/', true);
       }
       if (path === '/videos') {
-        return { name: 'catalog', mode: 'videos', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/videos' };
+        return makeCatalogRoute('videos', '/videos');
       }
       if (path === '/comics') {
-        return { name: 'catalog', mode: 'comics', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/comics' };
+        return makeCatalogRoute('comics', '/comics');
       }
-      if (path === '/cosplay') {
-        return { name: 'catalog', mode: 'galleries', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/cosplay' };
+      if (path === '/cosplay' || path === '/modelos') {
+        return makeCatalogRoute('galleries', '/cosplay');
       }
       if (path === '/juegos' || path === '/games') {
-        return { name: 'catalog', mode: 'games', category: q.get('cat') || 'all', page: Number(q.get('page')) || 1, pageFromQuery: q.has('page'), query: q.get('q') || '', canonical: '/juegos' };
+        return makeCatalogRoute('games', '/juegos');
       }
 
       // 4. Bóveda, Historial y Cuenta
@@ -289,21 +301,26 @@
     navigate(targetUrl, replace = false, preserveScroll = false) {
       if (!targetUrl) return;
 
-      const currentPath = window.location.pathname;
+      const currentScrollKey = (window.location.pathname || '/') + (window.location.search || '');
       if (!preserveScroll) {
-        scrollPositions.set(currentPath, window.scrollY);
+        scrollPositions.set(currentScrollKey, window.scrollY);
       }
 
       const urlObj = new URL(targetUrl, window.location.origin);
       const parsed = this.parsePath(urlObj.pathname, urlObj.search, urlObj.hash);
 
-      // Si la URL canónica difiere (ej: enlace legado), usar la canónica
-      const finalUrl = (parsed.canonical || urlObj.pathname) + urlObj.search;
+      // Si la URL canónica difiere (ej: enlace legado), usar la canónica y retirar ?tab= redundante
+      const finalParams = new URLSearchParams(urlObj.search);
+      if (parsed.canonical && parsed.canonical !== urlObj.pathname) {
+        finalParams.delete('tab');
+      }
+      const cleanSearch = finalParams.toString();
+      const finalUrl = (parsed.canonical || urlObj.pathname) + (cleanSearch ? '?' + cleanSearch : '');
 
       if (replace) {
         window.history.replaceState({ url: finalUrl, route: parsed }, '', finalUrl);
       } else {
-        window.history.pushState({ url: finalUrl, route: parsed }, '', finalUrl);
+        window.history.pushState({ url: finalUrl, route: parsed, _fromFeedPush: true }, '', finalUrl);
       }
 
       this.executeRoute(parsed, preserveScroll);
@@ -348,7 +365,7 @@
         vault_history: 'Mi Bóveda: Historial — Morbo Hub',
         account: 'Mi Cuenta Morbo VIP — Morbo Hub',
         auth: 'Acceso VIP & Membresía — Morbo Hub',
-        '404': 'Página no encontrada &bull; Morbo Hub'
+        '404': 'Página no encontrada • Morbo Hub'
       };
 
       let title = titles.home;
@@ -453,13 +470,13 @@
 
         const target = link.getAttribute('target');
         const href = link.getAttribute('href');
-        if (target === '_blank' || link.hasAttribute('download') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+        if (!href || target === '_blank' || link.hasAttribute('download') || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) {
           return;
         }
 
         const url = new URL(href, window.location.origin);
-        // Si es un dominio externo, no interceptar
-        if (url.origin !== window.location.origin) {
+        // Si es un dominio externo o un endpoint API, no interceptar
+        if (url.origin !== window.location.origin || url.pathname.startsWith('/api/')) {
           return;
         }
 
@@ -537,12 +554,14 @@
     // 6. INICIALIZACIÓN DEL ENRUTADOR
     // =======================================================================
     init() {
+      this._initialized = true;
       this.bindLinkInterceptor();
       this.bindPrefetchEngine();
 
       window.addEventListener('popstate', (e) => {
         const path = window.location.pathname;
-        const savedScroll = scrollPositions.get(path) || 0;
+        const scrollKey = (path || '/') + (window.location.search || '');
+        const savedScroll = scrollPositions.get(scrollKey) || 0;
         const route = this.parsePath(path, window.location.search, window.location.hash);
         this.executeRoute(route, true);
 
@@ -553,10 +572,13 @@
 
       // Procesar la ruta inicial al cargar el documento
       const initialRoute = this.parsePath(window.location.pathname, window.location.search, window.location.hash);
-      
+
       // Si la URL inicial contenía hash o query legada, normalizarla sin recargar
       if (initialRoute.canonical && initialRoute.canonical !== window.location.pathname) {
-        const next = initialRoute.canonical + window.location.search + window.location.hash;
+        const initParams = new URLSearchParams(window.location.search);
+        initParams.delete('tab');
+        const initQs = initParams.toString();
+        const next = initialRoute.canonical + (initQs ? '?' + initQs : '') + window.location.hash;
         window.history.replaceState({ url: next, route: initialRoute }, '', next);
       }
 

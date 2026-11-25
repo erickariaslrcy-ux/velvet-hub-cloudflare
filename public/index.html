@@ -44,8 +44,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css';">
 
   <!-- High-Performance Static Design System (Compiled Tailwind CSS) -->
-  <link rel="stylesheet" href="/css/tailwind.css?v=3.9.0">
-  <link rel="stylesheet" href="/css/pagination.css?v=3.9.0">
+  <link rel="stylesheet" href="/css/tailwind.css?v=3.10.0">
+  <link rel="stylesheet" href="/css/pagination.css?v=3.10.0">
 
   <!-- Emulador Flash Ruffle WebAssembly Oficial -->
   <script src="https://unpkg.com/@ruffle-rs/ruffle" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle';"></script>
@@ -53,12 +53,12 @@
   <script defer src="https://cdn.tailwindcss.com"></script>
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination -->
-  <script defer src="/js/personal-data.js?v=3.9.0"></script>
-  <script defer src="/js/store.js?v=3.9.0"></script>
-  <script defer src="/js/router.js?v=3.9.0"></script>
-  <script defer src="/js/vault.js?v=3.9.0"></script>
-  <script defer src="/js/pagination.js?v=3.9.0"></script>
-  <script defer src="/js/image-loader.js?v=3.9.0"></script>
+  <script defer src="/js/personal-data.js?v=3.10.0"></script>
+  <script defer src="/js/store.js?v=3.10.0"></script>
+  <script defer src="/js/router.js?v=3.10.0"></script>
+  <script defer src="/js/vault.js?v=3.10.0"></script>
+  <script defer src="/js/pagination.js?v=3.10.0"></script>
+  <script defer src="/js/image-loader.js?v=3.10.0"></script>
 
   <style>
     /* =======================================================================
@@ -99,7 +99,6 @@
     
     #video-stage-wrapper {
       isolation: isolate;
-      contain: layout paint style;
     }
     
     #video-stage {
@@ -2069,24 +2068,38 @@
               <h4 class="text-sm font-bold text-white">Seguridad & Contraseña</h4>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-3">
               <div>
-                <label class="block text-[11px] font-bold text-purple-300 uppercase tracking-wider mb-1.5">Nueva Contraseña</label>
+                <label class="block text-[11px] font-bold text-purple-300 uppercase tracking-wider mb-1.5">Contraseña Actual</label>
                 <input
                   type="password"
-                  id="profile-new-password"
-                  placeholder="Mínimo 6 caracteres"
+                  id="profile-current-password"
+                  placeholder="Tu contraseña actual (requerida salvo acceso Patreon nuevo)"
+                  autocomplete="current-password"
                   class="w-full bg-[#120726] border border-purple-500/30 rounded-xl px-4 py-2.5 text-xs text-white placeholder-purple-400/30 focus:outline-none focus:border-pink-500 transition-colors"
                 />
               </div>
-              <div>
-                <label class="block text-[11px] font-bold text-purple-300 uppercase tracking-wider mb-1.5">Confirmar Contraseña</label>
-                <input
-                  type="password"
-                  id="profile-confirm-password"
-                  placeholder="Repite la contraseña"
-                  class="w-full bg-[#120726] border border-purple-500/30 rounded-xl px-4 py-2.5 text-xs text-white placeholder-purple-400/30 focus:outline-none focus:border-pink-500 transition-colors"
-                />
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-[11px] font-bold text-purple-300 uppercase tracking-wider mb-1.5">Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    id="profile-new-password"
+                    placeholder="Mínimo 6 caracteres"
+                    autocomplete="new-password"
+                    class="w-full bg-[#120726] border border-purple-500/30 rounded-xl px-4 py-2.5 text-xs text-white placeholder-purple-400/30 focus:outline-none focus:border-pink-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-purple-300 uppercase tracking-wider mb-1.5">Confirmar Contraseña</label>
+                  <input
+                    type="password"
+                    id="profile-confirm-password"
+                    placeholder="Repite la contraseña"
+                    autocomplete="new-password"
+                    class="w-full bg-[#120726] border border-purple-500/30 rounded-xl px-4 py-2.5 text-xs text-white placeholder-purple-400/30 focus:outline-none focus:border-pink-500 transition-colors"
+                  />
+                </div>
               </div>
             </div>
 
@@ -2201,7 +2214,7 @@
     </div>
 
     <!-- Toast Flotante de Deshacer (Undo) -->
-    <div id="vault-undo-toast" class="hidden fixed bottom-6 right-6 z-50 bg-[#0e071c] border border-pink-500/50 rounded-2xl p-4 shadow-[0_0_30px_rgba(255,45,149,0.3)] flex items-center gap-4 text-xs">
+    <div id="vault-undo-toast" class="hidden fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-50 bg-[#0e071c] border border-pink-500/50 rounded-2xl p-4 shadow-[0_0_30px_rgba(255,45,149,0.3)] flex items-center gap-4 text-xs">
       <span id="vault-undo-text" class="text-white font-medium">Elemento quitado</span>
       <button onclick="window.VelvetVault?.undoRemoveFavorite()" class="px-3 py-1.5 rounded-xl bg-pink-500 text-white font-bold hover:bg-pink-400 transition-colors cursor-pointer">
         Deshacer
@@ -2363,14 +2376,14 @@
         <!-- COLUMNA PRINCIPAL (70% en lg:col-span-8 o 12 en modo cine) -->
         <div id="video-primary-column" class="lg:col-span-8 flex flex-col gap-4 w-full transition-all duration-300">
           
+          <!-- Dimmer de Luces / Modo Cine (fuera del wrapper para cubrir todo el viewport) -->
+          <div id="cinema-dimmer" class="fixed inset-0 bg-[#06030a]/92 opacity-0 pointer-events-none transition-opacity duration-300 z-20" onclick="toggleCinemaLights(event)"></div>
+
           <!-- Escenario del Reproductor con Aislamiento de Capa (Hardware Layer) -->
-          <div id="video-stage-wrapper" class="relative w-full flex flex-col items-center isolation-isolate contain-paint">
+          <div id="video-stage-wrapper" class="relative w-full flex flex-col items-center isolation-isolate">
             
             <!-- Canvas Ambilight 32x18 escalado por CSS al tamaño del contenedor (CERO BLUR CSS) -->
             <canvas id="video-ambilight-canvas" width="32" height="18" class="absolute -inset-3 sm:-inset-5 w-[calc(100%+1.5rem)] sm:w-[calc(100%+2.5rem)] h-[calc(100%+1.5rem)] sm:h-[calc(100%+2.5rem)] rounded-2xl opacity-0 pointer-events-none -z-10 transition-opacity duration-300"></canvas>
-
-            <!-- Dimmer de Luces / Modo Cine -->
-            <div id="cinema-dimmer" class="fixed inset-0 bg-[#06030a]/92 opacity-0 pointer-events-none transition-opacity duration-300 z-20" onclick="toggleCinemaLights(event)"></div>
 
             <!-- Stage Box -->
             <div id="video-stage" class="w-full aspect-video bg-[#000000] rounded-2xl overflow-hidden shadow-2xl relative border border-white/[0.08] select-none group/player transition-all duration-300 isolation-isolate contain-paint">
@@ -2944,8 +2957,8 @@
   <!-- ===================================================================== -->
 
   <!-- MODAL: ACTUALIZACION A VELVET VIP ($5.99) -->
-  <div id="pro-upgrade-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 select-none">
-    <div class="bg-[#0b0416] border border-amber-500/40 rounded-3xl max-w-md w-full p-6 sm:p-8 flex flex-col shadow-[0_0_50px_rgba(245,158,11,0.3)] relative text-center">
+  <div id="pro-upgrade-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 overflow-y-auto select-none">
+    <div class="bg-[#0b0416] border border-amber-500/40 rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-6 sm:p-8 flex flex-col shadow-[0_0_50px_rgba(245,158,11,0.3)] relative text-center my-auto">
       <button onclick="closeProUpgradeModal()" class="absolute top-5 right-5 w-8 h-8 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white flex items-center justify-center border border-purple-500/20 transition-colors cursor-pointer">
         <i class="fa-solid fa-xmark text-sm"></i>
       </button>
@@ -2991,6 +3004,7 @@
       <!-- Botón Principal Patreon $5.99 -->
       <a
         href="/api/auth/patreon"
+        data-no-route
         class="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#FF424D] to-[#E02935] hover:from-[#ff5a64] hover:to-[#eb3b47] text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(255,66,77,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2.5 text-decoration-none select-none mb-2.5"
       >
         <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M15.386.524c-4.764 0-8.64 3.876-8.64 8.64 0 4.75 3.876 8.613 8.64 8.613 4.75 0 8.614-3.864 8.614-8.613C24 4.4 20.136.524 15.386.524M.001 23.476H5.2V.524H.001z"/></svg>
@@ -3008,12 +3022,12 @@
       </button>
 
       <p class="text-[10px] text-purple-300/50 mt-3">
-        ¿Ya eres miembro? <a href="/api/auth/patreon" class="text-pink-400 hover:underline">Re-conectar Patreon</a> o <a href="javascript:void(0)" onclick="closeProUpgradeModal(); openAuthModal('login');" class="text-purple-300 hover:underline">Iniciar sesión</a>
+        ¿Ya eres miembro? <a href="/api/auth/patreon" data-no-route class="text-pink-400 hover:underline">Re-conectar Patreon</a> o <a href="javascript:void(0)" onclick="closeProUpgradeModal(); openAuthModal('login');" class="text-purple-300 hover:underline">Iniciar sesión</a>
       </p>
     </div>
-  </div><div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 select-none">
+  </div><div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 overflow-y-auto select-none">
 
-    <div class="bg-[#0b0416] border border-purple-500/30 rounded-3xl max-w-md w-full p-6 sm:p-8 flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative">
+    <div class="bg-[#0b0416] border border-purple-500/30 rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-6 sm:p-8 flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative my-auto">
 
       <!-- Botón Cerrar -->
 
@@ -3047,6 +3061,7 @@
       <div class="my-4">
         <a
           href="/api/auth/patreon"
+          data-no-route
           class="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#FF424D] to-[#E02935] hover:from-[#ff5a64] hover:to-[#eb3b47] text-white font-black text-xs uppercase tracking-wider shadow-[0_0_25px_rgba(255,66,77,0.4)] transition-all cursor-pointer flex items-center justify-center gap-2.5 group text-decoration-none select-none"
         >
           <svg class="w-4 h-4 fill-current transition-transform group-hover:scale-110 shrink-0" viewBox="0 0 24 24">
@@ -3225,9 +3240,9 @@
 
   <!-- ===================================================================== -->
 
-  <div id="vault-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 select-none">
+  <div id="vault-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 overflow-y-auto select-none">
 
-    <div style="height: 78vh; min-height: 480px; max-height: 720px;" class="bg-[#0c051a] border border-purple-500/30 rounded-3xl max-w-2xl w-full p-5 sm:p-7 flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative">
+    <div style="height: 78vh; min-height: min(480px, 90dvh); max-height: 720px;" class="bg-[#0c051a] border border-purple-500/30 rounded-3xl max-w-2xl w-full p-5 sm:p-7 flex flex-col shadow-[0_0_50px_rgba(168,85,247,0.25)] relative my-auto">
 
       <!-- Cabecera de Mi Bóveda -->
 
@@ -3854,7 +3869,7 @@
 
   <!-- ===================================================================== -->
 
-  <script src="/js/video-session.js?v=3.7.0"></script>
+  <script defer src="/js/video-session.js?v=3.10.0"></script>
   <script>
 
     // =======================================================================
@@ -4500,8 +4515,9 @@
         }
       } else {
         state.page = options.page || (isUserClick ? 1 : (state.page || 1));
-        state.category = options.category || (isUserClick ? 'all' : (state.category || 'all'));
-        state.query = isUserClick ? '' : (state.query || '');
+        state.category = options.category !== undefined ? options.category : (isUserClick ? 'all' : (state.category || 'all'));
+        state.query = options.query !== undefined ? options.query : (isUserClick ? '' : (state.query || ''));
+        state.tag = options.tag !== undefined ? options.tag : (isUserClick ? '' : (state.tag || ''));
         if (options.sort) {
           state.sort = options.sort;
           if (state.sort === 'random') {
@@ -4538,18 +4554,26 @@
 
       } catch (e) {}
 
-      // Sincronizar parámetro URL sin recargar para persistir pestaña activa
+      // Sincronizar URL canónica sin ?tab= ni recargar al cambiar de pestaña
       try {
         const curUrl = new URL(window.location.href);
-        const curTab = curUrl.searchParams.get('tab');
-        const targetTab = mode === 'comics' ? null : mode;
-        if ((targetTab && curTab !== targetTab) || (!targetTab && curTab)) {
-          if (targetTab) {
-            curUrl.searchParams.set('tab', targetTab);
-          } else {
-            curUrl.searchParams.delete('tab');
+        if (!curUrl.pathname.startsWith('/boveda') && !curUrl.pathname.startsWith('/cuenta') && !curUrl.pathname.startsWith('/acceso')) {
+          const canonicalModePath = mode === 'videos' ? '/videos' : (mode === 'galleries' ? '/cosplay' : (mode === 'games' ? '/juegos' : '/comics'));
+          curUrl.pathname = canonicalModePath;
+          curUrl.searchParams.delete('tab');
+          if (state.category && state.category !== 'all') curUrl.searchParams.set('cat', state.category);
+          else curUrl.searchParams.delete('cat');
+          if (state.page && state.page > 1) curUrl.searchParams.set('page', String(state.page));
+          else curUrl.searchParams.delete('page');
+          const qs = curUrl.searchParams.toString();
+          const nextStateUrl = canonicalModePath + (qs ? '?' + qs : '');
+          const routeObj = window.VelvetRouter && typeof window.VelvetRouter.parsePath === 'function'
+            ? window.VelvetRouter.parsePath(canonicalModePath, curUrl.search, curUrl.hash)
+            : null;
+          history.replaceState({ url: nextStateUrl, route: routeObj, mode }, `MORBO HUB - ${mode}`, nextStateUrl);
+          if (window.VelvetRouter && typeof window.VelvetRouter.updateActiveNavLinks === 'function') {
+            window.VelvetRouter.updateActiveNavLinks(canonicalModePath);
           }
-          history.replaceState({ mode }, `MORBO HUB - ${mode}`, curUrl.pathname + curUrl.search);
         }
       } catch (e) {}
 
@@ -4837,15 +4861,18 @@
 
       state.page = 1;
 
-      // Sincronizar parámetro URL ?sort=
+      // Sincronizar parámetro URL ?sort= y reiniciar ?page=
       const url = new URL(window.location.href);
+      url.searchParams.delete('page');
+      url.searchParams.delete('shuffle');
+      url.searchParams.delete('seed');
       if (sortId && sortId !== 'random') {
         url.searchParams.set('sort', sortId);
       } else {
         url.searchParams.delete('sort');
       }
       if (window.history && window.history.pushState) {
-        window.history.pushState({ sort: sortId }, '', url.toString());
+        window.history.pushState({ sort: sortId, page: 1 }, '', url.pathname + url.search + url.hash);
       }
 
       updateSortUI(sortId);
@@ -5175,7 +5202,7 @@
 
       }
 
-      return 'Cómic a color. Las páginas se cargan desde el proveedor original.';
+      return 'Cómic erótico en alta definición sin censura.';
 
     }
 
@@ -5273,7 +5300,20 @@
       state.page = initPage;
 
       window.VelvetPagination?.init();
-      setPortalMode(state.mode, false, { page: initPage, category: initCat || 'all', sort: initSort });
+      const initRoute = window.VelvetRouter?.parsePath?.(window.location.pathname, window.location.search, window.location.hash);
+      const hasLegacyModalMatch = Boolean(videoMatch || galleryMatch || comicMatch);
+      const isCatalogStartup = !hasLegacyModalMatch && (!initRoute || initRoute.name === 'home' || initRoute.name === 'catalog');
+      if (isCatalogStartup) {
+        setPortalMode(state.mode, false, {
+          page: initPage,
+          category: initCat || 'all',
+          query: initUrlParams.get('q') || '',
+          tag: initUrlParams.get('tag') || '',
+          sort: initSort
+        });
+      } else {
+        updateModeButtonsUI(state.mode);
+      }
       if (typeof renderSortOptions === 'function') {
         renderSortOptions();
       }
@@ -5324,7 +5364,7 @@
             openReader(dec.source, dec.sourceId, false);
           }
         }
-      } else {
+      } else if (isCatalogStartup) {
         startHeroAutoPlay();
       }
 
@@ -5494,7 +5534,7 @@
             img.classList.remove('opacity-0');
             img.classList.add('opacity-100');
             const sk = img.previousElementSibling;
-            if (sk && (sk.classList.contains('skeleton-shimmer') || sk.classList.contains('velvet-skeleton'))) {
+            if (sk && (sk.classList.contains('skeleton-shimmer') || sk.classList.contains('velvet-skeleton') || sk.classList.contains('velvet-logo-ph'))) {
               sk.style.opacity = '0';
               setTimeout(() => { try { sk.remove(); } catch(e){} }, 200);
             }
@@ -5699,7 +5739,7 @@
         return;
       }
 
-      // 2. Ruta Inicio o Catálogos (/videos, /comics, /cosplay)
+      // 2. Ruta Inicio o Catálogos (/videos, /comics, /cosplay, /juegos)
       if (route.name === 'home' || route.name === 'catalog') {
         if (vaultView) vaultView.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
@@ -5711,17 +5751,83 @@
 
         const targetMode = route.mode || 'comics';
         const targetPage = route.page || 1;
+        const targetCat = route.category !== undefined ? route.category : 'all';
+        const targetQuery = route.query !== undefined ? route.query : '';
+        const targetTag = route.tag !== undefined ? route.tag : '';
+        const targetSort = route.sort || '';
+
         if (targetMode !== state.mode) {
-          setPortalMode(targetMode, true, { page: targetPage, keepPage: !!route.pageFromQuery });
-        } else if (route.pageFromQuery && targetPage !== state.page) {
-          state.page = targetPage;
-          fetchLiveFeed(true);
-        } else if (route.category && route.category !== state.category) {
-          state.category = route.category;
-          fetchLiveFeed(true);
-        } else if (route.query && route.query !== state.query) {
-          state.query = route.query;
-          fetchLiveFeed(true);
+          setPortalMode(targetMode, true, {
+            page: targetPage,
+            keepPage: !!route.pageFromQuery,
+            category: targetCat,
+            query: targetQuery,
+            tag: targetTag,
+            sort: targetSort || undefined
+          });
+        } else {
+          let needsReload = !(state.catalogCache && state.catalogCache.length > 0);
+          if (targetPage !== state.page) { state.page = targetPage; needsReload = true; }
+          if (targetCat !== state.category) {
+            state.category = targetCat;
+            if (typeof renderCategoryChips === 'function') renderCategoryChips();
+            needsReload = true;
+          }
+          if (targetQuery !== state.query) {
+            state.query = targetQuery;
+            const sIn = document.getElementById('search-input');
+            if (sIn) sIn.value = targetQuery;
+            const cBtn = document.getElementById('clear-search-btn');
+            if (cBtn) cBtn.classList.toggle('hidden', !targetQuery);
+            needsReload = true;
+          }
+          if (targetTag !== state.tag) { state.tag = targetTag; needsReload = true; }
+          if (targetSort && targetSort !== state.sort) {
+            state.sort = targetSort;
+            state.catalogMode = targetSort === 'random' ? 'dynamic' : 'static';
+            if (typeof updateSortUI === 'function') updateSortUI(targetSort);
+            needsReload = true;
+          }
+          if (needsReload) fetchLiveFeed(true);
+        }
+        return;
+      }
+
+      // 2b. Ruta Acceso VIP (/acceso)
+      if (route.name === 'auth') {
+        if (vaultView) vaultView.classList.add('hidden');
+        if (mainContent) mainContent.classList.remove('hidden');
+        if (gHeader) gHeader.classList.remove('hidden');
+        if (mobNav) mobNav.classList.remove('hidden');
+        if (typeof openAuthModal === 'function') openAuthModal();
+        return;
+      }
+
+      // 2c. Ruta Juego (/j/:slug)
+      if (route.name === 'game') {
+        if (vaultView) vaultView.classList.add('hidden');
+        let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
+        if (route.rawToken) {
+          const dec = decodeStealthId(route.rawToken);
+          if (dec && (dec.isNumeric || dec.isId)) itemId = dec.id;
+          else if (dec && dec.source && dec.sourceId) { source = dec.source; id = dec.sourceId; }
+        }
+        const cacheMatch = (itemId ? getCachedItem(String(itemId)) : null) ||
+                           (source && id ? getCachedItem(`${source}_${id}`) : null) ||
+                           (state.catalogCache || []).find(x => (itemId && String(x.id) === String(itemId)) || (source && id && x.source === source && String(x.source_id) === String(id)));
+        if (cacheMatch && typeof openGameModal === 'function') {
+          openGameModal(cacheMatch);
+        } else {
+          setPortalMode('games', false, { page: 1 });
+          const lookupPath = (itemId && /^\d+$/.test(String(itemId)))
+            ? `/api/items/id/${itemId}`
+            : (source && id ? `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(id)}` : '');
+          if (lookupPath) {
+            fetch(lookupPath).then(r => r.ok ? r.json() : null).then(d => {
+              const g = d && (d.item || d);
+              if (g && (g.embed_url || g.swf_url || g.media_type === 'game')) openGameModal(g);
+            }).catch(() => {});
+          }
         }
         return;
       }
@@ -5771,6 +5877,25 @@
           itemId = cacheMatch.id || itemId;
         }
         openReader(source, id, false, itemId);
+        return;
+      }
+
+      // 5. Ruta 404 Desconocida
+      if (route.name === '404') {
+        if (vaultView) vaultView.classList.add('hidden');
+        if (videoView) videoView.classList.add('hidden');
+        if (readerModal) readerModal.classList.add('hidden');
+        if (mainContent) mainContent.classList.remove('hidden');
+        const emptyEl = document.getElementById('empty-state');
+        const gridEl = document.getElementById('comics-grid');
+        if (gridEl) gridEl.innerHTML = '';
+        if (emptyEl) {
+          emptyEl.classList.remove('hidden');
+          const h3 = emptyEl.querySelector('h3');
+          const p = emptyEl.querySelector('p');
+          if (h3) h3.textContent = 'Página no encontrada';
+          if (p) p.textContent = 'La ruta solicitada no existe o fue movida. Vuelve al catálogo principal.';
+        }
         return;
       }
     });
@@ -6016,17 +6141,47 @@
       const dropUser = document.getElementById('dropdown-username');
       const dropRole = document.getElementById('dropdown-role-badge');
 
+      const accountBadge = document.getElementById('account-avatar-badge');
+      const AVATAR_ICON_COLORS = {
+        crown: 'text-amber-300',
+        gem: 'text-purple-300',
+        bolt: 'text-amber-400',
+        fire: 'text-rose-400',
+        gamepad: 'text-emerald-400',
+        ghost: 'text-indigo-300',
+        heart: 'text-pink-400',
+        rocket: 'text-cyan-400',
+        cat: 'text-amber-300',
+        'shield-halved': 'text-teal-400'
+      };
+      const SAFE_AVATAR_BGS = new Set([
+        'from-pink-600 to-purple-600',
+        'from-amber-500 to-rose-600',
+        'from-cyan-500 to-blue-600',
+        'from-emerald-500 to-teal-600',
+        'from-emerald-500 to-teal-700',
+        'from-purple-600 to-indigo-800',
+        'from-purple-800 to-indigo-900',
+        'from-rose-600 to-pink-700'
+      ]);
+
       if (state.currentUser) {
         const u = state.currentUser;
         const subInfo = window.VelvetStore?.getSubscriptionInfo?.() || { active: hasFullAccess(), status: u.subscription_status || 'inactive' };
         if (btnText) btnText.textContent = u.username || 'Mi Cuenta';
         if (dropUser) dropUser.textContent = u.username || 'Mi Cuenta';
+        const chosenIcon = AVATAR_ICON_COLORS[u.avatar] ? u.avatar : null;
+        const chosenColor = chosenIcon ? AVATAR_ICON_COLORS[chosenIcon] : null;
+        if (accountBadge) {
+          const safeBg = SAFE_AVATAR_BGS.has(u.avatarBg) ? u.avatarBg : 'from-pink-600 to-purple-600';
+          accountBadge.className = `w-6 h-6 rounded-full bg-gradient-to-tr ${safeBg} flex items-center justify-center text-[11px] text-white shadow-sm shrink-0`;
+        }
         if (u.role === 'admin') {
-          if (avatarIcon) avatarIcon.className = 'fa-solid fa-crown text-amber-300';
+          if (avatarIcon) avatarIcon.className = `fa-solid fa-${chosenIcon || 'crown'} ${chosenColor || 'text-amber-300'}`;
           if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-crown text-amber-400"></i> Dueño &bull; Administrador';
           if (adminBtn) adminBtn.classList.remove('hidden');
         } else if (subInfo.active) {
-          if (avatarIcon) avatarIcon.className = 'fa-solid fa-user-check text-pink-300';
+          if (avatarIcon) avatarIcon.className = `fa-solid fa-${chosenIcon || 'user-check'} ${chosenColor || 'text-pink-300'}`;
           const daysTxt = subInfo.isLifetime ? 'Permanente' : (subInfo.daysRemaining != null ? `${subInfo.daysRemaining}d restantes` : 'Activo');
           if (dropRole) dropRole.innerHTML = `<i class="fa-solid fa-shield-halved text-pink-400"></i> Miembro VIP &bull; ${daysTxt}`;
           if (adminBtn) adminBtn.classList.add('hidden');
@@ -6039,13 +6194,16 @@
           if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-ban text-rose-400"></i> Cuenta Suspendida';
           if (adminBtn) adminBtn.classList.add('hidden');
         } else {
-          if (avatarIcon) avatarIcon.className = 'fa-solid fa-user text-purple-300';
+          if (avatarIcon) avatarIcon.className = `fa-solid fa-${chosenIcon || 'user'} ${chosenColor || 'text-purple-300'}`;
           if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-user text-purple-300"></i> Cuenta Gratuita';
           if (adminBtn) adminBtn.classList.add('hidden');
         }
       } else {
         if (btnText) btnText.textContent = 'Ingresar';
         if (avatarIcon) avatarIcon.className = 'fa-solid fa-key';
+        if (accountBadge) {
+          accountBadge.className = 'w-6 h-6 rounded-full bg-gradient-to-tr from-pink-600 to-purple-600 flex items-center justify-center text-[11px] text-white shadow-sm shrink-0';
+        }
         if (adminBtn) adminBtn.classList.add('hidden');
         if (dropRole) dropRole.innerHTML = '<i class="fa-solid fa-lock text-purple-400"></i> Sin Sesión';
       }
@@ -6473,7 +6631,7 @@
       }
 
       if (!append) {
-        setupHeroCarousel(data.items.slice(0, 5));
+        setupHeroCarousel((itemsToRender.length > 0 ? itemsToRender : (data.items || [])).slice(0, 5));
       }
 
       const totalPages = parseInt(data.total_pages, 10) || state.totalPages || 1;
@@ -7083,8 +7241,8 @@
           <div class="relative aspect-[16/11] w-full overflow-hidden select-none bg-[#100922]">
             ${velvetLogoPlaceholder()}
             <img
-              src="${coverSrc}"
-              alt="${escapeHtml(it.title)}"
+              src="${escapeHtml(coverSrc)}"
+              alt="${escapeHtml(safeGameTitle)}"
               referrerpolicy="no-referrer"
               loading="${idx < 6 ? 'eager' : 'lazy'}"
               decoding="async"
@@ -7587,7 +7745,7 @@
               data-media-type="${state.mode === 'galleries' ? 'gallery' : 'comic'}"
               data-cover-fallback="${it.cover_fallback ? getStealthImageUrl(it.cover_fallback, it.url || '', 0, 70) : ''}"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton')||s.classList.contains('velvet-logo-ph'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, '${state.mode === 'galleries' ? 'gallery' : 'comic'}')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -7723,8 +7881,8 @@
           <div class="relative aspect-video w-full overflow-hidden select-none" style="background-color: ${domColor};">
             ${velvetLogoPlaceholder()}
             <img
-              src="${coverSrc}"
-              ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
+              src="${escapeHtml(coverSrc)}"
+              ${responsiveSrcSet ? `srcset="${escapeHtml(responsiveSrcSet)}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(cleanVideoTitle)}"
@@ -7732,9 +7890,9 @@
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
               data-media-type="video"
-              data-cover-fallback="${it.cover_fallback ? getStealthImageUrl(it.cover_fallback, it.url || '', 0, 70) : ''}"
+              data-cover-fallback="${escapeHtml(it.cover_fallback ? getStealthImageUrl(it.cover_fallback, it.url || '', 0, 70) : '')}"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton')||s.classList.contains('velvet-logo-ph'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, 'video')"
             />
             <div class="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors pointer-events-none"></div>
@@ -9148,9 +9306,11 @@
     function isItemLockedForUser(it, _idx = null) {
       if (hasFullAccess()) return false;
       if (!it) return false;
-      let num = parseInt(it.id, 10);
-      if (!num || isNaN(num)) {
-        const str = String(it.source || '') + ':' + String(it.source_id || it.sourceId || it.title || '');
+      const rawId = it.id != null ? it.id : it.item_id;
+      const strId = String(rawId ?? '').trim();
+      let num = /^\d{1,15}$/.test(strId) ? Number(strId) : 0;
+      if (!num || !Number.isSafeInteger(num)) {
+        const str = String(it.source || '') + ':' + String(it.source_id || it.sourceId || it.title || rawId || '');
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
           hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -9312,16 +9472,7 @@
             const nextSrc = allSources[videoFailoverAttempts % allSources.length];
             playVideoSource(nextSrc, null, true, loadToken);
           } else if (player && player._currentVs && videoGuard.matches(loadToken)) {
-            const ref = state.currentVideo?.url || '';
-            const proxyUrl = getStealthStreamUrl(player._currentVs.url, ref);
-            player._loadToken = loadToken;
-            player.src = proxyUrl;
-            player.load();
-            player.play().then(() => {
-              if (!videoGuard.matches(loadToken)) {
-                silenceBackgroundVideo(player);
-              }
-            }).catch(() => {});
+            playVideoSource(player._currentVs, null, true, loadToken);
           }
         }, backoffMs);
         return;
@@ -9452,7 +9603,8 @@
         if (pushRoute) {
           const effId = cachedVid.id || itemId;
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedVid) : `/v/${effId}`;
-          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cleanVidTitle, canonicalUrl);
+          const homeWasOpen = Boolean(homeView && (!homeView.classList.contains('hidden') || state.savedHomeScroll !== undefined));
+          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true, _fromFeedPush: homeWasOpen }, cleanVidTitle, canonicalUrl);
         }
         document.title = `${cleanVidTitle} — MORBO HUB`;
         if (!videoGuard.matches(ticket.token)) return;
@@ -9505,7 +9657,8 @@
         if (pushRoute) {
           const effId = item.id || itemId;
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/v/${effId}`;
-          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cleanVidTitle, canonicalUrl);
+          const homeWasOpen = Boolean(homeView && !homeView.classList.contains('hidden'));
+          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true, _fromFeedPush: homeWasOpen }, cleanVidTitle, canonicalUrl);
         }
         document.title = `${cleanVidTitle} — MORBO HUB`;
 
@@ -9731,6 +9884,12 @@
             handleVideoPlaybackFailover(loadToken);
           }
         });
+      }).catch(() => {
+        if (!videoGuard.matches(loadToken)) return;
+        clearVideoWatchdog();
+        if (buffSpinner) buffSpinner.classList.add('hidden');
+        if (loader) loader.classList.add('hidden');
+        handleVideoPlaybackFailover(loadToken);
       });
     } else {
         if (!videoGuard.matches(loadToken)) return;
@@ -9832,7 +9991,7 @@
         renderContinueShelf();
       }
 
-      if (pushRoute && window.history.length > 1 && window.history.state && (window.history.state.fromApp || window.history.state.type)) {
+      if (pushRoute && window.history.length > 1 && window.history.state && window.history.state._fromFeedPush) {
         window.history.back();
         return;
       }
@@ -9859,19 +10018,30 @@
       }
 
       if (pushRoute) {
-        let returnUrl = '/';
-        if (state.mode === 'videos') {
-          returnUrl = '/?tab=videos';
-        } else if (state.mode === 'galleries') {
-          returnUrl = '/?tab=galleries';
+        let returnUrl = '/comics';
+        if (state.mode === 'videos') returnUrl = '/videos';
+        else if (state.mode === 'galleries') returnUrl = '/cosplay';
+        else if (state.mode === 'games') returnUrl = '/juegos';
+        const retParams = new URLSearchParams();
+        if (state.category && state.category !== 'all') retParams.set('cat', state.category);
+        if (state.query) retParams.set('q', state.query);
+        if (state.tag) retParams.set('tag', state.tag);
+        if (state.sort && state.sort !== 'random') retParams.set('sort', state.sort);
+        if (state.page && state.page > 1) retParams.set('page', String(state.page));
+        const qs = retParams.toString();
+        const fullReturn = returnUrl + (qs ? '?' + qs : '');
+        history.replaceState({ mode: state.mode, page: state.page || 1, fromApp: true }, 'MORBO HUB', fullReturn);
+        if (window.VelvetRouter && typeof window.VelvetRouter.updateActiveNavLinks === 'function') {
+          window.VelvetRouter.updateActiveNavLinks(returnUrl);
         }
-        history.replaceState({ mode: state.mode, fromApp: true }, 'MORBO HUB', returnUrl);
 
         document.title = state.mode === 'galleries'
           ? 'Morbo Hub — Galerías & Cosplays 4K Ultra HD'
           : (state.mode === 'videos'
               ? 'Morbo Hub — Videos Porno Sin Censura'
-              : 'Morbo Hub — Cómics +18 & Mangas Sin Censura');
+              : (state.mode === 'games'
+                  ? 'Morbo Hub — Juegos +18 Interactivos'
+                  : 'Morbo Hub — Cómics +18 & Mangas Sin Censura'));
       }
     }
 
@@ -10202,6 +10372,7 @@
     }
 
     function handleRouterPopState() {
+      if (window.VelvetRouter && window.VelvetRouter._initialized) return;
 
       const path = window.location.pathname;
 
@@ -10584,8 +10755,8 @@
           <div class="relative aspect-[3/4] w-full overflow-hidden select-none" style="background-color: ${domColor};">
             ${velvetLogoPlaceholder()}
             <img
-              src="${coverSrc}"
-              ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
+              src="${escapeHtml(coverSrc)}"
+              ${responsiveSrcSet ? `srcset="${escapeHtml(responsiveSrcSet)}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
               alt="${escapeHtml(cleanCardTitle)}"
@@ -10595,7 +10766,7 @@
               data-media-type="${state.mode === 'galleries' ? 'gallery' : 'comic'}"
               data-cover-fallback="${escapeHtml(it.cover_fallback ? getStealthImageUrl(it.cover_fallback, it.url || '', 0, 70) : '')}"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0 ${isLocked ? 'filter brightness-90' : ''}"
-              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
+              onload="this.classList.remove('opacity-0'); this.classList.add('opacity-100'); const s=this.previousElementSibling; if(s&&(s.classList.contains('skeleton-shimmer')||s.classList.contains('velvet-skeleton')||s.classList.contains('velvet-logo-ph'))){s.style.opacity='0'; setTimeout(()=>s.remove(),200);}"
               onerror="handleCardImageError(this, '${state.mode === 'galleries' ? 'gallery' : 'comic'}')"
             />
             <div class="absolute inset-0 z-10 select-none" oncontextmenu="return false;" ondragstart="return false;"></div>
@@ -10835,29 +11006,34 @@
       if (readBtn) {
         if (isLocked) {
           readBtn.innerHTML = '<i class="fa-solid fa-lock text-xs text-amber-300"></i> Desbloquear VIP ($5.99)';
+          readBtn.href = '#';
+          readBtn.onclick = (e) => { if (e) e.preventDefault(); openProUpgradeModal(item); };
           readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-amber-500 via-pink-600 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
         } else {
-          readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer'; readBtn.href = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : '#';
+          readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
+          readBtn.href = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : '#';
           const isGame = (item.media_type === 'game') || (state.mode === 'games');
           if (isGame) {
             readBtn.innerHTML = '<i class="fa-solid fa-gamepad text-xs"></i> Jugar Ahora en HD';
             readBtn.className = 'h-10 sm:h-11 px-5 sm:px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-xs sm:text-sm shadow-md hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer';
-            readBtn.onclick = () => {
+            readBtn.onclick = (e) => {
+              if (e) e.preventDefault();
               if (item.id) setCachedItem(String(item.id), item);
               openGameModal(item);
             };
           } else if (isVid) {
             readBtn.innerHTML = '<i class="fa-solid fa-play text-xs"></i> Ver Video en HD';
-            readBtn.onclick = () => {
+            readBtn.onclick = (e) => {
+              if (e) e.preventDefault();
               if (item.id) setCachedItem(String(item.id), item);
               openVideoPlayer(item.source, item.source_id, item.title, item.cover_url, item.url, true, item.id);
             };
           } else if (isGallery) {
             readBtn.innerHTML = '<i class="fa-solid fa-images text-xs"></i> Ver Galería';
-            readBtn.onclick = () => openHeroComic();
+            readBtn.onclick = (e) => openHeroComic(e);
           } else {
             readBtn.innerHTML = '<i class="fa-solid fa-book-open text-xs"></i> Comenzar a Leer';
-            readBtn.onclick = () => openHeroComic();
+            readBtn.onclick = (e) => openHeroComic(e);
           }
         }
       }
@@ -10935,7 +11111,9 @@
         openProUpgradeModal(it);
         return;
       }
-      if (state.mode === 'videos' || it.media_type === 'video') {
+      if (it.media_type === 'game' || it.embed_url || it.swf_url || state.mode === 'games') {
+        openGameModal(it);
+      } else if (state.mode === 'videos' || it.media_type === 'video') {
         openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, true, it.id);
       } else {
         openReader(it.source, it.source_id, true, it.id);
@@ -11003,8 +11181,9 @@
         }
 
         const key = `${h.source}:${h.source_id}`;
-        const p = state.progress[key];
-        if (!p) return false;
+        const p = state.progress[key] || {};
+        if (isGame) return !(p.completed || h.completed);
+        if (!state.progress[key]) return false;
         if (p.completed || h.completed) return false;
 
         if (isVid) {
@@ -11102,7 +11281,7 @@
           <div class="mt-2 flex-1 flex flex-col justify-between">
             <a href="${escapeHtml(itemUrl)}"
                data-card-key="${escapeHtml(registerCardActionItem(h))}"
-               ${isLocked ? `onclick="handleContinueCardAction(this, event, 'locked')"` : ''}
+               ${(isGame || isLocked) ? `onclick="handleContinueCardAction(this, event, '${isGame ? 'game' : 'locked'}')"` : ''}
                class="block">
               <h5 class="text-xs font-bold text-white group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug min-h-[32px]" title="${escapeHtml(cleanContinueTitle)}">
                 ${escapeHtml(cleanContinueTitle)}
@@ -11261,7 +11440,18 @@
       if (typeof updateAutoScrollUI === 'function') updateAutoScrollUI(!!state.autoScroll);
     }
 
+    let _readerFetchCtrl = null;
+    let _readerOpenSeq = 0;
+
     async function openReader(source, sourceId, pushRoute = true, itemId = null) {
+      const mySeq = ++_readerOpenSeq;
+      if (_readerFetchCtrl) {
+        try { _readerFetchCtrl.abort(); } catch (e) {}
+      }
+      _readerFetchCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const mySignal = _readerFetchCtrl ? _readerFetchCtrl.signal : undefined;
+      state.currentChapters = [];
+      state.currentSeries = null;
       stopBackgroundVideo();
 
       if (typeof canUserAccessItem === 'function' && !canUserAccessItem({ id: itemId, source, sourceId, media_type: 'comic' })) {
@@ -11359,7 +11549,8 @@
               ['buondua', '4khd', 'xasiat'].includes(cachedItem.source || source);
             if (isGallery) state.mode = 'galleries';
             const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedItem) : `/${isGallery ? 'g' : 'c'}/${effId}`;
-            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, cachedHeading, canonicalUrl);
+            const homeWasOpen = homeView && !homeView.classList.contains('hidden');
+            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true, _fromFeedPush: homeWasOpen }, cachedHeading, canonicalUrl);
             document.title = `${cachedHeading} — MORBO HUB`;
           }
           renderReaderPages(cachedItem.pages, cachedItem.url);
@@ -11367,16 +11558,19 @@
           return;
         }
 
-        const detailOpts = { headers: authHeaders(), credentials: 'include' };
+        const detailOpts = { headers: authHeaders(), credentials: 'include', signal: mySignal };
         const detailUrl = (itemId || (source === 'id' && sourceId) || (/^\d+$/.test(sourceId) && !source))
           ? `/api/items/id/${itemId || sourceId}`
           : (source && sourceId ? `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}` : `/api/items/id/${itemId || sourceId}`);
         let resp = await fetch(detailUrl, detailOpts);
+        if (mySeq !== _readerOpenSeq) return;
         if (resp.status !== 403 && !resp.ok && source && sourceId && source !== 'id') {
           resp = await fetch(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`, detailOpts);
+          if (mySeq !== _readerOpenSeq) return;
         }
         if (resp.status !== 403 && !resp.ok && (itemId || sourceId)) {
           resp = await fetch(`/api/items/id/${itemId || sourceId}`, detailOpts);
+          if (mySeq !== _readerOpenSeq) return;
         }
 
         if (resp.status === 403) {
@@ -11402,6 +11596,7 @@
         } catch {
           throw new Error('Respuesta del servidor no válida');
         }
+        if (mySeq !== _readerOpenSeq) return;
 
         // Si es una serie sin páginas pero con capítulos (ej: Manhwas)
 
@@ -11418,7 +11613,7 @@
           setReaderHeading(`${item.title} - ${firstCh.title || 'Cap. 1'}`);
           applyReaderCopy(item);
 
-          await openReader(source, firstCh.id || firstCh.url);
+          await openReader(source, firstCh.id || firstCh.url, pushRoute);
 
           return;
 
@@ -11453,7 +11648,8 @@
             ['buondua', '4khd', 'xasiat'].includes(item.source || source);
           if (isGallery) state.mode = 'galleries';
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/${isGallery ? 'g' : 'c'}/${effId}`;
-          history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, headingTitle, canonicalUrl);
+          const homeWasOpen = homeView && !homeView.classList.contains('hidden');
+          history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true, _fromFeedPush: homeWasOpen }, headingTitle, canonicalUrl);
         }
         document.title = `${headingTitle} — MORBO HUB`;
 
@@ -11667,23 +11863,28 @@
       img.onerror = function() {
         if (!this.dataset.retried) {
           this.dataset.retried = '1';
-          this.src = getStealthImageUrl(p.image_url, p.referer || refererUrl);
+          const freshUrl = getStealthImageUrl(p.image_url, p.referer || refererUrl);
+          const sep = freshUrl.includes('?') ? '&' : '?';
+          this.src = freshUrl && !freshUrl.startsWith('data:') ? `${freshUrl}${sep}cb=${Date.now()}` : freshUrl;
           return;
         }
         this.style.display = 'none';
         try { skeleton.remove(); } catch(e){}
         const errBox = document.createElement('div');
         errBox.className = 'p-6 my-4 border border-rose-900/50 rounded-2xl bg-pitch text-center z-30 relative';
-        
+
         const errP = document.createElement('p');
         errP.className = 'text-xs text-rose-400 font-bold mb-2';
         errP.textContent = `No se pudo conectar con la pág ${p.index || idx + 1}`;
-        
+
         const retryBtn = document.createElement('button');
         retryBtn.className = 'px-3 py-1 bg-glass text-lav text-xs rounded-lg border border-neon/30 hover:border-hot transition-colors';
         retryBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate mr-1"></i> Reintentar Carga';
         retryBtn.onclick = function() {
-          retryImage(this, imgUrl);
+          const retryTarget = imgUrl && !imgUrl.startsWith('data:')
+            ? `${imgUrl}${imgUrl.includes('?') ? '&' : '?'}cb=${Date.now()}`
+            : imgUrl;
+          retryImage(this, retryTarget);
         };
 
         errBox.appendChild(errP);
@@ -11773,7 +11974,8 @@
       pages = (pages || []).filter(p => p && p.image_url && !VIP_REGEX.test(p.image_url));
       pages.forEach((p, idx) => { p.index = idx + 1; });
 
-      if (!pages || pages.length === 0) {
+      const cleanPages = (pages || []).filter(p => p && p.image_url);
+      if (!cleanPages || cleanPages.length === 0) {
         const thumbbar = document.getElementById('reader-thumbbar');
         if (thumbbar) thumbbar.classList.add('hidden');
         const controls = document.getElementById('reader-controls');
@@ -11815,19 +12017,20 @@
       if (thumbbar) thumbbar.classList.remove('hidden');
 
       state.slideIndex = 0;
-      updateReaderProgress(1, pages.length);
+      if (state.currentItem) state.currentItem.pages = cleanPages;
+      updateReaderProgress(1, cleanPages.length);
 
-      _readerAllPages = pages;
+      _readerAllPages = cleanPages;
       _readerRefererUrl = refererUrl;
       _readerRenderedIndex = 0;
       _readerIsRenderingChunk = false;
 
-      // Renderizar inmediatamente SOLO el lote inicial que cabe en pantalla (4 en móvil, 6 en PC)
+      // Renderizar inmediatamente SOLO el lote inicial que cabe en pantalla
       const initialChunk = getReaderChunkSize();
-      const firstEnd = Math.min(initialChunk, pages.length);
+      const firstEnd = Math.min(initialChunk, cleanPages.length);
       const frag = document.createDocumentFragment();
       for (let i = 0; i < firstEnd; i++) {
-        frag.appendChild(createReaderPageItem(pages[i], i, refererUrl));
+        frag.appendChild(createReaderPageItem(cleanPages[i], i, refererUrl));
       }
       vContainer.appendChild(frag);
       _readerRenderedIndex = firstEnd;
@@ -11836,7 +12039,7 @@
       preloadSinglePage(firstEnd);
 
       // Si hay más fotos, añadir centinela para auto-carga fluida al bajar
-      if (_readerRenderedIndex < pages.length) {
+      if (_readerRenderedIndex < cleanPages.length) {
         const sentinel = document.createElement('div');
         sentinel.id = 'reader-page-sentinel';
         sentinel.className = 'w-full py-8 flex items-center justify-center text-lav/40 text-xs gap-2 select-none';
@@ -11870,6 +12073,7 @@
 
       recs.forEach((it, idx) => {
         const isLocked = isItemLockedForUser(it, idx);
+        const recType = (it.media_type === 'gallery' || it.media_type === 'cosplay' || state.mode === 'galleries') ? 'gallery' : 'comic';
         const card = document.createElement('div');
         if (isLocked) {
           card.className = 'group flex flex-col bg-[#120722] border border-amber-500/40 rounded-xl overflow-hidden hover:border-amber-400 transition-all cursor-pointer';
@@ -11881,10 +12085,12 @@
             openReader(it.source, it.source_id, true, it.id);
           };
         }
-        const coverSrc = it.cover_url || COMIC_FALLBACK_SVG;
+        const coverSrc = it.cover_url
+          ? getStealthImageUrl(it.cover_url, it.url)
+          : coverFallbackFor(recType);
         card.innerHTML = `
           <div class="aspect-[3/4] w-full overflow-hidden bg-pitch relative">
-            <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+            <img src="${escapeHtml(coverSrc)}" loading="lazy" data-media-type="${recType}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="handleCardImageError(this, '${recType}')">
             ${isLocked ? `
               <span class="absolute top-1 right-1 text-[8px] font-black bg-black/90 border border-amber-500/70 text-amber-300 px-1.5 py-0.5 rounded flex items-center gap-1">
                 <i class="fa-solid fa-lock text-amber-400"></i> VIP
@@ -11954,8 +12160,9 @@
     }
 
     function setupIntersectionObserver() {
-      const pages = document.querySelectorAll('#reader-pages-vertical > div');
+      const pages = document.querySelectorAll('#reader-pages-vertical > .reader-page-item');
       if (!pages.length) return;
+      const totalPagesCount = (_readerAllPages && _readerAllPages.length > 0) ? _readerAllPages.length : pages.length;
 
       if (window._readerObserver) {
         window._readerObserver.disconnect();
@@ -11979,8 +12186,8 @@
         if (bestEntry) {
           const pIndex = parseInt(bestEntry.target.dataset.pageIndex, 10);
           if (pIndex) {
-            updateReaderProgress(pIndex, pages.length);
-            saveReadingProgress(pIndex, pages.length);
+            updateReaderProgress(pIndex, totalPagesCount);
+            saveReadingProgress(pIndex, totalPagesCount);
             if (state.currentItem && state.currentItem.pages) {
               preloadNextImages(state.currentItem.pages, state.currentItem.url, pIndex);
             }
@@ -11990,7 +12197,7 @@
 
       pages.forEach(p => window._readerObserver.observe(p));
 
-      // Observador adaptativo para descarga de imágenes antes de llegar a la vista (800px en móvil lento, 1500px normal)
+      // Observador adaptativo para descarga de imágenes antes de llegar a la vista
       if (window._readerPrefetchObserver) {
         window._readerPrefetchObserver.disconnect();
       }
@@ -12063,8 +12270,8 @@
       if (!item) return;
       const itemId = item.id || (state.currentItem ? state.currentItem.id : null);
       const existing = state.history.findIndex(h => {
-        if (itemId && h.id && Number(h.id) === Number(itemId)) return true;
-        return h.source === item.source && h.source_id === item.source_id;
+        if (itemId != null && itemId !== '' && h.id != null && h.id !== '' && String(h.id) === String(itemId)) return true;
+        return Boolean(item.source && item.source_id != null && h.source === item.source && String(h.source_id) === String(item.source_id));
       });
       let prevProg = null;
       if (existing >= 0) {
@@ -12077,7 +12284,7 @@
         source_id: item.source_id,
         title: item.title,
         cover_url: item.cover_url,
-        url: item.url,
+        url: item.url || '',
         media_type: item.media_type || 'comic',
         completed: prevProg ? prevProg.completed : false,
         page: prevProg ? prevProg.page : 1,
@@ -12091,12 +12298,22 @@
 
       if (state.currentUser) {
         try {
-          fetch('/api/user/history', {
-            method: 'POST',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-            keepalive: true,
-            body: JSON.stringify(histItem)
-          }).catch(() => {});
+          if (window.VelvetPersonalData && typeof window.VelvetPersonalData.fetchAuthed === 'function') {
+            window.VelvetPersonalData.fetchAuthed('/api/user/history', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              keepalive: true,
+              body: JSON.stringify(histItem)
+            }).catch(() => {});
+          } else {
+            fetch('/api/user/history', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+              keepalive: true,
+              body: JSON.stringify(histItem)
+            }).catch(() => {});
+          }
         } catch (e) {}
       }
     }
@@ -12349,6 +12566,16 @@
       toggleReaderHUD();
     }
 
+    function toggleThumbbarDrawer(event) {
+      if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+      const controls = document.getElementById('thumbbar-controls');
+      const arrow = document.getElementById('reader-pill-arrow');
+      if (!controls) return;
+      const willHide = !controls.classList.contains('hidden');
+      controls.classList.toggle('hidden', willHide);
+      if (arrow) arrow.classList.toggle('rotate-180', willHide);
+    }
+
     function toggleReaderHUD(force) {
       if (typeof force === 'boolean') {
         state.hudVisible = force;
@@ -12584,9 +12811,8 @@
 
     function updateSlideView() {
 
-      if (!state.currentItem || !state.currentItem.pages || state.currentItem.pages.length === 0) return;
-
-      const pages = state.currentItem.pages;
+      const pages = (_readerAllPages && _readerAllPages.length > 0) ? _readerAllPages : ((state.currentItem && state.currentItem.pages) || []);
+      if (!pages || pages.length === 0) return;
 
       if (state.slideIndex < 0) state.slideIndex = 0;
 
@@ -12594,11 +12820,12 @@
 
       const p = pages[state.slideIndex];
 
-      const imgUrl = getStealthImageUrl(p.image_url, p.referer || state.currentItem.url);
+      const imgUrl = getStealthImageUrl(p.image_url, p.referer || (state.currentItem && state.currentItem.url) || '');
 
       const slideImg = document.getElementById('slide-current-img');
       const slidePh = document.getElementById('slide-cover-placeholder');
-      if (slideImg) paintFadingCover(slideImg, imgUrl, slidePh, { type: 'comic' });
+      const slideType = (state.currentItem && (state.currentItem.media_type === 'gallery' || state.currentItem.media_type === 'cosplay')) || state.mode === 'galleries' ? 'gallery' : 'comic';
+      if (slideImg) paintFadingCover(slideImg, imgUrl, slidePh, { type: slideType });
 
       document.getElementById('slide-page-num').textContent = `${state.slideIndex + 1} / ${pages.length}`;
 
@@ -12622,7 +12849,8 @@
 
     function nextSlide() {
 
-      if (state.currentItem && state.currentItem.pages && state.slideIndex < state.currentItem.pages.length - 1) {
+      const pages = (_readerAllPages && _readerAllPages.length > 0) ? _readerAllPages : ((state.currentItem && state.currentItem.pages) || []);
+      if (pages && state.slideIndex < pages.length - 1) {
 
         state.slideIndex++;
 
@@ -12650,8 +12878,8 @@
         renderContinueShelf();
       }
 
-      // Si el usuario navegó entre cómics (ej: desde recomendaciones) o desde el feed, volver en el historial
-      if (pushRoute && window.history.length > 1 && window.history.state && (window.history.state.fromApp || window.history.state.type)) {
+      // Volver atrás solo cuando realmente venimos de una ruta interna empujada desde el catálogo
+      if (pushRoute && window.history.length > 1 && window.history.state && window.history.state._fromFeedPush) {
         window.history.back();
         return;
       }
@@ -12682,19 +12910,30 @@
       }
 
       if (pushRoute) {
-        let returnUrl = '/';
-        if (state.mode === 'videos') {
-          returnUrl = '/?tab=videos';
-        } else if (state.mode === 'galleries') {
-          returnUrl = '/?tab=galleries';
+        let returnUrl = '/comics';
+        if (state.mode === 'videos') returnUrl = '/videos';
+        else if (state.mode === 'galleries') returnUrl = '/cosplay';
+        else if (state.mode === 'games') returnUrl = '/juegos';
+        const retParams = new URLSearchParams();
+        if (state.category && state.category !== 'all') retParams.set('cat', state.category);
+        if (state.query) retParams.set('q', state.query);
+        if (state.tag) retParams.set('tag', state.tag);
+        if (state.sort && state.sort !== 'random') retParams.set('sort', state.sort);
+        if (state.page && state.page > 1) retParams.set('page', String(state.page));
+        const qs = retParams.toString();
+        const fullReturn = returnUrl + (qs ? '?' + qs : '');
+        history.replaceState({ mode: state.mode, page: state.page || 1, fromApp: true }, 'MORBO HUB', fullReturn);
+        if (window.VelvetRouter && typeof window.VelvetRouter.updateActiveNavLinks === 'function') {
+          window.VelvetRouter.updateActiveNavLinks(returnUrl);
         }
-        history.replaceState({ mode: state.mode, fromApp: true }, 'MORBO HUB', returnUrl);
 
         document.title = state.mode === 'galleries'
           ? 'Morbo Hub — Galerías & Cosplays 4K Ultra HD'
           : (state.mode === 'videos'
               ? 'Morbo Hub — Videos Porno Sin Censura'
-              : 'Morbo Hub — Cómics +18 & Mangas Sin Censura');
+              : (state.mode === 'games'
+                  ? 'Morbo Hub — Juegos +18 Interactivos'
+                  : 'Morbo Hub — Cómics +18 & Mangas Sin Censura'));
       }
     }
 
@@ -12825,6 +13064,17 @@
 
     }
 
+    function renderVaultWatchlist() {
+      const container = document.getElementById('vault-watchlist-grid');
+      if (!container) return;
+      const list = Array.isArray(state.watchlist) ? state.watchlist : [];
+      if (list.length === 0) {
+        container.innerHTML = '<div class="text-sm text-lav/60 py-6 text-center">No tienes series en seguimiento aún.</div>';
+        return;
+      }
+      container.innerHTML = '';
+    }
+
     function toggleWatchlist(item, event) {
       if (event) event.stopPropagation();
       if (!hasFullAccess()) {
@@ -12932,6 +13182,28 @@
       });
     }
 
+    function consumePatreonQueryBanner() {
+      try {
+        if (typeof window === 'undefined' || !window.location || !window.location.search) return;
+        const usp = new URLSearchParams(window.location.search);
+        if (usp.get('patreon') === 'connected') {
+          showToast('Patreon conectado y suscripción VIP activada', 'success');
+          usp.delete('patreon');
+          const cleanQs = usp.toString();
+          history.replaceState(history.state, '', window.location.pathname + (cleanQs ? '?' + cleanQs : ''));
+        } else if (usp.get('patreon_error')) {
+          const pErr = usp.get('patreon_error');
+          const msg = pErr === 'not_active_patron'
+            ? 'No se detectó una membresía activa de Patreon ($5.99).'
+            : 'No se pudo completar la conexión con Patreon.';
+          showToast(msg, 'warning');
+          usp.delete('patreon_error');
+          const cleanQs = usp.toString();
+          history.replaceState(history.state, '', window.location.pathname + (cleanQs ? '?' + cleanQs : ''));
+        }
+      } catch (e) {}
+    }
+
     async function initAuth(attempt = 0) {
       try {
         if (window.VelvetPersonalData && typeof window.VelvetPersonalData.restoreSessionFromStorage === 'function') {
@@ -12960,6 +13232,7 @@
           const cookieResp = await fetch('/api/auth/me', { credentials: 'include', headers: { 'Accept': 'application/json' } });
           if (cookieResp.status === 503) {
             updateUserUI();
+            if (attempt === 0) consumePatreonQueryBanner();
             return;
           }
           if (cookieResp.ok) {
@@ -12967,8 +13240,10 @@
             rememberSession(data.user || data, data.token || data.new_token, data.refresh_token || data.new_refresh_token, data.expires_at, data.device_token);
             loadStorage();
             updateUserUI();
+            if (attempt === 0) consumePatreonQueryBanner();
             await loadCloudFavorites();
             await loadCloudHistory();
+            if (window.VelvetVault && typeof window.VelvetVault.render === 'function') window.VelvetVault.render();
             return;
           }
         } catch (e) {}
@@ -12978,6 +13253,7 @@
         renderContinueShelf();
         updateVaultCounts();
         updateUserUI();
+        if (attempt === 0) consumePatreonQueryBanner();
         return;
       }
 
@@ -13037,26 +13313,7 @@
         await loadCloudFavorites();
         await loadCloudHistory();
 
-        if (attempt === 0 && typeof window !== 'undefined' && window.location && window.location.search) {
-          try {
-            const usp = new URLSearchParams(window.location.search);
-            if (usp.get('patreon') === 'connected') {
-              showToast('Patreon conectado y suscripción VIP activada', 'success');
-              usp.delete('patreon');
-              const cleanQs = usp.toString();
-              history.replaceState(history.state, '', window.location.pathname + (cleanQs ? '?' + cleanQs : ''));
-            } else if (usp.get('patreon_error')) {
-              const pErr = usp.get('patreon_error');
-              const msg = pErr === 'not_active_patron'
-                ? 'No se detectó una membresía activa de Patreon ($5.99).'
-                : 'No se pudo completar la conexión con Patreon.';
-              showToast(msg, 'warning');
-              usp.delete('patreon_error');
-              const cleanQs = usp.toString();
-              history.replaceState(history.state, '', window.location.pathname + (cleanQs ? '?' + cleanQs : ''));
-            }
-          } catch (e) {}
-        }
+        if (attempt === 0) consumePatreonQueryBanner();
 
         if (state.catalogCache && state.catalogCache.length > 0) {
           renderFeedData({ items: state.catalogCache, page: state.page || 1, total_pages: state.totalPages || 1 });
@@ -13111,49 +13368,6 @@
           ? idData.ids.map(parseStrictPositiveFavInt).filter(n => n !== null)
           : [];
         let refs = Array.isArray(idData.refs) ? idData.refs : [];
-        const localCompact = (state.favorites || []).map(compactFavoriteRecord).filter(Boolean);
-        const serverKeySet = new Set([
-          ...ids.map(String),
-          ...refs.map(getFavoriteDedupKey)
-        ].filter(Boolean));
-        const missing = localCompact.filter(f => {
-          const numId = parseStrictPositiveFavInt(f.id || f.item_id);
-          if (numId && serverKeySet.has(String(numId))) return false;
-          const k = getFavoriteDedupKey(f);
-          if (k && serverKeySet.has(k)) return false;
-          return Boolean(numId || k);
-        });
-        const serverEmpty = ids.length === 0 && refs.length === 0;
-        if ((serverEmpty && localCompact.length > 0) || missing.length > 0) {
-          const payloadSrc = serverEmpty ? localCompact : missing;
-          const sync = await fetch('/api/user/favorites', {
-            method: 'POST',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              items: payloadSrc.slice(0, 2000).map(f => ({
-                id: f.id || f.item_id || null,
-                item_id: f.item_id || f.id || null,
-                source: f.source || '',
-                source_id: f.source_id || '',
-                title: f.title || '',
-                cover_url: f.cover_url || '',
-                url: f.url || '',
-                media_type: f.media_type || ''
-              }))
-            })
-          });
-          if (sync.ok) {
-            const again = await fetch('/api/user/favorites?ids=1', { headers: authHeaders(), credentials: 'include' });
-            if (again.ok) {
-              const againData = await again.json();
-              if (againData && !againData.degraded && Array.isArray(againData.ids)) {
-                ids = againData.ids.map(parseStrictPositiveFavInt).filter(n => n !== null);
-                refs = Array.isArray(againData.refs) ? againData.refs : refs;
-              }
-            }
-          }
-        }
 
         const favPs = getPersonalVaultPageSize();
         const detailsById = new Map();
@@ -13175,7 +13389,7 @@
           page++;
         }
 
-        let merged = [];
+        const merged = [];
         const seenMerged = new Set();
         const pushMerged = (entry) => {
           if (!entry) return;
@@ -13195,34 +13409,10 @@
           pushMerged(hydrated);
         });
 
-        // Fusión no destructiva: si el servidor devolvió vacío pero localmente hay favoritos,
-        // conservar los favoritos locales y subirlos al servidor en vez de borrarlos
-        if (merged.length === 0 && localCompact.length > 0) {
-          merged = localCompact;
-          try {
-            await fetch('/api/user/favorites', {
-              method: 'POST',
-              headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                items: localCompact.slice(0, 2000).map(f => ({
-                  id: f.id || f.item_id || null,
-                  item_id: f.item_id || f.id || null,
-                  source: f.source || '',
-                  source_id: f.source_id || '',
-                  title: f.title || '',
-                  cover_url: f.cover_url || '',
-                  url: f.url || '',
-                  media_type: f.media_type || ''
-                }))
-              })
-            }).catch(() => {});
-          } catch (syncErr) {}
-        } else if (localCompact.length > 0) {
-          localCompact.forEach(loc => pushMerged(loc));
-        }
-
         state.favorites = merged;
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.syncCanonicalFavoritesCache === 'function') {
+          window.VelvetPersonalData.syncCanonicalFavoritesCache(merged);
+        }
         saveStorage();
         updateVaultFavCountBadge();
         updateVaultCounts();
@@ -13795,10 +13985,15 @@
 
     let _selectedAvatar = 'crown';
     let _selectedAvatarBg = 'from-pink-600 to-purple-600';
-    const ALLOWED_PROFILE_AVATARS = new Set(['crown', 'gem', 'bolt', 'fire', 'gamepad', 'heart']);
+    const ALLOWED_PROFILE_AVATARS = new Set([
+      'crown', 'gem', 'bolt', 'fire', 'gamepad',
+      'ghost', 'heart', 'rocket', 'cat', 'shield-halved'
+    ]);
     const ALLOWED_PROFILE_BGS = new Set([
       'from-pink-600 to-purple-600',
+      'from-emerald-500 to-teal-600',
       'from-amber-500 to-rose-600',
+      'from-purple-800 to-indigo-900',
       'from-cyan-500 to-blue-600',
       'from-emerald-500 to-teal-700',
       'from-purple-600 to-indigo-800',
@@ -13888,10 +14083,12 @@
     }
 
     async function updateAccountPassword() {
+      const p0 = document.getElementById('profile-current-password');
       const p1 = document.getElementById('profile-new-password');
       const p2 = document.getElementById('profile-confirm-password');
       const btn = document.getElementById('change-password-btn');
 
+      const pw0 = p0 ? p0.value : '';
       const pw1 = p1 ? p1.value : '';
       const pw2 = p2 ? p2.value : '';
 
@@ -13909,14 +14106,16 @@
       try {
         const res = await fetch('/api/user/change-password', {
           method: 'POST',
+          credentials: 'include',
           headers: authHeaders(),
-          body: JSON.stringify({ new_password: pw1 })
+          body: JSON.stringify({ old_password: pw0, new_password: pw1 })
         });
         const data = await res.json();
         if (!res.ok) {
           showToast(data.error || 'Error al cambiar contraseña', 'error');
         } else {
           showToast('Contraseña actualizada', 'success');
+          if (p0) p0.value = '';
           if (p1) p1.value = '';
           if (p2) p2.value = '';
         }
@@ -13936,6 +14135,8 @@
       } catch (e) {}
 
       dropSession();
+      vaultFavProCache.clear();
+      vaultHistProCache.clear();
       loadStorage();
       renderContinueShelf();
       updateVaultCounts();
@@ -13963,7 +14164,16 @@
       if (adminBtn) adminBtn.classList.add('hidden');
 
       showToast('Sesión cerrada', 'info');
-      fetchLiveFeed(true);
+      const homeView = document.getElementById('home-view');
+      if (homeView && homeView.classList.contains('hidden')) {
+        if (window.VelvetRouter && typeof window.VelvetRouter.navigate === 'function') {
+          window.VelvetRouter.navigate('/');
+        } else {
+          fetchLiveFeed(true);
+        }
+      } else {
+        fetchLiveFeed(true);
+      }
 
     }
 
@@ -14416,8 +14626,18 @@
 
       if (state.currentUser) {
         try {
-          await fetch('/api/user/history', { method: 'DELETE', headers: authHeaders(), credentials: 'include' });
-        } catch (e) {}
+          const doDel = () => (window.VelvetPersonalData && typeof window.VelvetPersonalData.fetchAuthed === 'function')
+            ? window.VelvetPersonalData.fetchAuthed('/api/user/history?clear=all', { method: 'DELETE' })
+            : fetch('/api/user/history?clear=all', { method: 'DELETE', headers: authHeaders(), credentials: 'include' });
+          const res = await doDel();
+          if (!res || !res.ok) {
+            showToast('No se pudo borrar el historial en la nube', 'warning');
+            return;
+          }
+        } catch (e) {
+          showToast('Error de red al borrar historial en la nube', 'warning');
+          return;
+        }
       }
       showToast('Historial borrado', 'info');
     }
@@ -15244,17 +15464,24 @@
     function clearSearch() {
       endManualShuffle();
 
-      document.getElementById('search-input').value = '';
-
-      document.getElementById('clear-search-btn').classList.add('hidden');
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.value = '';
+      const clearBtn = document.getElementById('clear-search-btn');
+      if (clearBtn) clearBtn.classList.add('hidden');
 
       state.query = '';
-
+      state.tag = '';
       state.page = 1;
 
-      restoreActiveShuffle(true);
-      fetchLiveFeed();
+      try {
+        const curUrl = new URL(window.location.href);
+        curUrl.searchParams.delete('q');
+        curUrl.searchParams.delete('tag');
+        curUrl.searchParams.delete('page');
+        history.replaceState({ ...(history.state || {}), page: 1 }, '', curUrl.pathname + curUrl.search + curUrl.hash);
+      } catch (e) {}
 
+      fetchLiveFeed(true);
     }
 
     function setCategory(cat, btn) {
@@ -15269,15 +15496,16 @@
       state.category = cat;
       state.page = 1;
 
-      // Sincronizar parámetro URL ?cat= para compartir y navegación de historial
+      // Sincronizar parámetro URL ?cat= y reiniciar ?page=
       const url = new URL(window.location.href);
+      url.searchParams.delete('page');
       if (cat && cat !== 'all') {
         url.searchParams.set('cat', cat);
       } else {
         url.searchParams.delete('cat');
       }
       if (window.history && window.history.pushState) {
-        window.history.pushState({ category: cat }, '', url.toString());
+        window.history.pushState({ category: cat, page: 1 }, '', url.pathname + url.search + url.hash);
       }
 
       renderCategoryChips();
@@ -15285,7 +15513,6 @@
       // Scroll suave hacia arriba
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
-      restoreActiveShuffle(true);
       fetchLiveFeed(true);
     }
 
@@ -15449,18 +15676,22 @@
       endManualShuffle();
 
       state.query = '';
-
+      state.tag = '';
       state.category = 'all';
-
       state.page = 1;
 
-      document.getElementById('search-input').value = '';
+      const searchIn = document.getElementById('search-input');
+      if (searchIn) searchIn.value = '';
+      const clearBtn = document.getElementById('clear-search-btn');
+      if (clearBtn) clearBtn.classList.add('hidden');
 
-      document.getElementById('clear-search-btn').classList.add('hidden');
+      try {
+        const canonicalPath = state.mode === 'videos' ? '/videos' : (state.mode === 'galleries' ? '/cosplay' : (state.mode === 'games' ? '/juegos' : '/comics'));
+        history.replaceState({ ...(history.state || {}), page: 1, mode: state.mode }, '', canonicalPath);
+      } catch (e) {}
 
-      restoreActiveShuffle(true);
-      fetchLiveFeed();
-
+      if (typeof renderCategoryChips === 'function') renderCategoryChips();
+      fetchLiveFeed(true);
     }
 
     function shuffleCurrentFeed() {
@@ -15486,7 +15717,7 @@
         window.VelvetPagination.resetLoadingState();
       }
       if (window.VelvetPagination && typeof window.VelvetPagination.render === 'function' && state.totalPages > 1) {
-        window.VelvetPagination.render(1, state.totalPages, state.totalPages);
+        window.VelvetPagination.render(1, state.totalPages, state.totalItems || (state.totalPages * (state.pageSize || 24)));
       }
       try {
         const curUrl = new URL(window.location.href);
@@ -15780,6 +16011,7 @@
 
     // Soporte para Navegación Historial (Atrás / Adelante) con ?cat= y ?sort=
     window.addEventListener('popstate', () => {
+      if (window.VelvetRouter && window.VelvetRouter._initialized) return;
       const q = new URLSearchParams(window.location.search);
       const cat = q.get('cat') || 'all';
       const sort = q.get('sort') || 'random';

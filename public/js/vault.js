@@ -81,8 +81,10 @@
     'from-pink-600 to-purple-600',
     'from-amber-500 to-rose-600',
     'from-cyan-500 to-blue-600',
+    'from-emerald-500 to-teal-600',
     'from-emerald-500 to-teal-700',
     'from-purple-600 to-indigo-800',
+    'from-purple-800 to-indigo-900',
     'from-rose-600 to-pink-700'
   ]);
 
@@ -548,30 +550,35 @@
         const coverSrc = it.cover_url
           ? (window.getStealthImageUrl ? window.getStealthImageUrl(it.cover_url, it.url) : it.cover_url)
           : '/velvet_logo.png';
-        const isVid = it.media_type === 'video' || (it.video_sources && it.video_sources.length > 0);
-        const badgeText = isVid ? 'Video XXX' : (it.media_type === 'gallery' ? 'Galería' : 'Cómic');
-        const actionLabel = isVid ? 'Reproducir' : (it.media_type === 'gallery' ? 'Ver galería' : 'Leer');
-        const itemId = it.id || `${it.source}_${it.source_id}`;
+        const isVid = it.media_type === 'video' || (it.video_sources && it.video_sources.length > 0 && it.media_type !== 'game');
+        const isGame = it.media_type === 'game';
+        const badgeText = isGame ? 'Juego VIP' : (isVid ? 'Video XXX' : (it.media_type === 'gallery' ? 'Galería' : 'Cómic'));
+        const actionLabel = isGame ? 'Jugar' : (isVid ? 'Reproducir' : (it.media_type === 'gallery' ? 'Ver galería' : 'Leer'));
+        const itemId = String(it.id || `${it.source}_${it.source_id}`);
+
+        const openFavItem = (e) => {
+          if (e.target.closest('button') || e.target.closest('input')) return;
+          e.preventDefault();
+          if (isGame && typeof window.openGameModal === 'function') {
+            window.openGameModal(it);
+          } else if (isVid && typeof window.openVideoPlayer === 'function') {
+            window.openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, false, it.id);
+          } else if (typeof window.openReader === 'function') {
+            window.openReader(it.source, it.source_id, false, it.id);
+          } else if (itemUrl && itemUrl !== '#') {
+            window.location.href = itemUrl;
+          }
+        };
 
         if (isGrid) {
           const card = document.createElement('a');
           card.href = itemUrl;
           card.id = `fav-card-${itemId}`;
           card.className = 'group flex flex-col bg-gradient-to-b from-[#130a24] to-[#0b0518] border border-purple-500/20 hover:border-pink-500/60 rounded-2xl overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_34px_rgba(236,72,153,0.22)] hover:-translate-y-0.5 transition-all duration-300 relative cursor-pointer';
-          card.onclick = (e) => {
-            if (e.target.closest('button') || e.target.closest('input')) return;
-            e.preventDefault();
-            if (isVid && typeof window.openVideoPlayer === 'function') {
-              window.openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, false, it.id);
-            } else if (typeof window.openReader === 'function') {
-              window.openReader(it.source, it.source_id, false, it.id);
-            } else if (itemUrl && itemUrl !== '#') {
-              window.location.href = itemUrl;
-            }
-          };
+          card.onclick = openFavItem;
           card.innerHTML = `
             <div class="relative aspect-[3/4] w-full overflow-hidden bg-black select-none">
-              <img src="${escapeHtml(coverSrc)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" onerror="this.src='/velvet_logo.png'" />
+              <img src="${escapeHtml(coverSrc)}" referrerpolicy="no-referrer" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" onerror="this.src='/velvet_logo.png'" />
               <div class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0b0518] via-[#0b0518]/35 to-transparent"></div>
 
               <!-- Checkbox multi-select si está activo -->
@@ -621,24 +628,14 @@
           row.href = itemUrl;
           row.id = `fav-card-${itemId}`;
           row.className = 'group p-2.5 rounded-2xl bg-[#0e071c] border border-purple-500/20 hover:border-pink-500/60 flex items-center justify-between gap-3 transition-all cursor-pointer';
-          row.onclick = (e) => {
-            if (e.target.closest('button') || e.target.closest('input')) return;
-            e.preventDefault();
-            if (isVid && typeof window.openVideoPlayer === 'function') {
-              window.openVideoPlayer(it.source, it.source_id, it.title, it.cover_url, it.url, false, it.id);
-            } else if (typeof window.openReader === 'function') {
-              window.openReader(it.source, it.source_id, false, it.id);
-            } else if (itemUrl && itemUrl !== '#') {
-              window.location.href = itemUrl;
-            }
-          };
+          row.onclick = openFavItem;
           row.innerHTML = `
             <div class="flex items-center gap-3 overflow-hidden flex-1">
               ${isMultiSelectMode ? `
                 <input type="checkbox" class="w-4 h-4 rounded accent-pink-500 cursor-pointer shrink-0" data-fav-id="${escapeHtml(itemId)}" ${selectedFavIds.has(itemId) ? 'checked' : ''} onclick="event.stopPropagation();" onchange="window.VelvetVault.toggleSelectFav(this.dataset.favId)">
               ` : ''}
               <div class="w-12 h-12 rounded-xl bg-black overflow-hidden shrink-0 border border-purple-500/30">
-                <img src="${escapeHtml(coverSrc)}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='/velvet_logo.png'" />
+                <img src="${escapeHtml(coverSrc)}" referrerpolicy="no-referrer" class="w-full h-full object-cover" loading="lazy" onerror="this.src='/velvet_logo.png'" />
               </div>
               <div class="truncate">
                 <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(sanitizeVaultTitle(it.title))}</span>
@@ -690,16 +687,30 @@
     },
 
     removeFavoriteItem(source, sourceId, id = null) {
+      const cardKey = String(id || `${source}_${sourceId}`);
+      const allKnown = [
+        ...(window.VelvetPersonalData?.getFavoritesState?.().items || []),
+        ...(window.VelvetStore?.getFavorites() || [])
+      ];
+      const match = allKnown.find((f) => {
+        if (!f) return false;
+        if (id && (String(f.id) === String(id) || String(f.item_id) === String(id))) return true;
+        return Boolean(source && sourceId && f.source === source && String(f.source_id) === String(sourceId));
+      });
       const removed = window.VelvetStore?.removeFavorite(source, sourceId, id);
-      lastRemovedFavorite = removed;
+      lastRemovedFavorite = match || removed || { id: id || null, source: source || '', source_id: sourceId || '' };
 
       // Animación suave de salida en el DOM sin recargar
-      const cardKey = id || `${source}_${sourceId}`;
       const el = document.getElementById(`fav-card-${cardKey}`);
       if (el) {
         el.style.opacity = '0';
         el.style.transform = 'scale(0.95)';
-        setTimeout(() => el.remove(), 250);
+        setTimeout(() => {
+          el.remove();
+          this.renderFavorites();
+        }, 250);
+      } else {
+        this.renderFavorites();
       }
 
       this.updateCounters();
@@ -735,6 +746,8 @@
     toggleMultiSelect() {
       isMultiSelectMode = !isMultiSelectMode;
       selectedFavIds.clear();
+      const countEl = document.getElementById('vault-selected-count');
+      if (countEl) countEl.textContent = '0';
       const bar = document.getElementById('vault-multiselect-bar');
       if (bar) {
         if (isMultiSelectMode) bar.classList.remove('hidden');
@@ -744,23 +757,41 @@
     },
 
     toggleSelectFav(id) {
-      if (selectedFavIds.has(id)) selectedFavIds.delete(id);
-      else selectedFavIds.add(id);
+      const key = String(id || '');
+      if (!key) return;
+      if (selectedFavIds.has(key)) selectedFavIds.delete(key);
+      else selectedFavIds.add(key);
 
       const countEl = document.getElementById('vault-selected-count');
       if (countEl) countEl.textContent = String(selectedFavIds.size);
     },
 
-    deleteSelectedFavorites() {
+    async deleteSelectedFavorites() {
       if (selectedFavIds.size === 0) return;
-      const favs = window.VelvetStore?.getFavorites() || [];
-      const toKeep = favs.filter((f) => {
-        const id = f.id || `${f.source}_${f.source_id}`;
-        return !selectedFavIds.has(id);
-      });
-      window.VelvetStore?.setFavorites(toKeep);
+      const pData = window.VelvetPersonalData;
+      const favs = (pData?.getFavoritesState?.().items?.length ? pData.getFavoritesState().items : window.VelvetStore?.getFavorites()) || [];
+      const toRemove = [];
+      const toKeep = [];
+      for (const f of favs) {
+        const key = String(f.id || `${f.source}_${f.source_id}`);
+        if (selectedFavIds.has(key) || (f.item_id && selectedFavIds.has(String(f.item_id)))) {
+          toRemove.push(f);
+        } else {
+          toKeep.push(f);
+        }
+      }
+      if (pData && typeof pData.removeFavoritesBatch === 'function') {
+        await pData.removeFavoritesBatch(toRemove.length ? toRemove : [...selectedFavIds]);
+      } else {
+        window.VelvetStore?.setFavorites(toKeep);
+      }
       selectedFavIds.clear();
-      this.toggleMultiSelect();
+      isMultiSelectMode = false;
+      const bar = document.getElementById('vault-multiselect-bar');
+      if (bar) bar.classList.add('hidden');
+      const countEl = document.getElementById('vault-selected-count');
+      if (countEl) countEl.textContent = '0';
+      this.updateCounters();
       this.renderFavorites();
     },
 
@@ -896,7 +927,8 @@
         groupList.className = 'space-y-2 py-2';
 
         group.items.forEach((h) => {
-          const isVid = h.media_type === 'video' || !!h.duration;
+          const isGame = h.media_type === 'game' || h.source === 'gamcore';
+          const isVid = !isGame && (h.media_type === 'video' || !!h.duration);
           const key = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
           const p = progMap[key] || progMap[`${h.source}:${h.source_id}`];
 
@@ -904,7 +936,10 @@
           let progressPercent = 0;
           let progressText = '';
 
-          if (isVid) {
+          if (isGame) {
+            progressPercent = 100;
+            progressText = p?.play_time ? `${p.play_time}m jugados` : 'Partida guardada';
+          } else if (isVid) {
             const cur = p?.currentTime || h.currentTime || 0;
             const dur = p?.duration || h.duration || 1;
             progressPercent = Math.min(100, Math.round((cur / dur) * 100));
@@ -920,12 +955,15 @@
             ? (window.getStealthImageUrl ? window.getStealthImageUrl(h.cover_url, h.url) : h.cover_url)
             : '/velvet_logo.png';
           const itemUrl = window.VelvetRouter?.getItemUrl(h) || '#';
-          const cardId = `hist-item-${h.id || `${h.source}_${h.source_id}`}`;
+          const cardId = `hist-item-${String(h.id || `${h.source}_${h.source_id}`)}`;
+          const badgeLabel = isGame ? 'Juego VIP' : (isVid ? 'Video XXX' : (h.media_type === 'gallery' ? 'Galería' : 'Cómic'));
 
           const itemRow = document.createElement('div');
           itemRow.id = cardId;
           itemRow.className = 'group p-3 rounded-2xl bg-[#0e071c] border border-purple-500/20 hover:border-pink-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all relative overflow-hidden';
-          
+
+          const safeCover = escapeHtml(coverSrc);
+          const safeUrl = escapeHtml(itemUrl);
           itemRow.innerHTML = `
             <!-- Barra de progreso superior fina neón -->
             <div class="absolute top-0 left-0 right-0 h-0.5 bg-white/5">
@@ -933,28 +971,28 @@
             </div>
 
             <div class="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
-              <a href="${itemUrl}" class="shrink-0">
-                <div class="${isVid ? 'aspect-video w-20' : 'aspect-[3/4] w-12'} rounded-xl bg-black overflow-hidden border border-purple-500/30">
-                  <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" onerror="this.src='/velvet_logo.png'" />
+              <a href="${safeUrl}" class="shrink-0 vault-hist-open">
+                <div class="${(isVid || isGame) ? 'aspect-video w-20' : 'aspect-[3/4] w-12'} rounded-xl bg-black overflow-hidden border border-purple-500/30">
+                  <img src="${safeCover}" referrerpolicy="no-referrer" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" onerror="this.src='/velvet_logo.png'" />
                 </div>
               </a>
               <div class="truncate flex-1 min-w-0">
-                <a href="${itemUrl}" class="text-xs font-bold text-white hover:text-pink-300 truncate block">
+                <a href="${safeUrl}" class="vault-hist-open text-xs font-bold text-white hover:text-pink-300 truncate block">
                   ${escapeHtml(sanitizeVaultTitle(h.title))}
                 </a>
                 <div class="flex items-center gap-2 pt-1 text-[11px] text-lav/70">
                   <span class="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-[9px] font-bold uppercase text-pink-300">
-                    ${isVid ? 'Video XXX' : 'Cómic'}
+                    ${badgeLabel}
                   </span>
-                  <span>${progressText}</span>
+                  <span>${escapeHtml(progressText)}</span>
                   ${isCompleted ? '<span class="text-emerald-400 font-bold text-[10px]"><i class="fa-solid fa-check"></i> Completado</span>' : ''}
                 </div>
               </div>
             </div>
 
             <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
-              <a href="${itemUrl}" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm">
-                <i class="fa-solid fa-play text-[10px]"></i> Continuar
+              <a href="${safeUrl}" class="vault-hist-open px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid ${isGame ? 'fa-gamepad' : 'fa-play'} text-[10px]"></i> Continuar
               </a>
               <button
                 type="button"
@@ -969,6 +1007,19 @@
               </button>
             </div>
           `;
+          itemRow.querySelectorAll('.vault-hist-open').forEach((anchor) => {
+            anchor.addEventListener('click', (e) => {
+              if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+              e.preventDefault();
+              if (isGame && typeof window.openGameModal === 'function') {
+                window.openGameModal(h);
+              } else if (isVid && typeof window.openVideoPlayer === 'function') {
+                window.openVideoPlayer(h.source, h.source_id, h.title, h.cover_url, h.url, true, h.id);
+              } else if (typeof window.openReader === 'function') {
+                window.openReader(h.source, h.source_id, true, h.id);
+              }
+            });
+          });
           groupList.appendChild(itemRow);
         });
 
@@ -1009,19 +1060,24 @@
 
     removeHistoryItem(source, sourceId, id = null) {
       window.VelvetStore?.removeHistoryItem(source, sourceId, id);
-      const cardKey = id || `${source}_${sourceId}`;
+      const cardKey = String(id || `${source}_${sourceId}`);
       const el = document.getElementById(`hist-item-${cardKey}`);
       if (el) {
         el.style.opacity = '0';
-        setTimeout(() => el.remove(), 200);
+        setTimeout(() => {
+          el.remove();
+          this.renderHistory();
+        }, 200);
+      } else {
+        this.renderHistory();
       }
       this.updateCounters();
     },
 
-    clearHistoryByRange(range = 'all') {
+    async clearHistoryByRange(range = 'all') {
       const confirmed = window.confirm(`¿Estás seguro de que deseas borrar ${range === 'today' ? 'el historial de hoy' : (range === 'week' ? 'el historial de los últimos 7 días' : 'todo el historial')}?`);
       if (confirmed) {
-        window.VelvetStore?.clearHistoryByRange(range);
+        await window.VelvetStore?.clearHistoryByRange(range);
         this.renderHistory();
         this.updateCounters();
       }
@@ -1064,7 +1120,7 @@
       const uname = user?.username || (user?.email ? user.email.split('@')[0] : 'Usuario VIP');
       if (usernameEl) usernameEl.textContent = isAuth ? uname : 'Invitado';
       if (emailEl) emailEl.textContent = isAuth ? (user?.email || 'VIP Activo') : 'Sin iniciar sesión';
-      if (editUserInput && !editUserInput.value && isAuth) editUserInput.value = uname;
+      if (editUserInput) editUserInput.value = isAuth ? uname : '';
 
       const userAvatar = user?.avatar || 'crown';
       const userBg = safeVaultAvatarBg(user?.avatarBg);
@@ -1179,8 +1235,16 @@
           return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-rose-400 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM12 20c-3.31 0-6-2.69-6-6 0-1.53.58-2.92 1.53-3.97.29 1.11 1.29 1.97 2.47 1.97 1.38 0 2.5-1.12 2.5-2.5 0-.46-.13-.88-.34-1.25.93.81 1.59 1.97 1.77 3.29.35-.38.57-.89.57-1.45 0-.32-.08-.63-.21-.9 1.94 1.41 3.19 3.65 3.19 6.21 0 3.31-2.69 6-6 6z"/></svg>';
         case 'gamepad':
           return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-emerald-400 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M15 7.5V2H9v5.5l3 3 3-3zM7.5 9H2v6h5.5l3-3-3-3zM9 16.5V22h6v-5.5l-3-3-3 3zm7.5-7.5l-3 3 3 3H22V9h-5.5z"/></svg>';
+        case 'ghost':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-indigo-300 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a8 8 0 0 0-8 8v11l2.6-2 2.7 2 2.7-2 2.7 2 2.7-2L20 21V10a8 8 0 0 0-8-8zm-2.5 9.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>';
         case 'heart':
           return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-pink-500 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+        case 'rocket':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-cyan-400 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c3.5 2.2 5.5 5.9 5.5 10.1l2.1 2.1v2.6l-3.4-.9-1.7 2.1H9.5l-1.7-2.1-3.4.9v-2.6l2.1-2.1C6.5 8.4 8.5 4.7 12 2.5zm0 5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>';
+        case 'cat':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-amber-300 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M4 3l4 3h8l4-3v9a8 8 0 1 1-16 0V3zm5 8a1.25 1.25 0 1 0 0 2.5A1.25 1.25 0 0 0 9 11zm6 0a1.25 1.25 0 1 0 0 2.5A1.25 1.25 0 0 0 15 11zm-3 3.5l-1.5 1.5h3L12 14.5z"/></svg>';
+        case 'shield-halved':
+          return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-teal-400 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l8 3.5v6.2c0 5.1-3.4 9.6-8 10.8-4.6-1.2-8-5.7-8-10.8V5.5L12 2zm0 2.3v15.8c3.2-1 5.6-4.4 5.6-8.4V7.1L12 4.3z"/></svg>';
         case 'crown':
         default:
           return '<svg id="vault-acc-avatar-svg" class="w-8 h-8 text-amber-300 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>';
@@ -1217,12 +1281,18 @@
     setFavSort(mode) {
       favSortMode = mode;
       favPage = 1;
+      if (mode === 'az' && window.VelvetPersonalData?.isAuthenticated() && typeof window.VelvetPersonalData.fetchAllFavoritesForFilter === 'function') {
+        window.VelvetPersonalData.fetchAllFavoritesForFilter();
+      }
       this.renderFavorites();
     },
 
     setFavSearch(query) {
       favSearchQuery = query;
       favPage = 1;
+      if (query && window.VelvetPersonalData?.isAuthenticated() && typeof window.VelvetPersonalData.fetchAllFavoritesForFilter === 'function') {
+        window.VelvetPersonalData.fetchAllFavoritesForFilter();
+      }
       this.renderFavorites();
     },
 
@@ -1238,15 +1308,31 @@
     setHistorySearch(query) {
       historySearchQuery = query;
       historyPage = 1;
+      if (query && window.VelvetPersonalData?.isAuthenticated() && typeof window.VelvetPersonalData.fetchAllHistoryForFilter === 'function') {
+        window.VelvetPersonalData.fetchAllHistoryForFilter();
+      }
       this.renderHistory();
     },
 
     setHistoryOnlyUnfinished(val) {
       historyOnlyUnfinished = val;
       historyPage = 1;
+      if (val && window.VelvetPersonalData?.isAuthenticated() && typeof window.VelvetPersonalData.fetchAllHistoryForFilter === 'function') {
+        window.VelvetPersonalData.fetchAllHistoryForFilter();
+      }
       this.renderHistory();
     }
   };
+
+  window.addEventListener('velvet:auth-changed', () => {
+    const viewEl = document.getElementById('view-vault');
+    VelvetVault.updateCounters();
+    if (viewEl && !viewEl.classList.contains('hidden')) {
+      if (currentTab === 'account') VelvetVault.renderAccount();
+      else if (currentTab === 'history') VelvetVault.renderHistory();
+      else VelvetVault.renderFavorites();
+    }
+  });
 
   VelvetVault.init();
   window.VelvetVault = VelvetVault;

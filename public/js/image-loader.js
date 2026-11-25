@@ -105,8 +105,14 @@
       retries += 1;
       if (!(original && original.indexOf("data:") !== 0)) return false;
       const plain = stripResizeParams(original);
-      let next = plain && plain !== original && plain !== img.src ? plain : "";
-      if (!next) {
+      const cf = img.dataset.coverFallback || "";
+      let next = "";
+      if (cf && !img.dataset.fallbackUsed && cf !== img.src) {
+        img.dataset.fallbackUsed = "1";
+        next = cf;
+      } else if (plain && plain !== original && plain !== img.src) {
+        next = plain;
+      } else {
         const sep = original.indexOf("?") === -1 ? "?" : "&";
         next = original + sep + "retry=" + retries;
       }

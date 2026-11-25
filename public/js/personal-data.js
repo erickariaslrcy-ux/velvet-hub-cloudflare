@@ -795,34 +795,38 @@
         if (srcKey && serverSet.has(srcKey)) return false;
         return Boolean(numId || (f.source && f.source_id) || f.id || f.item_id);
       });
-      const serverEmpty = serverIds.length === 0 && refs.length === 0;
-      if ((serverEmpty && localCompact.length > 0) || missing.length > 0) {
-        if (!_favState._pushedLocal) {
-          const payloadSrc = serverEmpty ? localCompact : missing;
-          const syncRes = await this.fetchAuthed('/api/user/favorites', {
-            method: 'POST',
-            body: JSON.stringify({
-              items: payloadSrc.slice(0, 2000).map(f => ({
-                id: f.id || f.item_id,
-                item_id: f.id || f.item_id,
-                source: f.source || '',
-                source_id: f.source_id || '',
-                media_type: f.media_type || '',
-                title: f.title || '',
-                cover_url: f.cover_url || '',
-                url: f.url || ''
-              }))
-            })
-          });
-          if (syncRes && syncRes.ok) {
-            _favState._pushedLocal = true;
-            const again = await this.fetchAuthed('/api/user/favorites?ids=1', { signal });
-            if (again && again.ok) {
-              const againData = await again.json();
-              if (againData && Array.isArray(againData.ids) && !againData.degraded) {
-                serverIds = againData.ids.map(parseStrictPositiveInt).filter(n => n !== null);
-                refs = (Array.isArray(againData.refs) ? againData.refs : []).map(compactFavRecord).filter(Boolean);
-              }
+      // Solo subir favoritos pendientes desde cache local si no vienen de un borrado legítimo en otro dispositivo
+      // (es decir, cuando el servidor tiene datos o se trata de una migración de invitado nueva).
+      const hasGuestPending = (() => {
+        try {
+          const g = JSON.parse(localStorage.getItem('velvet_guest_favs') || '[]');
+          return Array.isArray(g) && g.length > 0 && !localStorage.getItem(`velvet_migrated_${_currentUser?.id || ''}`);
+        } catch (e) { return false; }
+      })();
+      if ((serverIds.length > 0 || refs.length > 0 || hasGuestPending) && missing.length > 0 && !_favState._pushedLocal) {
+        const syncRes = await this.fetchAuthed('/api/user/favorites', {
+          method: 'POST',
+          body: JSON.stringify({
+            items: missing.slice(0, 200).map(f => ({
+              id: f.id || f.item_id,
+              item_id: f.id || f.item_id,
+              source: f.source || '',
+              source_id: f.source_id || '',
+              media_type: f.media_type || '',
+              title: f.title || '',
+              cover_url: f.cover_url || '',
+              url: f.url || ''
+            }))
+          })
+        });
+        if (syncRes && syncRes.ok) {
+          _favState._pushedLocal = true;
+          const again = await this.fetchAuthed('/api/user/favorites?ids=1', { signal });
+          if (again && again.ok) {
+            const againData = await again.json();
+            if (againData && Array.isArray(againData.ids) && !againData.degraded) {
+              serverIds = againData.ids.map(parseStrictPositiveInt).filter(n => n !== null);
+              refs = (Array.isArray(againData.refs) ? againData.refs : []).map(compactFavRecord).filter(Boolean);
             }
           }
         }
@@ -917,36 +921,6 @@
 
         const serverItems = Array.isArray(data.items) ? data.items : [];
         const serverTotal = typeof data.total === 'number' ? data.total : serverItems.length;
-        const localBefore = _favState.items.slice();
-
-        if (serverTotal === 0 && localBefore.length > 0 && !data.degraded) {
-          if (!_favState._pushedLocal) {
-            _favState._pushedLocal = true;
-            try {
-              const syncRes = await this.fetchAuthed('/api/user/favorites', {
-                method: 'POST',
-                body: JSON.stringify({
-                  items: localBefore.map(compactFavRecord).filter(f => f && (f.id || f.item_id)).slice(0, 2000)
-                })
-              });
-              if (syncRes && syncRes.ok) {
-                const again = await this.fetchFavorites(page);
-                if (again && again.total > 0) return again;
-              }
-            } catch (syncErr) {}
-          }
-          _favState.items = localBefore;
-          _favState.total = localBefore.length;
-          _favState.totalPages = Math.max(1, Math.ceil(localBefore.length / _favState.pageSize));
-          _favState.isLoading = false;
-          _favState.error = null;
-          _lastSyncTimestamp = Date.now();
-          this.publishCanonical('favorites');
-          this.updateSyncStatusText();
-          this.updateAllCounters();
-          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
-          return this.getFavoritesState();
-        }
 
         _favState.items = serverItems.slice(0, _favState.pageSize);
         _favState.total = serverTotal;
@@ -1078,12 +1052,12 @@
       }
     },
 
-    async removeFavorite(itemOrId) {
-      if (!itemOrId) return null;
-      const isObj = typeof itemOrId === 'object';
-      const itemId = isObj ? (itemOrId.id || itemOrId.item_id || null) : itemOrId;
-      const source = isObj ? (itemOrId.source || '') : '';
-      const sourceId = isObj ? (itemOrId.source_id || '') : '';
+    async removeFavorite(itemOrId, sourceArg = '', sourceIdArg = '') {
+      if (!itemOrId && !(sourceArg && sourceIdArg)) return null;
+      const isObj = itemOrId && typeof itemOrId === 'object';
+      const itemId = isObj ? (itemOrId.id || itemOrId.item_id || null) : (itemOrId || null);
+      const source = isObj ? (itemOrId.source || '') : (sourceArg || '');
+      const sourceId = isObj ? (itemOrId.source_id || '') : (sourceIdArg || '');
       if (!itemId && !(source && sourceId)) return null;
 
       const prevItems = [..._favState.items];
@@ -1097,7 +1071,7 @@
         return Boolean(source && sourceId && f.source === source && String(f.source_id) === String(sourceId));
       };
 
-      const removed = _favState.items.find(matchesTarget) || (isObj ? itemOrId : { id: itemId });
+      const removed = _favState.items.find(matchesTarget) || (isObj ? itemOrId : { id: itemId, source, source_id: sourceId });
       _favState.items = _favState.items.filter(f => !matchesTarget(f));
       if (Array.isArray(_favState.ids) && itemId) {
         _favState.ids = _favState.ids.filter(id => String(id) !== String(itemId));
@@ -1142,17 +1116,43 @@
       }
     },
 
-    async removeFavoritesBatch(itemIds = []) {
-      if (!itemIds || itemIds.length === 0) return;
-      const idSet = new Set(itemIds.map(String));
-      _favState.items = _favState.items.filter(f => !idSet.has(String(f.id)) && !idSet.has(String(f.item_id)));
+    async removeFavoritesBatch(targets = []) {
+      if (!targets || targets.length === 0) return;
+      const normalized = targets.map((t) => {
+        if (t && typeof t === 'object') {
+          return {
+            key: String(t.id || `${t.source || ''}_${t.source_id || ''}`),
+            id: t.id || t.item_id || null,
+            source: t.source || '',
+            source_id: t.source_id || ''
+          };
+        }
+        const s = String(t);
+        const match = (_favState.items || []).find(f => String(f.id || f.item_id || `${f.source}_${f.source_id}`) === s);
+        return match
+          ? { key: s, id: match.id || match.item_id || null, source: match.source || '', source_id: match.source_id || '' }
+          : { key: s, id: s, source: '', source_id: '' };
+      });
+      const idSet = new Set(normalized.map(x => x.key));
+      const matchEntry = (f) => {
+        if (!f) return false;
+        const k1 = String(f.id || '');
+        const k2 = String(f.item_id || '');
+        const k3 = (f.source && f.source_id) ? `${f.source}_${f.source_id}` : '';
+        return (k1 && idSet.has(k1)) || (k2 && idSet.has(k2)) || (k3 && idSet.has(k3)) ||
+          normalized.some(t => t.source && t.source_id && f.source === t.source && String(f.source_id) === String(t.source_id));
+      };
+
+      const beforeLen = _favState.items.length;
+      _favState.items = _favState.items.filter(f => !matchEntry(f));
+      const removedLocalCount = Math.max(0, beforeLen - _favState.items.length);
       if (Array.isArray(_favState.ids)) {
         _favState.ids = _favState.ids.filter(id => !idSet.has(String(id)));
       }
       if (Array.isArray(_favState.refs)) {
-        _favState.refs = _favState.refs.filter(r => !idSet.has(String(r.id)) && !idSet.has(String(r.item_id)));
+        _favState.refs = _favState.refs.filter(r => !matchEntry(r));
       }
-      _favState.total = Math.max(0, _favState.total - itemIds.length);
+      _favState.total = Math.max(0, _favState.total - Math.max(removedLocalCount, normalized.length));
       _favState.totalPages = Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
 
       this.publishCanonical('favorites');
@@ -1163,12 +1163,35 @@
         return;
       }
 
-      // Eliminar en paralelo
-      await Promise.all(itemIds.map(id => {
-        return this.fetchAuthed(`/api/user/favorites?id=${encodeURIComponent(id)}`, {
+      await Promise.all(normalized.map(t => {
+        const qp = new URLSearchParams();
+        if (t.id) qp.set('id', String(t.id));
+        if (t.source) qp.set('source', String(t.source));
+        if (t.source_id) qp.set('source_id', String(t.source_id));
+        return this.fetchAuthed(`/api/user/favorites?${qp.toString()}`, {
           method: 'DELETE'
         }).catch(() => {});
       }));
+    },
+
+    async fetchAllFavoritesForFilter() {
+      if (!this.isAuthenticated()) return this.getFavoritesState();
+      if (_favState.total <= _favState.items.length || _favState._allLoaded) {
+        return this.getFavoritesState();
+      }
+      try {
+        const res = await this.fetchAuthed('/api/user/favorites?page=1&pageSize=100');
+        if (!res || !res.ok) return this.getFavoritesState();
+        const data = await res.json().catch(() => null);
+        if (data && Array.isArray(data.items) && !data.degraded) {
+          _favState.items = data.items;
+          _favState.total = typeof data.total === 'number' ? data.total : data.items.length;
+          _favState._allLoaded = true;
+          this.updateAllCounters();
+          window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));
+        }
+      } catch (e) {}
+      return this.getFavoritesState();
     },
 
     isFavorite(itemOrId, source = '', sourceId = '') {
@@ -1462,12 +1485,27 @@
       } catch (e) {}
     },
 
-    async removeHistoryItem(itemId) {
-      if (!itemId) return;
-      const sId = String(itemId);
-      _histState.items = _histState.items.filter(h => String(h.id) !== sId && String(h.item_id) !== sId);
-      _histState.total = Math.max(0, _histState.total - 1);
-      _progressMap.delete(sId);
+    async removeHistoryItem(itemIdOrObj, sourceArg = '', sourceIdArg = '') {
+      const isObj = itemIdOrObj && typeof itemIdOrObj === 'object';
+      const itemId = isObj ? (itemIdOrObj.id || itemIdOrObj.item_id || null) : (itemIdOrObj || null);
+      const source = isObj ? (itemIdOrObj.source || '') : (sourceArg || '');
+      const sourceId = isObj ? (itemIdOrObj.source_id || '') : (sourceIdArg || '');
+      if (!itemId && !(source && sourceId)) return;
+
+      const sId = itemId ? String(itemId) : '';
+      const compKey = (source && sourceId) ? `${source}:${sourceId}` : '';
+      const beforeLen = _histState.items.length;
+      _histState.items = _histState.items.filter(h => {
+        if (!h) return false;
+        if (sId && (String(h.id) === sId || String(h.item_id) === sId)) return false;
+        if (source && sourceId && h.source === source && String(h.source_id) === String(sourceId)) return false;
+        return true;
+      });
+      if (_histState.items.length < beforeLen || sId || compKey) {
+        _histState.total = Math.max(0, _histState.total - 1);
+      }
+      if (sId) _progressMap.delete(sId);
+      if (compKey) _progressMap.delete(compKey);
 
       this.updateAllCounters();
       window.dispatchEvent(new CustomEvent('velvet:history-updated', { detail: this.getHistoryState() }));
@@ -1479,10 +1517,34 @@
       }
 
       try {
-        await this.fetchAuthed(`/api/user/history?id=${encodeURIComponent(itemId)}`, {
+        const qp = new URLSearchParams();
+        if (itemId) qp.set('id', String(itemId));
+        if (source) qp.set('source', String(source));
+        if (sourceId) qp.set('source_id', String(sourceId));
+        await this.fetchAuthed(`/api/user/history?${qp.toString()}`, {
           method: 'DELETE'
         });
       } catch (e) {}
+    },
+
+    async fetchAllHistoryForFilter() {
+      if (!this.isAuthenticated()) return this.getHistoryState();
+      if (_histState.total <= _histState.items.length || _histState._allLoaded) {
+        return this.getHistoryState();
+      }
+      try {
+        const res = await this.fetchAuthed('/api/user/history?page=1&pageSize=100');
+        if (!res || !res.ok) return this.getHistoryState();
+        const data = await res.json().catch(() => null);
+        if (data && Array.isArray(data.items) && !data.degraded) {
+          _histState.items = data.items;
+          _histState.total = typeof data.total === 'number' ? data.total : data.items.length;
+          _histState._allLoaded = true;
+          this.updateAllCounters();
+          window.dispatchEvent(new CustomEvent('velvet:history-updated', { detail: this.getHistoryState() }));
+        }
+      } catch (e) {}
+      return this.getHistoryState();
     },
 
     async clearAllHistory() {

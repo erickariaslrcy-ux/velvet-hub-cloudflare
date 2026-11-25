@@ -11,6 +11,10 @@
 /gallery/*           /g/:splat          301
 /video/*             /v/:splat          301
 /comic/*             /c/:splat          301
+/juego/*             /j/:splat          301
+/game/*              /j/:splat          301
+/games               /juegos            301
+/modelos             /cosplay           301
 
 # 2. Rutas dinámicas de la aplicación (Rewrite 200 al shell SPA)
 /                    /index.html        200
@@ -22,6 +26,7 @@
 /c/*                 /index.html        200
 /g/*                 /index.html        200
 /j/*                 /index.html        200
+/boveda              /index.html        200
 /boveda/favoritos    /index.html        200
 /boveda/historial    /index.html        200
 /boveda/*            /index.html        200

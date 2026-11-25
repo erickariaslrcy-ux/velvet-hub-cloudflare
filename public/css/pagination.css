@@ -373,7 +373,7 @@
   visibility: hidden;
   opacity: 0;
   transition: visibility 0.25s ease, opacity 0.25s ease;
-  touch-action: pan-down;
+  touch-action: pan-y;
 }
 
 .v-bottom-sheet.is-open {

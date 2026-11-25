@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v31-android-pagination-fix';
+const CACHE_VERSION = 'v32-launch-hardening';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
@@ -16,14 +16,15 @@ const STATIC_ASSETS = [
   '/icon-192.png',
   '/icon-512.png',
   '/velvet_logo.png',
-  '/css/tailwind.css?v=3.9.0',
-  '/css/pagination.css?v=3.9.0',
-  '/js/personal-data.js?v=3.9.0',
-  '/js/store.js?v=3.9.0',
-  '/js/router.js?v=3.9.0',
-  '/js/vault.js?v=3.9.0',
-  '/js/pagination.js?v=3.9.0',
-  '/js/image-loader.js?v=3.9.0'
+  '/css/tailwind.css?v=3.10.0',
+  '/css/pagination.css?v=3.10.0',
+  '/js/video-session.js?v=3.10.0',
+  '/js/personal-data.js?v=3.10.0',
+  '/js/store.js?v=3.10.0',
+  '/js/router.js?v=3.10.0',
+  '/js/vault.js?v=3.10.0',
+  '/js/pagination.js?v=3.10.0',
+  '/js/image-loader.js?v=3.10.0'
 ];
 
 const BRAND_FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%"><rect width="100%" height="100%" fill="#0f071e"/><radialGradient id="g" cx="50%" cy="45%" r="60%"><stop offset="0%" stop-color="#2a0d3f"/><stop offset="100%" stop-color="#0a0414"/></radialGradient><rect width="100%" height="100%" fill="url(#g)"/><circle cx="150" cy="168" r="28" fill="none" stroke="#ff2d95" stroke-width="2"/><text x="150" y="176" text-anchor="middle" fill="#ff2d95" font-family="Georgia,serif" font-size="22" font-weight="700">M</text><text x="150" y="230" text-anchor="middle" fill="#c4b5fd" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="11" font-weight="700" letter-spacing="2">MORBO HUB</text></svg>`;
@@ -95,6 +96,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
+  // Nunca interceptar recursos de terceros (CDNs de fuentes, FontAwesome, Ruffle, streaming externo):
+  // dejar que el navegador y su caché HTTP nativa los resuelvan sin convertirse en 404/CORS opacos.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   // 1. Exclusiones críticas: streaming de video, range requests, auth, admin, APIs privadas y catálogo paginado
   if (
     url.pathname.startsWith('/api/items') ||
@@ -106,6 +113,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/api/history') ||
     url.pathname.startsWith('/api/preferences') ||
     url.pathname.startsWith('/api/sync') ||
+    url.pathname.startsWith('/api/redeem') ||
     req.destination === 'video' ||
     req.destination === 'audio' ||
     req.headers.has('range') ||
@@ -114,7 +122,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Navegación HTML SPA: Network-First con fallback a Shell Cache
+  // 2. Navegación HTML SPA: Network-First con fallback a Shell Cache (solo clave normalizada para no inflar caché)
   const isNavigation = req.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html');
   if (isNavigation) {
     event.respondWith(
@@ -122,47 +130,48 @@ self.addEventListener('fetch', (event) => {
         .then((networkResp) => {
           if (networkResp && networkResp.status === 200) {
             const clone = networkResp.clone();
-            caches.open(STATIC_CACHE).then((cache) => cache.put(req, clone));
+            const isShell = url.pathname === '/' || url.pathname === '/index.html';
+            caches.open(STATIC_CACHE).then((cache) => {
+              cache.put(isShell ? '/' : req.url.split('?')[0], clone).catch(() => {});
+            });
           }
           return networkResp;
         })
-        .catch(() => caches.match('/index.html').then((res) => res || caches.match(req)))
+        .catch(() => caches.match('/index.html').then((res) => res || caches.match('/') || caches.match(req)))
     );
     return;
   }
 
-  // 3. Fuentes e Iconos estáticos: Cache-First
-  const isFontOrIcon =
-    url.hostname.includes('fonts.gstatic.com') ||
-    url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('cdnjs.cloudflare.com') ||
-    url.pathname.endsWith('.woff2') ||
-    url.pathname.endsWith('.woff') ||
+  // 3. Activos estáticos versionados locales (/js/, /css/, logos, manifest)
+  const isLocalStatic =
+    url.pathname.startsWith('/js/') ||
+    url.pathname.startsWith('/css/') ||
     url.pathname === '/velvet_logo.png' ||
-    url.pathname === '/manifest.json';
+    url.pathname === '/manifest.json' ||
+    url.pathname === '/favicon.ico' ||
+    /^\/(?:apple-touch-icon|icon-\d+|favicon-\d+x\d+)\.png$/.test(url.pathname);
 
-  if (isFontOrIcon) {
+  if (isLocalStatic) {
     event.respondWith(
       caches.match(req).then((cached) => {
         if (cached) return cached;
         return fetch(req).then((resp) => {
           if (resp && resp.status === 200) {
             const clone = resp.clone();
-            caches.open(STATIC_CACHE).then((c) => c.put(req, clone));
+            caches.open(STATIC_CACHE).then((c) => c.put(req, clone).catch(() => {}));
           }
           return resp;
-        }).catch(() => new Response('', { status: 404 }));
+        }).catch(() => fetch(req));
       })
     );
     return;
   }
 
-  // 4. Caché de Imágenes: Stale-While-Revalidate con Fallback SVG de marca (CERO cuadros negros)
+  // 4. Caché de Imágenes: solo peticiones reales de imagen (nunca Fetch/XHR de playlists .m3u8 ni segmentos .ts)
   const isImageReq =
-    (url.pathname.startsWith('/api/media') && !url.searchParams.get('t')?.includes('mp4')) ||
+    req.destination === 'image' ||
     url.pathname.startsWith('/api/image') ||
-    url.pathname.startsWith('/api/img') ||
-    req.destination === 'image';
+    url.pathname.startsWith('/api/img');
 
   if (isImageReq) {
     event.respondWith(
@@ -189,7 +198,7 @@ self.addEventListener('fetch', (event) => {
                 cache.put(req, networkResp.clone());
                 trimLruCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
               }
-              if (networkResp && !isHtml && (networkResp.status === 200 || networkResp.status === 304)) {
+              if (networkResp && !isHtml && (networkResp.status === 200 || networkResp.status === 304 || networkResp.status === 206)) {
                 return networkResp;
               }
             } catch (err) {
@@ -200,12 +209,11 @@ self.addEventListener('fetch', (event) => {
         })();
 
         const netRes = await fetchPromise;
-        if (netRes && (netRes.status === 200 || netRes.status === 304)) {
+        if (netRes && (netRes.status === 200 || netRes.status === 304 || netRes.status === 206)) {
           return netRes;
         }
 
         // 502 para que el onerror de la tarjeta elija cámara, libro o play.
-        // Un SVG 200 con ▶ se veía como un video en galerías de fotos.
         return new Response('', {
           status: 502,
           headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' }

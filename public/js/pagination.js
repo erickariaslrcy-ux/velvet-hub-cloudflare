@@ -201,7 +201,7 @@
     try {
       const curUrl = new URL(window.location.href);
       // Si estamos en la vista de catálogo pero la URL conservaba una ruta de cómic/lector cerrado, normalizar
-      if (curUrl.pathname.startsWith('/c/') || curUrl.pathname.startsWith('/g/') || curUrl.pathname.startsWith('/v/')) {
+      if (curUrl.pathname.startsWith('/c/') || curUrl.pathname.startsWith('/g/') || curUrl.pathname.startsWith('/v/') || curUrl.pathname.startsWith('/j/')) {
         const homeView = document.getElementById('home-view');
         const readerModal = document.getElementById('reader-modal');
         const videoView = document.getElementById('video-view');
@@ -212,6 +212,9 @@
           const mode = (window.state && window.state.mode) || 'comics';
           curUrl.pathname = mode === 'videos' ? '/videos' : mode === 'galleries' ? '/cosplay' : mode === 'games' ? '/juegos' : '/comics';
         }
+      }
+      if (['/comics', '/videos', '/cosplay', '/modelos', '/juegos', '/games'].includes(curUrl.pathname)) {
+        curUrl.searchParams.delete('tab');
       }
       if (targetPage > 1) {
         curUrl.searchParams.set('page', String(targetPage));
@@ -831,6 +834,8 @@
 
     // Escuchar botón atrás / adelante del navegador
     window.addEventListener('popstate', (e) => {
+    // VelvetRouter coordina la navegación SPA global vía velvet:route-render; evitar doble recarga.
+    if (typeof window !== 'undefined' && window.VelvetRouter && window.VelvetRouter._initialized) return;
       const urlInfo = parseUrlPage(window.location.search, state.totalPages);
       if (urlInfo.page !== state.currentPage) {
         jumpToPage(urlInfo.page, { fromHistory: true });

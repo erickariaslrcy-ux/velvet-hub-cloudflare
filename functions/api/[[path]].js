@@ -265,6 +265,7 @@ function isSafeUpstreamUrl(urlStr) {
       "pixibb.com",
       "doujins.com",
       "alotporn.com",
+      "anyporn.com",
       "porntubeai.com",
       "gamcore.com",
       "serverable.com",
@@ -575,7 +576,19 @@ function cleanPublicTitle(rawTitle) {
   s = s.replace(/\[([^\[\]]*)$/, " $1").replace(/^([^\[\]]*)\]/, "$1 ");
   s = s.replace(/\s+/g, " ").replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, "").trim();
   if (s) return s;
-  return original.replace(/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, "").replace(EXTERNAL_SITE_LEAK_RE, "").replace(/\s+/g, " ").trim();
+  const fallbackClean = original
+    .replace(/\{[^}]{1,90}\}/g, " ")
+    .replace(/\[([^\[\]]{1,120})\]/g, (all, inner) => (isDirtyBracketChunk(inner) ? " " : all))
+    .replace(/\b(?:ai[\s\-]*translat(?:ed|ion)|machine[\s\-]*translat(?:ed|ion)|traducido\s+(?:con|por)\s+ia)\b/gi, " ")
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, " ")
+    .replace(/\b\d+\s*(?:pics?|photos?|fotos?|im[aá]genes?|imgs?|videos?)\b/gi, " ")
+    .replace(/(?:tg\s*@[^\s\]]+|t\.me\/\S+|https?:\/\/\S+)/gi, " ")
+    .replace(EXTERNAL_SITE_LEAK_RE, " ")
+    .replace(/[\[\]]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, "")
+    .trim();
+  return fallbackClean;
 }
 
 function sanitizePublicTags(tags) {
@@ -1047,9 +1060,16 @@ function buildGameCatalogPage(games, opts) {
   const sort = validateSort(opts && opts.sort);
   const q = sanitizeSearchQuery((opts && opts.q) || "");
   const category = sanitizeSlug((opts && opts.category) || "");
+  const tagFilter = String((opts && opts.tag) || "").trim().toLowerCase();
   const seed = Number(opts && opts.seed) || 1;
   let list = Array.isArray(games) ? games.slice() : [];
   if (category && category !== "all") list = list.filter(g => gameMatchesCategory(g, category));
+  if (tagFilter) {
+    list = list.filter(g => {
+      const gTags = Array.isArray(g.tags) ? g.tags.map(t => String(t || "").toLowerCase()) : [];
+      return gTags.some(t => t === tagFilter || t.includes(tagFilter));
+    });
+  }
   if (q) {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     list = list.filter(g => {
@@ -1068,12 +1088,7 @@ function buildGameCatalogPage(games, opts) {
   }
   const total = list.length;
   const start = (page - 1) * pageSize;
-  let slice = list.slice(start, start + pageSize);
-  if (slice.length < pageSize && total >= pageSize && start >= total) {
-    const wrappedStart = start % total;
-    slice = list.slice(wrappedStart, wrappedStart + pageSize);
-    if (slice.length < pageSize) slice = slice.concat(list.slice(0, pageSize - slice.length));
-  }
+  const slice = start >= total ? [] : list.slice(start, start + pageSize);
   return {
     items: slice,
     total,
@@ -1135,11 +1150,11 @@ async function maskGameItem(it, secret) {
     id: it.id,
     source: it.source || "gamcore",
     source_id: it.source_id ? String(it.source_id) : String(it.id),
-    title: it.title || "Juego VIP",
+    title: cleanPublicTitle(it.title) || "Juego VIP",
     cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
     media_type: "game",
-    tags: it.tags || [],
-    artists: it.engine ? [it.engine] : [],
+    tags: sanitizePublicTags(it.tags || []),
+    artists: it.engine ? sanitizePublicArtists([it.engine], "game") : [],
     url: "",
     page_count: 0,
     video_sources: [{
@@ -1190,9 +1205,16 @@ function buildVideoCatalogPage(videos, opts) {
   const sort = validateSort(opts && opts.sort);
   const q = sanitizeSearchQuery((opts && opts.q) || "");
   const category = sanitizeSlug((opts && opts.category) || "");
+  const tagFilter = String((opts && opts.tag) || "").trim().toLowerCase();
   const seed = Number(opts && opts.seed) || 1;
   let list = Array.isArray(videos) ? videos.slice() : [];
   if (category && category !== "all") list = list.filter(v => videoMatchesCategory(v, category));
+  if (tagFilter) {
+    list = list.filter(v => {
+      const vTags = Array.isArray(v.tags) ? v.tags.map(t => String(t || "").toLowerCase()) : [];
+      return vTags.some(t => t === tagFilter || t.includes(tagFilter));
+    });
+  }
   if (q) {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     list = list.filter(v => {
@@ -1211,12 +1233,7 @@ function buildVideoCatalogPage(videos, opts) {
   }
   const total = list.length;
   const start = (page - 1) * pageSize;
-  let slice = list.slice(start, start + pageSize);
-  if (slice.length < pageSize && total >= pageSize && start >= total) {
-    const wrappedStart = start % total;
-    slice = list.slice(wrappedStart, wrappedStart + pageSize);
-    if (slice.length < pageSize) slice = slice.concat(list.slice(0, pageSize - slice.length));
-  }
+  const slice = start >= total ? [] : list.slice(start, start + pageSize);
   return {
     items: slice,
     total,
@@ -1296,11 +1313,11 @@ async function maskVideoItem(it, secret) {
     id: it.id,
     source: it.source || "pmvhaven",
     source_id: it.source_id ? String(it.source_id) : String(it.id),
-    title: it.title || "Video HD",
+    title: cleanPublicTitle(it.title) || "Video HD",
     cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
     media_type: "video",
-    tags: it.tags || [],
-    artists: it.artists || [],
+    tags: sanitizePublicTags(it.tags || []),
+    artists: sanitizePublicArtists(it.artists || [], "video"),
     url: "",
     vip_locked: vipLocked,
     page_count: 0,
@@ -1816,13 +1833,17 @@ function checkAuthRateLimit(request, bucket, maxPerMin = 15) {
   return entry.count <= maxPerMin;
 }
 
-const ALLOWED_AVATAR_ICONS = new Set(["crown", "gem", "bolt", "fire", "gamepad", "heart"]);
+const ALLOWED_AVATAR_ICONS = new Set([
+  "crown", "gem", "bolt", "fire", "gamepad", "ghost", "heart", "rocket", "cat", "shield-halved"
+]);
 const ALLOWED_AVATAR_BGS = new Set([
   "from-pink-600 to-purple-600",
   "from-amber-500 to-rose-600",
   "from-cyan-500 to-blue-600",
+  "from-emerald-500 to-teal-600",
   "from-emerald-500 to-teal-700",
   "from-purple-600 to-indigo-800",
+  "from-purple-800 to-indigo-900",
   "from-rose-600 to-pink-700"
 ]);
 
@@ -1976,6 +1997,48 @@ async function exchangeRefreshToken(refreshToken, sbUrl, sbKey) {
 
 function sanitizeAuthAlias(input) {
   return String(input || "").toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 64);
+}
+
+const RESERVED_USERNAMES = new Set([
+  "admin", "administrator", "erick", "master", "owner", "root",
+  "morbo", "morbohub", "velvet", "velvethub", "soporte", "support", "staff", "mod", "moderator"
+]);
+
+function isReservedUsername(raw) {
+  const clean = sanitizeAuthAlias(raw);
+  return !clean || RESERVED_USERNAMES.has(clean);
+}
+
+function escapePostgrestLike(input) {
+  return String(input || "").replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+function enforceCookieMutationOrigin(request, corsOrigin) {
+  const m = String(request.method || "GET").toUpperCase();
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS") return null;
+  const authHeader = request.headers.get("authorization") || "";
+  const hasExplicitBearer = authHeader.startsWith("Bearer ") && authHeader.length > 15;
+  const hasSessionCookies = Boolean(
+    readRequestCookie(request, "velvet_access") || readRequestCookie(request, "velvet_refresh")
+  );
+  const originHdr = request.headers.get("origin");
+  if (originHdr && !isAllowedOrigin(originHdr)) {
+    return new Response(JSON.stringify({ error: "Origen no permitido", detail: "Origen no permitido" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(corsOrigin) }
+    });
+  }
+  if (!hasExplicitBearer && hasSessionCookies && !originHdr) {
+    const refHdr = request.headers.get("referer") || "";
+    const refOrigin = refererOrigin(refHdr);
+    if (refOrigin && !isAllowedOrigin(refOrigin)) {
+      return new Response(JSON.stringify({ error: "Referer no permitido", detail: "Referer no permitido" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(corsOrigin) }
+      });
+    }
+  }
+  return null;
 }
 
 // Resuelve la sesión SIN consumir el refresh token. El canje vive solo en /api/auth/refresh
@@ -2331,8 +2394,9 @@ function publicUserPayload(view) {
 
 function isItemVIPGated(item, fallbackId = null) {
   const rawId = item && item.id != null ? item.id : fallbackId;
-  let num = parseInt(rawId, 10);
-  if (!num || Number.isNaN(num)) {
+  const strId = String(rawId ?? "").trim();
+  let num = /^\d{1,15}$/.test(strId) ? Number(strId) : 0;
+  if (!num || !Number.isSafeInteger(num)) {
     const str = String(item?.source || "") + ":" + String(item?.source_id || item?.title || rawId || "");
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -2441,18 +2505,22 @@ async function resolveLoginEmail(rawUser, sbUrl, serviceKey, env) {
   }
   if (serviceKey && sbUrl) {
     try {
+      const escapedAlias = escapePostgrestLike(alias);
       const exactUserRes = await fetch(
-        `${sbUrl}/rest/v1/profiles?select=email,username&username=ilike.${encodeURIComponent(alias)}&limit=1`,
+        `${sbUrl}/rest/v1/profiles?select=email,username&username=ilike.${encodeURIComponent(escapedAlias)}&limit=5`,
         { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } }
       );
       if (exactUserRes.ok) {
         const rows = await exactUserRes.json().catch(() => []);
-        if (Array.isArray(rows) && rows[0] && rows[0].email) {
-          return { email: rows[0].email.toLowerCase(), invalid: false };
+        const exactRow = (Array.isArray(rows) ? rows : []).find(
+          (r) => String(r.username || "").toLowerCase() === alias
+        );
+        if (exactRow && exactRow.email) {
+          return { email: exactRow.email.toLowerCase(), invalid: false };
         }
       }
       const prefixRes = await fetch(
-        `${sbUrl}/rest/v1/profiles?select=email&email=ilike.${encodeURIComponent(alias + "@%")}&limit=5`,
+        `${sbUrl}/rest/v1/profiles?select=email&email=ilike.${encodeURIComponent(escapedAlias + "@%")}&limit=5`,
         { headers: { "apikey": serviceKey, "Authorization": `Bearer ${serviceKey}` } }
       );
       if (prefixRes.ok) {
@@ -2549,6 +2617,9 @@ export async function onRequest(context) {
     return new Response(null, { status: 204, headers: getCorsHeaders(origin) });
   }
 
+  const csrfBlock = enforceCookieMutationOrigin(context.request, origin);
+  if (csrfBlock) return csrfBlock;
+
   // =========================================================================
   // 0. VERSIÓN Y OBSERVABILIDAD DEL SISTEMA (/api/version)
   // =========================================================================
@@ -2610,8 +2681,7 @@ export async function onRequest(context) {
 
     const targetMediaUrl = payload.u;
     const isVideo =
-      targetMediaUrl.includes(".mp4") ||
-      targetMediaUrl.includes(".m3u8") ||
+      /\.(?:mp4|m3u8|webm|m4v|ts)(?:$|[?#])/i.test(targetMediaUrl) ||
       url.pathname.includes("/video/");
 
     const directVideo = directVideoRedirectUrl(targetMediaUrl);
@@ -2682,10 +2752,7 @@ export async function onRequest(context) {
 
     const cache = typeof caches !== "undefined" ? caches.default : null;
     const cacheKey = new Request(normUrl.toString(), {
-      method: "GET",
-      headers: {
-        "Accept": context.request.headers.get("Accept") || "*/*"
-      }
+      method: "GET"
     });
 
     if (cache && !isVideo && method === "GET") {
@@ -2807,7 +2874,12 @@ export async function onRequest(context) {
         }
         if (upstream && !upstream.ok && (upstream.status === 403 || upstream.status === 401 || upstream.status === 503)) {
           if (isSafeUpstreamUrl(finalVideoUrl)) {
-            return Response.redirect(finalVideoUrl, 307);
+              if (resp.status >= 400 || !resp.body) {
+              return new Response("Video upstream error", {
+                status: resp.status || 502,
+                headers: { "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+              });
+            }
           }
         }
       } else {
@@ -2852,7 +2924,7 @@ export async function onRequest(context) {
 
       if (isVideo) {
         respHeaders.set("Accept-Ranges", "bytes");
-        respHeaders.set("Cache-Control", "public, max-age=7200");
+        respHeaders.set("Cache-Control", (upstream && upstream.ok) ? "public, max-age=7200" : "no-store");
       } else {
         respHeaders.set("Cache-Control", "public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=604800, immutable");
         respHeaders.set("ETag", etag);
@@ -2897,12 +2969,13 @@ export async function onRequest(context) {
           }));
           const rewrittenBody = rewritten.join("\n");
           const m3u8Headers = new Headers(respHeaders);
+          m3u8Headers.delete("Content-Length");
           m3u8Headers.set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
           m3u8Headers.set("Access-Control-Allow-Origin", "*");
           m3u8Headers.set("Cache-Control", "public, max-age=3600");
           return new Response(rewrittenBody, { status: 200, headers: m3u8Headers });
         } catch (mErr) {
-          // Si falla la reescritura, continuar con el streaming normal
+          return new Response("Error procesando lista HLS", { status: 502, headers: { "Cache-Control": "no-store", ...getCorsHeaders(origin) } });
         }
       }
 
@@ -3003,9 +3076,27 @@ export async function onRequest(context) {
           const v = pmvData.video || pmvData.data || pmvData;
           if (v && v.title) {
             const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
-            const rawVideo = v.videoUrl || "";
+            const rawVideo = v.videoUrl || v.hlsMasterPlaylistUrl || "";
             const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
             const videoToken = rawVideo ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+            const hlsToken = (v.hlsMasterPlaylistUrl && v.hlsMasterPlaylistUrl !== rawVideo)
+              ? await encodeMediaToken(v.hlsMasterPlaylistUrl, "https://pmvhaven.com/", MEDIA_SECRET)
+              : "";
+            const pmvSources = [];
+            if (rawVideo) {
+              pmvSources.push({
+                quality: rawVideo.includes(".m3u8") ? "Auto HLS" : "1080p HD",
+                url: videoToken ? `/api/media?t=${videoToken}` : "",
+                format: rawVideo.includes(".m3u8") ? "m3u8" : "mp4"
+              });
+            }
+            if (hlsToken) {
+              pmvSources.push({
+                quality: "Master Multi-Bitrate HD",
+                url: `/api/media?t=${hlsToken}`,
+                format: "m3u8"
+              });
+            }
             const detailPayload = {
               id: v._id,
               source: "pmvhaven",
@@ -3019,13 +3110,7 @@ export async function onRequest(context) {
               page_count: 0,
               pages: [],
               chapters: [],
-              video_sources: rawVideo ? [
-                {
-                  quality: "1080p HD",
-                  url: videoToken ? `/api/media?t=${videoToken}` : "",
-                  format: "mp4"
-                }
-              ] : [],
+              video_sources: pmvSources,
               extra: {
                 duration: v.duration || "",
                 durationSeconds: v.durationSeconds || 0,
@@ -3049,6 +3134,12 @@ export async function onRequest(context) {
         }
       } catch (pmvErr) {
         console.error("PMVHaven detail fetch error:", pmvErr);
+      }
+      if (targetPmvId && /^[a-f0-9]{24}$/i.test(targetPmvId)) {
+        return new Response(JSON.stringify({ detail: "Video no encontrado" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
       }
     }
 
@@ -3164,80 +3255,26 @@ export async function onRequest(context) {
         if (!pages || !Array.isArray(pages) || pages.length === 0) return [];
         const adRegex = /(logo|banner|advert|patrocinador|donar|promo|avatar|gravatar|ACCESO-VIPS|HACERSE-VIP|ZONAVIP|CHAT-VIPS|portadavip|unirse[-_]vip|acceso[-_]vip|hacerse[-_]vip|ms-icon|favicon|\/themes\/|\/plugins\/|discord|telegram|yarpp|thumbnail)/i;
 
-        let valid = pages.filter(p => {
-          const u = (typeof p === "string" ? p : (p.image_url || p.url || "")).trim();
-          if (!u || u.startsWith("data:")) return false;
-          if (adRegex.test(u)) return false;
-          return true;
-        });
-
-        if (valid.length <= 2) return valid.map((p, idx) => ({
-          index: idx + 1,
-          image_url: typeof p === "string" ? p : p.image_url,
-          referer: typeof p === "object" ? (p.referer || "") : ""
-        }));
-
-        // Detectar carpeta mensual dominante (/wp-content/uploads/YYYY/MM/) para descartar miniaturas intrusas de otros cómics
-        const folderCounts = {};
-        for (const p of valid) {
-          const u = typeof p === "string" ? p : p.image_url;
-          const m = u.match(/\/wp-content\/uploads\/(\d{4}\/\d{2})\//i);
-          if (m) folderCounts[m[1]] = (folderCounts[m[1]] || 0) + 1;
-        }
-
-        let dominantFolder = null;
-        let maxCount = 0;
-        for (const [ym, count] of Object.entries(folderCounts)) {
-          if (count > maxCount) {
-            maxCount = count;
-            dominantFolder = ym;
-          }
-        }
-
-        if (dominantFolder && maxCount >= 2 && maxCount >= valid.length * 0.5) {
-          valid = valid.filter(p => {
-            const u = typeof p === "string" ? p : p.image_url;
-            const m = u.match(/\/wp-content\/uploads\/(\d{4}\/\d{2})\//i);
-            if (!m) return true;
-            return m[1] === dominantFolder;
+        const out = [];
+        for (const p of pages) {
+          const u = (typeof p === "string" ? p : (p && (p.image_url || p.url) ? (p.image_url || p.url) : "")).trim();
+          if (!u || u.startsWith("data:") || adRegex.test(u)) continue;
+          out.push({
+            index: out.length + 1,
+            image_url: u,
+            referer: (p && typeof p === "object" && p.referer) ? String(p.referer) : ""
           });
         }
-
-        return valid.map((p, idx) => ({
-          index: idx + 1,
-          image_url: typeof p === "string" ? p : p.image_url,
-          referer: typeof p === "object" ? (p.referer || "") : ""
-        }));
+        return out;
       };
 
-      // Si el cómic ya tiene páginas, sanitizarlas inmediatamente para expulsar intrusos de posts relacionados
+      // Si el cómic ya tiene páginas, sanitizarlas inmediatamente sin sobrescribir la base de datos en lecturas
       const isComic = it.media_type === "comic" || !it.media_type;
-      if (isComic && it.pages && it.pages.length > 0) {
-        const initialCount = it.pages.length;
+      if (isComic && Array.isArray(it.pages) && it.pages.length > 0) {
         const cleaned = cleanComicPagesList(it.pages);
-        if (cleaned.length !== initialCount) {
-          it.pages = cleaned;
-          it.page_count = cleaned.length;
-          if (it.pages[0]) it.cover_url = it.pages[0].image_url;
-          if (context.waitUntil) {
-            context.waitUntil(
-              fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${it.id}`, {
-                method: "PATCH",
-                headers: {
-                  "apikey": SUPABASE_ADMIN_KEY,
-                  "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}`,
-                  "Content-Type": "application/json",
-                  "Prefer": "return=minimal"
-                },
-                body: JSON.stringify({
-                  pages: it.pages,
-                  page_count: it.page_count,
-                  cover_url: it.cover_url
-                })
-              }).catch(() => {})
-            );
-          }
-        }
+        it.pages = cleaned;
+        it.page_count = cleaned.length;
+        if (!it.cover_url && it.pages[0]) it.cover_url = it.pages[0].image_url;
       }
 
       // Auto-reparación y extracción JIT de páginas si el cómic está sin páginas
@@ -3277,7 +3314,7 @@ export async function onRequest(context) {
             const r1 = await fetch(`https://cdn.imagedeliveries.com/${sid}/thumbnails/1.webp`, { method: "HEAD" }).catch(() => null);
             if (r1 && r1.ok) {
               let low = 1;
-              let high = 24;
+              let high = 250;
               let detected = 1;
               while (low <= high) {
                 const mid = Math.floor((low + high) / 2);
@@ -3418,7 +3455,7 @@ export async function onRequest(context) {
               });
               if (pmvRes.ok) {
                 const pmvData = await pmvRes.json();
-                const vData = pmvData?.data;
+                const vData = pmvData?.video || pmvData?.data;
                 if (vData) {
                   const newStreams = [];
                   if (vData.videoUrl) newStreams.push({ quality: "1080p HD", url: vData.videoUrl, format: "mp4" });
@@ -3534,7 +3571,7 @@ export async function onRequest(context) {
       const maskedCoverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
       const maskedPages = await Promise.all((it.pages || []).map(async (p, idx) => ({
         index: p.index || idx + 1,
-        image_url: p.image_url ? `/api/media?t=${await encodeMediaToken(p.image_url, "", MEDIA_SECRET)}` : ""
+        image_url: p.image_url ? `/api/media?t=${await encodeMediaToken(p.image_url, p.referer || it.url || "", MEDIA_SECRET)}` : ""
       })));
       const maskedVideoSources = await Promise.all(sortedSources.map(async vs => ({
         ...vs,
@@ -3542,12 +3579,20 @@ export async function onRequest(context) {
       })));
 
       const masked = {
-        ...it,
+        id: it.id,
+        source: it.source || "",
+        source_id: it.source_id != null ? String(it.source_id) : "",
         title: cleanPublicTitle(it.title) || it.title || "Contenido VIP",
+        media_type: it.media_type || (isComic ? "comic" : "video"),
         tags: sanitizePublicTags(it.tags),
         artists: sanitizePublicArtists(it.artists, it.media_type),
         url: "", // Ocultar URL original
         cover_url: maskedCoverToken ? `/api/media?t=${maskedCoverToken}` : "",
+        cover_fallback: it.cover_fallback || "",
+        page_count: it.page_count || maskedPages.length || 0,
+        chapters: Array.isArray(it.chapters) ? it.chapters : undefined,
+        synopsis: it.synopsis || undefined,
+        extra: it.extra || undefined,
         pages: maskedPages,
         video_sources: maskedVideoSources
       };
@@ -3601,7 +3646,8 @@ export async function onRequest(context) {
     const pageSize = validatePageSize(url.searchParams.get("page_size"), 24);
     const q = sanitizeSearchQuery(url.searchParams.get("q"));
     const category = sanitizeSlug(url.searchParams.get("category"));
-    const tag = sanitizeSlug(url.searchParams.get("tag"));
+    const rawTagParam = (url.searchParams.get("tag") || "").trim();
+    const tag = rawTagParam.replace(/[\x00-\x1f<>{}]/g, "").slice(0, 64);
     const seedParam = readShuffleSeed(url.searchParams.get("seed"));
     const shuffleParam = readShuffleSeed(url.searchParams.get("shuffle"));
     const sort = validateSort(url.searchParams.get("sort"));
@@ -3714,6 +3760,8 @@ export async function onRequest(context) {
       let pmvApiUrl = `https://pmvhaven.com/api/videos?page=${fetchPmvPage}&limit=${pageSize}&sort=${pmvSort}`;
       if (category && category !== "all") {
         pmvApiUrl += `&tag=${encodeURIComponent(category)}`;
+      } else if (tag) {
+        pmvApiUrl += `&tag=${encodeURIComponent(tag)}`;
       } else if (q) {
         pmvApiUrl += `&tag=${encodeURIComponent(q)}`;
       }
@@ -3743,7 +3791,7 @@ export async function onRequest(context) {
 
             const items = await Promise.all(vList.map(async v => {
               const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
-              const rawVideo = v.videoUrl || "";
+              const rawVideo = v.videoUrl || v.hlsMasterPlaylistUrl || "";
               const vipLocked = isItemVIPGated({ id: v._id, source: "pmvhaven", source_id: v._id, title: v.title });
               const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
               const videoToken = (!vipLocked && rawVideo) ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
@@ -3761,9 +3809,9 @@ export async function onRequest(context) {
                 page_count: 0,
                 video_sources: (!vipLocked && rawVideo) ? [
                   {
-                    quality: "1080p HD",
+                    quality: rawVideo.includes(".m3u8") ? "Auto HLS" : "1080p HD",
                     url: videoToken ? `/api/media?t=${videoToken}` : "",
-                    format: "mp4"
+                    format: rawVideo.includes(".m3u8") ? "m3u8" : "mp4"
                   }
                 ] : [],
                 extra: {
@@ -3792,7 +3840,7 @@ export async function onRequest(context) {
             const jsonStr = JSON.stringify(responsePayload);
             setIsolateCache(ISOLATE_CATALOG_CACHE, isolateCatalogKey, jsonStr);
 
-            const pmvResponse = new Response(jsonStr, {
+            const pmvResponse = new Response(method === "HEAD" ? null : jsonStr, {
               status: 200,
               headers: {
                 "Content-Type": "application/json; charset=utf-8",
@@ -3823,7 +3871,7 @@ export async function onRequest(context) {
 
     // Modo aleatorio y rotación cada 3 horas SOLO si sort=random o viene seed Y no hay búsqueda, categoría ni tag
     const isRandomMode = (sort === "random" || seedParam > 0) && !q && !tag && (!category || category === "all");
-    const rotateCatalog = (sort === "random" || freshShuffle) && !q && !tag && (!category || category === "all");
+    const rotateCatalog = (sort === "random" || freshShuffle) && !q;
     const effectiveSeed = freshShuffle ? freshSeed : (rotateCatalog ? catalogSlot : (((catalogSlot * 7919) % 50000) + 1));
 
     // Juegos: el proyecto Supabase DB2 (vtyleivfovkolpxjjkjs) ya no resuelve (Cloudflare 1016).
@@ -3837,6 +3885,7 @@ export async function onRequest(context) {
           sort,
           q,
           category,
+          tag,
           seed: effectiveSeed
         });
         const items = await Promise.all((seeded.items || []).map(it => maskGameItem(it, MEDIA_SECRET)));
@@ -3901,6 +3950,7 @@ export async function onRequest(context) {
             sort,
             q,
             category,
+            tag,
             seed: effectiveSeed
           });
           const items = await Promise.all((seeded.items || []).map(it => maskVideoItem(it, MEDIA_SECRET)));
@@ -3950,7 +4000,18 @@ export async function onRequest(context) {
     filterQuery += "&status=neq.blocked&real_people=is.false";
 
     if (tag) {
-      filterQuery += `&tags=cs.{${encodeURIComponent(tag)}}`;
+      const safeTag = tag.replace(/["\\{}(),]/g, "").trim();
+      if (safeTag) {
+        const lowerTag = safeTag.toLowerCase();
+        const titleTag = lowerTag.replace(/\b\w/g, ch => ch.toUpperCase());
+        const variants = Array.from(new Set([safeTag, lowerTag, titleTag]));
+        if (variants.length === 1) {
+          filterQuery += `&tags=cs.{${encodeURIComponent(variants[0])}}`;
+        } else {
+          const orTags = variants.map(v => `tags.cs.{${encodeURIComponent(v)}}`).join(",");
+          filterQuery += `&or=(${orTags})`;
+        }
+      }
     }
 
     if (q) {
@@ -4019,7 +4080,11 @@ export async function onRequest(context) {
       } catch (spanErr) {
         filteredSpan = null;
       }
-      if (filteredSpan && filteredSpan.total > 0) totalCount = filteredSpan.total;
+      if (filteredSpan && filteredSpan.total > 0) {
+        totalCount = filteredSpan.total;
+      } else if (filteredSpan && filteredSpan.total === 0 && (tag || (category && category !== "all"))) {
+        totalCount = 0;
+      }
     }
 
     try {
@@ -4233,11 +4298,26 @@ export async function onRequest(context) {
   // 4. RANDOM / SORPRÉNDEME (/api/random)
   // =========================================================================
   if (url.pathname === "/api/random" && method === "GET") {
-    const mediaType = url.searchParams.get("media_type") || "comic";
+    const mediaType = (url.searchParams.get("media_type") || "comic").trim().toLowerCase();
     const count = Math.min(10, Math.max(1, parseInt(url.searchParams.get("count") || "1", 10)));
     const rndArr = new Uint32Array(1);
     crypto.getRandomValues(rndArr);
     const randomSeed = (rndArr[0] % 2147483645) + 1;
+
+    if (mediaType === "game") {
+      try {
+        const games = await loadGameCatalog(context, url);
+        const ordered = orderCatalogForSlot(games, randomSeed, "game");
+        const sample = ordered.slice(0, count);
+        const items = await Promise.all(sample.map(it => maskGameItem(it, MEDIA_SECRET)));
+        return new Response(JSON.stringify(items), {
+          status: 200,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      } catch (gErr) {
+        return new Response("[]", { status: 200, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } });
+      }
+    }
 
     const preferLivePmv = env.ENABLE_PMVHAVEN_LIVE !== "false" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db";
     if (mediaType === "video") {
@@ -4254,9 +4334,10 @@ export async function onRequest(context) {
             if (vList.length > 0) {
               const items = await Promise.all(vList.map(async v => {
                 const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
+                const rawVidUrl = v.videoUrl || v.hlsMasterPlaylistUrl || "";
                 const vipLocked = isItemVIPGated({ id: v._id, source: "pmvhaven", source_id: v._id, title: v.title });
                 const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
-                const videoToken = (!vipLocked && v.videoUrl) ? await encodeMediaToken(v.videoUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
+                const videoToken = (!vipLocked && rawVidUrl) ? await encodeMediaToken(rawVidUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
                 return {
                   id: v._id,
                   source: "pmvhaven",
@@ -4269,7 +4350,11 @@ export async function onRequest(context) {
                   url: "",
                   vip_locked: vipLocked,
                   page_count: 0,
-                  video_sources: videoToken ? [{ quality: "1080p HD", url: `/api/media?t=${videoToken}`, format: "mp4" }] : []
+                  video_sources: videoToken ? [{
+                    quality: rawVidUrl.includes(".m3u8") ? "Auto HLS" : "1080p HD",
+                    url: `/api/media?t=${videoToken}`,
+                    format: rawVidUrl.includes(".m3u8") ? "m3u8" : "mp4"
+                  }] : []
                 };
               }));
               return new Response(JSON.stringify(items), {
@@ -4296,7 +4381,7 @@ export async function onRequest(context) {
     }
 
     const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists,video_sources";
-    const filterQuery = mediaType === "gallery"
+    const filterQuery = (mediaType === "gallery" || mediaType === "cosplay")
       ? "media_type=eq.gallery&page_count=gt.0&source=neq.leakgallery&status=neq.blocked&real_people=is.false"
       : "media_type=eq.comic&page_count=gt.0&status=neq.blocked&real_people=is.false";
 
@@ -4333,12 +4418,17 @@ export async function onRequest(context) {
         const videoSources = vipLocked
           ? []
           : await Promise.all((it.video_sources || []).map(async vs => ({
-              ...vs,
+              quality: vs.quality || "HD",
+              format: vs.format || "mp4",
               url: vs.url ? `/api/media?t=${await encodeMediaToken(vs.url, "", MEDIA_SECRET)}` : ""
             })));
         return {
-          ...it,
+          id: it.id,
+          source: it.source || "",
+          source_id: it.source_id != null ? String(it.source_id) : "",
           title: cleanPublicTitle(it.title) || it.title,
+          media_type: it.media_type || (mediaType === "gallery" || mediaType === "cosplay" ? "gallery" : "comic"),
+          page_count: it.page_count || 0,
           tags: sanitizePublicTags(it.tags),
           artists: sanitizePublicArtists(it.artists, it.media_type),
           url: "",
@@ -4694,7 +4784,7 @@ export async function onRequest(context) {
       if (!tokData.access_token) return errRedirect("missing_token");
 
       const idRes = await fetch(
-        "https://www.patreon.com/api/oauth2/v2/identity?include=memberships&fields%5Buser%5D=email,full_name,image_url&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,next_charge_date",
+        "https://www.patreon.com/api/oauth2/v2/identity?include=memberships,memberships.campaign&fields%5Buser%5D=email,full_name,image_url&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,next_charge_date&fields%5Bcampaign%5D=id",
         { headers: { "Authorization": `Bearer ${tokData.access_token}` } }
       );
       if (!idRes.ok) return errRedirect("identity_failed");
@@ -4703,9 +4793,19 @@ export async function onRequest(context) {
       const email = String(patreonUser?.attributes?.email || "").trim().toLowerCase();
       if (!email) return errRedirect("email_required");
 
-      const memberships = Array.isArray(idData?.included) ? idData.included.filter((i) => i.type === "member") : [];
-      const activeMember = memberships.find((m) => m.attributes?.patron_status === "active_patron");
       const isMaster = masterEmail && email === masterEmail;
+      if (!isMaster && !campaignId) {
+        return errRedirect("patreon_campaign_not_configured");
+      }
+      const minTierCents = Math.max(100, parseInt(env.PATREON_MIN_CENTS || "100", 10) || 100);
+      const memberships = Array.isArray(idData?.included) ? idData.included.filter((i) => i.type === "member") : [];
+      const activeMember = memberships.find((m) => {
+        if (m.attributes?.patron_status !== "active_patron") return false;
+        const memberCampaignId = String(m.relationships?.campaign?.data?.id || "");
+        if (!campaignId || memberCampaignId !== campaignId) return false;
+        const cents = Number(m.attributes?.currently_entitled_amount_cents || 0);
+        return cents >= minTierCents;
+      });
       if (!isMaster && !activeMember) {
         return errRedirect("not_active_patron");
       }
@@ -4837,8 +4937,8 @@ export async function onRequest(context) {
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
       }
-      if (!username || username.length < 3) {
-        return new Response(JSON.stringify({ detail: "El nombre de usuario debe tener 3 a 32 caracteres válidos (letras, números, _ . -)" }), {
+      if (!username || username.length < 3 || isReservedUsername(username)) {
+        return new Response(JSON.stringify({ detail: "Ese nombre de usuario no está disponible o es inválido (mín. 3 caracteres válidos)." }), {
           status: 400,
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
@@ -4860,13 +4960,17 @@ export async function onRequest(context) {
 
       // 1. Verificar disponibilidad del nombre de usuario antes de crear usuario o consumir llave
       if (SUPABASE_SERVICE_ROLE_KEY) {
+        const escapedUsername = escapePostgrestLike(username);
         const dupUserRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?select=id&username=ilike.${encodeURIComponent(username)}&limit=1`,
+          `${SUPABASE_URL}/rest/v1/profiles?select=id,username&username=ilike.${encodeURIComponent(escapedUsername)}&limit=5`,
           { headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
         );
         if (dupUserRes.ok) {
           const dupRows = await dupUserRes.json().catch(() => []);
-          if (Array.isArray(dupRows) && dupRows.length > 0) {
+          const exactTaken = (Array.isArray(dupRows) ? dupRows : []).some(
+            (r) => String(r.username || "").toLowerCase() === username.toLowerCase()
+          );
+          if (exactTaken) {
             return new Response(JSON.stringify({ detail: "Ese nombre de usuario ya está en uso. Elige otro." }), {
               status: 409,
               headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
@@ -5455,6 +5559,13 @@ export async function onRequest(context) {
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
       }
+      const revokedRows = await patchRes.json().catch(() => []);
+      if (!Array.isArray(revokedRows) || revokedRows.length === 0) {
+        return new Response(JSON.stringify({ detail: "La llave especificada no existe" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
       return new Response(JSON.stringify({ ok: true, code: rawCode }), {
         status: 200,
         headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
@@ -5464,13 +5575,23 @@ export async function onRequest(context) {
     // GET /api/admin/users
     if (url.pathname === "/api/admin/users" && method === "GET") {
       try {
-        const [profRes, authUsersRes, favsRes, customFavsRes, histRes, customHistRes] = await Promise.all([
-          fetch(`${SUPABASE_URL}/rest/v1/profiles?select=${encodeURIComponent(SUBSCRIPTION_PROFILE_SELECT)}&order=created_at.desc`, {
+        const fetchAllAuthUsers = async () => {
+          const all = [];
+          for (let page = 1; page <= 10; page++) {
+            const r = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=200`, { headers: adminHeaders });
+            if (!r.ok) break;
+            const d = await r.json().catch(() => ({}));
+            const batch = Array.isArray(d?.users) ? d.users : [];
+            all.push(...batch);
+            if (batch.length < 200) break;
+          }
+          return all;
+        };
+        const [profRes, authUsers, favsRes, customFavsRes, histRes, customHistRes] = await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/profiles?select=${encodeURIComponent(SUBSCRIPTION_PROFILE_SELECT)}&order=created_at.desc&limit=2000`, {
             headers: adminHeaders
           }),
-          fetch(`${SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=200`, {
-            headers: adminHeaders
-          }),
+          fetchAllAuthUsers(),
           fetch(`${SUPABASE_URL}/rest/v1/favorites?select=user_id&limit=10000`, {
             headers: adminHeaders
           }),
@@ -5486,8 +5607,6 @@ export async function onRequest(context) {
         ]);
 
         const profiles = profRes.ok ? await profRes.json().catch(() => []) : [];
-        const authPayload = authUsersRes.ok ? await authUsersRes.json().catch(() => ({})) : {};
-        const authUsers = Array.isArray(authPayload?.users) ? authPayload.users : [];
         const favRows = favsRes.ok ? await favsRes.json().catch(() => []) : [];
         const customFavRows = customFavsRes && customFavsRes.ok ? await customFavsRes.json().catch(() => []) : [];
         const histRows = histRes.ok ? await histRes.json().catch(() => []) : [];
@@ -5536,8 +5655,8 @@ export async function onRequest(context) {
           headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
         });
       } catch (err) {
-        console.error("[Velvet-Admin] keys error:", err);
-        return new Response(JSON.stringify({ detail: "Error consultando llaves" }), {
+        console.error("[Velvet-Admin] users error:", err);
+        return new Response(JSON.stringify({ detail: "Error consultando usuarios" }), {
           status: 500,
           headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
         });
@@ -5576,24 +5695,30 @@ export async function onRequest(context) {
         ? "active"
         : (expMs > 0 ? "expired" : "inactive");
 
-      await Promise.all([
+      const [profPatchRes, authPutRes] = await Promise.all([
         fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(targetId)}`, {
           method: "PATCH",
-          headers: adminHeaders,
+          headers: { ...adminHeaders, "Prefer": "return=representation" },
           body: JSON.stringify({
             is_suspended: shouldSuspend,
             subscription_status: shouldSuspend ? "suspended" : reactivatedSubStatus,
             updated_at: new Date().toISOString()
           })
-        }),
+        }).catch(() => null),
         fetch(`${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(targetId)}`, {
           method: "PUT",
           headers: adminHeaders,
           body: JSON.stringify({
             ban_duration: shouldSuspend ? "876000h" : "none"
           })
-        })
+        }).catch(() => null)
       ]);
+      if (!profPatchRes?.ok || !authPutRes?.ok) {
+        return new Response(JSON.stringify({ detail: "No se pudo actualizar el estado del usuario en la base de datos" }), {
+          status: 502,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
 
       return new Response(JSON.stringify({
         ok: true,
@@ -5665,9 +5790,20 @@ export async function onRequest(context) {
         headers: { ...adminHeaders, "Prefer": "return=representation" },
         body: JSON.stringify(patchPayload)
       });
+      if (!patchRes.ok) {
+        return new Response(JSON.stringify({ detail: "Error actualizando suscripción en el servidor" }), {
+          status: 502,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
       const updatedRows = await patchRes.json().catch(() => []);
-      const updated = (Array.isArray(updatedRows) && updatedRows[0]) ? updatedRows[0] : { ...curProf, ...patchPayload };
-      const view = buildUserSubscriptionView(updated, null, env);
+      if (!Array.isArray(updatedRows) || updatedRows.length === 0) {
+        return new Response(JSON.stringify({ detail: "Perfil de usuario no encontrado para actualizar" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) }
+        });
+      }
+      const view = buildUserSubscriptionView(updatedRows[0], null, env);
 
       return new Response(JSON.stringify({
         ok: true,
@@ -5813,6 +5949,9 @@ export async function onRequest(context) {
   };
 
   const resolveSqlItemId = async (candidate, tokenVal, userId) => {
+    if (inferPersonalMediaType(candidate) === "game" || String(candidate?.source || "").toLowerCase() === "gamcore") {
+      return null;
+    }
     const rawNum = parseStrictPositiveInt(candidate?.id || candidate?.item_id);
     if (rawNum) return rawNum;
     const src = String(candidate?.source || "").trim();
@@ -5850,12 +5989,12 @@ export async function onRequest(context) {
     let effectiveTitle = cleanPublicTitle(it.title || entry.title || meta.title) || fallbackTitle;
     let effectiveSource = it.source || entry.source || meta.source || "";
     let effectiveSourceId = it.source_id || entry.source_id || meta.source_id || "";
-    const effectiveUrl = it.url || entry.url || meta.url || "";
+    const effectiveReferer = it.url || entry.url || meta.url || "";
     const rawCover = it.cover_url || entry.cover_url || meta.cover_url || "";
     const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
     let finalCover = "/velvet_logo.png";
     if (upstreamCover) {
-      const freshTok = await encodeToken(upstreamCover, effectiveUrl);
+      const freshTok = await encodeToken(upstreamCover, effectiveReferer);
       if (freshTok) finalCover = `/api/media?t=${freshTok}`;
     } else if (rawCover && rawCover.startsWith("/api/media?t=")) {
       finalCover = rawCover;
@@ -5870,7 +6009,7 @@ export async function onRequest(context) {
           (effectiveTitle && effectiveTitle !== fallbackTitle && effectiveTitle !== "Guardado" && effectiveTitle !== "Contenido visto" && v.title && v.title.toLowerCase() === effectiveTitle.toLowerCase())
       );
       if (vMatch) {
-        effectiveTitle = vMatch.title || effectiveTitle;
+        effectiveTitle = cleanPublicTitle(vMatch.title) || effectiveTitle;
         effectiveSource = effectiveSource || "pmvhaven";
         effectiveSourceId = effectiveSourceId || String(vMatch.id || "");
         const vUpstream = extractRawMediaUrl(vMatch.cover_url) || vMatch.cover_url || "";
@@ -5880,24 +6019,29 @@ export async function onRequest(context) {
         }
       }
     }
-    return { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover };
+    return { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl: "", finalCover };
   };
 
-  const upsertCustomFavoriteRow = async (userId, item, tokenVal, isVerified = false) => {
+  const buildCustomFavRow = (userId, item) => {
     const itemKey = buildCustomItemKey(item);
-    if (!itemKey) return { ok: false, status: 400 };
-    const payload = {
+    if (!itemKey) return null;
+    return {
       user_id: userId,
       item_key: itemKey,
       item_id: String(item.id || item.item_id || item.source_id || itemKey).slice(0, 120),
       source: String(item.source || "external").slice(0, 40),
       source_id: String(item.source_id || item.id || "").slice(0, 120),
       media_type: inferPersonalMediaType(item),
-      title: String(item.title || "Contenido guardado").slice(0, 300),
+      title: String(cleanPublicTitle(item.title) || "Contenido guardado").slice(0, 300),
       cover_url: String(extractRawMediaUrl(item.cover_url) || item.cover_url || "").slice(0, 1000),
       url: String(item.url || "").slice(0, 1000),
       created_at: new Date().toISOString()
     };
+  };
+
+  const upsertCustomFavoriteRow = async (userId, item, tokenVal, isVerified = false) => {
+    const payload = buildCustomFavRow(userId, item);
+    if (!payload) return { ok: false, status: 400 };
     const res = await restFetchWithAdminFallback(
       `${SUPABASE_URL}/rest/v1/user_custom_favorites?on_conflict=user_id,item_key`,
       (useAdmin) => ({
@@ -5911,7 +6055,7 @@ export async function onRequest(context) {
       userId,
       isVerified
     );
-    return { ok: Boolean(res && res.ok), status: res ? res.status : 0, item_key: itemKey, item_id: payload.item_id };
+    return { ok: Boolean(res && res.ok), status: res ? res.status : 0, item_key: payload.item_key, item_id: payload.item_id };
   };
 
   const deleteCustomTableTarget = async (tableName, userId, target, tokenVal, isVerified = false) => {
@@ -6019,7 +6163,7 @@ export async function onRequest(context) {
 
         const refs = [];
         const seenRefs = new Set();
-        const pushRefEntry = (cf) => {
+        const pushRefEntry = async (cf) => {
           if (!cf) return;
           const n = parseStrictPositiveInt(cf.id || cf.item_id);
           if (n && !seenIds.has(n)) {
@@ -6031,15 +6175,22 @@ export async function onRequest(context) {
           const refKey = (src && srcId) ? `${src.toLowerCase()}:${srcId}` : String(cf.item_key || cf.id || srcId);
           if (!refKey || seenRefs.has(refKey)) return;
           seenRefs.add(refKey);
+          const rawCover = String(cf.cover_url || "");
+          const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
+          let finalCover = rawCover.startsWith("/api/media?t=") ? rawCover : "/velvet_logo.png";
+          if (upstreamCover) {
+            const freshTok = await encodeToken(upstreamCover, "");
+            if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+          }
           refs.push({
             id: n || cf.id || cf.item_id || srcId || null,
             item_key: cf.item_key || refKey,
             source: src,
             source_id: srcId,
             media_type: inferPersonalMediaType(cf),
-            title: String(cf.title || "Contenido guardado").slice(0, 120),
-            cover_url: cf.cover_url || "",
-            url: cf.url || ""
+            title: String(cleanPublicTitle(cf.title) || "Contenido guardado").slice(0, 120),
+            cover_url: finalCover,
+            url: ""
           });
         };
 
@@ -6047,7 +6198,7 @@ export async function onRequest(context) {
         if (customRes && customRes.ok) {
           const customRows = await customRes.json().catch(() => []);
           for (const cf of (Array.isArray(customRows) ? customRows : [])) {
-            pushRefEntry(cf);
+            await pushRefEntry(cf);
           }
         }
 
@@ -6056,7 +6207,7 @@ export async function onRequest(context) {
           ...(Array.isArray(user.user_metadata?.favorites) ? user.user_metadata.favorites : []),
           ...(Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [])
         ];
-        for (const mf of legacyMetaFavs) pushRefEntry(mf);
+        for (const mf of legacyMetaFavs) await pushRefEntry(mf);
 
         if (!sqlOk && refs.length === 0) {
           return new Response(JSON.stringify({ ids: [], refs: [], total: 0, degraded: true }), {
@@ -6089,7 +6240,7 @@ export async function onRequest(context) {
       const getVideoCatalog = createVideoCatalogLoader();
 
       try {
-        const favQueryUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,page_count,status,real_people)&order=created_at.desc,item_id.desc`;
+        const favQueryUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,page_count,status)&order=created_at.desc,item_id.desc`;
         const sqlRangeHeader = hasTypeFilter ? "0-499" : `${offset}-${to}`;
 
         let customUrl = `${SUPABASE_URL}/rest/v1/user_custom_favorites?user_id=eq.${user.id}&select=item_key,item_id,source,source_id,media_type,title,cover_url,url,created_at&order=created_at.desc&limit=500`;
@@ -6165,9 +6316,9 @@ export async function onRequest(context) {
         if (!Array.isArray(rawSqlRows)) rawSqlRows = [];
 
         // Si existen favoritos custom + SQL paginados en más de 1 página, traer ventana suficiente para ordenar cronológicamente sin saltos
-        if ((customTotal > 0 || legacyMetaFavs.length > 0) && sqlTotal > rawSqlRows.length && sqlTotal <= 500 && rawSqlRows.length < sqlTotal) {
-          const fullWinTo = Math.min(499, Math.max(to, offset + pageSize + customTotal - 1));
-          const winUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,page_count,status,real_people)&order=created_at.desc,item_id.desc`;
+        if ((customTotal > 0 || legacyMetaFavs.length > 0) && sqlTotal > rawSqlRows.length && rawSqlRows.length < sqlTotal) {
+          const fullWinTo = Math.min(999, Math.max(to, offset + pageSize + customTotal - 1));
+          const winUrl = `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&select=item_id,created_at,items(id,title,cover_url,media_type,source,source_id,page_count,status)&order=created_at.desc,item_id.desc`;
           const winRes = await restFetchWithAdminFallback(
             winUrl,
             (useAdmin) => ({
@@ -6212,9 +6363,9 @@ export async function onRequest(context) {
           rawSqlRows.map(async (r) => {
             const it = r.items || {};
             const metaMatch = legacyMetaFavs.find((cf) => String(cf.id) === String(r.item_id) || String(cf.source_id) === String(r.item_id));
-            const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+            const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover } =
               await formatPersonalMediaEntry({ item_id: r.item_id, items: it, meta: metaMatch }, getVideoCatalog, "Guardado");
-            const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
+            const isAvailable = Boolean((it && it.id && it.status !== "blocked" && it.real_people !== true) || metaMatch);
             return {
               id: it.id || r.item_id,
               item_id: r.item_id,
@@ -6223,7 +6374,7 @@ export async function onRequest(context) {
               media_type: it.media_type || (metaMatch && metaMatch.media_type) || "comic",
               source: effectiveSource,
               source_id: effectiveSourceId,
-              url: isAvailable ? effectiveUrl : "",
+              url: "",
               page_count: it.page_count || (metaMatch && metaMatch.page_count) || 0,
               created_at: r.created_at,
               available: isAvailable
@@ -6247,7 +6398,7 @@ export async function onRequest(context) {
 
         const formattedCustom = await Promise.all(
           [...customRows, ...legacyMetaFavs].map(async (cf) => {
-            const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+            const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover } =
               await formatPersonalMediaEntry(cf, getVideoCatalog, "Contenido guardado");
             const numId = parseStrictPositiveInt(cf.item_id || cf.id);
             const resolvedId = numId || (cf.id || cf.item_id || cf.source_id || cf.item_key);
@@ -6260,7 +6411,7 @@ export async function onRequest(context) {
               media_type: inferPersonalMediaType(cf),
               source: effectiveSource || "external",
               source_id: effectiveSourceId || String(resolvedId || ""),
-              url: effectiveUrl,
+              url: "",
               page_count: cf.page_count || 0,
               created_at: cf.created_at || new Date(0).toISOString(),
               available: true,
@@ -6322,9 +6473,10 @@ export async function onRequest(context) {
         if (Array.isArray(body.items)) {
           const numericCandidates = [];
           const customCandidates = [];
-          for (const it of body.items.slice(0, 2000)) {
+          for (const it of body.items.slice(0, 200)) {
             const num = parseStrictPositiveInt(it?.id || it?.item_id);
-            if (num) {
+            const isGame = inferPersonalMediaType(it) === "game" || String(it?.source || "").toLowerCase() === "gamcore";
+            if (num && !isGame) {
               numericCandidates.push({ num, item: it });
             } else if (it && (it.id || it.item_id || (it.source && it.source_id))) {
               customCandidates.push(it);
@@ -6334,7 +6486,7 @@ export async function onRequest(context) {
           let syncedCount = 0;
           if (numericCandidates.length > 0) {
             const rows = numericCandidates.map((c) => ({ user_id: user.id, item_id: c.num }));
-            const batchRes = await restFetchWithAdminFallback(
+            let batchRes = await restFetchWithAdminFallback(
               `${SUPABASE_URL}/rest/v1/favorites`,
               (useAdmin) => ({
                 method: "POST",
@@ -6351,8 +6503,27 @@ export async function onRequest(context) {
             if (batchRes && batchRes.ok) {
               syncedCount += numericCandidates.length;
             } else {
-              for (const c of numericCandidates.slice(0, 200)) {
-                const singleRes = await restFetchWithAdminFallback(
+              // Batch fallback sin explotar subrequests: verificar qué IDs existen en Supabase en 1 consulta
+              const idList = [...new Set(numericCandidates.map(c => c.num))].slice(0, 200);
+              let validSet = new Set();
+              if (idList.length > 0 && SUPABASE_ADMIN_KEY) {
+                try {
+                  const existRes = await fetch(
+                    `${SUPABASE_URL}/rest/v1/items?id=in.(${idList.join(",")})&select=id&limit=200`,
+                    { headers: getAdminRestHeaders() }
+                  );
+                  if (existRes.ok) {
+                    const existRows = await existRes.json().catch(() => []);
+                    validSet = new Set((Array.isArray(existRows) ? existRows : []).map(r => Number(r.id)));
+                  }
+                } catch (e) {}
+              }
+              const validRows = numericCandidates.filter(c => validSet.has(c.num)).map(c => ({ user_id: user.id, item_id: c.num }));
+              for (const c of numericCandidates) {
+                if (!validSet.has(c.num)) customCandidates.push(c.item);
+              }
+              if (validRows.length > 0) {
+                const retryBatch = await restFetchWithAdminFallback(
                   `${SUPABASE_URL}/rest/v1/favorites`,
                   (useAdmin) => ({
                     method: "POST",
@@ -6360,23 +6531,42 @@ export async function onRequest(context) {
                       "Content-Type": "application/json",
                       "Prefer": "resolution=ignore-duplicates"
                     }),
-                    body: JSON.stringify({ user_id: user.id, item_id: c.num })
+                    body: JSON.stringify(validRows)
                   }),
                   user.id,
                   verified
                 );
-                if (singleRes && singleRes.ok) {
-                  syncedCount++;
-                } else {
-                  customCandidates.push(c.item);
-                }
+                if (retryBatch && retryBatch.ok) syncedCount += validRows.length;
               }
             }
           }
 
-          for (const ci of customCandidates.slice(0, 100)) {
-            const cfRes = await upsertCustomFavoriteRow(user.id, ci, token, verified);
-            if (cfRes.ok) syncedCount++;
+          if (customCandidates.length > 0) {
+            const seenCustom = new Set();
+            const customPayloads = [];
+            for (const ci of customCandidates.slice(0, 100)) {
+              const row = buildCustomFavRow(user.id, ci);
+              if (row && !seenCustom.has(row.item_key)) {
+                seenCustom.add(row.item_key);
+                customPayloads.push(row);
+              }
+            }
+            if (customPayloads.length > 0) {
+              const cfBatchRes = await restFetchWithAdminFallback(
+                `${SUPABASE_URL}/rest/v1/user_custom_favorites?on_conflict=user_id,item_key`,
+                (useAdmin) => ({
+                  method: "POST",
+                  headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=merge-duplicates,return=minimal"
+                  }),
+                  body: JSON.stringify(customPayloads)
+                }),
+                user.id,
+                verified
+              );
+              if (cfBatchRes && cfBatchRes.ok) syncedCount += customPayloads.length;
+            }
           }
 
           return new Response(JSON.stringify({ ok: true, synced: syncedCount }), {
@@ -6387,7 +6577,7 @@ export async function onRequest(context) {
 
         // Caso B: Toggle a falso si se envía favorite: false
         if (body.favorite === false) {
-          const removeId = parseStrictPositiveInt(body.id || body.item_id);
+          const removeId = await resolveSqlItemId(body, token, user.id);
           if (removeId) {
             await restFetchWithAdminFallback(
               `${SUPABASE_URL}/rest/v1/favorites?user_id=eq.${user.id}&item_id=eq.${removeId}`,
@@ -6480,17 +6670,23 @@ export async function onRequest(context) {
       const parts = url.pathname.split("/").filter(Boolean);
       const lastPart = parts[parts.length - 1];
       const secondLastPart = parts.length >= 4 ? parts[parts.length - 2] : null;
+      const isBareFavorites = url.pathname === "/api/favorites" || url.pathname === "/api/user/favorites";
       const isClearAll = url.searchParams.get("clear") === "all";
       const rawId = url.searchParams.get("id") || url.searchParams.get("item_id");
       const qSource = url.searchParams.get("source") || "";
       const qSourceId = url.searchParams.get("source_id") || "";
+      const effectiveSource = qSource || (secondLastPart && secondLastPart !== "favorites" ? secondLastPart : "");
+      const effectiveSourceId = qSourceId || (!isBareFavorites && secondLastPart && secondLastPart !== "favorites" ? lastPart : "");
 
       let targetId = parseStrictPositiveInt(rawId);
-      if (!targetId) {
-        targetId = parseStrictPositiveInt(lastPart);
+      if (targetId && (effectiveSource === "gamcore" || url.searchParams.get("media_type") === "game")) {
+        targetId = null;
       }
-      if (!targetId && qSource && qSourceId) {
-        targetId = await resolveSqlItemId({ source: qSource, source_id: qSourceId }, token, user.id);
+      if (!targetId && effectiveSource && effectiveSourceId) {
+        targetId = await resolveSqlItemId({ source: effectiveSource, source_id: effectiveSourceId }, token, user.id);
+      }
+      if (!targetId && !effectiveSource && !isBareFavorites && lastPart !== "favorites") {
+        targetId = parseStrictPositiveInt(lastPart);
       }
 
       const sqlDeletePromise = isClearAll
@@ -6515,9 +6711,9 @@ export async function onRequest(context) {
           clearAll: isClearAll,
           numId: Number.isInteger(targetId) ? targetId : null,
           rawId,
-          source: qSource,
-          sourceId: qSourceId,
-          lastPart,
+          source: effectiveSource,
+          sourceId: effectiveSourceId,
+          lastPart: isBareFavorites ? "favorites" : lastPart,
           secondLastPart
         }, token, verified)
       ]);
@@ -6533,6 +6729,32 @@ export async function onRequest(context) {
   // 9. HISTORIAL Y PROGRESO (/api/user/history, /api/history)
   // Persistencia atómica en user_history + user_custom_history (sin inflar JWT)
   // =========================================================================
+  const buildCustomHistRow = (userId, itemData, targetItemId) => {
+    const mediaType = inferPersonalMediaType(itemData);
+    const pos = Math.max(0, parseInt(itemData.position || itemData.page || itemData.currentTime || 0, 10) || 0);
+    const dur = Math.max(0, parseInt(itemData.duration || itemData.total || 0, 10) || 0);
+    const comp = Boolean(itemData.completed);
+    const clientTs = parseInt(itemData.client_timestamp || itemData.at || Date.now(), 10) || Date.now();
+    const itemKey = buildCustomItemKey(itemData);
+    if (!itemKey) return null;
+    return {
+      user_id: userId,
+      item_key: itemKey,
+      item_id: String(targetItemId || itemData.id || itemData.item_id || itemData.source_id || itemKey).slice(0, 120),
+      source: String(itemData.source || "").slice(0, 40),
+      source_id: String(itemData.source_id || itemData.id || "").slice(0, 120),
+      media_type: mediaType,
+      title: String(cleanPublicTitle(itemData.title) || "Contenido visto").slice(0, 300),
+      cover_url: String(extractRawMediaUrl(itemData.cover_url) || itemData.cover_url || "").slice(0, 1000),
+      url: String(itemData.url || "").slice(0, 1000),
+      position: pos,
+      duration: dur,
+      completed: comp,
+      client_timestamp: clientTs,
+      last_activity: new Date().toISOString()
+    };
+  };
+
   const upsertSqlOrCustomHistory = async (userId, itemData, targetItemId, tokenVal, isVerified = false) => {
     const mediaType = inferPersonalMediaType(itemData);
     const sqlMedia = mediaType === "video" ? "video" : (mediaType === "gallery" ? "gallery" : "comic");
@@ -6558,7 +6780,7 @@ export async function onRequest(context) {
       if (rpcRes && rpcRes.ok) return true;
 
       const postRes = await restFetchWithAdminFallback(
-        `${SUPABASE_URL}/rest/v1/user_history`,
+        `${SUPABASE_URL}/rest/v1/user_history?on_conflict=user_id,item_id`,
         (useAdmin) => ({
           method: "POST",
           headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(tokenVal, extra))({
@@ -6582,24 +6804,8 @@ export async function onRequest(context) {
       if (postRes && postRes.ok) return true;
     }
 
-    const itemKey = buildCustomItemKey(itemData);
-    if (!itemKey) return false;
-    const chPayload = {
-      user_id: userId,
-      item_key: itemKey,
-      item_id: String(targetItemId || itemData.id || itemData.item_id || itemData.source_id || itemKey).slice(0, 120),
-      source: String(itemData.source || "").slice(0, 40),
-      source_id: String(itemData.source_id || itemData.id || "").slice(0, 120),
-      media_type: mediaType,
-      title: String(itemData.title || "Contenido visto").slice(0, 300),
-      cover_url: String(extractRawMediaUrl(itemData.cover_url) || itemData.cover_url || "").slice(0, 1000),
-      url: String(itemData.url || "").slice(0, 1000),
-      position: pos,
-      duration: dur,
-      completed: comp,
-      client_timestamp: clientTs,
-      last_activity: new Date().toISOString()
-    };
+    const chPayload = buildCustomHistRow(userId, itemData, targetItemId);
+    if (!chPayload) return false;
     const customRes = await restFetchWithAdminFallback(
       `${SUPABASE_URL}/rest/v1/user_custom_history?on_conflict=user_id,item_key`,
       (useAdmin) => ({
@@ -6647,26 +6853,49 @@ export async function onRequest(context) {
       const hasTypeFilter = Boolean(typeFilter && ["comic", "video", "gallery", "game"].includes(typeFilter));
       const getVideoCatalog = createVideoCatalogLoader();
 
-      let histQueryUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,page_count,status,real_people)&order=last_activity.desc,id.desc`;
-      if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
-        histQueryUrl += `&media_type=eq.${typeFilter}`;
-      }
+      const sqlQueryPromise = (typeFilter === "game")
+        ? Promise.resolve(null)
+        : (async () => {
+            let histQueryUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,page_count,status)&order=last_activity.desc,id.desc`;
+            if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
+              histQueryUrl += `&media_type=eq.${typeFilter}`;
+            }
+            let r = await restFetchWithAdminFallback(
+              histQueryUrl,
+              (useAdmin) => ({
+                headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                  "Prefer": "count=exact",
+                  "Range": `${offset}-${to}`
+                })
+              }),
+              user.id,
+              verified
+            );
+            if (!r || !r.ok) {
+              let plainHistUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp&order=last_activity.desc,id.desc`;
+              if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
+                plainHistUrl += `&media_type=eq.${typeFilter}`;
+              }
+              r = await restFetchWithAdminFallback(
+                plainHistUrl,
+                (useAdmin) => ({
+                  headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                    "Prefer": "count=exact",
+                    "Range": `${offset}-${to}`
+                  })
+                }),
+                user.id,
+                verified
+              );
+            }
+            return r;
+          })();
 
       let customHistUrl = `${SUPABASE_URL}/rest/v1/user_custom_history?user_id=eq.${user.id}&select=item_key,item_id,source,source_id,media_type,title,cover_url,url,position,duration,completed,client_timestamp,last_activity&order=last_activity.desc&limit=500`;
       if (hasTypeFilter) customHistUrl += `&media_type=eq.${typeFilter}`;
 
       const [histRes, customHistRes] = await Promise.all([
-        restFetchWithAdminFallback(
-          histQueryUrl,
-          (useAdmin) => ({
-            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
-              "Prefer": "count=exact",
-              "Range": `${offset}-${to}`
-            })
-          }),
-          user.id,
-          verified
-        ),
+        sqlQueryPromise,
         restFetchWithAdminFallback(
           customHistUrl,
           (useAdmin) => ({
@@ -6679,21 +6908,40 @@ export async function onRequest(context) {
         )
       ]);
 
-      const sqlTotal = histRes && histRes.ok ? parseContentRangeTotal(histRes) : 0;
-      let rawRows = histRes && histRes.ok ? await histRes.json().catch(() => []) : [];
-      if (!Array.isArray(rawRows)) rawRows = [];
       const customRowsRaw = customHistRes && customHistRes.ok ? await customHistRes.json().catch(() => []) : [];
       const customRows = Array.isArray(customRowsRaw) ? customRowsRaw : [];
-
       const metaHist = (Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [])
         .filter((mh) => !hasTypeFilter || inferPersonalMediaType(mh) === typeFilter);
-      const needsCombinedWindow = customRows.length > 0 || metaHist.length > 0;
+
+      if (typeFilter !== "game" && (!histRes || !histRes.ok) && customRows.length === 0 && metaHist.length === 0) {
+        return new Response(JSON.stringify({
+          items: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 1,
+          degraded: true,
+          error: "No se pudo leer tu historial"
+        }), {
+          status: 200,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      const sqlTotal = (typeFilter !== "game" && histRes && histRes.ok) ? parseContentRangeTotal(histRes) : 0;
+      let rawRows = (typeFilter !== "game" && histRes && histRes.ok) ? await histRes.json().catch(() => []) : [];
+      if (!Array.isArray(rawRows)) rawRows = [];
+      const needsCombinedWindow = typeFilter !== "game" && (customRows.length > 0 || metaHist.length > 0);
 
       // Si hay historial custom + SQL en más de 1 página, cargar ventana combinada para paginar correctamente sin repetir pág 1
-      if (needsCombinedWindow && sqlTotal > rawRows.length && sqlTotal <= 500 && rawRows.length < sqlTotal) {
-        const fullWinTo = Math.min(499, Math.max(to, offset + pageSize + customRows.length + metaHist.length - 1));
+      if (needsCombinedWindow && sqlTotal > rawRows.length && rawRows.length < sqlTotal) {
+        const fullWinTo = Math.min(999, Math.max(to, offset + pageSize + customRows.length + metaHist.length - 1));
+        let winHistUrl = `${SUPABASE_URL}/rest/v1/user_history?user_id=eq.${user.id}&select=id,item_id,media_type,position,duration,completed,last_activity,client_timestamp,items(id,title,cover_url,media_type,source,source_id,page_count,status)&order=last_activity.desc,id.desc`;
+        if (typeFilter && ["comic", "video", "gallery"].includes(typeFilter)) {
+          winHistUrl += `&media_type=eq.${typeFilter}`;
+        }
         const winRes = await restFetchWithAdminFallback(
-          histQueryUrl,
+          winHistUrl,
           (useAdmin) => ({
             headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
               "Range": `0-${fullWinTo}`
@@ -6736,9 +6984,9 @@ export async function onRequest(context) {
         (Array.isArray(rawRows) ? rawRows : []).map(async (r) => {
           const it = r.items || {};
           const metaMatch = metaHist.find((mh) => String(mh.id || mh.item_id) === String(r.item_id));
-          const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+          const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover } =
             await formatPersonalMediaEntry({ item_id: r.item_id, items: it, meta: metaMatch }, getVideoCatalog, "Contenido visto");
-          const isAvailable = Boolean((it && it.id && it.status !== "blocked") || metaMatch);
+          const isAvailable = Boolean((it && it.id && it.status !== "blocked" && it.real_people !== true) || metaMatch);
           return {
             id: it.id || r.item_id,
             history_id: r.id,
@@ -6748,7 +6996,7 @@ export async function onRequest(context) {
             media_type: r.media_type || it.media_type || (metaMatch && metaMatch.media_type) || "comic",
             source: effectiveSource,
             source_id: effectiveSourceId,
-            url: isAvailable ? effectiveUrl : "",
+            url: "",
             page_count: it.page_count || (metaMatch && metaMatch.page_count) || 0,
             position: r.position || (metaMatch && (metaMatch.position || metaMatch.page || metaMatch.currentTime)) || 0,
             duration: r.duration || (metaMatch && (metaMatch.duration || metaMatch.total)) || 0,
@@ -6762,21 +7010,21 @@ export async function onRequest(context) {
 
       const formattedCustomHist = await Promise.all(
         [...customRows, ...metaHist].map(async (ch) => {
-          const { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl, finalCover } =
+          const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover } =
             await formatPersonalMediaEntry(ch, getVideoCatalog, "Contenido visto");
-          const numId = parseInt(ch.item_id || ch.id, 10);
-          const resolvedId = Number.isInteger(numId) && numId > 0 ? numId : (ch.id || ch.item_id || ch.source_id || ch.item_key);
+          const numId = parseStrictPositiveInt(ch.item_id || ch.id);
+          const resolvedId = (numId && inferPersonalMediaType(ch) !== "game") ? numId : (ch.id || ch.item_id || ch.source_id || ch.item_key);
           const atTs = ch.client_timestamp ? Number(ch.client_timestamp) : (ch.at ? Number(ch.at) : new Date(ch.last_activity || 0).getTime());
           return {
-            ...ch,
             id: resolvedId,
             item_id: resolvedId,
+            item_key: ch.item_key || buildCustomItemKey(ch),
             title: effectiveTitle,
             cover_url: finalCover,
             media_type: inferPersonalMediaType(ch),
             source: effectiveSource || ch.source || "",
             source_id: effectiveSourceId || ch.source_id || String(resolvedId || ""),
-            url: effectiveUrl || ch.url || "",
+            url: "",
             position: ch.position || ch.page || ch.currentTime || 0,
             duration: ch.duration || ch.total || 0,
             completed: Boolean(ch.completed),
@@ -6824,12 +7072,77 @@ export async function onRequest(context) {
 
         // Caso A: Fusión masiva de historial desde dispositivo o localStorage
         if (Array.isArray(body.items)) {
-          let synced = 0;
-          for (const it of body.items.slice(0, 100)) {
-            const resolvedId = await resolveSqlItemId(it, token, user.id);
-            const ok = await upsertSqlOrCustomHistory(user.id, it, resolvedId, token, verified);
-            if (ok || (Number.isInteger(resolvedId) && resolvedId > 0)) synced++;
+          const batch = body.items.slice(0, 50);
+          const resolvedEntries = [];
+          for (let i = 0; i < batch.length; i += 6) {
+            const chunk = batch.slice(i, i + 6);
+            const part = await Promise.all(chunk.map(async (it) => ({
+              it,
+              resolvedId: await resolveSqlItemId(it, token, user.id)
+            })));
+            resolvedEntries.push(...part);
           }
+
+          const sqlRows = [];
+          const customRows = [];
+          let synced = 0;
+          const nowIso = new Date().toISOString();
+
+          for (const { it, resolvedId } of resolvedEntries) {
+            if (!it || typeof it !== "object") continue;
+            if (Number.isInteger(resolvedId) && resolvedId > 0) {
+              const mediaType = inferPersonalMediaType(it);
+              const sqlMedia = mediaType === "video" ? "video" : (mediaType === "gallery" ? "gallery" : "comic");
+              sqlRows.push({
+                user_id: user.id,
+                item_id: resolvedId,
+                media_type: sqlMedia,
+                position: Math.max(0, parseInt(it.position || it.page || it.currentTime || 0, 10) || 0),
+                duration: Math.max(0, parseInt(it.duration || it.total || 0, 10) || 0),
+                completed: Boolean(it.completed),
+                last_activity: nowIso,
+                client_timestamp: parseInt(it.client_timestamp || it.at || Date.now(), 10) || Date.now()
+              });
+            } else {
+              const ch = buildCustomHistRow(user.id, it, resolvedId);
+              if (ch) customRows.push(ch);
+            }
+          }
+
+          if (sqlRows.length > 0) {
+            const sqlBatchRes = await restFetchWithAdminFallback(
+              `${SUPABASE_URL}/rest/v1/user_history?on_conflict=user_id,item_id`,
+              (useAdmin) => ({
+                method: "POST",
+                headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                  "Content-Type": "application/json",
+                  "Prefer": "resolution=merge-duplicates,return=minimal"
+                }),
+                body: JSON.stringify(sqlRows)
+              }),
+              user.id,
+              verified
+            );
+            if (sqlBatchRes && sqlBatchRes.ok) synced += sqlRows.length;
+          }
+
+          if (customRows.length > 0) {
+            const customBatchRes = await restFetchWithAdminFallback(
+              `${SUPABASE_URL}/rest/v1/user_custom_history?on_conflict=user_id,item_key`,
+              (useAdmin) => ({
+                method: "POST",
+                headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+                  "Content-Type": "application/json",
+                  "Prefer": "resolution=merge-duplicates,return=minimal"
+                }),
+                body: JSON.stringify(customRows)
+              }),
+              user.id,
+              verified
+            );
+            if (customBatchRes && customBatchRes.ok) synced += customRows.length;
+          }
+
           return new Response(JSON.stringify({ ok: true, synced }), {
             status: 200,
             headers: getPersonalHeaders(origin, newToken)
@@ -6840,6 +7153,12 @@ export async function onRequest(context) {
         const itemData = body.item || body;
         const targetItemId = await resolveSqlItemId(itemData, token, user.id);
         const savedOk = await upsertSqlOrCustomHistory(user.id, itemData, targetItemId, token, verified);
+        if (!savedOk) {
+          return new Response(JSON.stringify({ error: "No se pudo guardar el progreso en la nube" }), {
+            status: 502,
+            headers: getPersonalHeaders(origin, newToken)
+          });
+        }
 
         return new Response(JSON.stringify({ ok: true, success: true, item_id: targetItemId || itemData.id, sql: savedOk }), {
           status: 200,
@@ -6862,7 +7181,14 @@ export async function onRequest(context) {
         });
       }
 
-      const isClearAll = url.searchParams.get("clear") === "all" || url.searchParams.get("action") === "clear";
+      const rawId = url.searchParams.get("id") || url.searchParams.get("item_id");
+      const qSource = url.searchParams.get("source") || "";
+      const qSourceId = url.searchParams.get("source_id") || "";
+      const parts = url.pathname.split("/").filter(Boolean);
+      const isBareHistoryPath = url.pathname === "/api/user/history" || url.pathname === "/api/history";
+      const isClearAll = url.searchParams.get("clear") === "all" || url.searchParams.get("action") === "clear"
+        || (isBareHistoryPath && !rawId && !qSource && !qSourceId);
+
       if (isClearAll) {
         await Promise.all([
           restFetchWithAdminFallback(
@@ -6879,15 +7205,24 @@ export async function onRequest(context) {
         });
       }
 
-      const rawId = url.searchParams.get("id") || url.searchParams.get("item_id");
-      const qSource = url.searchParams.get("source") || "";
-      const qSourceId = url.searchParams.get("source_id") || "";
       let targetId = parseStrictPositiveInt(rawId);
-      const parts = url.pathname.split("/").filter(Boolean);
       const lastPart = parts[parts.length - 1];
       const secondLastPart = parts.length >= 4 ? parts[parts.length - 2] : null;
       if (!targetId) {
         targetId = parseStrictPositiveInt(lastPart);
+      }
+      if (!targetId && ((qSource && qSourceId) || (secondLastPart && lastPart && secondLastPart !== "history"))) {
+        targetId = await resolveSqlItemId({
+          source: qSource || secondLastPart,
+          source_id: qSourceId || lastPart
+        }, token, user.id);
+      }
+
+      if (!targetId && !rawId && !qSource && !qSourceId && (!lastPart || lastPart === "history")) {
+        return new Response(JSON.stringify({ error: "Identificador requerido para eliminar del historial" }), {
+          status: 400,
+          headers: getPersonalHeaders(origin, newToken)
+        });
       }
 
       await Promise.all([
@@ -6909,7 +7244,7 @@ export async function onRequest(context) {
         }, token, verified)
       ]);
 
-      return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId || lastPart }), {
+      return new Response(JSON.stringify({ ok: true, success: true, deleted_id: targetId || qSourceId || rawId || lastPart }), {
         status: 200,
         headers: getPersonalHeaders(origin, newToken)
       });
@@ -6960,7 +7295,24 @@ export async function onRequest(context) {
         });
       }
       const body = await context.request.json().catch(() => ({}));
-      const dataObj = (body.data && typeof body.data === "object") ? body.data : body;
+      const rawData = (body.data && typeof body.data === "object") ? { ...body.data } : { ...body };
+      let dataObj = rawData;
+
+      if (dataObj.game_saves === undefined) {
+        try {
+          const existingRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data&limit=1`, {
+            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
+          });
+          if (existingRes.ok) {
+            const existingRows = await existingRes.json().catch(() => []);
+            const existingSaves = existingRows && existingRows[0] && existingRows[0].data && existingRows[0].data.game_saves;
+            if (existingSaves && typeof existingSaves === "object") {
+              dataObj = { ...dataObj, game_saves: existingSaves };
+            }
+          }
+        } catch (e) {}
+      }
+
       const serialized = JSON.stringify(dataObj);
       if (serialized.length > 16384) {
         return new Response(JSON.stringify({ error: "Tamaño máximo de preferencias excedido (16KB)" }), {
@@ -6971,7 +7323,7 @@ export async function onRequest(context) {
       const ver = parseInt(body.version || 2, 10);
       const nowIso = new Date().toISOString();
 
-      await fetch(`${SUPABASE_URL}/rest/v1/user_preferences`, {
+      const prefWriteRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?on_conflict=user_id`, {
         method: "POST",
         headers: {
           "apikey": SUPABASE_KEY,
@@ -6986,6 +7338,13 @@ export async function onRequest(context) {
           updated_at: nowIso
         })
       });
+
+      if (!prefWriteRes.ok) {
+        return new Response(JSON.stringify({ error: "No se pudieron guardar las preferencias" }), {
+          status: 502,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
 
       return new Response(JSON.stringify({ ok: true, success: true, data: dataObj, version: ver, updated_at: nowIso }), {
         status: 200,
@@ -7255,12 +7614,63 @@ export async function onRequest(context) {
       const targetGameId = String(gameId || url.searchParams.get("game_id") || "").trim();
       const slotName = url.searchParams.get("slot_name");
 
-      if (targetGameId) {
-        let delUrl = `${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${user.id}&game_id=eq.${encodeURIComponent(targetGameId)}`;
-        if (slotName) delUrl += `&slot_name=eq.${encodeURIComponent(slotName)}`;
-        await fetch(delUrl, {
-          method: "DELETE",
+      if (!targetGameId) {
+        return new Response(JSON.stringify({ error: "game_id requerido" }), {
+          status: 400,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+
+      let delUrl = `${SUPABASE_URL}/rest/v1/game_saves?user_id=eq.${user.id}&game_id=eq.${encodeURIComponent(targetGameId)}`;
+      if (slotName) delUrl += `&slot_name=eq.${encodeURIComponent(slotName)}`;
+      const delRes = await fetch(delUrl, {
+        method: "DELETE",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
+      }).catch(() => null);
+
+      let prefClearedOk = false;
+      try {
+        const prefRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?user_id=eq.${user.id}&select=data&limit=1`, {
           headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}` }
+        });
+        if (prefRes.ok) {
+          const prefRows = await prefRes.json().catch(() => []);
+          const currentData = (prefRows && prefRows[0] && prefRows[0].data) ? { ...prefRows[0].data } : null;
+          if (currentData && currentData.game_saves && currentData.game_saves[targetGameId]) {
+            if (slotName) {
+              delete currentData.game_saves[targetGameId][slotName];
+              if (Object.keys(currentData.game_saves[targetGameId]).length === 0) {
+                delete currentData.game_saves[targetGameId];
+              }
+            } else {
+              delete currentData.game_saves[targetGameId];
+            }
+            const prefWriteRes = await fetch(`${SUPABASE_URL}/rest/v1/user_preferences?on_conflict=user_id`, {
+              method: "POST",
+              headers: {
+                "apikey": SUPABASE_KEY,
+                "Authorization": `Bearer ${token || SUPABASE_ANON_KEY || SUPABASE_KEY}`,
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates"
+              },
+              body: JSON.stringify({
+                user_id: user.id,
+                data: currentData,
+                version: 2,
+                updated_at: new Date().toISOString()
+              })
+            });
+            prefClearedOk = Boolean(prefWriteRes && prefWriteRes.ok);
+          } else {
+            prefClearedOk = true;
+          }
+        }
+      } catch (e) {}
+
+      if ((!delRes || !delRes.ok) && !prefClearedOk) {
+        return new Response(JSON.stringify({ error: "No se pudo eliminar la partida guardada" }), {
+          status: 502,
+          headers: getPersonalHeaders(origin, newToken)
         });
       }
 
@@ -7319,15 +7729,22 @@ export async function onRequest(context) {
         headers: getPersonalHeaders(origin, newToken)
       });
     }
+    if (username && isReservedUsername(username)) {
+      return new Response(JSON.stringify({ error: "Ese nombre de usuario está reservado y no se puede utilizar" }), {
+        status: 403,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
 
-    if (username && SUPABASE_SERVICE_ROLE_KEY) {
+    if (username && SUPABASE_ADMIN_KEY) {
+      const escapedUserLike = escapePostgrestLike(username);
       const dupRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?select=id&username=ilike.${encodeURIComponent(username)}&id=neq.${encodeURIComponent(user.id)}&limit=1`,
-        { headers: { "apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` } }
+        `${SUPABASE_URL}/rest/v1/profiles?select=id,username&username=ilike.${encodeURIComponent(escapedUserLike)}&id=neq.${encodeURIComponent(user.id)}&limit=5`,
+        { headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` } }
       );
       if (dupRes.ok) {
         const dupRows = await dupRes.json().catch(() => []);
-        if (Array.isArray(dupRows) && dupRows.length > 0) {
+        if (Array.isArray(dupRows) && dupRows.some(r => String(r.username || "").trim().toLowerCase() === username.toLowerCase())) {
           return new Response(JSON.stringify({ error: "Ese nombre de usuario ya está en uso por otro miembro" }), {
             status: 409,
             headers: getPersonalHeaders(origin, newToken)
@@ -7342,7 +7759,7 @@ export async function onRequest(context) {
     userMetadata.avatarBg = avatarBg;
 
     // Actualizar metadata en Supabase Auth
-    await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    const authPutRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: "PUT",
       headers: {
         "apikey": SUPABASE_KEY,
@@ -7350,7 +7767,7 @@ export async function onRequest(context) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ data: userMetadata })
-    }).catch(() => {});
+    }).catch(() => null);
 
     // Actualizar perfil persistente en Postgres
     const profPatch = {
@@ -7367,7 +7784,7 @@ export async function onRequest(context) {
       ? SUPABASE_SERVICE_ROLE_KEY
       : (SUPABASE_ANON_KEY || SUPABASE_KEY);
 
-    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
+    const profPatchRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
       method: "PATCH",
       headers: {
         "apikey": patchApiKey,
@@ -7375,7 +7792,20 @@ export async function onRequest(context) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify(profPatch)
-    }).catch(() => {});
+    }).catch(() => null);
+
+    if ((!authPutRes || !authPutRes.ok) && (!profPatchRes || !profPatchRes.ok)) {
+      return new Response(JSON.stringify({ error: "No se pudo actualizar el perfil" }), {
+        status: 502,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
+    if (profPatchRes && profPatchRes.status === 409) {
+      return new Response(JSON.stringify({ error: "Ese nombre de usuario ya está en uso por otro miembro" }), {
+        status: 409,
+        headers: getPersonalHeaders(origin, newToken)
+      });
+    }
 
     const updatedProfile = await fetchUserProfile(SUPABASE_URL, SUPABASE_ADMIN_KEY, SUPABASE_KEY, user.id, token);
     const view = buildUserSubscriptionView(
@@ -7410,6 +7840,7 @@ export async function onRequest(context) {
     }
 
     const body = await context.request.json().catch(() => ({}));
+    const oldPassword = String(body.old_password || "");
     const newPassword = String(body.new_password || "");
     if (!newPassword || newPassword.length < 6) {
       return new Response(JSON.stringify({ error: "La nueva contraseña debe tener al menos 6 caracteres" }), {
@@ -7418,6 +7849,33 @@ export async function onRequest(context) {
       });
     }
 
+    const isInitialPatreonPassword = Boolean(
+      user.user_metadata?.patreon_id && user.user_metadata?.password_initialized !== true && !oldPassword
+    );
+    if (!isInitialPatreonPassword) {
+      if (!oldPassword) {
+        return new Response(JSON.stringify({ error: "Ingresa tu contraseña actual" }), {
+          status: 400,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+      const verifyRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_ANON_KEY || SUPABASE_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email: user.email, password: oldPassword })
+      }).catch(() => null);
+      if (!verifyRes || !verifyRes.ok) {
+        return new Response(JSON.stringify({ error: "La contraseña actual es incorrecta" }), {
+          status: 401,
+          headers: getPersonalHeaders(origin, newToken)
+        });
+      }
+    }
+
+    const nextMeta = { ...(user.user_metadata || {}), password_initialized: true };
     const upRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: "PUT",
       headers: {
@@ -7425,7 +7883,7 @@ export async function onRequest(context) {
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ password: newPassword })
+      body: JSON.stringify({ password: newPassword, data: nextMeta })
     });
 
     if (!upRes.ok) {
