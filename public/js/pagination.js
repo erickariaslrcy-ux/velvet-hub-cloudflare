@@ -540,9 +540,6 @@
       </nav>
       ${sheetHtml}
     `;
-
-    // Despachar prefetch predictivo de la página siguiente si aplica
-    schedulePrefetchNextPage();
   }
 
   // ==========================================================================
@@ -826,6 +823,11 @@
     // Delegación de eventos en document para capturar dentro y fuera del root (ej. bottom sheet)
     document.addEventListener('click', handleRootClick);
     document.addEventListener('keydown', handleRootKeydown);
+    document.addEventListener('pointerenter', (e) => {
+      if (e.target && e.target.closest && e.target.closest('#velvet-pagination-root .v-page-next')) {
+        schedulePrefetchNextPage();
+      }
+    }, true);
 
     // Escuchar botón atrás / adelante del navegador
     window.addEventListener('popstate', (e) => {

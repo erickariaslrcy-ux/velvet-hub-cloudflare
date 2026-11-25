@@ -1,9 +1,9 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v29-random-disjoint-ui';
+const CACHE_VERSION = 'v30-pmv-disjoint-final';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
-const MAX_CACHED_IMAGES = 400;
+const MAX_CACHED_IMAGES = 800;
 
 const STATIC_ASSETS = [
   '/',
@@ -215,16 +215,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 5. Catálogo de Etiquetas (/api/tags): Stale-While-Revalidate (catálogo /api/items pasa directo a red/borde)
+  // 5. Catálogo de Etiquetas (/api/tags): Cache-First fresco por 6h, luego SWR (catálogo /api/items pasa directo a red/borde)
   const isCatalogApi = url.pathname.startsWith('/api/tags');
   if (isCatalogApi) {
     event.respondWith(
       caches.open(API_CACHE).then(async (cache) => {
         const cached = await cache.match(req);
+        const cachedAt = cached ? Number(cached.headers.get('X-SW-Cached-At') || 0) : 0;
+        if (cached && cachedAt && (Date.now() - cachedAt) < 21600000) {
+          return cached;
+        }
         const fetchPromise = fetch(req)
           .then((networkResp) => {
             if (networkResp && networkResp.status === 200) {
-              cache.put(req, networkResp.clone());
+              const hdrs = new Headers(networkResp.headers);
+              hdrs.set('X-SW-Cached-At', String(Date.now()));
+              const stamped = new Response(networkResp.clone().body, {
+                status: networkResp.status,
+                statusText: networkResp.statusText,
+                headers: hdrs
+              });
+              cache.put(req, stamped);
             }
             return networkResp;
           })

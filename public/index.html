@@ -3991,7 +3991,7 @@
 
     const CLIENT_CACHE = new Map();
     window.CLIENT_CACHE = CLIENT_CACHE;
-    const CLIENT_CACHE_TTL = 300000; // 5 minutos
+    const CLIENT_CACHE_TTL = 600000; // 10 minutos
 
     // Turbo Cache Persistente en Memoria & SessionStorage (0ms lectura y navegación)
     const ITEM_DETAILS_CACHE = new Map();
@@ -6856,7 +6856,10 @@
       if (!skipCache && CLIENT_CACHE.has(cacheKey)) {
         _isLoadingFeed = false;
         const cached = CLIENT_CACHE.get(cacheKey);
-        renderFeedData(cached.data);
+        const cData = (state.freshShuffle || state.sort === 'random') && cached.data && Array.isArray(cached.data.items)
+          ? Object.assign({}, cached.data, { items: dedupeRandomPageItems(state.page || 1, cached.data.items) })
+          : cached.data;
+        renderFeedData(cData);
         if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
           window.VelvetPagination.resetLoadingState();
         }
@@ -6873,7 +6876,10 @@
             if (parsed && parsed.data && parsed.data.items && parsed.data.items.length > 0) {
               _isLoadingFeed = false;
               CLIENT_CACHE.set(cacheKey, parsed);
-              renderFeedData(parsed.data);
+              const sData = state.sort === 'random'
+                ? Object.assign({}, parsed.data, { items: dedupeRandomPageItems(state.page || 1, parsed.data.items) })
+                : parsed.data;
+              renderFeedData(sData);
               if (window.VelvetPagination && typeof window.VelvetPagination.resetLoadingState === 'function') {
                 window.VelvetPagination.resetLoadingState();
               }
@@ -15466,14 +15472,15 @@
         }
       } catch (e) {}
       CLIENT_CACHE.clear();
+      if (typeof randomPageHistory !== 'undefined') randomPageHistory.clear();
       try {
         Object.keys(sessionStorage).forEach(k => {
-          if (k.startsWith('vcache_')) sessionStorage.removeItem(k);
+          if (k.startsWith('vcache')) sessionStorage.removeItem(k);
         });
         const localKeysToRemove = [];
         for (let i = 0; i < localStorage.length; i++) {
           const lk = localStorage.key(i);
-          if (lk && lk.startsWith('vcache_')) localKeysToRemove.push(lk);
+          if (lk && lk.startsWith('vcache')) localKeysToRemove.push(lk);
         }
         localKeysToRemove.forEach(lk => localStorage.removeItem(lk));
       } catch (e) {}

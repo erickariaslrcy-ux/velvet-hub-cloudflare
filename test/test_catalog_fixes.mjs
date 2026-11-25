@@ -499,7 +499,7 @@ const embedRes = await callMedia(embedToken, "", async (input) => {
 assert.equal(embedRes.status, 200, "cdn.buondua.com se abre en pok.misskon.com");
 assert.equal(embedCalls[0], "https://pok.misskon.com/images/2025/12/30/cover.webp");
 
-assert.ok(sw.includes("v23-morbo-name") || sw.includes("v24-subscriptions-fix") || sw.includes("v25-cloud-favorites") || sw.includes("v26-security-audit") || sw.includes("v27-vault-pagination") || sw.includes("v28-clean-vault-titles") || sw.includes("v29-random-disjoint-ui"), "El service worker purga la caché vieja de portadas");
+assert.ok(sw.includes("v23-morbo-name") || sw.includes("v24-subscriptions-fix") || sw.includes("v25-cloud-favorites") || sw.includes("v26-security-audit") || sw.includes("v27-vault-pagination") || sw.includes("v28-clean-vault-titles") || sw.includes("v29-random-disjoint-ui") || sw.includes("v30-pmv-disjoint-final"), "El service worker purga la caché vieja de portadas");
 assert.ok(sw.includes("req.destination === 'video'"), "El service worker no intercepta la reproducción");
 assert.ok(sw.includes("function isUsableCoverResponse"), "El service worker descarta SVG y 403 cacheados");
 

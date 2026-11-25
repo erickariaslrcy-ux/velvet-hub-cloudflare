@@ -875,13 +875,43 @@ function assembleShufflePage(bandRows, pageSize, seed) {
 
 function pmvPageNumbers(seed, page, pageSize, totalPages) {
   const total = Math.max(1, Math.floor(Number(totalPages) || 1));
+  const safePage = Math.max(1, Math.floor(Number(page) || 1));
+  const baseSeed = Math.abs(Math.floor(Number(seed) || 1)) || 1;
+  if (total >= 1600) {
+    const lowStart = 600;
+    const lowSpan = 200; // [600..799]: fuera del bloque pegajoso < 600 de PMVHaven y siempre < 800
+    const lowSlots = 24;
+    const lowSlot = permutePageIndex((safePage - 1) % lowSlots, lowSlots, (baseSeed + 131) >>> 0);
+    const subStart = lowStart + Math.floor((lowSlot * lowSpan) / lowSlots);
+    const subEnd = lowSlot === lowSlots - 1 ? 799 : lowStart + Math.floor(((lowSlot + 1) * lowSpan) / lowSlots) - 1;
+    const rng = shuffleRng((baseSeed ^ Math.imul(safePage, 0x9e3779b1)) >>> 0);
+    const p0 = Math.min(799, Math.max(lowStart, subStart + Math.floor(rng() * Math.max(1, subEnd - subStart + 1))));
+    const highPlan = planShuffleWindows({
+      total: Math.max(1, total - 800 + 1),
+      minId: 800,
+      maxId: total,
+      page: safePage,
+      pageSize: pageSize || 24,
+      seed: baseSeed,
+      bands: 4
+    });
+    const pages = [p0];
+    const seen = new Set([p0]);
+    for (let i = 1; i < highPlan.windows.length; i++) {
+      const p = Math.min(total, Math.max(800, Math.floor(Number(highPlan.windows[i].anchorId) || 800)));
+      if (seen.has(p)) continue;
+      seen.add(p);
+      pages.push(p);
+    }
+    return pages;
+  }
   const plan = planShuffleWindows({
     total,
     minId: 1,
     maxId: total,
-    page: page || 1,
+    page: safePage,
     pageSize: pageSize || 24,
-    seed: seed || 1,
+    seed: baseSeed,
     bands: 4
   });
   const pages = [];
@@ -935,7 +965,7 @@ function orderCatalogForSlot(items, slot, mediaType) {
 
 function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "9");
+  u.searchParams.set("cv", "10");
   if (slot !== undefined && slot !== null && slot !== "") {
     u.searchParams.set("rot", String(slot));
   }
@@ -1313,9 +1343,25 @@ async function fetchIdBounds(supabaseUrl, apiKey, filterQuery) {
 }
 
 async function fetchCatalogSpan(supabaseUrl, apiKey, filterQuery) {
-  const cacheKey = `span:v4:${filterQuery}`;
+  const cacheKey = `span:v5:${filterQuery}`;
   const cached = getIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, 1800000);
   if (cached && cached.minId && cached.maxId && cached.total) return cached;
+  const edgeCache = typeof caches !== "undefined" ? caches.default : null;
+  const edgeReq = edgeCache
+    ? new Request(`https://velvet-internal.cache/span/v5?s=${encodeURIComponent(supabaseUrl)}&q=${encodeURIComponent(filterQuery)}`, { method: "GET" })
+    : null;
+  if (edgeCache && edgeReq) {
+    try {
+      const hit = await edgeCache.match(edgeReq);
+      if (hit) {
+        const span = await hit.json();
+        if (span && span.minId && span.maxId && span.total) {
+          setIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, span);
+          return span;
+        }
+      }
+    } catch (e) {}
+  }
   const headers = { "apikey": apiKey, "Authorization": `Bearer ${apiKey}` };
   // planned sale del plan de Postgres, sin recorrer la tabla. exact en un
   // ILIKE de categoría llegaba al statement_timeout y dejaba el índice colgado.
@@ -1341,6 +1387,14 @@ async function fetchCatalogSpan(supabaseUrl, apiKey, filterQuery) {
     }
     const span = { minId, maxId, total };
     setIsolateCache(ISOLATE_CATALOG_CACHE, cacheKey, span);
+    if (edgeCache && edgeReq && total > 0) {
+      try {
+        await edgeCache.put(edgeReq, new Response(JSON.stringify(span), {
+          status: 200,
+          headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=21600" }
+        }));
+      } catch (e) {}
+    }
     return span;
   } catch (e) {
     return null;
@@ -1458,11 +1512,17 @@ async function sampleComicByIdLottery({ supabaseUrl, apiKey, filterQuery, select
     }
   };
   const select = comicCatalogSelect(selectFields);
+  const baseSeed = Math.abs(Number(seed) || 1) >>> 0;
+  const mixSeed = (baseSeed + safePage * 997) >>> 0;
+  if (total <= size * 8) {
+    // Subconjunto compacto (< ~192 items): permutación biyectiva directa en índice denso (0 solape y 1 RTT).
+    const plan = catalogPageOffset(safePage, size, total, baseSeed, true);
+    const directRows = await fetchRows(`${supabaseUrl}/rest/v1/items?select=${select}&limit=${plan.pageSize}&offset=${plan.offset}&order=id.desc&${filterQuery}`);
+    return { items: fisherYates(directRows, mixSeed).slice(0, size), total };
+  }
   const idSpan = Math.max(1, Math.floor(maxId) - Math.floor(minId) + 1);
   const density = Math.min(1, Math.max(0.004, total / idSpan));
   const probes = Math.min(720, Math.max(size * 8, Math.ceil((size * 5) / density)));
-  const baseSeed = Math.abs(Number(seed) || 1) >>> 0;
-  const mixSeed = (baseSeed + safePage * 997) >>> 0;
   const slotMod = total > size * 2 ? Math.min(32, Math.max(2, Math.floor(total / Math.max(1, size * 2)))) : 0;
   const pageBucket = slotMod ? permutePageIndex((safePage - 1) % slotMod, slotMod, baseSeed) : 0;
   const bucketFilter = slotMod ? { slotMod, pageBucket, partitionSeed: baseSeed } : null;
@@ -1551,7 +1611,7 @@ async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectF
   // Una consulta por ficha supera el tope de subrequests; muestrear sub-bandas
   // disjuntas por página para que Page 1 y Page 2 no repitan elementos.
   const bandCount = Math.min(8, Math.max(4, Math.ceil(size / 3)));
-  const take = Math.max(4, Math.ceil((size * 2) / bandCount));
+  const take = Math.max(12, Math.ceil((size * 3) / bandCount));
   const bandPlan = planSpanBands(minId, maxId, total, safePage, bandCount, seed, take);
   const loadBand = (entry) => {
     const url = `${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${take}&offset=0&order=id.desc&id=lte.${entry.anchor}&${filterQuery}`;
@@ -1581,25 +1641,8 @@ async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectF
     return shuffleBand(strict, bIdx);
   });
   let items = assembleShufflePage(inSlotBands, size, mixSeed);
-  if (items.length < size && total > size) {
-    // Si las sub-bandas tuvieron huecos reales de IDs, complementar con ventanas disjuntas en índice denso.
-    const plan = planShuffleWindows({
-      total,
-      minId,
-      maxId,
-      page: safePage,
-      pageSize: size,
-      seed: baseSeed,
-      bands: 4
-    });
-    const offsetBands = await Promise.all(plan.windows.map((w) =>
-      fetchRows(`${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${w.take}&offset=${w.offset}&order=id.desc&${filterQuery}`)
-    ));
-    const mergedBands = inSlotBands.map((rows, idx) => rows.concat(offsetBands[idx] || []));
-    for (let k = inSlotBands.length; k < offsetBands.length; k++) mergedBands.push(offsetBands[k]);
-    items = assembleShufflePage(mergedBands, size, mixSeed);
-  }
   if (items.length < size) {
+    // Usar primero las filas ya cargadas en esta misma RTT particionadas por cubeta hash por página
     const spillBands = rawBandRows.map((rows, bIdx) => shuffleBand(rows, bIdx));
     const slotMod = total > size * 2 ? Math.min(32, Math.max(2, Math.floor(total / Math.max(1, size * 2)))) : 0;
     const pageBucket = slotMod ? permutePageIndex((safePage - 1) % slotMod, slotMod, baseSeed) : 0;
@@ -1614,14 +1657,28 @@ async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectF
       seen.add(k);
       items.push(r);
     }
-    if (items.length < size) {
-      for (const r of assembleShufflePage(spillBands, size, mixSeed)) {
-        if (items.length >= size) break;
-        const k = String(r.id);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        items.push(r);
-      }
+  }
+  if (items.length < size && total > size) {
+    // Fallback por índice denso solo si los huecos impidieron llenar la página en índice PK
+    const plan = planShuffleWindows({
+      total,
+      minId,
+      maxId,
+      page: safePage,
+      pageSize: size,
+      seed: baseSeed,
+      bands: 4
+    });
+    const offsetBands = await Promise.all(plan.windows.map((w) =>
+      fetchRows(`${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${w.take}&offset=${w.offset}&order=id.desc&${filterQuery}`)
+    ));
+    const seen = new Set(items.map((r) => String(r.id)));
+    for (const r of assembleShufflePage(offsetBands, size, mixSeed)) {
+      if (items.length >= size) break;
+      const k = String(r.id);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      items.push(r);
     }
   }
   if (items.length < size) {
@@ -3650,8 +3707,8 @@ export async function onRequest(context) {
         // La permutación biyectiva deja la 494 y la 495 en páginas distintas
         // y cambia toda la categoría al cambiar la ventana de 3 horas.
         let pmvSeed = (Math.imul(seedVal, 997) ^ 0x51a7) >>> 0;
-        if ((pmvSeed % 2500) < 23) pmvSeed = (pmvSeed + 137) >>> 0;
-        fetchPmvPage = permutePageIndex(Math.max(0, page - 1), 2500, pmvSeed) + 1;
+        if ((pmvSeed % 1900) < 23) pmvSeed = (pmvSeed + 137) >>> 0;
+        fetchPmvPage = 600 + permutePageIndex(Math.max(0, page - 1), 1900, pmvSeed);
       }
 
       let pmvApiUrl = `https://pmvhaven.com/api/videos?page=${fetchPmvPage}&limit=${pageSize}&sort=${pmvSort}`;

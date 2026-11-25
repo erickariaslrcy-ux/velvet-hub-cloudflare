@@ -482,7 +482,7 @@
       };
 
       const prefetch = (url) => {
-        if (!url || prefetchedUrls.has(url)) return;
+        if (!url || prefetchedUrls.has(url) || prefetchedUrls.size >= 40) return;
         if (isSlowConnection() || document.documentElement.classList.contains('velvet-data-saver')) return;
 
         prefetchedUrls.add(url);
@@ -519,7 +519,7 @@
         clearTimeout(prefetchTimer);
         prefetchTimer = setTimeout(() => {
           prefetch(href);
-        }, 150);
+        }, 400);
       });
 
       document.addEventListener('mouseout', (e) => {
