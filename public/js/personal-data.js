@@ -137,6 +137,19 @@
     return Number.isSafeInteger(n) && n > 0 ? n : null;
   }
 
+  function cleanPersonalCachedTitle(raw) {
+    return String(raw || '')
+      .replace(/\{[^}]{1,90}\}/g, ' ')
+      .replace(/[\[\(（【][^\]\)）】]{0,80}\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?|videos?)\b[^\]\)）】]{0,50}(?:[\]\)）】]|$)/gi, ' ')
+      .replace(/[\[\(（【]\s*\d+\s*photo[^\])]*$/gi, ' ')
+      .replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, '')
+      .trim()
+      .slice(0, 140);
+  }
+
   function compactFavRecord(f) {
     if (!f || typeof f !== 'object') return null;
     const id = parseStrictPositiveInt(f.id || f.item_id);
@@ -153,7 +166,7 @@
     if (f.source) out.source = String(f.source).slice(0, 40);
     if (f.source_id != null && f.source_id !== '') out.source_id = String(f.source_id).slice(0, 80);
     if (f.media_type) out.media_type = String(f.media_type).slice(0, 16);
-    if (f.title) out.title = String(f.title).slice(0, 120);
+    if (f.title) out.title = cleanPersonalCachedTitle(f.title);
     if (f.cover_url) out.cover_url = String(f.cover_url).slice(0, 500);
     if (f.url) out.url = String(f.url).slice(0, 500);
     return out;
@@ -183,7 +196,7 @@
     }
     if (h.source) out.source = String(h.source).slice(0, 40);
     if (h.source_id != null && h.source_id !== '') out.source_id = String(h.source_id).slice(0, 80);
-    if (h.title) out.title = String(h.title).slice(0, 80);
+    if (h.title) out.title = cleanPersonalCachedTitle(h.title);
     if (h.cover_url) out.cover_url = String(h.cover_url).slice(0, 500);
     if (h.url) out.url = String(h.url).slice(0, 500);
     if (!isVid && pos) out.page = pos;

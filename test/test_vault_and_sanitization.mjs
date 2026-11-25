@@ -98,6 +98,10 @@ assert.ok(!vaultJs.includes("HISTORY_CHUNK_SIZE = 48"), "vault.js no debe acumul
 
   const cleanTags = ctx.sanitizeDisplayTags(["xasiat", "buondua.com", "270MB", "40P", "Cosplay", "Lingerie"]);
   assert.deepEqual(cleanTags, ["Cosplay", "Lingerie"]);
+  assert.equal(ctx.cleanGallerySetTitle("[ROSI写真] No.5066 - 5070 (477 photos)"), "[ROSI写真] No.5066 - 5070");
+  assert.equal(ctx.cleanGallerySetTitle("Coser@一小小央泽: 小绵羊 (63 photos + 1 video)"), "Coser@一小小央泽: 小绵羊");
+  assert.equal(ctx.cleanGallerySetTitle("Coser@布丁大法 (Pudding Dafa): 2026年05月 居家姐姐 (25 photo..."), "Coser@布丁大法 (Pudding Dafa): 2026年05月 居家姐姐");
+  assert.equal(ctx.cleanGallerySetTitle("[Cosplay] 纸祝Etsu_ko 円山小姐 [23P-..."), "[Cosplay] 纸祝Etsu_ko 円山小姐");
   assert.equal(ctx.sanitizeCreatorName("xasiat.com", "comic"), "Morbo VIP");
   assert.equal(ctx.sanitizeCreatorName("NOOKKIZZCOS", "gallery"), "");
   console.log("✓ Limpiadores de títulos, hero bilingüe, pills de galerías y tags verificados.");
@@ -153,7 +157,13 @@ assert.ok(!vaultJs.includes("HISTORY_CHUNK_SIZE = 48"), "vault.js no debe acumul
     const allFavs = Array.from({ length: 40 }, (_, i) => ({
       id: 1000 + i,
       item_id: 1000 + i,
-      title: `[AIGirl] Set ${i + 1}]270MB xasiat`,
+      title: i % 4 === 0
+        ? `[AIGirl] Set ${i + 1}]270MB xasiat (477 photos)`
+        : (i % 4 === 1
+          ? `Coser Set ${i + 1} (63 photos + 1 video)`
+          : (i % 4 === 2
+            ? `Coser Pack ${i + 1} (25 photo...`
+            : `Cosplay ${i + 1} [23P-...`)),
       media_type: "gallery",
       source: "xasiat",
       source_id: String(1000 + i)
@@ -244,6 +254,10 @@ assert.ok(!vaultJs.includes("HISTORY_CHUNK_SIZE = 48"), "vault.js no debe acumul
     await PD.fetchFavorites(1);
     Vault.renderFavorites();
     assert.equal(favContainer.children.length, expectedMax, `Favoritos pág 1 debe renderizar máx ${expectedMax} elementos`);
+    const renderedFavHtml = favContainer.children.map((c) => c.innerHTML).join(" ");
+    const favTitlesOnly = [...renderedFavHtml.matchAll(/<h4[^>]*>([\s\S]*?)<\/h4>/g)].map((m) => m[1]).join(" ");
+    assert.ok(!/270MB|477 photos|63 photos|1 video|25 photo|23P/i.test(renderedFavHtml), `Favoritos renderizó peso o cantidad de fotos: ${renderedFavHtml.slice(0, 300)}`);
+    assert.ok(!/270MB|477 photos|63 photos|1 video|25 photo|23P|xasiat/i.test(favTitlesOnly), `Título en Favoritos conservó ruido o sitio: ${favTitlesOnly}`);
     assert.ok(fetchedUrls.some((u) => u.includes(`/api/user/favorites?page=1&pageSize=${expectedMax}`)));
     assert.ok(favPg.innerHTML.includes(`(${expectedMax}/pág.)`));
 

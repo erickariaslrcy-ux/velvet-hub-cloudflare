@@ -561,13 +561,14 @@ function cleanPublicTitle(rawTitle) {
     }
     return all;
   });
+  s = s.replace(/[\[\(（【][^\]\)）】]*\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photo(?:s)?|fotos?|imgs?|videos?)\b[^\]\)）】]*$/gi, " ");
+  s = s.replace(/[\[\(（【]\s*\d+\s*photo[^\])]*$/gi, " ");
   s = s.replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, " ");
   s = s.replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, " ");
   s = s.replace(/\b\d+\s*(?:pics?|photos?|fotos?|im[aá]genes?|imgs?)\b(?=\s*(?:[\]|)\-–—]|$))/gi, " ");
   s = s.replace(/(?:tg\s*@[^\s\]]+|t\.me\/\S+|https?:\/\/\S+|[a-z0-9-]+\.(?:com|net|org|li|cc|me|io|xxx)\b)/gi, " ");
   s = s.replace(EXTERNAL_SITE_LEAK_RE, " ");
-  s = s.replace(/\[[^\]]*$/g, " ");
-  s = s.replace(/[\]\[]+/g, (tok, off) => (off === 0 || s.slice(0, off).indexOf("[") === -1 ? " " : tok));
+  s = s.replace(/\[([^\[\]]*)$/, " $1").replace(/^([^\[\]]*)\]/, "$1 ");
   s = s.replace(/\s+/g, " ").replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, "").trim();
   if (s) return s;
   return original.replace(/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, "").replace(EXTERNAL_SITE_LEAK_RE, "").replace(/\s+/g, " ").trim();

@@ -56,10 +56,13 @@
     let s = s0
       .replace(/\{[^}]{1,90}\}/g, ' ')
       .replace(/[\[\(（【](?:peso\b|aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|xasiat|buondua|misskon|4khd|pmvhaven|3hentai)[^\]\)）】]{0,60}[\]\)）】]/gi, ' ')
-      .replace(/[\[\(（【][^\]\)）】]{0,60}\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?)\b[^\]\)）】]{0,30}[\]\)）】]/gi, ' ')
+      .replace(/[\[\(（【][^\]\)）】]{0,80}\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?|videos?)\b[^\]\)）】]{0,50}(?:[\]\)）】]|$)/gi, ' ')
+      .replace(/[\[\(（【]\s*\d+\s*photo[^\])]*$/gi, ' ')
       .replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
       .replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b\d+\s*(?:pics?|photos?|fotos?|im[aá]genes?|imgs?|videos?)\b(?=\s*(?:[\]|)\-–—]|$))/gi, ' ')
       .replace(/\b(?:xasiat|xascdn|buondua|misskon|4khd|pmvhaven|3hentai|hentaipaw|f95zone|gamcore)\b(?:\.[a-z]{2,5})?/gi, ' ')
+      .replace(/\[[^\]]*$/g, ' ')
       .replace(/\s+/g, ' ')
       .replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, '')
       .trim();

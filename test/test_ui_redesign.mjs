@@ -269,7 +269,7 @@ assert.ok(
 
 // Service Worker v12
 assert.ok(
-  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign") || swJs.includes("v13-session-persist") || swJs.includes("v14-stable-media") || swJs.includes("v15-mobile-nav") || swJs.includes("v16-stable-covers") || swJs.includes("v17-gallery-mirrors") || swJs.includes("v18-fav-ids") || swJs.includes("v19-section-zoom") || swJs.includes("v20-video-silence") || swJs.includes("v21-gallery-budget") || swJs.includes("v22-video-direct") || swJs.includes("v23-morbo-name") || swJs.includes("v24-subscriptions-fix") || swJs.includes("v25-cloud-favorites") || swJs.includes("v26-security-audit") || swJs.includes("v27-vault-pagination"),
+  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign") || swJs.includes("v13-session-persist") || swJs.includes("v14-stable-media") || swJs.includes("v15-mobile-nav") || swJs.includes("v16-stable-covers") || swJs.includes("v17-gallery-mirrors") || swJs.includes("v18-fav-ids") || swJs.includes("v19-section-zoom") || swJs.includes("v20-video-silence") || swJs.includes("v21-gallery-budget") || swJs.includes("v22-video-direct") || swJs.includes("v23-morbo-name") || swJs.includes("v24-subscriptions-fix") || swJs.includes("v25-cloud-favorites") || swJs.includes("v26-security-audit") || swJs.includes("v27-vault-pagination") || swJs.includes("v28-clean-vault-titles"),
   "sw.js debe tener la versión de caché actualizada"
 );
 assert.ok(
