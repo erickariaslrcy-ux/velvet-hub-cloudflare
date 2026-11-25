@@ -100,8 +100,17 @@ let _activeSupabaseUrl = "";
 let _activeSupabaseKey = "";
 let _activeSupabaseServiceKey = "";
 
-// Paginación real de datos personales desde PostgreSQL (única fuente de verdad)
-const PERSONAL_PAGE_SIZE = 24;
+// Paginación real de datos personales desde PostgreSQL (única fuente de verdad: máx 18 PC / 12 Android)
+const PERSONAL_PAGE_SIZE = 18;
+
+function resolvePersonalPageSize(request, url) {
+  const raw = url.searchParams.get("pageSize");
+  if (raw != null && raw !== "") {
+    return Math.min(50, Math.max(1, parseInt(raw, 10) || PERSONAL_PAGE_SIZE));
+  }
+  const ua = request && request.headers ? (request.headers.get("User-Agent") || "") : "";
+  return /Android/i.test(ua) ? 12 : PERSONAL_PAGE_SIZE;
+}
 
 // El exp cambia de segundo en segundo si se calcula como now+TTL, y entonces
 // cada portada es una URL nueva: el edge, el navegador y el SW nunca reutilizan
@@ -509,6 +518,91 @@ function sanitizeSlug(input) {
   return input.toLowerCase().replace(/[^a-z0-9_\-]/g, "").slice(0, 60);
 }
 
+const DETAIL_SOURCE_ALIAS_MAP = {
+  mv: "pmvhaven",
+  mx: "xasiat",
+  mb: "buondua",
+  m4: "4khd",
+  mc: "3hentai",
+  mp: "hentaipaw",
+  md: "doujins",
+  mg: "gamcore",
+  ml: "leakgallery"
+};
+
+const EXTERNAL_SITE_LEAK_RE = /\b(?:xasiat|xascdn|buondua|misskon|4khd|imagedeliveries|pmvhaven|3hentai|hentaipaw|doujins|comics18(?:_net|_org)?|comicspornoxxx|reycomix|vercomics?porno|cartooncomixhd|pornocomic|sexkomix2?|comicsparaadultos|melapelacomics|melapelocondibujos|mhcomics|leermanhwas|manhwaweb|f95zone|gamcore|leakgallery|pornhd|damplips|pornone|redporn|anyporn|alotporn|nhentai|e-?hentai|exhentai|hitomi|pixibb|cosplaytele|everia|mrcong|pornhub|xvideos|xnxx|xhamster)\b(?:\.[a-z]{2,5})?/gi;
+
+function isWeightOrNoiseTag(tag) {
+  const s = String(tag || "").trim();
+  if (!s) return true;
+  if (EXTERNAL_SITE_LEAK_RE.test(s)) {
+    EXTERNAL_SITE_LEAK_RE.lastIndex = 0;
+    return true;
+  }
+  if (/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/i.test(s)) return true;
+  if (/^\d+\s*(?:p|pics?|photos?|fotos?|imgs?|videos?)$/i.test(s)) return true;
+  if (/^[a-z0-9-]+\.(?:com|net|org|li|cc|me|io|xxx)$/i.test(s)) return true;
+  if (/^(?:tg\s*@|t\.me\/|@)/i.test(s)) return true;
+  return false;
+}
+
+function cleanPublicTitle(rawTitle) {
+  const original = String(rawTitle || "").trim();
+  if (!original) return "";
+  let s = original;
+  s = s.replace(/\{[^}]{1,90}\}/g, " ");
+  s = s.replace(/[\[\(（【]([^\]\)）】]{1,90})[\]\)）】]/g, (all, inner) => {
+    const t = String(inner || "").trim();
+    if (/^(?:peso\b|aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|complete|completo|uncensored|sin\s*censura|decensored|joselito|joselillo|mtl|rip|scan)/i.test(t)) return "";
+    if (/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/i.test(t) || /^\d+\s*(?:p|pics?|photos?|fotos?|imgs?|videos?)(?:\s*[+\-–—/]\s*\d+(?:[.,]\d+)?\s*(?:p|pics?|photos?|fotos?|imgs?|kb|mb|gb|tb|videos?))*$/i.test(t)) return "";
+    if (EXTERNAL_SITE_LEAK_RE.test(t)) {
+      EXTERNAL_SITE_LEAK_RE.lastIndex = 0;
+      return "";
+    }
+    return all;
+  });
+  s = s.replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, " ");
+  s = s.replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, " ");
+  s = s.replace(/\b\d+\s*(?:pics?|photos?|fotos?|im[aá]genes?|imgs?)\b(?=\s*(?:[\]|)\-–—]|$))/gi, " ");
+  s = s.replace(/(?:tg\s*@[^\s\]]+|t\.me\/\S+|https?:\/\/\S+|[a-z0-9-]+\.(?:com|net|org|li|cc|me|io|xxx)\b)/gi, " ");
+  s = s.replace(EXTERNAL_SITE_LEAK_RE, " ");
+  s = s.replace(/\[[^\]]*$/g, " ");
+  s = s.replace(/[\]\[]+/g, (tok, off) => (off === 0 || s.slice(0, off).indexOf("[") === -1 ? " " : tok));
+  s = s.replace(/\s+/g, " ").replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, "").trim();
+  if (s) return s;
+  return original.replace(/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, "").replace(EXTERNAL_SITE_LEAK_RE, "").replace(/\s+/g, " ").trim();
+}
+
+function sanitizePublicTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const raw of tags) {
+    const cleaned = String(raw || "").trim();
+    if (!cleaned || isWeightOrNoiseTag(cleaned)) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(cleaned);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
+function sanitizePublicArtists(artists, mediaType) {
+  if (mediaType === "game") return Array.isArray(artists) ? artists : [];
+  if (mediaType === "gallery" || mediaType === "cosplay") return [];
+  if (!Array.isArray(artists)) return [];
+  const out = [];
+  for (const a of artists) {
+    const cleaned = cleanPublicTitle(a);
+    if (!cleaned || cleaned.length > 36 || isWeightOrNoiseTag(cleaned)) continue;
+    out.push(cleaned);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 const ALLOWED_SORTS = new Set(["recent", "random", "views", "rating", "popular"]);
 function validateSort(sortInput) {
   const s = (sortInput || "recent").trim().toLowerCase();
@@ -816,7 +910,7 @@ function orderCatalogForSlot(items, slot, mediaType) {
 
 function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "7");
+  u.searchParams.set("cv", "8");
   if (slot !== undefined && slot !== null && slot !== "") {
     u.searchParams.set("rot", String(slot));
   }
@@ -1386,18 +1480,29 @@ async function sampleSupabaseShuffle({ supabaseUrl, apiKey, filterQuery, selectF
       return [];
     }
   };
-  // Una consulta por ficha (24 o 48) más el conteo pasa el tope de 50
-  // subrequests del Worker y Cloudflare responde 500. Seis franjas bastan
-  // para cruzar el catálogo y llenar la página.
-  const bandCount = Math.min(6, size);
+  // Una consulta por ficha supera el tope de subrequests; muestrear bandas
+  // distribuidas por todo el catálogo real (minId..maxId) y mezclar cada banda.
+  const bandCount = Math.min(8, Math.max(4, Math.ceil(size / 3)));
   const anchors = randomAnchorsInSpan(minId, maxId, total, safePage, bandCount, seed);
-  const take = Math.min(16, Math.max(4, Math.ceil(size / bandCount) + 2));
+  const take = Math.max(4, Math.ceil((size * 2) / bandCount));
   const loadBand = (anchor) => {
     const url = `${supabaseUrl}/rest/v1/items?select=${selectFields}&limit=${take}&offset=0&order=id.desc&id=lte.${anchor}&${filterQuery}`;
     return fetchRows(url);
   };
   const mixSeed = Number(seed) + safePage * 997;
   let bandRows = await Promise.all(anchors.map(loadBand));
+  bandRows = bandRows.map((rows, bIdx) => {
+    if (!Array.isArray(rows) || rows.length <= 1) return rows;
+    const copy = rows.slice();
+    const rng = shuffleRng((mixSeed + (bIdx + 1) * 7919) >>> 0);
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const tmp = copy[i];
+      copy[i] = copy[j];
+      copy[j] = tmp;
+    }
+    return copy;
+  });
   let items = assembleShufflePage(bandRows, size, mixSeed);
   if (items.length < size) {
     const hole = Math.max(0, total - size);
@@ -1446,11 +1551,11 @@ async function fetchPmvShuffleItems({ page, pageSize, seed, category, q, encodeT
       id: v._id || v.id,
       source: "pmvhaven",
       source_id: v._id || v.id,
-      title: v.title || "Video HD",
+      title: cleanPublicTitle(v.title) || "Video HD",
       cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
       media_type: "video",
-      tags: v.tags || [],
-      artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+      tags: sanitizePublicTags(v.tags || []),
+      artists: sanitizePublicArtists(v.uploaderUsername ? [v.uploaderUsername] : [], "video"),
       url: "",
       vip_locked: vipLocked,
       page_count: 0,
@@ -2652,7 +2757,8 @@ export async function onRequest(context) {
   const itemDetailMatch = url.pathname.match(/^\/api\/items\/(?:id\/([^/]+)|([^/]+)\/([^/]+))$/);
   if (itemDetailMatch && method === "GET") {
     const rawId = itemDetailMatch[1] ? itemDetailMatch[1].replace(/[^a-zA-Z0-9_\-]/g, "").slice(0, 64) : null;
-    const rawSource = itemDetailMatch[2] ? sanitizeSlug(decodeURIComponent(itemDetailMatch[2])) : null;
+    const decodedSourceSlug = itemDetailMatch[2] ? sanitizeSlug(decodeURIComponent(itemDetailMatch[2])) : null;
+    const rawSource = decodedSourceSlug ? (DETAIL_SOURCE_ALIAS_MAP[decodedSourceSlug] || decodedSourceSlug) : null;
     const rawSourceId = itemDetailMatch[3] ? decodeURIComponent(itemDetailMatch[3]).replace(/[^a-zA-Z0-9_.\-:]/g, "").slice(0, 128) : null;
     if (!rawId && (!rawSource || !rawSourceId)) {
       return new Response(JSON.stringify({ detail: "Parámetros de elemento inválidos" }), {
@@ -2662,7 +2768,7 @@ export async function onRequest(context) {
     }
 
     // Cache L1 de Memoria RAM Isolate (0ms)
-    const detailCacheKey = url.pathname;
+    const detailCacheKey = `v2:${url.pathname}`;
     const l1Detail = getIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, 86400000);
     if (l1Detail && (!l1Detail.includes('"pages":[]') || l1Detail.includes('"chapters":['))) {
       let parsedL1 = null;
@@ -2683,7 +2789,7 @@ export async function onRequest(context) {
 
     // Cache L2 de Borde Cloudflare para detalle de cómics y videos (aceleración instantánea en móvil)
     const cache = typeof caches !== "undefined" ? caches.default : null;
-    const cacheKey = new Request(url.toString(), { method: "GET" });
+    const cacheKey = new Request(`${url.origin}${url.pathname}?dcv=2`, { method: "GET" });
     if (cache) {
       try {
         const cached = await cache.match(cacheKey);
@@ -2728,12 +2834,12 @@ export async function onRequest(context) {
               id: v._id,
               source: "pmvhaven",
               source_id: v._id,
-              title: v.title,
+              title: cleanPublicTitle(v.title) || "Video HD",
               cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
               media_type: "video",
-              tags: v.tags || [],
-              artists: v.uploaderUsername ? [v.uploaderUsername] : [],
-              url: `https://pmvhaven.com/video?v=${v._id}`,
+              tags: sanitizePublicTags(v.tags || []),
+              artists: sanitizePublicArtists(v.uploaderUsername ? [v.uploaderUsername] : [], "video"),
+              url: "",
               page_count: 0,
               pages: [],
               chapters: [],
@@ -3261,6 +3367,9 @@ export async function onRequest(context) {
 
       const masked = {
         ...it,
+        title: cleanPublicTitle(it.title) || it.title || "Contenido VIP",
+        tags: sanitizePublicTags(it.tags),
+        artists: sanitizePublicArtists(it.artists, it.media_type),
         url: "", // Ocultar URL original
         cover_url: maskedCoverToken ? `/api/media?t=${maskedCoverToken}` : "",
         pages: maskedPages,
@@ -3464,11 +3573,11 @@ export async function onRequest(context) {
                 id: v._id,
                 source: "pmvhaven",
                 source_id: v._id,
-                title: v.title || "Video HD",
+                title: cleanPublicTitle(v.title) || "Video HD",
                 cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
                 media_type: "video",
-                tags: v.tags || [],
-                artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+                tags: sanitizePublicTags(v.tags || []),
+                artists: sanitizePublicArtists(v.uploaderUsername ? [v.uploaderUsername] : [], "video"),
                 url: "",
                 vip_locked: vipLocked,
                 page_count: 0,
@@ -3736,7 +3845,7 @@ export async function onRequest(context) {
     }
 
     try {
-      if (freshShuffle) {
+      if (freshShuffle || rotateCatalog) {
         try {
           const sampled = await sampleSupabaseShuffle({
             supabaseUrl: SUPABASE_URL,
@@ -3745,7 +3854,7 @@ export async function onRequest(context) {
             selectFields,
             page: safePage,
             pageSize,
-            seed: freshSeed,
+            seed: effectiveSeed,
             estimatedTotal: totalCount,
             span: filteredSpan
           });
@@ -3878,12 +3987,12 @@ export async function onRequest(context) {
           id: it.id,
           source: it.source || "velvet",
           source_id: it.source_id ? String(it.source_id) : String(it.id),
-          title: it.title,
+          title: cleanPublicTitle(it.title) || it.title,
           cover_url: maskedCover.cover_url,
           cover_fallback: maskedCover.cover_fallback,
           media_type: it.media_type,
-          tags: it.tags || [],
-          artists: it.artists || [],
+          tags: sanitizePublicTags(it.tags),
+          artists: sanitizePublicArtists(it.artists, it.media_type),
           url: "", // Ocultar URL original
           vip_locked: vipLocked,
           page_count: it.page_count || 0,
@@ -3948,19 +4057,22 @@ export async function onRequest(context) {
   if (url.pathname === "/api/random" && method === "GET") {
     const mediaType = url.searchParams.get("media_type") || "comic";
     const count = Math.min(10, Math.max(1, parseInt(url.searchParams.get("count") || "1", 10)));
-    const maxOffset = mediaType === "video" ? 3000 : (mediaType === "gallery" ? 3000 : 5000);
-    const randomOffset = Math.floor(Math.random() * Math.max(1, maxOffset - count));
+    const rndArr = new Uint32Array(1);
+    crypto.getRandomValues(rndArr);
+    const randomSeed = (rndArr[0] % 2147483645) + 1;
 
     const preferLivePmv = env.ENABLE_PMVHAVEN_LIVE !== "false" && url.searchParams.get("source") !== "supabase" && url.searchParams.get("source") !== "db";
     if (mediaType === "video") {
       if (preferLivePmv) {
         try {
-          const pmvRes = await fetch(`https://pmvhaven.com/api/videos?sort=random&limit=${count}`, {
+          const pmvPage = (randomSeed % 2500) + 1;
+          const pmvRes = await fetch(`https://pmvhaven.com/api/videos?sort=recent&page=${pmvPage}&limit=${Math.max(count, 6)}`, {
             headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Referer": "https://pmvhaven.com/" }
           });
           if (pmvRes.ok) {
             const pmvData = await pmvRes.json();
-            const vList = pmvData.videos || [];
+            const rawList = pmvData.videos || [];
+            const vList = orderCatalogForSlot(rawList.map(v => ({ ...v, id: v._id || v.id })), randomSeed, "video").slice(0, count);
             if (vList.length > 0) {
               const items = await Promise.all(vList.map(async v => {
                 const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
@@ -3971,11 +4083,11 @@ export async function onRequest(context) {
                   id: v._id,
                   source: "pmvhaven",
                   source_id: v._id,
-                  title: v.title,
+                  title: cleanPublicTitle(v.title) || "Video HD",
                   cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
                   media_type: "video",
-                  tags: v.tags || [],
-                  artists: v.uploaderUsername ? [v.uploaderUsername] : [],
+                  tags: sanitizePublicTags(v.tags || []),
+                  artists: sanitizePublicArtists(v.uploaderUsername ? [v.uploaderUsername] : [], "video"),
                   url: "",
                   vip_locked: vipLocked,
                   page_count: 0,
@@ -3984,7 +4096,7 @@ export async function onRequest(context) {
               }));
               return new Response(JSON.stringify(items), {
                 status: 200,
-                headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+                headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
               });
             }
           }
@@ -3993,31 +4105,50 @@ export async function onRequest(context) {
 
       try {
         const videos = await loadVideoCatalog(context, url);
-        const randomStart = Math.floor(Math.random() * Math.max(1, videos.length - count));
-        const sample = videos.slice(randomStart, randomStart + count);
+        const ordered = orderCatalogForSlot(videos, randomSeed, "video");
+        const sample = ordered.slice(0, count);
         const items = await Promise.all(sample.map(it => maskVideoItem(it, MEDIA_SECRET)));
         return new Response(JSON.stringify(items), {
           status: 200,
-          headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
         });
       } catch (vidErr) {
         return new Response("[]", { status: 200, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } });
       }
     }
 
-    let queryParam = `select=id,source,source_id,title,cover_url,media_type,tags,page_count,video_sources&limit=${count}&offset=${randomOffset}`;
-    if (mediaType === "gallery") {
-      queryParam += "&media_type=eq.gallery&id=gte.370000&source=neq.leakgallery&status=neq.blocked&real_people=is.false&order=id.desc";
-    } else {
-      queryParam += "&media_type=eq.comic&page_count=gt.0&status=neq.blocked&real_people=is.false&order=id.desc";
-    }
+    const selectFields = "id,source,source_id,title,cover_url,media_type,tags,page_count,artists,video_sources";
+    const filterQuery = mediaType === "gallery"
+      ? "media_type=eq.gallery&page_count=gt.0&source=neq.leakgallery&status=neq.blocked&real_people=is.false"
+      : "media_type=eq.comic&page_count=gt.0&status=neq.blocked&real_people=is.false";
 
     try {
-      const spRes = await fetch(`${SUPABASE_URL}/rest/v1/items?${queryParam}`, {
-        headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
-      });
+      const span = await fetchCatalogSpan(SUPABASE_URL, SUPABASE_ADMIN_KEY, filterQuery);
+      let rawItems = [];
+      try {
+        const sampled = await sampleSupabaseShuffle({
+          supabaseUrl: SUPABASE_URL,
+          apiKey: SUPABASE_ADMIN_KEY,
+          filterQuery,
+          selectFields,
+          page: 1,
+          pageSize: Math.max(count, 6),
+          seed: randomSeed,
+          estimatedTotal: span?.total || 18000,
+          span
+        });
+        rawItems = (sampled && sampled.items ? sampled.items : []).slice(0, count);
+      } catch (sampleErr) {}
 
-      const rawItems = await spRes.json();
+      if (!rawItems.length) {
+        const maxPool = Math.max(1, (span && span.total ? span.total : 18000) - count);
+        const randomOffset = randomSeed % maxPool;
+        const spRes = await fetch(`${SUPABASE_URL}/rest/v1/items?select=${selectFields}&limit=${count}&offset=${randomOffset}&${filterQuery}&order=id.desc`, {
+          headers: { "apikey": SUPABASE_ADMIN_KEY, "Authorization": `Bearer ${SUPABASE_ADMIN_KEY}` }
+        });
+        rawItems = await spRes.json().catch(() => []);
+      }
+
       const items = await Promise.all((rawItems || []).map(async it => {
         const coverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
         const vipLocked = isItemVIPGated(it);
@@ -4029,6 +4160,9 @@ export async function onRequest(context) {
             })));
         return {
           ...it,
+          title: cleanPublicTitle(it.title) || it.title,
+          tags: sanitizePublicTags(it.tags),
+          artists: sanitizePublicArtists(it.artists, it.media_type),
           url: "",
           vip_locked: vipLocked,
           cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
@@ -4038,7 +4172,7 @@ export async function onRequest(context) {
 
       return new Response(JSON.stringify(items), {
         status: 200,
-        headers: { "Content-Type": "application/json; charset=utf-8", ...getCorsHeaders(origin) }
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
       });
     } catch (err) {
       return new Response(JSON.stringify([]), {
@@ -5535,7 +5669,7 @@ export async function onRequest(context) {
   const formatPersonalMediaEntry = async (entry, getVideoCatalog, fallbackTitle = "Contenido guardado") => {
     const it = entry.items || {};
     const meta = entry.meta || {};
-    let effectiveTitle = it.title || entry.title || meta.title || fallbackTitle;
+    let effectiveTitle = cleanPublicTitle(it.title || entry.title || meta.title) || fallbackTitle;
     let effectiveSource = it.source || entry.source || meta.source || "";
     let effectiveSourceId = it.source_id || entry.source_id || meta.source_id || "";
     const effectiveUrl = it.url || entry.url || meta.url || "";
@@ -5766,10 +5900,10 @@ export async function onRequest(context) {
       }
     }
 
-    // --- GET FAVORITOS (SQL + Custom unificado con paginación real 24/página) ---
+    // --- GET FAVORITOS (SQL + Custom unificado con paginación adaptativa máx 18 PC / 12 Android) ---
     if (method === "GET") {
       const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
-      const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") || String(PERSONAL_PAGE_SIZE), 10)));
+      const pageSize = resolvePersonalPageSize(context.request, url);
       const offset = (page - 1) * pageSize;
       const to = offset + pageSize - 1;
       const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
@@ -5972,7 +6106,7 @@ export async function onRequest(context) {
 
         const totalCombined = Math.max(combined.length, (hasTypeFilter ? filteredSql.length : sqlTotal) + customTotal);
         const totalPages = Math.max(1, Math.ceil(totalCombined / pageSize));
-        const pageSlice = combined.length > pageSize ? combined.slice(offset, offset + pageSize) : combined;
+        const pageSlice = combined.slice(offset, offset + pageSize);
 
         return new Response(JSON.stringify({ items: pageSlice, total: totalCombined, page, pageSize, totalPages }), {
           status: 200,
@@ -6325,10 +6459,10 @@ export async function onRequest(context) {
       });
     }
 
-    // --- GET HISTORIAL (Paginado determinista 24/página desde SQL + Custom) ---
+    // --- GET HISTORIAL (Paginado determinista máx 18 PC / 12 Android desde SQL + Custom) ---
     if (method === "GET") {
       const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
-      const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get("pageSize") || String(PERSONAL_PAGE_SIZE), 10)));
+      const pageSize = resolvePersonalPageSize(context.request, url);
       const offset = (page - 1) * pageSize;
       const to = offset + pageSize - 1;
       const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
@@ -6368,9 +6502,33 @@ export async function onRequest(context) {
       ]);
 
       const sqlTotal = histRes && histRes.ok ? parseContentRangeTotal(histRes) : 0;
-      const rawRows = histRes && histRes.ok ? await histRes.json().catch(() => []) : [];
+      let rawRows = histRes && histRes.ok ? await histRes.json().catch(() => []) : [];
+      if (!Array.isArray(rawRows)) rawRows = [];
       const customRowsRaw = customHistRes && customHistRes.ok ? await customHistRes.json().catch(() => []) : [];
       const customRows = Array.isArray(customRowsRaw) ? customRowsRaw : [];
+
+      const metaHist = (Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [])
+        .filter((mh) => !hasTypeFilter || inferPersonalMediaType(mh) === typeFilter);
+      const needsCombinedWindow = customRows.length > 0 || metaHist.length > 0;
+
+      // Si hay historial custom + SQL en más de 1 página, cargar ventana combinada para paginar correctamente sin repetir pág 1
+      if (needsCombinedWindow && sqlTotal > rawRows.length && sqlTotal <= 500 && rawRows.length < sqlTotal) {
+        const fullWinTo = Math.min(499, Math.max(to, offset + pageSize + customRows.length + metaHist.length - 1));
+        const winRes = await restFetchWithAdminFallback(
+          histQueryUrl,
+          (useAdmin) => ({
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
+              "Range": `0-${fullWinTo}`
+            })
+          }),
+          user.id,
+          verified
+        );
+        if (winRes && winRes.ok) {
+          const winRows = await winRes.json().catch(() => []);
+          if (Array.isArray(winRows) && winRows.length > 0) rawRows = winRows;
+        }
+      }
 
       // Si algún item_id no vino con items(...) poblado, buscarlo en la tabla items
       const missingHistIds = (Array.isArray(rawRows) ? rawRows : [])
@@ -6395,9 +6553,6 @@ export async function onRequest(context) {
           }
         } catch (e) {}
       }
-
-      const metaHist = (Array.isArray(user.user_metadata?.history) ? user.user_metadata.history : [])
-        .filter((mh) => !hasTypeFilter || inferPersonalMediaType(mh) === typeFilter);
 
       const items = await Promise.all(
         (Array.isArray(rawRows) ? rawRows : []).map(async (r) => {
@@ -6469,7 +6624,7 @@ export async function onRequest(context) {
 
       const finalTotal = Math.max(sqlTotal + customRows.length, mergedHist.length);
       const totalPages = Math.max(1, Math.ceil(finalTotal / pageSize));
-      const sliceOut = mergedHist.slice(0, pageSize);
+      const sliceOut = needsCombinedWindow ? mergedHist.slice(offset, offset + pageSize) : mergedHist.slice(0, pageSize);
 
       return new Response(JSON.stringify({ items: sliceOut, total: finalTotal, page, pageSize, totalPages }), {
         status: 200,

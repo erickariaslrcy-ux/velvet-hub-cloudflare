@@ -18,9 +18,43 @@
   let prefetchTimer = null;
   const prefetchedUrls = new Set();
 
+  const SOURCE_TO_ALIAS = {
+    pmvhaven: 'mv',
+    xasiat: 'mx',
+    buondua: 'mb',
+    '4khd': 'm4',
+    '3hentai': 'mc',
+    hentaipaw: 'mp',
+    doujins: 'md',
+    gamcore: 'mg',
+    leakgallery: 'ml'
+  };
+  const ALIAS_TO_SOURCE = Object.fromEntries(
+    Object.entries(SOURCE_TO_ALIAS).map(([k, v]) => [v, k])
+  );
+  const URL_NOISE_RE = /\b(?:xasiat|xascdn|buondua|misskon|4khd|imagedeliveries|pmvhaven|3hentai|hentaipaw|doujins|comics18(?:_net|_org)?|comicspornoxxx|reycomix|vercomics?porno|cartooncomixhd|pornocomic|sexkomix2?|comicsparaadultos|melapelacomics|melapelocondibujos|mhcomics|leermanhwas|manhwaweb|f95zone|gamcore|leakgallery|pornhd|damplips|pornone|redporn|anyporn|alotporn|nhentai|e-?hentai|exhentai|hitomi|pixibb|cosplaytele|everia|mrcong|pornhub|xvideos|xnxx|xhamster)\b(?:\.[a-z]{2,5})?/gi;
+
+  function cleanSlugSourceTitle(text) {
+    if (!text) return '';
+    let s = String(text)
+      .replace(/\{[^}]{1,80}\}/g, ' ')
+      .replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b\d+\s*(?:p|pics?|photos?|fotos?|imgs?|videos?)\b/gi, ' ')
+      .replace(URL_NOISE_RE, ' ')
+      .replace(/\b(?:aigirl|spanish|espa[nñ]ol|english|eng|digital|raw|ebisutraslade|acatlll|joselito|joselillo)\b/gi, ' ');
+    if (s.includes('|')) {
+      const parts = s.split(/\s*\|\s*/).map((p) => p.trim()).filter(Boolean);
+      if (parts.length === 2 && parts[1].length >= 8) s = parts[1];
+      else if (parts.length > 0) s = parts[0];
+    }
+    return s;
+  }
+
   function slugify(text) {
-    if (!text) return 'item';
-    return String(text)
+    const cleaned = cleanSlugSourceTitle(text);
+    if (!cleaned) return 'item';
+    return String(cleaned)
       .toLowerCase()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -41,12 +75,15 @@
       const type = item.media_type || (item.video_sources && item.video_sources.length > 0 ? 'video' : 'comic');
       const slug = slugify(item.title);
 
-      // Si tiene id explícito (numérico o hex ObjectId), usarlo prioritariamente
+      // Si tiene id explícito (numérico o hex ObjectId), usarlo prioritariamente sin exponer fuente
       let idPart = '';
       if (item.id) {
         idPart = String(item.id);
       } else if (item.source && item.source_id) {
-        idPart = `${item.source}--${encodeURIComponent(item.source_id)}`;
+        const rawSrc = String(item.source).toLowerCase();
+        const safeSrc = SOURCE_TO_ALIAS[rawSrc] || (URL_NOISE_RE.test(rawSrc) ? 'mx' : rawSrc);
+        URL_NOISE_RE.lastIndex = 0;
+        idPart = `${safeSrc}--${encodeURIComponent(item.source_id)}`;
       } else {
         idPart = 'item';
       }
@@ -68,14 +105,15 @@
     parseItemToken(token) {
       if (!token) return { id: null, source: null, sourceId: null };
 
-      // 1. Formato source--sourceId(-slug)
+      // 1. Formato alias/source--sourceId(-slug)
       if (token.includes('--')) {
         const parts = token.split('--');
-        const source = parts[0];
+        const rawSrc = decodeURIComponent(parts[0]);
+        const source = ALIAS_TO_SOURCE[rawSrc.toLowerCase()] || rawSrc;
         const rest = parts.slice(1).join('--');
         const dashIdx = rest.indexOf('-');
         const sourceId = dashIdx !== -1 ? rest.slice(0, dashIdx) : rest;
-        return { id: null, source: decodeURIComponent(source), sourceId: decodeURIComponent(sourceId) };
+        return { id: null, source, sourceId: decodeURIComponent(sourceId) };
       }
 
       // 2. Formato Stealth vh_

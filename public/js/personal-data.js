@@ -6,7 +6,7 @@
  * ÚNICA FUENTE DE VERDAD PARA TODA LA APLICACIÓN:
  * - Favoritos, Historial, Continuar Leyendo, Progreso y Preferencias.
  * - Sincronización multi-dispositivo respaldada por PostgreSQL/Supabase.
- * - Paginación real de 24 en 24 items por página (PERSONAL_PAGE_SIZE = 24).
+ * - Paginación real adaptativa: máx 18 items/pág en PC y máx 12 en Android/móvil.
  * - Aislamiento estricto por cuenta (claves de caché con user_id).
  * - Migración idempotente de datos locales heredados (con respaldo 30 días).
  * - Concurrencia segura: AbortController y descartes de peticiones obsoletas.
@@ -17,7 +17,20 @@
 (function (window) {
   'use strict';
 
-  const PERSONAL_PAGE_SIZE = 24;
+  const PERSONAL_PAGE_SIZE_DESKTOP = 18;
+  const PERSONAL_PAGE_SIZE_MOBILE = 12;
+
+  function getPersonalPageSize() {
+    try {
+      const isAndroidUa = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
+      const isMobileViewport = typeof window !== 'undefined' && typeof window.innerWidth === 'number' && window.innerWidth > 0 && window.innerWidth < 768;
+      return (isAndroidUa || isMobileViewport) ? PERSONAL_PAGE_SIZE_MOBILE : PERSONAL_PAGE_SIZE_DESKTOP;
+    } catch (e) {
+      return PERSONAL_PAGE_SIZE_DESKTOP;
+    }
+  }
+
+  const PERSONAL_PAGE_SIZE = getPersonalPageSize();
   const BACKUP_PREFIX = 'velvet_backup_pre_migration_';
   const BACKUP_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
 
@@ -311,6 +324,7 @@
   // --------------------------------------------------------------------------
   const VelvetPersonalData = {
     PERSONAL_PAGE_SIZE,
+    getPersonalPageSize,
 
     init() {
       this.restoreSessionFromStorage();
@@ -627,6 +641,10 @@
     },
 
     hydrateCanonicalCache() {
+      const pageSize = getPersonalPageSize();
+      _favState.pageSize = pageSize;
+      _histState.pageSize = pageSize;
+
       const uid = _currentUser && _currentUser.id;
       const favKeys = uid
         ? [`velvet_usr_${uid}_favs`, `velvet_${uid}_favs`]
@@ -653,7 +671,7 @@
       const histList = (Array.isArray(cachedHist) && cachedHist.length ? cachedHist : this.readLegacyList(histKeys))
         .map(compactHistRecord)
         .filter(Boolean)
-        .slice(0, 50);
+        .slice(0, 100);
       if (histList.length) {
         _histState.items = histList;
         const storedTotal = Number(readLocalCache('history_total', histList.length));
@@ -792,13 +810,17 @@
     },
 
     async fetchFavorites(page = 1, options = {}) {
+      const pageSize = getPersonalPageSize();
+      _favState.pageSize = pageSize;
+
       if (!this.isAuthenticated()) {
-        // Invitado: leer de caché de invitado
+        // Invitado: leer de caché de invitado con paginación adaptativa (18 PC / 12 Android)
         const guestFavs = readLocalCache('favs', []);
-        _favState.items = (Array.isArray(guestFavs) ? guestFavs : []).map(compactFavRecord).filter(Boolean);
-        _favState.total = _favState.items.length;
-        _favState.page = 1;
-        _favState.totalPages = 1;
+        const allGuestFavs = (Array.isArray(guestFavs) ? guestFavs : []).map(compactFavRecord).filter(Boolean);
+        _favState.items = allGuestFavs;
+        _favState.total = allGuestFavs.length;
+        _favState.totalPages = Math.max(1, Math.ceil(_favState.total / pageSize));
+        _favState.page = Math.min(Math.max(1, parseInt(page, 10) || 1), _favState.totalPages);
         _favState.isLoading = false;
         _favState.error = null;
         this.updateAllCounters();
@@ -813,7 +835,7 @@
       _favState.controller = new AbortController();
       const currentReqId = ++_favState.requestId;
 
-      _favState.page = Math.max(1, page);
+      _favState.page = Math.max(1, parseInt(page, 10) || 1);
       if (options.filter) _favState.filter = options.filter;
       if (options.sort) _favState.sort = options.sort;
       if (options.search !== undefined) _favState.search = options.search;
@@ -832,7 +854,7 @@
           queryParams.set('type', _favState.filter);
         }
 
-        // Petición directa y ultra rápida a la página solicitada (24 items), en paralelo con canonical IDs si aplica
+        // Petición directa a la página solicitada (18 PC / 12 Android), en paralelo con canonical IDs si aplica
         const [res, canonResult] = await Promise.all([
           this.fetchAuthed(`/api/user/favorites?${queryParams.toString()}`, {
             signal: _favState.controller.signal
@@ -902,9 +924,10 @@
           return this.getFavoritesState();
         }
 
-        _favState.items = serverItems;
+        _favState.items = serverItems.slice(0, _favState.pageSize);
         _favState.total = serverTotal;
         _favState.totalPages = data.totalPages || Math.max(1, Math.ceil(_favState.total / _favState.pageSize));
+        _favState.page = Math.min(_favState.page, _favState.totalPages);
         _favState.isLoading = false;
         _favState.error = null;
         _lastSyncTimestamp = Date.now();
@@ -1173,12 +1196,16 @@
     },
 
     async fetchHistory(page = 1, options = {}) {
+      const pageSize = getPersonalPageSize();
+      _histState.pageSize = pageSize;
+
       if (!this.isAuthenticated()) {
         const guestHist = readLocalCache('history', []);
-        _histState.items = (Array.isArray(guestHist) ? guestHist : []).map(compactHistRecord).filter(Boolean).slice(0, 50);
-        _histState.total = _histState.items.length;
-        _histState.page = 1;
-        _histState.totalPages = 1;
+        const guestHistList = (Array.isArray(guestHist) ? guestHist : []).map(compactHistRecord).filter(Boolean).slice(0, 100);
+        _histState.items = guestHistList;
+        _histState.total = guestHistList.length;
+        _histState.totalPages = Math.max(1, Math.ceil(_histState.total / pageSize));
+        _histState.page = Math.min(Math.max(1, parseInt(page, 10) || 1), _histState.totalPages);
         _histState.isLoading = false;
         _histState.error = null;
         this.updateAllCounters();
@@ -1192,7 +1219,7 @@
       _histState.controller = new AbortController();
       const currentReqId = ++_histState.requestId;
 
-      _histState.page = Math.max(1, page);
+      _histState.page = Math.max(1, parseInt(page, 10) || 1);
       if (options.filter) _histState.filter = options.filter;
       if (options.onlyUnfinished !== undefined) _histState.onlyUnfinished = options.onlyUnfinished;
       if (options.search !== undefined) _histState.search = options.search;
@@ -1262,9 +1289,10 @@
             }
           }
         }
-        _histState.items = serverItems;
+        _histState.items = serverItems.slice(0, _histState.pageSize);
         _histState.total = typeof data.total === 'number' ? data.total : _histState.items.length;
         _histState.totalPages = data.totalPages || Math.max(1, Math.ceil(_histState.total / _histState.pageSize));
+        _histState.page = Math.min(_histState.page, _histState.totalPages);
         _histState.isLoading = false;
         _histState.error = null;
 

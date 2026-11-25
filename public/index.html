@@ -1523,7 +1523,7 @@
             <span id="hero-author" class="text-pink-300 font-extrabold hover:underline"></span>
           </div>
 
-          <h1 id="hero-title" class="font-display text-2xl sm:text-3xl md:text-4xl text-white font-black leading-tight">
+          <h1 id="hero-title" class="font-display text-2xl sm:text-3xl md:text-4xl text-white font-black leading-tight line-clamp-2 sm:line-clamp-3">
 
             Cargando cómic destacado...
 
@@ -1913,6 +1913,9 @@
               Comenzar a Explorar
             </a>
           </div>
+
+          <!-- Contenedor Paginación Historial Bóveda -->
+          <div id="vault-history-pagination-root" class="w-full flex justify-center py-4"></div>
         </div>
 
         <!-- ========================================== -->
@@ -3290,6 +3293,8 @@
 
         </div>
 
+        <div id="vault-favs-pro-pagination" class="pt-1 pb-3 flex items-center justify-center"></div>
+
       </div>
 
       <!-- Contenido Tab 2: Historial en la Nube -->
@@ -3313,6 +3318,8 @@
           <!-- Renderizado dinámicamente -->
 
         </div>
+
+        <div id="vault-hist-pro-pagination" class="pt-1 pb-3 flex items-center justify-center"></div>
 
       </div>
 
@@ -4816,14 +4823,12 @@
 
     function selectSortOption(sortId) {
       closeSortMenu();
-      forgetActiveShuffle();
-      endManualShuffle();
       if (sortId === 'random') {
-        state.catalogMode = 'dynamic';
-        state.sort = 'random';
-        state.feedSeed = getRotatingSeed();
-        state.videoSeed = state.feedSeed;
+        shuffleCurrentFeed();
+        return;
       } else {
+        forgetActiveShuffle();
+        endManualShuffle();
         state.catalogMode = 'static';
         state.sort = sortId;
         state.feedSeed = 0;
@@ -4908,10 +4913,49 @@
 
     };
 
-    // Parser y Embellecedor de Títulos: Extrae autor y elimina ruido de escaneo ([Spanish], [joselito], etc.)
-    function parseComicTitle(rawTitle) {
+    const EXTERNAL_SOURCE_LEAK_RE = /\b(?:xasiat|xascdn|buondua|misskon|4khd|imagedeliveries|pmvhaven|3hentai|hentaipaw|doujins|comics18(?:_net|_org)?|comicspornoxxx|reycomix|vercomics?porno|cartooncomixhd|pornocomic|sexkomix2?|comicsparaadultos|melapelacomics|melapelocondibujos|mhcomics|leermanhwas|manhwaweb|f95zone|gamcore|leakgallery|pornhd|damplips|pornone|redporn|anyporn|alotporn|nhentai|e-?hentai|exhentai|hitomi|pixibb|cosplaytele|everia|mrcong|pornhub|xvideos|xnxx|xhamster)\b(?:\.[a-z]{2,5})?/gi;
+
+    function isNoiseOrSiteTag(raw) {
+      const s = String(raw || '').trim();
+      if (!s) return true;
+      if (EXTERNAL_SOURCE_LEAK_RE.test(s)) {
+        EXTERNAL_SOURCE_LEAK_RE.lastIndex = 0;
+        return true;
+      }
+      if (/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/i.test(s)) return true;
+      if (/^\d+\s*(?:p|pics?|photos?|fotos?|imgs?|videos?)$/i.test(s)) return true;
+      if (/^[a-z0-9-]+\.(?:com|net|org|li|cc|me|io|xxx)$/i.test(s)) return true;
+      if (/^(?:tg\s*@|t\.me\/|@)/i.test(s)) return true;
+      return false;
+    }
+
+    function stripCurlyAndWeightNoise(raw) {
+      const original = String(raw || '').trim();
+      if (!original) return '';
+      let s = original;
+      s = s.replace(/\{[^}]{1,90}\}/g, ' ');
+      s = s.replace(/[\[\(（【]([^\]\)）】]{1,90})[\]\)）】]/g, (all, inner) => {
+        const innerClean = String(inner || '').trim();
+        if (isGalleryMetaChunk(innerClean)) return '';
+        if (/^(?:aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|complete|completo|uncensored|sin\s*censura|decensored|joselito|joselillo|mtl|rip|scan)/i.test(innerClean)) return '';
+        if (isNoiseOrSiteTag(innerClean)) return '';
+        return all;
+      });
+      s = s.replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ');
+      s = s.replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ');
+      s = s.replace(/\b\d+\s*(?:pics?|photos?|fotos?|im[aá]genes?|imgs?)\b(?=\s*(?:[\]|)\-–—]|$))/gi, ' ');
+      s = s.replace(/(?:tg\s*@[^\s\]]+|t\.me\/\S+|https?:\/\/\S+|[a-z0-9-]+\.(?:com|net|org|li|cc|me|io|xxx)\b)/gi, ' ');
+      s = s.replace(EXTERNAL_SOURCE_LEAK_RE, ' ');
+      s = s.replace(/\[[^\]]*$/g, ' ');
+      s = s.replace(/[\]\[]+/g, (tok, off) => (off === 0 || s.slice(0, off).indexOf('[') === -1 ? ' ' : tok));
+      s = s.replace(/\s+/g, ' ').replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, '').trim();
+      return s;
+    }
+
+    // Parser y Embellecedor de Títulos: Extrae autor y elimina ruido de escaneo, pesos y sitios externos
+    function parseComicTitle(rawTitle, opts = {}) {
       if (!rawTitle) return { title: '', author: '' };
-      let str = String(rawTitle).trim();
+      let str = stripCurlyAndWeightNoise(rawTitle);
       let author = '';
 
       // 1. Extraer artista/círculo del corchete inicial: [Author] Title
@@ -4919,11 +4963,11 @@
       if (leadingAuthorMatch) {
         const candidate = leadingAuthorMatch[1].trim();
         const candidateLower = candidate.toLowerCase();
-        const NON_AUTHOR_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'completo', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'manhwa', 'color', 'full color', 'joselito', 'joselillo'];
-        if (!NON_AUTHOR_TAGS.some(t => candidateLower === t || candidateLower.startsWith(t + ' '))) {
+        const NON_AUTHOR_TAGS = ['aigirl', 'cosplay', 'spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'completo', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'manhwa', 'color', 'full color', 'joselito', 'joselillo'];
+        if (!NON_AUTHOR_TAGS.some(t => candidateLower === t || candidateLower.startsWith(t + ' ')) && !isNoiseOrSiteTag(candidate)) {
           author = candidate;
-          str = leadingAuthorMatch[2].trim();
         }
+        str = leadingAuthorMatch[2].trim();
       }
 
       // 2. Extraer autor de corchetes finales o eliminar tags de scanlation
@@ -4931,8 +4975,8 @@
       if (trailingBracketMatch) {
         const candidate = trailingBracketMatch[2].trim();
         const candidateLower = candidate.toLowerCase();
-        const SCAN_TAGS = ['spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'color', 'joselillo', 'joselito', 'rip', 'mtl', 'hentai', 'manga'];
-        if (SCAN_TAGS.some(t => candidateLower.includes(t))) {
+        const SCAN_TAGS = ['aigirl', 'spanish', 'español', 'english', 'eng', 'raw', 'digital', 'complete', 'uncensored', 'sin censura', 'decensored', 'hd', '4k', '3d', 'color', 'joselillo', 'joselito', 'rip', 'mtl', 'hentai', 'manga'];
+        if (SCAN_TAGS.some(t => candidateLower.includes(t)) || isNoiseOrSiteTag(candidate)) {
           str = trailingBracketMatch[1].trim();
         } else if (!author && candidate.length <= 30) {
           author = candidate;
@@ -4941,18 +4985,25 @@
       }
 
       // 3. Limpiar tags de uploader / scanlation restantes en cualquier parte del título
-      str = str.replace(/\[(?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|joselito|mtl|webtoon|cómics|scan|hentai|manga|rip|translated)[^\]]*\]/gi, '');
-      str = str.replace(/\((?:spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|joselito|mtl|webtoon|cómics|scan|hentai|manga|rip|translated)[^)]*\)/gi, '');
+      str = str.replace(/\[(?:aigirl|spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|joselito|mtl|webtoon|cómics|scan|hentai|manga|rip|translated)[^\]]*\]/gi, '');
+      str = str.replace(/\((?:aigirl|spanish|español|english|eng|raw|digital|complete|completo|uncensored|sin censura|decensored|hd|4k|3d|color|full color|joselillo|joselito|mtl|webtoon|cómics|scan|hentai|manga|rip|translated)[^)]*\)/gi, '');
 
-      str = str.replace(/\s+/g, ' ').trim();
-      str = str.replace(/^[-\s:|]+|[-\s:|]+$/g, '').trim();
-
-      if (author) {
-        author = author.replace(/\[.*?\]|\(.*?\)/g, '').trim();
-        author = author.replace(/^(by|por)\s+/i, '').trim();
+      // 4. En títulos bilingües largos ("Romanji... | Traducción Español"), elegir la versión limpia más clara
+      if (str.includes('|')) {
+        const halves = str.split(/\s*\|\s*/).map(p => p.trim()).filter(Boolean);
+        if (halves.length === 2 && (opts.preferConcise || str.length > 75)) {
+          str = halves[1].length >= 10 ? halves[1] : halves[0];
+        }
       }
 
-      if (!str) str = rawTitle;
+      str = stripCurlyAndWeightNoise(str) || str.replace(/\s+/g, ' ').replace(/^[-\s:|]+|[-\s:|]+$/g, '').trim();
+
+      if (author) {
+        author = stripCurlyAndWeightNoise(author.replace(/\[.*?\]|\(.*?\)/g, '').replace(/^(by|por)\s+/i, '').trim());
+        if (isNoiseOrSiteTag(author)) author = '';
+      }
+
+      if (!str) str = cleanGallerySetTitle(rawTitle);
 
       return { title: str, author };
     }
@@ -4971,11 +5022,40 @@
     function cleanGallerySetTitle(raw) {
       const original = String(raw || '').trim();
       if (!original) return '';
-      let s = original.replace(/[\[\(（【]([^\]\)）】]{1,80})[\]\)）】]/g, (all, inner) => {
-        return isGalleryMetaChunk(inner) ? '' : all;
-      });
-      s = s.replace(/\s+/g, ' ').replace(/[\s\-–—|:·]+$/g, '').trim();
-      return s || original;
+      const cleaned = stripCurlyAndWeightNoise(original);
+      return cleaned || original.replace(/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, '').replace(EXTERNAL_SOURCE_LEAK_RE, '').replace(/\s+/g, ' ').trim();
+    }
+
+    function sanitizeDisplayTags(tags) {
+      if (!Array.isArray(tags)) return [];
+      const seen = new Set();
+      const out = [];
+      for (const raw of tags) {
+        const clean = cleanGallerySetTitle(String(raw || '').replace(/^#+/, '').trim());
+        if (!clean || clean.length < 2 || isNoiseOrSiteTag(clean)) continue;
+        const low = clean.toLowerCase();
+        if (seen.has(low)) continue;
+        seen.add(low);
+        out.push(clean);
+      }
+      return out;
+    }
+
+    function sanitizeCreatorName(raw, mediaType = 'comic') {
+      if (mediaType === 'gallery' || mediaType === 'cosplay') return '';
+      const clean = stripCurlyAndWeightNoise(raw);
+      if (!clean || clean.length > 28 || isNoiseOrSiteTag(clean)) return 'Morbo VIP';
+      return clean;
+    }
+
+    function getCleanGalleryCategoryBadge(item, cleanedTitle) {
+      const raw = `${(item && item.title) || ''} ${cleanedTitle || ''} ${((item && item.tags) || []).join(' ')}`.toLowerCase();
+      if (/\[?aigirl\]?|\bai\s*girl\b|\bmidjourney\b|\barte\s*ia\b/i.test(raw)) return 'ARTE IA 4K';
+      if (/artgravia|korea|korean/i.test(raw)) return 'EDICIÓN KOREA';
+      if (/xiuren|ugirl|mfstar|feilin|mygirl|youwu|imiss|asian/i.test(raw)) return 'SESIÓN ASIAN 4K';
+      if (/lingerie|lencer[ií]a|bikini|swimsuit/i.test(raw)) return 'LENCERÍA & BIKINI';
+      if (/cosplay|genshin|honkai|nikke|azur|nier|fate|tifa|makima/i.test(raw)) return 'COSPLAY VIP';
+      return 'GALERÍA VIP 4K';
     }
 
     
@@ -4983,9 +5063,9 @@
       if (!item) return '1080P HD';
       const tLower = (item.title || '').toLowerCase();
       if (item.artists && Array.isArray(item.artists) && item.artists[0]) {
-        const art = item.artists[0];
+        const art = stripCurlyAndWeightNoise(item.artists[0]);
         const artL = art.toLowerCase();
-        if (tLower.includes(artL) && art.length <= 16) {
+        if (art && !isNoiseOrSiteTag(art) && tLower.includes(artL) && art.length <= 16) {
           return art.toUpperCase();
         }
       }
@@ -5059,11 +5139,11 @@
       const title = (item.title || '').toLowerCase();
 
         if (item.media_type === 'video' || state.mode === 'videos') {
-        return 'Video en streaming. El archivo está en un servidor externo.';
+        return 'Video en streaming HD exclusivo disponible al instante en Morbo Hub.';
       }
 
       if (item.media_type === 'gallery' || (item.tags && item.tags.some(t => String(t).toLowerCase().includes('cosplay')))) {
-        return 'Galería de fotos. Las imágenes se sirven desde el sitio original.';
+        return 'Galería fotográfica en alta definición sin censura exclusiva de Morbo Hub.';
       }
 
       if (title.includes('3d') || title.includes('rysketches') || title.includes('render') || title.includes('penny')) {
@@ -6902,9 +6982,11 @@
         if (existingCards.has(cardId)) return;
         existingCards.add(cardId);
 
+        const safeGameTitle = cleanGallerySetTitle(it.title) || it.title || 'Juego +18';
+        const safeGameTags = sanitizeDisplayTags(it.tags);
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
-        card.setAttribute('aria-label', it.title || 'Juego');
+        card.setAttribute('aria-label', safeGameTitle);
         card.style.setProperty('--card-i', String(Math.min(idx, 16)));
         card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-emerald-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(16,185,129,0.25)] transition-all duration-300 cursor-pointer relative';
         
@@ -6975,13 +7057,13 @@
 
           <div class="p-3 flex-1 flex flex-col justify-between">
             <div>
-              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug" title="${escapeHtml(it.title)}">
-                ${escapeHtml(it.title)}
+              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug" title="${escapeHtml(safeGameTitle)}">
+                ${escapeHtml(safeGameTitle)}
               </h4>
               <div class="flex items-center gap-2 text-[11px] text-purple-300/70 pt-1.5">
                 <span class="font-semibold text-emerald-300/80">👁 ${escapeHtml(String(plays))}</span>
                 <span>&bull;</span>
-                <span class="truncate">${escapeHtml((it.tags || []).slice(0, 2).join(' · '))}</span>
+                <span class="truncate">${escapeHtml(safeGameTags.slice(0, 2).join(' · ') || 'VIP +18')}</span>
               </div>
             </div>
           </div>
@@ -7423,7 +7505,7 @@
           : COMIC_FALLBACK_SVG;
         const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const photoCount = it.page_count || (it.pages ? it.pages.length : null);
-        const modelName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || 'Cosplay VIP';
+        const modelName = getCleanGalleryCategoryBadge(it, setTitle);
         const isFav = isFavorite(it.source, it.source_id, it.id);
         const domColor = getCardDominantColor(cardId);
 
@@ -7435,7 +7517,7 @@
               ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
-              alt="${escapeHtml(setTitle || it.title)}"
+              alt="${escapeHtml(setTitle || 'Galería VIP')}"
               loading="${isAboveFold ? 'eager' : 'lazy'}"
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
@@ -7486,7 +7568,7 @@
               </button>
             </div>
 
-            <!-- Badge Inferior Izquierda: Nombre de la modelo -->
+            <!-- Badge Inferior Izquierda: Categoría limpia sin sitios ni nombres reales -->
             <div class="absolute bottom-2 left-2 right-2">
               <span class="inline-block px-2 py-0.5 rounded-md bg-[#090414]/90 text-lav border border-white/10 text-[9px] font-bold uppercase truncate max-w-full">
                 ${escapeHtml(modelName)}
@@ -7495,8 +7577,8 @@
           </div>
 
           <div class="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
-            <h4 class="text-xs font-bold text-ink group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-snug">
-              ${escapeHtml(setTitle || it.title)}
+            <h4 class="text-xs font-bold text-ink group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-snug" title="${escapeHtml(setTitle || 'Galería VIP')}">
+              ${escapeHtml(setTitle || 'Galería VIP')}
             </h4>
             <div class="mt-2 pt-2 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
               ${isLocked ? `
@@ -7544,11 +7626,12 @@
         existingCards.add(cardId);
 
         const isLocked = isItemLockedForUser(it, idx);
+        const cleanVideoTitle = cleanGallerySetTitle(it.title) || 'Video HD';
         const card = document.createElement('a');
         const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(it) : '#';
         card.href = itemUrl;
         card.setAttribute('data-card-id', cardId);
-        card.setAttribute('aria-label', it.title || 'Video');
+        card.setAttribute('aria-label', cleanVideoTitle);
         card.style.setProperty('--card-i', String(Math.min(idx, 16)));
         card.classList.add('velvet-card-enter');
 
@@ -7568,7 +7651,8 @@
           : VIDEO_FALLBACK_SVG;
         const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const duration = (it.extra && it.extra.duration) || 'HD';
-        const performerName = (it.artists && it.artists[0]) || (it.tags && it.tags[0]) || 'Morbo VIP';
+        const rawPerf = (it.artists && it.artists[0]) || (sanitizeDisplayTags(it.tags)[0]) || 'Morbo VIP';
+        const performerName = sanitizeCreatorName(rawPerf, 'video');
         const viewsCount = (it.extra && it.extra.views) ? `${it.extra.views} vistas` : null;
         const domColor = getCardDominantColor(cardId);
 
@@ -7580,7 +7664,7 @@
               ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
-              alt="${escapeHtml(it.title)}"
+              alt="${escapeHtml(cleanVideoTitle)}"
               loading="${isAboveFold ? 'eager' : 'lazy'}"
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
@@ -7629,8 +7713,8 @@
           <!-- Info debajo de la miniatura -->
           <div class="p-3 flex-1 flex flex-col justify-between">
             <div>
-              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-[#ff4da8] transition-colors line-clamp-2 leading-snug" title="${escapeHtml(it.title)}">
-                ${escapeHtml(it.title)}
+              <h4 class="text-xs sm:text-sm font-bold text-white group-hover:text-[#ff4da8] transition-colors line-clamp-2 leading-snug" title="${escapeHtml(cleanVideoTitle)}">
+                ${escapeHtml(cleanVideoTitle)}
               </h4>
               <div class="flex items-center gap-2 text-[11px] text-purple-300/70 pt-1.5">
                 <span class="font-semibold text-pink-300/80 truncate">${escapeHtml(performerName)}</span>
@@ -9294,9 +9378,10 @@
 
       // Reproducción instantánea a 0ms si el video ya está en caché con fuentes
       if (cachedVid && cachedVid.video_sources && cachedVid.video_sources.length > 0) {
+        const cleanVidTitle = cleanGallerySetTitle(cachedVid.title) || 'Video HD';
         state.currentVideo = cachedVid;
         state.currentVideo.media_type = 'video';
-        titleEl.textContent = cachedVid.title;
+        titleEl.textContent = cleanVidTitle;
         const displayBadge = getReliableBadge(cachedVid);
         srcBadge.innerHTML = displayBadge || 'Morbo VIP';
         updateVideoFavIcon();
@@ -9304,9 +9389,9 @@
         if (pushRoute) {
           const effId = cachedVid.id || itemId;
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedVid) : `/v/${effId}`;
-          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cachedVid.title, canonicalUrl);
+          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cleanVidTitle, canonicalUrl);
         }
-        document.title = `${cachedVid.title} — MORBO HUB`;
+        document.title = `${cleanVidTitle} — MORBO HUB`;
         if (!videoGuard.matches(ticket.token)) return;
         setupVideoQualityButtons(cachedVid.video_sources);
         playVideoSource(cachedVid.video_sources[0], null, false, ticket.token);
@@ -9336,10 +9421,11 @@
         const item = await resp.json();
         if (!videoGuard.matches(ticket.token)) return;
 
+        const cleanVidTitle = cleanGallerySetTitle(item.title) || 'Video HD';
         state.currentVideo = item;
         state.currentVideo.media_type = 'video';
         setCachedItem(vCacheKey, item);
-        titleEl.textContent = item.title;
+        titleEl.textContent = cleanVidTitle;
 
         const displayBadge = getReliableBadge(item);
         srcBadge.innerHTML = displayBadge || 'Morbo VIP';
@@ -9356,9 +9442,9 @@
         if (pushRoute) {
           const effId = item.id || itemId;
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/v/${effId}`;
-          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, item.title, canonicalUrl);
+          history.pushState({ type: 'video', source, sourceId, itemId: effId, fromApp: true }, cleanVidTitle, canonicalUrl);
         }
-        document.title = `${item.title} — MORBO HUB`;
+        document.title = `${cleanVidTitle} — MORBO HUB`;
 
         let sources = item.video_sources || [];
         if (sources.length === 0) {
@@ -9992,10 +10078,11 @@
           const duration = (r.extra && r.extra.duration) || 'HD';
           const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
 
+          const cleanRelTitle = cleanGallerySetTitle(r.title) || 'Video HD';
           const card = document.createElement('a');
           const itemUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(r) : '#';
           card.href = itemUrl;
-          card.setAttribute('aria-label', r.title || 'Video');
+          card.setAttribute('aria-label', cleanRelTitle);
           card.className = 'group flex flex-col rounded-xl overflow-hidden bg-white/[0.03] border border-white/[0.08] hover:border-[#ff2d95]/40 transition-all cursor-pointer relative';
           card.onmouseenter = () => prefetchVideoOnHover(r);
           card.onmouseleave = () => cancelVideoPrefetch();
@@ -10010,7 +10097,7 @@
             <div class="aspect-video w-full overflow-hidden bg-black relative">
               <img
                 src="${coverSrc}"
-                alt="${escapeHtml(r.title)}"
+                alt="${escapeHtml(cleanRelTitle)}"
                 loading="lazy"
                 decoding="async"
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
@@ -10022,7 +10109,7 @@
             </div>
             <div class="p-2 flex flex-col gap-0.5">
               <h5 class="text-xs font-medium text-white/90 group-hover:text-[#ff2d95] transition-colors line-clamp-2 leading-tight">
-                ${escapeHtml(r.title)}
+                ${escapeHtml(cleanRelTitle)}
               </h5>
             </div>
           `;
@@ -10426,7 +10513,8 @@
         const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const isFav = isFavorite(it.source, it.source_id, it.id);
         const isWatch = isWatchlisted(it.source, it.source_id, it.id);
-        const cleanCardTitle = parseComicTitle(it.title).title || it.title;
+        const cleanCardTitle = parseComicTitle(it.title, { preferConcise: true }).title || cleanGallerySetTitle(it.title) || 'Cómic VIP';
+        const safeComicCreator = sanitizeCreatorName(it.artists && it.artists[0], 'comic');
         const domColor = getCardDominantColor(cardId);
 
         card.innerHTML = `
@@ -10437,7 +10525,7 @@
               ${responsiveSrcSet ? `srcset="${responsiveSrcSet}"` : ''}
               sizes="${RESPONSIVE_CARD_SIZES}"
               referrerpolicy="no-referrer"
-              alt="${escapeHtml(it.title)}"
+              alt="${escapeHtml(cleanCardTitle)}"
               loading="${isAboveFold ? 'eager' : 'lazy'}"
               fetchpriority="${isAboveFold ? 'high' : 'low'}"
               decoding="async"
@@ -10508,13 +10596,13 @@
           <!-- Pie de Tarjeta -->
           <div class="p-3 flex-1 flex flex-col justify-between space-y-2">
             <div>
-              <h4 class="text-xs font-bold text-ink line-clamp-2 group-hover:text-[#ff4da8] transition-colors" title="${escapeHtml(it.title)}">
+              <h4 class="text-xs font-bold text-ink line-clamp-2 group-hover:text-[#ff4da8] transition-colors" title="${escapeHtml(cleanCardTitle)}">
                 ${escapeHtml(cleanCardTitle)}
               </h4>
             </div>
             <div class="pt-1.5 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
               <span class="text-lav/60 text-[10px] truncate max-w-[120px] flex items-center gap-1">
-                <i class="fa-solid fa-crown text-[8px] text-amber-400"></i> ${escapeHtml((it.artists && it.artists[0]) || 'Morbo VIP')}
+                <i class="fa-solid fa-crown text-[8px] text-amber-400"></i> ${escapeHtml(safeComicCreator)}
               </span>
               <span class="text-[#ff4da8] font-bold text-[10px] group-hover:translate-x-0.5 transition-transform">Leer &rarr;</span>
             </div>
@@ -10620,14 +10708,15 @@
         }
       }
 
-      const parsedTitle = parseComicTitle(isGallery ? cleanGallerySetTitle(item.title) : item.title);
-      document.getElementById('hero-title').textContent = parsedTitle.title;
+      const parsedTitle = parseComicTitle(isGallery ? cleanGallerySetTitle(item.title) : item.title, { preferConcise: true });
+      document.getElementById('hero-title').textContent = parsedTitle.title || cleanGallerySetTitle(item.title);
 
       const authorContainer = document.getElementById('hero-author-container');
       const authorEl = document.getElementById('hero-author');
-      const authorName = parsedTitle.author || (item.artists && item.artists[0] ? item.artists[0] : '');
+      const rawAuthor = parsedTitle.author || (item.artists && item.artists[0] ? item.artists[0] : '');
+      const authorName = (isVid || isGallery) ? '' : sanitizeCreatorName(rawAuthor, 'comic');
       if (authorContainer && authorEl) {
-        if (authorName && !isVid) {
+        if (authorName && authorName !== 'Morbo VIP' && !isVid && !isGallery) {
           authorEl.textContent = authorName;
           authorContainer.classList.remove('hidden');
         } else {
@@ -10710,10 +10799,9 @@
         }
       }
 
-      // Tags del hero estilizados
+      // Tags del hero estilizados (sin nombres de sitios externos ni pesos)
       const tagsContainer = document.getElementById('hero-tags');
-      const FORBIDDEN_SITES = new Set(['pornhd', 'damplips', 'pornone', 'redporn', 'anyporn', 'alotporn', 'pmvhaven']);
-      const cleanTags = (item.tags || []).filter(t => t && t.length > 2 && !t.toLowerCase().includes('comic') && !FORBIDDEN_SITES.has(t.toLowerCase().trim())).slice(0, 4);
+      const cleanTags = sanitizeDisplayTags(item.tags || []).filter(t => !t.toLowerCase().includes('comic')).slice(0, 4);
 
       if (cleanTags.length > 0) {
         tagsContainer.innerHTML = cleanTags.map(t => `<span class="px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-purple-200/80">#${escapeHtml(t.replace(/^#/, ''))}</span>`).join(' ');
@@ -10911,12 +10999,13 @@
 
         const domColor = getCardDominantColor(h.id || (h.source + '_' + h.source_id));
 
+        const cleanContinueTitle = parseComicTitle(h.title, { preferConcise: true }).title || cleanGallerySetTitle(h.title) || 'Contenido VIP';
         card.innerHTML = `
           <!-- Portada Vertical Aspecto 2:3 -->
           <div class="relative w-full aspect-[2/3] rounded-xl overflow-hidden border border-white/10" style="background-color: ${domColor};">
             ${velvetLogoPlaceholder()}
             <img src="${coverSrc}"
-                 alt="${escapeHtml(h.title || 'Portada')}"
+                 alt="${escapeHtml(cleanContinueTitle)}"
                  loading="lazy"
                  data-media-type="${isVid ? 'video' : 'comic'}"
                  class="card-cover-img w-full h-full object-cover opacity-0 transition-all duration-300 group-hover:scale-105"
@@ -10952,8 +11041,8 @@
                data-card-key="${escapeHtml(registerCardActionItem(h))}"
                ${isLocked ? `onclick="handleContinueCardAction(this, event, 'locked')"` : ''}
                class="block">
-              <h5 class="text-xs font-bold text-white group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug min-h-[32px]" title="${escapeHtml(h.title)}">
-                ${escapeHtml(h.title)}
+              <h5 class="text-xs font-bold text-white group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug min-h-[32px]" title="${escapeHtml(cleanContinueTitle)}">
+                ${escapeHtml(cleanContinueTitle)}
               </h5>
             </a>
 
@@ -11192,7 +11281,8 @@
         if (cachedItem && cachedItem.pages && cachedItem.pages.length > 0) {
           state.currentItem = cachedItem;
           const fmt = getFormatInfo(cachedItem);
-          setReaderHeading(cachedItem.title);
+          const cachedHeading = parseComicTitle(cleanGallerySetTitle(cachedItem.title), { preferConcise: true }).title || cleanGallerySetTitle(cachedItem.title);
+          setReaderHeading(cachedHeading);
           applyReaderCopy(cachedItem);
           formatBadge.textContent = fmt.label;
           metaEl.textContent = `• ${cachedItem.pages.length} páginas`;
@@ -11206,8 +11296,8 @@
               ['buondua', '4khd', 'xasiat'].includes(cachedItem.source || source);
             if (isGallery) state.mode = 'galleries';
             const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedItem) : `/${isGallery ? 'g' : 'c'}/${effId}`;
-            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, cachedItem.title, canonicalUrl);
-            document.title = `${cachedItem.title} — MORBO HUB`;
+            history.pushState({ type: isGallery ? 'gallery' : 'comic', source, sourceId, itemId: effId, fromApp: true }, cachedHeading, canonicalUrl);
+            document.title = `${cachedHeading} — MORBO HUB`;
           }
           renderReaderPages(cachedItem.pages, cachedItem.url);
           renderReaderRecommendations();
@@ -11277,7 +11367,7 @@
         const fmt = getFormatInfo(item);
 
         const galleryHeading = item.media_type === 'gallery' || item.media_type === 'cosplay' || state.mode === 'galleries';
-        const headingTitle = galleryHeading ? cleanGallerySetTitle(item.title) : item.title;
+        const headingTitle = parseComicTitle(cleanGallerySetTitle(item.title), { preferConcise: true }).title || cleanGallerySetTitle(item.title) || 'Contenido VIP';
         setReaderHeading(headingTitle);
         applyReaderCopy(item);
 
@@ -11746,7 +11836,7 @@
             `}
           </div>
           <div class="p-2">
-            <h5 class="text-[11px] font-bold text-ink truncate group-hover:text-hot transition-colors">${escapeHtml((it.media_type === 'gallery' || it.media_type === 'cosplay') ? cleanGallerySetTitle(it.title) : it.title)}</h5>
+            <h5 class="text-[11px] font-bold text-ink truncate group-hover:text-hot transition-colors">${escapeHtml(parseComicTitle(cleanGallerySetTitle(it.title), { preferConcise: true }).title || cleanGallerySetTitle(it.title) || 'Contenido VIP')}</h5>
           </div>
         `;
         container.appendChild(card);
@@ -12932,6 +13022,20 @@
       return String(it.id || it.item_id || '');
     }
 
+    function getPersonalVaultPageSize() {
+      try {
+        if (window.VelvetPersonalData && typeof window.VelvetPersonalData.getPersonalPageSize === 'function') {
+          return window.VelvetPersonalData.getPersonalPageSize();
+        }
+        const isAndroidUa = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
+        const isMobileViewport = typeof window !== 'undefined' && typeof window.innerWidth === 'number' && window.innerWidth > 0 && window.innerWidth < 768;
+        return (isAndroidUa || isMobileViewport) ? 12 : 18;
+      } catch (e) {
+        return 18;
+      }
+    }
+    window.getPersonalVaultPageSize = getPersonalVaultPageSize;
+
     async function loadCloudFavorites() {
       if (!state.currentUser) return;
       try {
@@ -12988,12 +13092,13 @@
           }
         }
 
+        const favPs = getPersonalVaultPageSize();
         const detailsById = new Map();
         const detailsByKey = new Map();
         let page = 1;
         let totalPages = 1;
-        while (page <= totalPages && page <= 8) {
-          const resp = await fetch(`/api/user/favorites?page=${page}&pageSize=50`, { headers: authHeaders(), credentials: 'include' });
+        while (page <= totalPages && page <= 15) {
+          const resp = await fetch(`/api/user/favorites?page=${page}&pageSize=${favPs}`, { headers: authHeaders(), credentials: 'include' });
           if (!resp.ok) break;
           const data = await resp.json();
           if (!data || data.degraded) break;
@@ -13075,9 +13180,10 @@
     async function loadCloudHistory() {
       if (!state.currentUser) return;
       try {
-        const resp = await fetch('/api/user/history?page=1&pageSize=50', { headers: authHeaders(), credentials: 'include' });
+        const histPs = getPersonalVaultPageSize();
+        const resp = await fetch(`/api/user/history?page=1&pageSize=${histPs}`, { headers: authHeaders(), credentials: 'include' });
         if (!resp.ok) return;
-        const data = await resp.json();
+        let data = await resp.json();
         if (!data || data.degraded) return;
         let cloud = Array.isArray(data.items) ? data.items : [];
         const byId = new Map();
@@ -13104,10 +13210,13 @@
             body: JSON.stringify({ items: toPush.slice(0, 100) })
           });
           if (sync.ok) {
-            const again = await fetch('/api/user/history?page=1&pageSize=50', { headers: authHeaders(), credentials: 'include' });
+            const again = await fetch(`/api/user/history?page=1&pageSize=${histPs}`, { headers: authHeaders(), credentials: 'include' });
             if (again.ok) {
               const againData = await again.json();
-              if (againData && !againData.degraded && Array.isArray(againData.items)) cloud = againData.items;
+              if (againData && !againData.degraded && Array.isArray(againData.items)) {
+                cloud = againData.items;
+                data = againData;
+              }
             }
           }
         }
@@ -13126,6 +13235,10 @@
           });
         }
 
+        state.vaultHistProTotal = typeof data.total === 'number' ? data.total : cloud.length;
+        state.vaultHistProTotalPages = Math.max(1, data.totalPages || Math.ceil(state.vaultHistProTotal / histPs));
+        vaultHistProCache.clear();
+        vaultHistProPage = 1;
         applyHistoryList(cloud);
         saveStorage();
         renderContinueShelf();
@@ -13792,12 +13905,70 @@
     }
 
     // Modal de Mi Bóveda
+    let vaultFavProPage = 1;
+    let vaultHistProPage = 1;
+    const vaultHistProCache = new Map();
+
+    function renderProModalPagination(containerId, scrollPanelId, currentPage, totalPages, totalItems, pageSize, onPageChange) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      if (!totalPages || totalPages <= 1) {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+        return;
+      }
+      const cur = Math.min(Math.max(1, parseInt(currentPage, 10) || 1), totalPages);
+      container.classList.remove('hidden');
+      container.innerHTML = `
+        <nav class="flex flex-wrap items-center justify-center gap-2 py-2 px-3 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-[11px] font-bold text-white" aria-label="Paginación de Bóveda">
+          <button type="button" class="vpro-pg-prev px-3 py-1.5 rounded-xl bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer min-h-[36px]" ${cur <= 1 ? 'disabled' : ''}>
+            &larr; Ant.
+          </button>
+          <span class="text-purple-300 font-mono">Pág ${cur}/${totalPages} · ${totalItems} (${pageSize}/pág.)</span>
+          <button type="button" class="vpro-pg-next px-3 py-1.5 rounded-xl bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer min-h-[36px]" ${cur >= totalPages ? 'disabled' : ''}>
+            Sig. &rarr;
+          </button>
+        </nav>
+      `;
+      const prevBtn = container.querySelector('.vpro-pg-prev');
+      const nextBtn = container.querySelector('.vpro-pg-next');
+      const scrollTopPanel = () => {
+        const panel = document.getElementById(scrollPanelId);
+        if (panel) panel.scrollTop = 0;
+      };
+      if (prevBtn) prevBtn.onclick = () => { if (cur > 1) { onPageChange(cur - 1); scrollTopPanel(); } };
+      if (nextBtn) nextBtn.onclick = () => { if (cur < totalPages) { onPageChange(cur + 1); scrollTopPanel(); } };
+    }
+
+    async function goToVaultHistProPage(targetPage) {
+      const p = Math.max(1, parseInt(targetPage, 10) || 1);
+      vaultHistProPage = p;
+      const pageSize = getPersonalVaultPageSize();
+      const hasFullLocal = Array.isArray(state.history) && state.history.length >= p * pageSize;
+      if (p > 1 && state.currentUser && !hasFullLocal && !vaultHistProCache.has(p)) {
+        try {
+          const resp = await fetch(`/api/user/history?page=${p}&pageSize=${pageSize}`, { headers: authHeaders(), credentials: 'include' });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && !data.degraded && Array.isArray(data.items)) {
+              vaultHistProCache.set(p, data.items.map(decorateServerHistory).slice(0, pageSize));
+              if (typeof data.total === 'number') state.vaultHistProTotal = data.total;
+              if (typeof data.totalPages === 'number') state.vaultHistProTotalPages = data.totalPages;
+            }
+          }
+        } catch (e) {}
+      }
+      renderVaultHistoryPro();
+    }
 
     function openVaultModal(tab = 'favorites') {
 
       const dropMenu = document.getElementById('user-dropdown-menu');
 
       if (dropMenu) dropMenu.classList.add('hidden');
+
+      vaultFavProPage = 1;
+      vaultHistProPage = 1;
 
       const modal = document.getElementById('vault-modal');
       if (modal) modal.classList.remove('hidden');
@@ -13847,10 +14018,12 @@
 
     function renderVaultFavoritesPro() {
       const container = document.getElementById('vault-favs-pro-list') || document.getElementById('vault-fav-pro-list');
+      const pgEl = document.getElementById('vault-favs-pro-pagination');
       if (!container) return;
       container.innerHTML = '';
 
       if (!state.favorites || state.favorites.length === 0) {
+        if (pgEl) { pgEl.innerHTML = ''; pgEl.classList.add('hidden'); }
         container.innerHTML = `
           <div class="py-12 flex flex-col items-center justify-center text-center gap-2 text-purple-300/60">
             <i class="fa-solid fa-heart-crack text-3xl text-purple-500/40 mb-1"></i>
@@ -13861,7 +14034,14 @@
         return;
       }
 
-      state.favorites.forEach(it => {
+      const pageSize = getPersonalVaultPageSize();
+      const totalItems = state.favorites.length;
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      vaultFavProPage = Math.min(Math.max(1, vaultFavProPage), totalPages);
+      const startIdx = (vaultFavProPage - 1) * pageSize;
+      const pageItems = state.favorites.slice(startIdx, startIdx + pageSize);
+
+      pageItems.forEach(it => {
         try {
           if (!it) return;
           const row = document.createElement('div');
@@ -13878,7 +14058,7 @@
             ? getStealthImageUrl(it.cover_url, it.url || '')
             : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
-          const titleText = ((it.media_type === 'gallery' || it.media_type === 'cosplay') ? cleanGallerySetTitle(it.title) : it.title) || (isVid ? 'Video sin título' : 'Cómic sin título');
+          const titleText = parseComicTitle(cleanGallerySetTitle(it.title), { preferConcise: true }).title || cleanGallerySetTitle(it.title) || (isVid ? 'Video sin título' : 'Cómic sin título');
 
           row.innerHTML = `
             <div class="flex items-center gap-3 overflow-hidden flex-1">
@@ -13911,14 +14091,29 @@
           console.warn('[VAULT ITEM RENDER WARN]:', itemErr);
         }
       });
+
+      renderProModalPagination(
+        'vault-favs-pro-pagination',
+        'vpanel-pro-favorites',
+        vaultFavProPage,
+        totalPages,
+        totalItems,
+        pageSize,
+        (nextPage) => {
+          vaultFavProPage = nextPage;
+          renderVaultFavoritesPro();
+        }
+      );
     }
 
     function renderVaultHistoryPro() {
       const container = document.getElementById('vault-hist-pro-list');
+      const pgEl = document.getElementById('vault-hist-pro-pagination');
       if (!container) return;
       container.innerHTML = '';
 
       if (!state.history || state.history.length === 0) {
+        if (pgEl) { pgEl.innerHTML = ''; pgEl.classList.add('hidden'); }
         container.innerHTML = `
           <div class="py-12 flex flex-col items-center justify-center text-center gap-2 text-purple-300/60">
             <i class="fa-solid fa-clock-rotate-left text-3xl text-purple-500/40 mb-1"></i>
@@ -13929,7 +14124,17 @@
         return;
       }
 
-      state.history.forEach(h => {
+      const pageSize = getPersonalVaultPageSize();
+      const totalItems = Math.max(state.vaultHistProTotal || 0, state.history.length);
+      const totalPages = Math.max(1, state.vaultHistProTotalPages || Math.ceil(totalItems / pageSize), Math.ceil(state.history.length / pageSize));
+      vaultHistProPage = Math.min(Math.max(1, vaultHistProPage), totalPages);
+      const cachedPage = vaultHistProPage > 1 ? vaultHistProCache.get(vaultHistProPage) : null;
+      const startIdx = (vaultHistProPage - 1) * pageSize;
+      const pageItems = Array.isArray(cachedPage)
+        ? cachedPage.slice(0, pageSize)
+        : state.history.slice(startIdx, startIdx + pageSize);
+
+      pageItems.forEach(h => {
         try {
           if (!h) return;
           const row = document.createElement('div');
@@ -13961,7 +14166,7 @@
             ? getStealthImageUrl(h.cover_url, h.url || '')
             : (isVid ? VIDEO_FALLBACK_SVG : COMIC_FALLBACK_SVG);
 
-          const titleText = h.title || (isVid ? 'Video sin título' : 'Cómic sin título');
+          const titleText = parseComicTitle(cleanGallerySetTitle(h.title), { preferConcise: true }).title || cleanGallerySetTitle(h.title) || (isVid ? 'Video sin título' : 'Cómic sin título');
 
           row.innerHTML = `
             <div class="flex items-center gap-3 truncate flex-1 min-w-0">
@@ -13997,13 +14202,27 @@
           console.warn('[VAULT HIST RENDER WARN]:', histErr);
         }
       });
+
+      renderProModalPagination(
+        'vault-hist-pro-pagination',
+        'vpanel-pro-history',
+        vaultHistProPage,
+        totalPages,
+        totalItems,
+        pageSize,
+        (nextPage) => { goToVaultHistProPage(nextPage); }
+      );
     }
 
     function removeVaultHistoryItem(source, sourceId, itemId = null) {
+      vaultHistProCache.clear();
       state.history = state.history.filter(h => {
         if (itemId && h.id && Number(h.id) === Number(itemId)) return false;
         return !(h.source === source && h.source_id === sourceId);
       });
+      if (typeof state.vaultHistProTotal === 'number' && state.vaultHistProTotal > 0) {
+        state.vaultHistProTotal = Math.max(0, state.vaultHistProTotal - 1);
+      }
       delete state.progress[`${source}:${sourceId}`];
       if (itemId) delete state.progress[String(itemId)];
       saveStorage();
@@ -14098,6 +14317,10 @@
     }
 
     async function handleClearCloudHistory() {
+      vaultHistProCache.clear();
+      vaultHistProPage = 1;
+      state.vaultHistProTotal = 0;
+      state.vaultHistProTotalPages = 1;
       state.history = [];
       state.progress = {};
       saveStorage();

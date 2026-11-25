@@ -19,13 +19,26 @@
   let historySearchQuery = '';
   let historyOnlyUnfinished = false;
   let historyPage = 1;
-  const HISTORY_CHUNK_SIZE = 48;
 
+  let favPage = 1;
   let favFilterType = 'all';
   let favSortMode = 'recent';
   let favSearchQuery = '';
   let isMultiSelectMode = false;
   const selectedFavIds = new Set();
+
+  function getVaultPageSize() {
+    try {
+      if (window.VelvetPersonalData && typeof window.VelvetPersonalData.getPersonalPageSize === 'function') {
+        return window.VelvetPersonalData.getPersonalPageSize();
+      }
+      const isAndroidUa = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
+      const isMobileViewport = typeof window !== 'undefined' && typeof window.innerWidth === 'number' && window.innerWidth > 0 && window.innerWidth < 768;
+      return (isAndroidUa || isMobileViewport) ? 12 : 18;
+    } catch (e) {
+      return 18;
+    }
+  }
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -35,6 +48,22 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function sanitizeVaultTitle(raw, fallback = 'Sin título') {
+    const s0 = String(raw || '').trim();
+    if (!s0) return fallback;
+    let s = s0
+      .replace(/\{[^}]{1,90}\}/g, ' ')
+      .replace(/[\[\(（【](?:peso\b|aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|xasiat|buondua|misskon|4khd|pmvhaven|3hentai)[^\]\)）】]{0,60}[\]\)）】]/gi, ' ')
+      .replace(/[\[\(（【][^\]\)）】]{0,60}\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?)\b[^\]\)）】]{0,30}[\]\)）】]/gi, ' ')
+      .replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b(?:xasiat|xascdn|buondua|misskon|4khd|pmvhaven|3hentai|hentaipaw|f95zone|gamcore)\b(?:\.[a-z]{2,5})?/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, '')
+      .trim();
+    return s || fallback;
   }
 
   const ALLOWED_VAULT_AVATAR_BGS = new Set([
@@ -92,27 +121,78 @@
     return groups;
   }
 
-  function renderFallbackPagination(container, currentPage, totalPages, onPageChange) {
-    if (!container || totalPages <= 1) {
-      if (container) container.innerHTML = '';
+  function buildVaultPageWindow(current, total) {
+    if (total <= 7) {
+      const all = [];
+      for (let i = 1; i <= total; i++) all.push(i);
+      return all;
+    }
+    const pages = [1];
+    const left = Math.max(2, current - 1);
+    const right = Math.min(total - 1, current + 1);
+    if (left > 2) pages.push('...');
+    for (let i = left; i <= right; i++) pages.push(i);
+    if (right < total - 1) pages.push('...');
+    pages.push(total);
+    return pages;
+  }
+
+  function renderVaultPagination(container, currentPage, totalPages, totalItems, pageSize, onPageChange, ariaLabel = 'Paginación de Bóveda') {
+    if (!container) return;
+    if (!totalPages || totalPages <= 1) {
+      container.innerHTML = '';
+      container.classList.add('hidden');
       return;
     }
+
+    const cur = Math.min(Math.max(1, parseInt(currentPage, 10) || 1), totalPages);
+    const tokens = buildVaultPageWindow(cur, totalPages);
+
+    const pageButtonsHtml = tokens.map((tok) => {
+      if (tok === '...') {
+        return '<span class="px-1.5 text-lav/50 select-none">…</span>';
+      }
+      const isCurrent = tok === cur;
+      const cls = isCurrent
+        ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white border-pink-400/60 shadow-md'
+        : 'bg-white/[0.06] hover:bg-pink-500/20 text-lav hover:text-white border-white/10';
+      return `<button type="button" data-vault-page="${tok}" class="vault-pg-num px-3 py-1.5 rounded-xl border ${cls} transition-all cursor-pointer min-h-[44px] min-w-[40px] flex items-center justify-center font-bold" ${isCurrent ? 'aria-current="page"' : ''} aria-label="Página ${tok}">${tok}</button>`;
+    }).join('');
+
     container.innerHTML = `
-      <!-- VelvetPagination Fallback Temporal -->
-      <nav class="flex items-center justify-center gap-3 my-6 py-3 px-5 rounded-full bg-[#0d061e]/90 border border-purple-500/30 text-xs font-bold text-white shadow-lg backdrop-blur-md" aria-label="Paginación Temporal de Bóveda">
-        <button type="button" class="vault-fb-prev px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center" ${currentPage <= 1 ? 'disabled' : ''}>
-          &larr; Anterior
+      <nav class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 my-4 py-2.5 px-3 sm:px-5 rounded-2xl sm:rounded-full bg-[#0d061e]/95 border border-purple-500/30 text-xs font-bold text-white shadow-lg backdrop-blur-md" aria-label="${escapeHtml(ariaLabel)}">
+        <button type="button" class="vault-pg-prev px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center gap-1" ${cur <= 1 ? 'disabled' : ''} aria-label="Página anterior">
+          &larr; <span class="hidden sm:inline">Anterior</span>
         </button>
-        <span class="text-purple-300 font-mono">Página ${currentPage} de ${totalPages}</span>
-        <button type="button" class="vault-fb-next px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center" ${currentPage >= totalPages ? 'disabled' : ''}>
-          Siguiente &rarr;
+        <div class="flex items-center gap-1 flex-wrap justify-center">
+          ${pageButtonsHtml}
+        </div>
+        <button type="button" class="vault-pg-next px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center gap-1" ${cur >= totalPages ? 'disabled' : ''} aria-label="Página siguiente">
+          <span class="hidden sm:inline">Siguiente</span> &rarr;
         </button>
+        <span class="text-[11px] text-purple-300/80 font-mono pl-1 sm:pl-2">
+          Pág ${cur}/${totalPages} &middot; ${totalItems} (${pageSize}/pág.)
+        </span>
       </nav>
     `;
-    const prevBtn = container.querySelector('.vault-fb-prev');
-    const nextBtn = container.querySelector('.vault-fb-next');
-    if (prevBtn) prevBtn.onclick = () => onPageChange(currentPage - 1);
-    if (nextBtn) nextBtn.onclick = () => onPageChange(currentPage + 1);
+    container.classList.remove('hidden');
+
+    const prevBtn = container.querySelector('.vault-pg-prev');
+    const nextBtn = container.querySelector('.vault-pg-next');
+    if (prevBtn) prevBtn.onclick = () => cur > 1 && onPageChange(cur - 1);
+    if (nextBtn) nextBtn.onclick = () => cur < totalPages && onPageChange(cur + 1);
+    container.querySelectorAll('.vault-pg-num').forEach((btn) => {
+      btn.onclick = () => {
+        const p = parseInt(btn.dataset.vaultPage, 10);
+        if (Number.isInteger(p) && p >= 1 && p <= totalPages && p !== cur) {
+          onPageChange(p);
+        }
+      };
+    });
+  }
+
+  function renderFallbackPagination(container, currentPage, totalPages, onPageChange) {
+    renderVaultPagination(container, currentPage, totalPages, totalPages * getVaultPageSize(), getVaultPageSize(), onPageChange, 'Paginación de Bóveda');
   }
 
   function renderSkeletonGrid(container, count = 8) {
@@ -164,6 +244,21 @@
       window.addEventListener('velvet:history-error', () => {
         if (currentTab === 'history') this.renderHistory();
       });
+
+      let lastAdaptiveSize = getVaultPageSize();
+      let resizeDebounce = null;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeDebounce);
+        resizeDebounce = setTimeout(() => {
+          const nextSize = getVaultPageSize();
+          if (nextSize === lastAdaptiveSize) return;
+          lastAdaptiveSize = nextSize;
+          const root = document.getElementById('view-vault');
+          if (!root || root.classList.contains('hidden')) return;
+          if (currentTab === 'favorites') this.goToFavoritesPage(1);
+          else if (currentTab === 'history') this.goToHistoryPage(1);
+        }, 180);
+      });
     },
 
     mount(tab = 'favorites') {
@@ -200,6 +295,7 @@
         if (subEl) subEl.textContent = 'Gestiona tu perfil, avatar, seguridad y estado de membresía.';
         this.renderAccount();
       } else if (tab === 'history') {
+        historyPage = 1;
         if (multiselectBtn) multiselectBtn.classList.add('hidden');
         if (headingEl) headingEl.textContent = 'Mi Historial de Reproducción';
         if (subEl) subEl.textContent = 'Continúa viendo tus videos, cómics y juegos desde donde los dejaste.';
@@ -208,6 +304,7 @@
         }
         this.renderHistory();
       } else {
+        favPage = 1;
         if (multiselectBtn) multiselectBtn.classList.remove('hidden');
         if (headingEl) headingEl.textContent = 'Mi Bóveda Personal';
         if (subEl) subEl.textContent = 'Tus favoritos e historial, en tu cuenta.';
@@ -305,12 +402,14 @@
         return;
       }
 
+      const pageSize = getVaultPageSize();
+      const storeFavs = window.VelvetStore?.getFavorites() || [];
       const favState = pData ? pData.getFavoritesState() : {
-        items: window.VelvetStore?.getFavorites() || [],
-        total: (window.VelvetStore?.getFavorites() || []).length,
-        page: 1,
-        pageSize: 24,
-        totalPages: 1,
+        items: storeFavs,
+        total: storeFavs.length,
+        page: favPage,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(storeFavs.length / pageSize)),
         isLoading: false,
         error: null
       };
@@ -358,10 +457,13 @@
       }
 
       // ESTADO 4: Bóveda Vacía
-      if (favs.length === 0 && favState.total === 0) {
+      if (favs.length === 0 && (favSearchQuery || favFilterType !== 'all' || favState.total === 0)) {
         container.innerHTML = '';
         container.classList.add('hidden');
-        if (paginationContainer) paginationContainer.classList.add('hidden');
+        if (paginationContainer) {
+          paginationContainer.classList.add('hidden');
+          paginationContainer.innerHTML = '';
+        }
         if (emptyEl) {
           emptyEl.innerHTML = `
             <div class="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(255,45,149,0.2)]">
@@ -388,6 +490,27 @@
       if (emptyEl) emptyEl.classList.add('hidden');
       container.classList.remove('hidden');
 
+      const isClientFavSlice = Boolean(!pData || !pData.isAuthenticated() || favSearchQuery || favSortMode === 'az' || favs.length > pageSize);
+      let favTotalItems;
+      let favTotalPages;
+      let favCurrentPage;
+      let pageFavs;
+
+      if (!isClientFavSlice) {
+        favTotalItems = Math.max(favState.total || 0, favs.length);
+        favTotalPages = Math.max(1, favState.totalPages || Math.ceil(favTotalItems / pageSize));
+        favCurrentPage = Math.min(Math.max(1, favState.page || favPage || 1), favTotalPages);
+        favPage = favCurrentPage;
+        pageFavs = favs.slice(0, pageSize);
+      } else {
+        favTotalItems = favs.length;
+        favTotalPages = Math.max(1, Math.ceil(favTotalItems / pageSize));
+        favPage = Math.min(Math.max(1, favPage), favTotalPages);
+        favCurrentPage = favPage;
+        const startIdx = (favCurrentPage - 1) * pageSize;
+        pageFavs = favs.slice(startIdx, startIdx + pageSize);
+      }
+
       const prefs = window.VelvetStore?.getPreferences() || {};
       const isGrid = prefs.vaultViewMode !== 'list';
 
@@ -399,9 +522,9 @@
 
       container.innerHTML = '';
 
-      // ESTADO 5: Con Resultados (Renderizado de tarjetas)
+      // ESTADO 5: Con Resultados (Renderizado de tarjetas, máx 18 PC / 12 Android)
 
-      favs.forEach((it) => {
+      pageFavs.forEach((it) => {
         const itemUrl = window.VelvetRouter?.getItemUrl(it) || '#';
         const coverSrc = it.cover_url
           ? (window.getStealthImageUrl ? window.getStealthImageUrl(it.cover_url, it.url) : it.cover_url)
@@ -457,7 +580,7 @@
             </div>
             <div class="p-2.5 flex-1 flex flex-col justify-between">
               <h4 class="text-xs font-bold text-white group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug">
-                ${escapeHtml(it.title || 'Sin título')}
+                ${escapeHtml(sanitizeVaultTitle(it.title))}
               </h4>
             </div>
           `;
@@ -488,7 +611,7 @@
                 <img src="${escapeHtml(coverSrc)}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='/velvet_logo.png'" />
               </div>
               <div class="truncate">
-                <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(it.title || 'Sin título')}</span>
+                <span class="text-xs font-bold text-white truncate block group-hover:text-pink-300">${escapeHtml(sanitizeVaultTitle(it.title))}</span>
                 <span class="text-[10px] text-lav/70 font-mono">${escapeHtml(badgeText)}</span>
               </div>
             </div>
@@ -507,6 +630,33 @@
           container.appendChild(row);
         }
       });
+
+      if (paginationContainer) {
+        renderVaultPagination(
+          paginationContainer,
+          favCurrentPage,
+          favTotalPages,
+          favTotalItems,
+          pageSize,
+          (nextPage) => this.goToFavoritesPage(nextPage),
+          'Paginación de Favoritos'
+        );
+      }
+    },
+
+    goToFavoritesPage(targetPage = 1) {
+      const p = Math.max(1, parseInt(targetPage, 10) || 1);
+      favPage = p;
+      const pData = window.VelvetPersonalData;
+      if (pData && pData.isAuthenticated() && !favSearchQuery && favSortMode !== 'az') {
+        pData.fetchFavorites(p, { filter: favFilterType, sort: favSortMode, search: favSearchQuery });
+      } else {
+        this.renderFavorites();
+      }
+      const listEl = document.getElementById('vault-favorites-list');
+      if (listEl && typeof listEl.scrollIntoView === 'function') {
+        try { listEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+      }
     },
 
     removeFavoriteItem(source, sourceId, id = null) {
@@ -592,7 +742,51 @@
       const emptyEl = document.getElementById('vault-history-empty');
       if (!container) return;
 
-      let hist = window.VelvetStore?.getHistory() || [];
+      let histPaginationContainer = document.getElementById('vault-history-pagination-root');
+      if (!histPaginationContainer && container.parentNode) {
+        histPaginationContainer = document.createElement('div');
+        histPaginationContainer.id = 'vault-history-pagination-root';
+        histPaginationContainer.className = 'w-full flex justify-center py-4';
+        container.parentNode.appendChild(histPaginationContainer);
+      }
+
+      const pageSize = getVaultPageSize();
+      const pData = window.VelvetPersonalData;
+      const isAuth = pData ? pData.isAuthenticated() : !!window.VelvetStore?.getCurrentUser();
+      const histState = pData ? pData.getHistoryState() : null;
+
+      if (histState && histState.isLoading && (!histState.items || histState.items.length === 0)) {
+        if (emptyEl) emptyEl.classList.add('hidden');
+        if (histPaginationContainer) {
+          histPaginationContainer.classList.add('hidden');
+          histPaginationContainer.innerHTML = '';
+        }
+        renderSkeletonGrid(container, Math.min(pageSize, 6));
+        return;
+      }
+
+      if (histState && histState.error && (!histState.items || histState.items.length === 0)) {
+        container.innerHTML = `
+          <div class="py-12 px-4 rounded-3xl bg-[#0e071c] border border-rose-500/30 text-center flex flex-col items-center justify-center">
+            <h3 class="text-base font-bold text-white mb-1">No se pudo cargar tu historial</h3>
+            <p class="text-xs text-lav/70 mb-5 max-w-xs">${escapeHtml(histState.error)}</p>
+            <button type="button" onclick="if(window.VelvetPersonalData) window.VelvetPersonalData.fetchHistory(${histState.page});" class="px-5 py-2.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/40 hover:bg-pink-500/30 text-xs font-bold transition-all cursor-pointer min-h-[44px] flex items-center justify-center">
+              <i class="fa-solid fa-rotate-right mr-1.5"></i> Reintentar
+            </button>
+          </div>
+        `;
+        container.classList.remove('hidden');
+        if (emptyEl) emptyEl.classList.add('hidden');
+        if (histPaginationContainer) {
+          histPaginationContainer.classList.add('hidden');
+          histPaginationContainer.innerHTML = '';
+        }
+        return;
+      }
+
+      let hist = (histState && (isAuth || (histState.items && histState.items.length > 0)))
+        ? histState.items.slice()
+        : (window.VelvetStore?.getHistory() || []);
       const progMap = window.VelvetStore?.getProgressMap() || {};
 
       // Filtro por tipo
@@ -618,6 +812,10 @@
       if (hist.length === 0) {
         container.innerHTML = '';
         container.classList.add('hidden');
+        if (histPaginationContainer) {
+          histPaginationContainer.classList.add('hidden');
+          histPaginationContainer.innerHTML = '';
+        }
         if (emptyEl) emptyEl.classList.remove('hidden');
         return;
       }
@@ -625,9 +823,28 @@
       if (emptyEl) emptyEl.classList.add('hidden');
       container.classList.remove('hidden');
 
-      // Limitar a los primeros N elementos para virtualización / chunking (máx ~48 nodos)
-      const slicedItems = hist.slice(0, historyPage * HISTORY_CHUNK_SIZE);
-      const groups = groupHistoryByDate(slicedItems);
+      const useServerHistPagination = Boolean(pData && isAuth && histState && !historySearchQuery && !historyOnlyUnfinished && hist.length <= pageSize);
+      let histTotalItems;
+      let histTotalPages;
+      let histCurrentPage;
+      let pageHistItems;
+
+      if (useServerHistPagination) {
+        histTotalItems = Math.max(histState.total || 0, hist.length);
+        histTotalPages = Math.max(1, histState.totalPages || Math.ceil(histTotalItems / pageSize));
+        histCurrentPage = Math.min(Math.max(1, histState.page || historyPage || 1), histTotalPages);
+        historyPage = histCurrentPage;
+        pageHistItems = hist.slice(0, pageSize);
+      } else {
+        histTotalItems = hist.length;
+        histTotalPages = Math.max(1, Math.ceil(histTotalItems / pageSize));
+        historyPage = Math.min(Math.max(1, historyPage), histTotalPages);
+        histCurrentPage = historyPage;
+        const startIdx = (histCurrentPage - 1) * pageSize;
+        pageHistItems = hist.slice(startIdx, startIdx + pageSize);
+      }
+
+      const groups = groupHistoryByDate(pageHistItems);
 
       container.innerHTML = '';
 
@@ -693,7 +910,7 @@
               </a>
               <div class="truncate flex-1 min-w-0">
                 <a href="${itemUrl}" class="text-xs font-bold text-white hover:text-pink-300 truncate block">
-                  ${escapeHtml(h.title || 'Sin título')}
+                  ${escapeHtml(sanitizeVaultTitle(h.title))}
                 </a>
                 <div class="flex items-center gap-2 pt-1 text-[11px] text-lav/70">
                   <span class="px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-500/30 text-[9px] font-bold uppercase text-pink-300">
@@ -728,22 +945,36 @@
         container.appendChild(groupList);
       });
 
-      // Botón "Cargar más" si hay más de 48 elementos
-      if (hist.length > slicedItems.length) {
-        const loadMoreBox = document.createElement('div');
-        loadMoreBox.className = 'py-4 text-center';
-        loadMoreBox.innerHTML = `
-          <button onclick="window.VelvetVault.loadMoreHistory()" class="px-5 py-2.5 rounded-full bg-white/[0.06] hover:bg-white/[0.1] text-xs font-bold text-lav hover:text-white border border-purple-500/20 transition-all cursor-pointer">
-            Cargar elementos anteriores (${hist.length - slicedItems.length} restantes)
-          </button>
-        `;
-        container.appendChild(loadMoreBox);
+      if (histPaginationContainer) {
+        renderVaultPagination(
+          histPaginationContainer,
+          histCurrentPage,
+          histTotalPages,
+          histTotalItems,
+          pageSize,
+          (nextPage) => this.goToHistoryPage(nextPage),
+          'Paginación de Historial'
+        );
+      }
+    },
+
+    goToHistoryPage(targetPage = 1) {
+      const p = Math.max(1, parseInt(targetPage, 10) || 1);
+      historyPage = p;
+      const pData = window.VelvetPersonalData;
+      if (pData && pData.isAuthenticated() && !historySearchQuery && !historyOnlyUnfinished) {
+        pData.fetchHistory(p, { filter: historyFilterType, onlyUnfinished: historyOnlyUnfinished, search: historySearchQuery });
+      } else {
+        this.renderHistory();
+      }
+      const listEl = document.getElementById('vault-history-list');
+      if (listEl && typeof listEl.scrollIntoView === 'function') {
+        try { listEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
       }
     },
 
     loadMoreHistory() {
-      historyPage++;
-      this.renderHistory();
+      this.goToHistoryPage(historyPage + 1);
     },
 
     removeHistoryItem(source, sourceId, id = null) {
@@ -940,24 +1171,37 @@
       this.renderFavorites();
     },
 
+    getPageSize() {
+      return getVaultPageSize();
+    },
+
     setFavFilter(type) {
       favFilterType = type;
+      favPage = 1;
+      if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
+        window.VelvetPersonalData.fetchFavorites(1, { filter: favFilterType, sort: favSortMode, search: favSearchQuery });
+      }
       this.renderFavorites();
     },
 
     setFavSort(mode) {
       favSortMode = mode;
+      favPage = 1;
       this.renderFavorites();
     },
 
     setFavSearch(query) {
       favSearchQuery = query;
+      favPage = 1;
       this.renderFavorites();
     },
 
     setHistoryFilter(type) {
       historyFilterType = type;
       historyPage = 1;
+      if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
+        window.VelvetPersonalData.fetchHistory(1, { filter: historyFilterType, onlyUnfinished: historyOnlyUnfinished, search: historySearchQuery });
+      }
       this.renderHistory();
     },
 

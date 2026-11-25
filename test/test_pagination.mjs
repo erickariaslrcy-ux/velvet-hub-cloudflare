@@ -71,7 +71,7 @@ assert.ok(
   "sw.js NO debe cachear /api/items en API_CACHE con SWR"
 );
 assert.ok(
-  swCode.includes("v12-velvet-turbo") || swCode.includes("v12-velvet-redesign") || swCode.includes("v13-session-persist") || swCode.includes("v14-stable-media") || swCode.includes("v15-mobile-nav") || swCode.includes("v16-stable-covers") || swCode.includes("v17-gallery-mirrors") || swCode.includes("v18-fav-ids") || swCode.includes("v19-section-zoom") || swCode.includes("v20-video-silence") || swCode.includes("v21-gallery-budget") || swCode.includes("v22-video-direct") || swCode.includes("v23-morbo-name") || swCode.includes("v24-subscriptions-fix") || swCode.includes("v25-cloud-favorites") || swCode.includes("v26-security-audit"),
+  swCode.includes("v12-velvet-turbo") || swCode.includes("v12-velvet-redesign") || swCode.includes("v13-session-persist") || swCode.includes("v14-stable-media") || swCode.includes("v15-mobile-nav") || swCode.includes("v16-stable-covers") || swCode.includes("v17-gallery-mirrors") || swCode.includes("v18-fav-ids") || swCode.includes("v19-section-zoom") || swCode.includes("v20-video-silence") || swCode.includes("v21-gallery-budget") || swCode.includes("v22-video-direct") || swCode.includes("v23-morbo-name") || swCode.includes("v24-subscriptions-fix") || swCode.includes("v25-cloud-favorites") || swCode.includes("v26-security-audit") || swCode.includes("v27-vault-pagination"),
   "sw.js debe tener la versión de caché actualizada"
 );
 assert.ok(

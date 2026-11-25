@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v26-security-audit';
+const CACHE_VERSION = 'v27-vault-pagination';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
