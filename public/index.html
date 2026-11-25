@@ -1831,7 +1831,7 @@
           </div>
 
           <!-- Grilla / Lista de Favoritos -->
-          <div id="vault-favorites-list" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5">
+          <div id="vault-favorites-list" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4 sm:gap-5">
             <!-- Renderizado dinámico por vault.js -->
           </div>
 
@@ -4934,16 +4934,20 @@
       if (!original) return '';
       let s = original;
       s = s.replace(/\{[^}]{1,90}\}/g, ' ');
-      s = s.replace(/[\[\(（【]([^\]\)）】]{1,90})[\]\)）】]/g, (all, inner) => {
+      const isNoiseChunk = (inner) => {
         const innerClean = String(inner || '').trim();
-        if (isGalleryMetaChunk(innerClean)) return '';
-        if (/^(?:aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|complete|completo|uncensored|sin\s*censura|decensored|joselito|joselillo|mtl|rip|scan)/i.test(innerClean)) return '';
-        if (isNoiseOrSiteTag(innerClean)) return '';
-        return all;
-      });
+        if (isGalleryMetaChunk(innerClean)) return true;
+        if (/^(?:aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|complete|completo|uncensored|sin\s*censura|decensored|joselito|joselillo|mtl|rip|scan|ai[\s\-]*translat)/i.test(innerClean)) return true;
+        if (/(?:\([^)]+\)\s*)?\b(?:spanish|espa[nñ]ol|english|ai[\s\-]*translat(?:ed|ion)|machine[\s\-]*translat(?:ed|ion)|uncensored|sin\s*censura|decensored|mtl|dokiyuri)\b/i.test(innerClean)) return true;
+        if (isNoiseOrSiteTag(innerClean)) return true;
+        return false;
+      };
+      s = s.replace(/\[([^\[\]]{1,120})\]/g, (all, inner) => (isNoiseChunk(inner) ? '' : all));
+      s = s.replace(/[\(（【]([^\)）】]{1,120})[\)）】]/g, (all, inner) => (isNoiseChunk(inner) ? '' : all));
       s = s.replace(/[\[\(（【][^\]\)）】]*\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photo(?:s)?|fotos?|imgs?|videos?)\b[^\]\)）】]*$/gi, ' ');
       s = s.replace(/[\[\(（【]\s*\d+\s*photo[^\])]*$/gi, ' ');
       s = s.replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ');
+      s = s.replace(/\b(?:ai[\s\-]*translat(?:ed|ion)|machine[\s\-]*translat(?:ed|ion)|traducido\s+(?:con|por)\s+ia)\b/gi, ' ');
       s = s.replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ');
       s = s.replace(/\b\d+\s*(?:pics?|photos?|fotos?|im[aá]genes?|imgs?)\b(?=\s*(?:[\]|)\-–—]|$))/gi, ' ');
       s = s.replace(/(?:tg\s*@[^\s\]]+|t\.me\/\S+|https?:\/\/\S+|[a-z0-9-]+\.(?:com|net|org|li|cc|me|io|xxx)\b)/gi, ' ');
@@ -6266,8 +6270,11 @@
           });
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
           data = await resp.json();
-          if (state.freshShuffle && data && Array.isArray(data.items)) {
-            data = Object.assign({}, data, { items: arrangeShuffleItems(data.items) });
+          if ((state.freshShuffle || state.sort === 'random') && data && Array.isArray(data.items)) {
+            const cleanItems = typeof dedupeRandomPageItems === 'function'
+              ? dedupeRandomPageItems(nextPage, data.items)
+              : arrangeShuffleItems(data.items);
+            data = Object.assign({}, data, { items: cleanItems });
             noteShownShuffleIds(data.items);
           }
           CLIENT_CACHE.set(cacheKey, { ts: Date.now(), data });
@@ -6635,12 +6642,58 @@
 
     const RECENT_SHUFFLE_CAP = 160;
     const recentShuffleIds = { comics: [], videos: [], galleries: [], games: [] };
+    const randomPageHistory = new Map();
 
     function recentShuffleKey() {
       if (state.mode === 'videos') return 'videos';
       if (state.mode === 'galleries') return 'galleries';
       if (state.mode === 'games') return 'games';
       return 'comics';
+    }
+
+    function activeRandomSessionKey() {
+      const seedVal = (state.freshShuffle && state.feedSeed)
+        ? state.feedSeed
+        : (typeof getRotatingSeed === 'function' ? getRotatingSeed() : 1);
+      return `${recentShuffleKey()}|${state.category || 'all'}|${state.tag || ''}|${state.query || ''}|${seedVal}`;
+    }
+
+    function dedupeRandomPageItems(pageNum, items) {
+      const list = Array.isArray(items) ? items : [];
+      if (!list.length) return list;
+      const p = Math.max(1, parseInt(pageNum, 10) || 1);
+      const sessKey = activeRandomSessionKey();
+      let pageMap = randomPageHistory.get(sessKey);
+      if (!pageMap) {
+        if (randomPageHistory.size >= 8) {
+          const first = randomPageHistory.keys().next().value;
+          randomPageHistory.delete(first);
+        }
+        pageMap = new Map();
+        randomPageHistory.set(sessKey, pageMap);
+      }
+      const seenElsewhere = new Set();
+      pageMap.forEach((idSet, prevPage) => {
+        if (prevPage === p) return;
+        idSet.forEach((id) => seenElsewhere.add(id));
+      });
+      const fresh = [];
+      const dup = [];
+      for (const it of list) {
+        const id = it && it.id != null ? String(it.id) : '';
+        if (id && seenElsewhere.has(id)) dup.push(it);
+        else fresh.push(it);
+      }
+      const chosen = (dup.length > 0 && fresh.length >= Math.min(list.length, Math.ceil((state.pageSize || 24) * 0.75)))
+        ? fresh
+        : (seenElsewhere.size ? fresh.concat(dup) : arrangeShuffleItems(list));
+      const thisSet = new Set();
+      for (const it of chosen) {
+        const id = it && it.id != null ? String(it.id) : '';
+        if (id) thisSet.add(id);
+      }
+      pageMap.set(p, thisSet);
+      return chosen;
     }
 
     function nextShuffleSeed() {
@@ -6856,14 +6909,17 @@
         let data = await resp.json();
         if (gen !== _feedGen) return;
 
-        if (state.freshShuffle && state.feedSeed && state._shuffleClick && Array.isArray(data.items)) {
-          const overlap = shuffleOverlapRatio(data.items);
-          if (state.page === 1 && !shuffleRetry && overlap >= 0.34 && data.items.length >= 8) {
-            state.feedSeed = nextShuffleSeed();
-            state.videoSeed = state.feedSeed;
-            rememberActiveShuffle(state.feedSeed);
-            return fetchLiveFeed(true, { shuffleRetry: true });
+        if ((state.freshShuffle || state.sort === 'random') && Array.isArray(data.items)) {
+          if (state.freshShuffle && state.feedSeed && state._shuffleClick) {
+            const overlap = shuffleOverlapRatio(data.items);
+            if (state.page === 1 && !shuffleRetry && overlap >= 0.34 && data.items.length >= 8) {
+              state.feedSeed = nextShuffleSeed();
+              state.videoSeed = state.feedSeed;
+              rememberActiveShuffle(state.feedSeed);
+              return fetchLiveFeed(true, { shuffleRetry: true });
+            }
           }
+          data.items = dedupeRandomPageItems(state.page || 1, data.items);
           noteShownShuffleIds(data.items);
           state._shuffleClick = false;
         }

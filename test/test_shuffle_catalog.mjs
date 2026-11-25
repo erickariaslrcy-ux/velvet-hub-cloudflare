@@ -404,8 +404,44 @@ try {
   assert.ok((gameNormalA.res.headers.get("Cache-Control") || "").includes("public"));
   assert.deepEqual(idsOf(gameNormalA.body), idsOf(gameNormalB.body));
   assert.equal(idsOf(gameNormalA.body).length, 24);
+
+  // Regresión explícita: Página 1, Página 2 y Página 3 en modo random NUNCA repiten ítems de páginas previas
+  const assertDisjointPages = (p1, p2, label) => {
+    const a = idsOf(p1.body);
+    const b = idsOf(p2.body);
+    const setA = new Set(a);
+    const dupes = b.filter((id) => setA.has(id));
+    assert.equal(dupes.length, 0, `${label} repitió ${dupes.length} ítems entre pág 1 y pág 2: ${dupes.join(",")}`);
+  };
+  const galleryPage2 = await callItems("media_type=gallery&sort=random&page=2&page_size=24&fresh=1&shuffle=11");
+  const galleryPage3 = await callItems("media_type=gallery&sort=random&page=3&page_size=24&fresh=1&shuffle=11");
+  assertDisjointPages(galleryA, galleryPage2, "gallery fresh p1 vs p2");
+  assertDisjointPages(galleryA, galleryPage3, "gallery fresh p1 vs p3");
+  assertDisjointPages(galleryPage2, galleryPage3, "gallery fresh p2 vs p3");
+
+  const galleryPlainP2 = await callItems("media_type=gallery&sort=random&page=2&page_size=24");
+  assertDisjointPages(galleryPlain, galleryPlainP2, "gallery normal random p1 vs p2");
+
+  const comicPage3 = await callItems("media_type=comic&sort=random&page=3&page_size=24&fresh=1&shuffle=11");
+  assertDisjointPages(comicA, comicPage2, "comic fresh p1 vs p2");
+  assertDisjointPages(comicA, comicPage3, "comic fresh p1 vs p3");
+  assertDisjointPages(comicPage2, comicPage3, "comic fresh p2 vs p3");
+
+  const comicNormalP2 = await callItems("media_type=comic&sort=random&page=2&page_size=24");
+  assertDisjointPages(normalA, comicNormalP2, "comic normal random p1 vs p2");
+
+  const videoDbPage2 = await callItems("media_type=video&source=supabase&sort=random&page=2&page_size=24&fresh=1&shuffle=11");
+  assertDisjointPages(videoDbA, videoDbPage2, "video supabase fresh p1 vs p2");
+
+  const videoPage2 = await callItems("media_type=video&sort=random&page=2&page_size=24&fresh=1&shuffle=11");
+  assertDisjointPages(videoA, videoPage2, "video PMV fresh p1 vs p2");
+
+  const videoNormalP2 = await callItems("media_type=video&sort=random&page=2&page_size=24");
+  assertDisjointPages(videoNormalA, videoNormalP2, "video PMV normal random p1 vs p2");
+
+  assertDisjointPages(gameA, gamePage2, "game fresh p1 vs p2");
 } finally {
   globalThis.fetch = originalFetch;
 }
 
-console.log("✓ Al Azar cambia con cada semilla, cubre el catálogo y la rotación de 3 h sigue cacheable.");
+console.log("✓ Al Azar cambia con cada semilla, cubre el catálogo, no repite entre páginas y la rotación de 3 h sigue cacheable.");

@@ -138,11 +138,19 @@
   }
 
   function cleanPersonalCachedTitle(raw) {
+    const cleanChunk = (all, inner) => {
+      const t = String(inner || '').trim();
+      if (/(?:\([^)]+\)\s*)?\b(?:peso\b|aigirl\b|spanish|espa[nñ]ol|english|ai[\s\-]*translat(?:ed|ion)|machine[\s\-]*translat(?:ed|ion)|uncensored|sin\s*censura|decensored|mtl|dokiyuri|xasiat|buondua|misskon|4khd|pmvhaven|3hentai)\b/i.test(t)) return ' ';
+      if (/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?|videos?)\b/i.test(t)) return ' ';
+      return all;
+    };
     return String(raw || '')
       .replace(/\{[^}]{1,90}\}/g, ' ')
-      .replace(/[\[\(（【][^\]\)）】]{0,80}\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?|videos?)\b[^\]\)）】]{0,50}(?:[\]\)）】]|$)/gi, ' ')
+      .replace(/\[([^\[\]]{1,120})\]/g, cleanChunk)
+      .replace(/[\(（【]([^\)）】]{1,120})[\)）】]/g, cleanChunk)
       .replace(/[\[\(（【]\s*\d+\s*photo[^\])]*$/gi, ' ')
       .replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b(?:ai[\s\-]*translat(?:ed|ion)|machine[\s\-]*translat(?:ed|ion)|traducido\s+(?:con|por)\s+ia)\b/gi, ' ')
       .replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
       .replace(/\s+/g, ' ')
       .replace(/^[\s\-–—|:·]+|[\s\-–—|:·]+$/g, '')

@@ -53,12 +53,20 @@
   function sanitizeVaultTitle(raw, fallback = 'Sin título') {
     const s0 = String(raw || '').trim();
     if (!s0) return fallback;
+    const cleanChunk = (all, inner) => {
+      const t = String(inner || '').trim();
+      if (/(?:\([^)]+\)\s*)?\b(?:peso\b|aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|complete|completo|uncensored|sin\s*censura|decensored|mtl|dokiyuri|joselito|joselillo|ai[\s\-]*translat(?:ed|ion)|machine[\s\-]*translat(?:ed|ion)|xasiat|buondua|misskon|4khd|pmvhaven|3hentai)\b/i.test(t)) return ' ';
+      if (/\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?|videos?)\b/i.test(t)) return ' ';
+      return all;
+    };
     let s = s0
       .replace(/\{[^}]{1,90}\}/g, ' ')
-      .replace(/[\[\(（【](?:peso\b|aigirl\b|spanish|espa[nñ]ol|english|eng|raw|digital|xasiat|buondua|misskon|4khd|pmvhaven|3hentai)[^\]\)）】]{0,60}[\]\)）】]/gi, ' ')
-      .replace(/[\[\(（【][^\]\)）】]{0,80}\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photos?|fotos?|imgs?|videos?)\b[^\]\)）】]{0,50}(?:[\]\)）】]|$)/gi, ' ')
+      .replace(/\[([^\[\]]{1,120})\]/g, cleanChunk)
+      .replace(/[\(（【]([^\)）】]{1,120})[\)）】]/g, cleanChunk)
+      .replace(/[\[\(（【][^\]\)）】]*\b\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb|p|pics?|photo(?:s)?|fotos?|imgs?|videos?)\b[^\]\)）】]{0,50}(?:[\]\)）】]|$)/gi, ' ')
       .replace(/[\[\(（【]\s*\d+\s*photo[^\])]*$/gi, ' ')
       .replace(/\]\s*\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
+      .replace(/\b(?:ai[\s\-]*translat(?:ed|ion)|machine[\s\-]*translat(?:ed|ion)|traducido\s+(?:con|por)\s+ia)\b/gi, ' ')
       .replace(/\b(?:peso\s*:?\s*)?\d+(?:[.,]\d+)?\s*(?:kb|mb|gb|tb)\b/gi, ' ')
       .replace(/\b\d+\s*(?:pics?|photos?|fotos?|im[aá]genes?|imgs?|videos?)\b(?=\s*(?:[\]|)\-–—]|$))/gi, ' ')
       .replace(/\b(?:xasiat|xascdn|buondua|misskon|4khd|pmvhaven|3hentai|hentaipaw|f95zone|gamcore)\b(?:\.[a-z]{2,5})?/gi, ' ')
@@ -157,13 +165,13 @@
       }
       const isCurrent = tok === cur;
       const cls = isCurrent
-        ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white border-pink-400/60 shadow-md'
+        ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white border-pink-400/70 shadow-[0_0_16px_rgba(236,72,153,0.45)]'
         : 'bg-white/[0.06] hover:bg-pink-500/20 text-lav hover:text-white border-white/10';
       return `<button type="button" data-vault-page="${tok}" class="vault-pg-num px-3 py-1.5 rounded-xl border ${cls} transition-all cursor-pointer min-h-[44px] min-w-[40px] flex items-center justify-center font-bold" ${isCurrent ? 'aria-current="page"' : ''} aria-label="Página ${tok}">${tok}</button>`;
     }).join('');
 
     container.innerHTML = `
-      <nav class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 my-4 py-2.5 px-3 sm:px-5 rounded-2xl sm:rounded-full bg-[#0d061e]/95 border border-purple-500/30 text-xs font-bold text-white shadow-lg backdrop-blur-md" aria-label="${escapeHtml(ariaLabel)}">
+      <nav class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 my-6 py-2.5 px-3 sm:px-5 rounded-2xl sm:rounded-full bg-[#0d061e]/95 border border-purple-400/30 text-xs font-bold text-white shadow-[0_12px_32px_rgba(0,0,0,0.5)] backdrop-blur-md" aria-label="${escapeHtml(ariaLabel)}">
         <button type="button" class="vault-pg-prev px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center gap-1" ${cur <= 1 ? 'disabled' : ''} aria-label="Página anterior">
           &larr; <span class="hidden sm:inline">Anterior</span>
         </button>
@@ -198,9 +206,9 @@
     renderVaultPagination(container, currentPage, totalPages, totalPages * getVaultPageSize(), getVaultPageSize(), onPageChange, 'Paginación de Bóveda');
   }
 
-  function renderSkeletonGrid(container, count = 8) {
+  function renderSkeletonGrid(container, count = 6) {
     if (!container) return;
-    container.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5';
+    container.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4 sm:gap-5';
     container.innerHTML = Array.from({ length: count }).map(() => `
       <div class="flex flex-col bg-[#0e071c] border border-purple-500/10 rounded-2xl overflow-hidden animate-pulse">
         <div class="aspect-[3/4] w-full bg-white/[0.04] relative"></div>
@@ -421,7 +429,7 @@
       if (favState.isLoading && (!favState.items || favState.items.length === 0)) {
         if (emptyEl) emptyEl.classList.add('hidden');
         if (paginationContainer) paginationContainer.classList.add('hidden');
-        renderSkeletonGrid(container, 8);
+        renderSkeletonGrid(container, 6);
         return;
       }
 
@@ -518,7 +526,7 @@
       const isGrid = prefs.vaultViewMode !== 'list';
 
       if (isGrid) {
-        container.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5';
+        container.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4 sm:gap-5';
       } else {
         container.className = 'space-y-2.5';
       }
@@ -534,13 +542,14 @@
           : '/velvet_logo.png';
         const isVid = it.media_type === 'video' || (it.video_sources && it.video_sources.length > 0);
         const badgeText = isVid ? 'Video XXX' : (it.media_type === 'gallery' ? 'Galería' : 'Cómic');
+        const actionLabel = isVid ? 'Reproducir' : (it.media_type === 'gallery' ? 'Ver galería' : 'Leer');
         const itemId = it.id || `${it.source}_${it.source_id}`;
 
         if (isGrid) {
           const card = document.createElement('a');
           card.href = itemUrl;
           card.id = `fav-card-${itemId}`;
-          card.className = 'group flex flex-col bg-[#0e071c] border border-purple-500/20 hover:border-pink-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_25px_rgba(255,45,149,0.25)] transition-all relative cursor-pointer';
+          card.className = 'group flex flex-col bg-gradient-to-b from-[#130a24] to-[#0b0518] border border-purple-500/20 hover:border-pink-500/60 rounded-2xl overflow-hidden shadow-[0_8px_24px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_34px_rgba(236,72,153,0.22)] hover:-translate-y-0.5 transition-all duration-300 relative cursor-pointer';
           card.onclick = (e) => {
             if (e.target.closest('button') || e.target.closest('input')) return;
             e.preventDefault();
@@ -554,24 +563,25 @@
           };
           card.innerHTML = `
             <div class="relative aspect-[3/4] w-full overflow-hidden bg-black select-none">
-              <img src="${coverSrc}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" onerror="this.src='/velvet_logo.png'" />
-              
+              <img src="${escapeHtml(coverSrc)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" onerror="this.src='/velvet_logo.png'" />
+              <div class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#0b0518] via-[#0b0518]/35 to-transparent"></div>
+
               <!-- Checkbox multi-select si está activo -->
               ${isMultiSelectMode ? `
-                <div class="absolute top-2 left-2 z-20" onclick="event.preventDefault(); event.stopPropagation();">
+                <div class="absolute top-2.5 left-2.5 z-20" onclick="event.preventDefault(); event.stopPropagation();">
                   <input type="checkbox" class="w-4 h-4 rounded accent-pink-500 cursor-pointer fav-select-cb" data-fav-id="${escapeHtml(itemId)}" ${selectedFavIds.has(itemId) ? 'checked' : ''} onchange="window.VelvetVault.toggleSelectFav(this.dataset.favId)">
                 </div>
               ` : ''}
 
               <!-- Badge tipo -->
-              <span class="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-black/85 text-[9px] font-black uppercase text-pink-300 border border-pink-500/30">
+              <span class="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-black/75 backdrop-blur-md text-[9px] font-black tracking-wider uppercase text-pink-300 border border-white/15 shadow-sm">
                 ${escapeHtml(badgeText)}
               </span>
 
               <!-- Botón quitar favorito -->
               <button
                 type="button"
-                class="absolute bottom-2 right-2 w-7 h-7 rounded-lg bg-black/90 hover:bg-rose-600 text-lav hover:text-white flex items-center justify-center text-xs transition-all shadow-md cursor-pointer border border-white/10"
+                class="absolute bottom-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-black/70 backdrop-blur-md hover:bg-rose-600 text-white/80 hover:text-white flex items-center justify-center text-xs transition-all duration-200 shadow-lg cursor-pointer border border-white/15 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100"
                 title="Quitar de favoritos"
                 data-fav-source="${escapeHtml(it.source || '')}"
                 data-fav-source-id="${escapeHtml(it.source_id || '')}"
@@ -581,10 +591,19 @@
                 <i class="fa-solid fa-trash-can text-[11px]"></i>
               </button>
             </div>
-            <div class="p-2.5 flex-1 flex flex-col justify-between">
-              <h4 class="text-xs font-bold text-white group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug">
+            <div class="p-3.5 flex-1 flex flex-col justify-between gap-2.5 border-t border-white/[0.06]">
+              <h4 class="text-[13px] font-bold text-white/95 group-hover:text-pink-300 transition-colors line-clamp-2 leading-snug">
                 ${escapeHtml(sanitizeVaultTitle(it.title))}
               </h4>
+              <div class="flex items-center justify-between text-[11px] pt-1.5 border-t border-white/[0.05]">
+                <span class="inline-flex items-center gap-1.5 text-emerald-400/90 font-semibold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  Guardado
+                </span>
+                <span class="text-pink-400 group-hover:text-pink-300 font-bold inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
+                  ${escapeHtml(actionLabel)} <span aria-hidden="true">&rarr;</span>
+                </span>
+              </div>
             </div>
           `;
           container.appendChild(card);
