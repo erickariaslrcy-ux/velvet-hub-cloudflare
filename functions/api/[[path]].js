@@ -816,7 +816,7 @@ function orderCatalogForSlot(items, slot, mediaType) {
 
 function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "6");
+  u.searchParams.set("cv", "7");
   if (slot !== undefined && slot !== null && slot !== "") {
     u.searchParams.set("rot", String(slot));
   }
