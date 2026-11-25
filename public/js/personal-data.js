@@ -435,6 +435,9 @@
       if (String(prevId || '') !== String(_currentUser.id || '')) {
         this.handleSessionSwitched();
         this.migrateLocalDataToServer();
+      } else if (!_favState.items.length || !_favState.total) {
+        this.fetchFavorites(_favState.page || 1);
+        this.fetchHistory(_histState.page || 1);
       }
 
       window.dispatchEvent(new CustomEvent('velvet:auth-changed', { detail: { user: _currentUser } }));

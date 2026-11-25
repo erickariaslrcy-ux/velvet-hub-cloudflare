@@ -21,6 +21,8 @@ assert.ok(indexHtml.includes('id="vault-favs-pro-pagination"') && indexHtml.incl
 assert.ok(!indexHtml.includes("desde el sitio original"), "No revelar que las imágenes vienen de otro sitio");
 assert.ok(!indexHtml.includes("servidor externo"), "No exponer menciones a servidores externos en sinopsis");
 assert.ok(!vaultJs.includes("HISTORY_CHUNK_SIZE = 48"), "vault.js no debe acumular 48 nodos sin paginar");
+assert.ok(indexHtml.includes('/js/vault.js?v=3.9.0') && indexHtml.includes('/css/tailwind.css?v=3.9.0'), "index.html debe romper caché inmutable antigua en Android/PC");
+assert.ok(!indexHtml.includes('id="vault-pagination-root" class="w-full flex'), "Contenedor de paginación en Bóveda no debe mezclar flex con hidden");
 
 // ---------------------------------------------------------------------------
 // 2. Verificar VelvetRouter: cero pesos/sitios en URLs y alias opacos

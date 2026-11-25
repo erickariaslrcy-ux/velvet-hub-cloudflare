@@ -33,9 +33,9 @@
   X-Robots-Tag: noindex, nofollow, noarchive
   Cache-Control: private, no-store, must-revalidate
 
-# Immutable Static CSS & JS Assets
+# Static CSS & JS Assets (Versioned via ?v= in index.html)
 /js/*
-  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
   Access-Control-Allow-Origin: *
 
 /css/*

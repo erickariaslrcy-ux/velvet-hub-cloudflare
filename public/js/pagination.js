@@ -866,6 +866,13 @@
   };
 
   root.VelvetPagination = VelvetPagination;
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = VelvetPagination;
   }

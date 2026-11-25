@@ -171,20 +171,24 @@
     }).join('');
 
     container.innerHTML = `
-      <nav class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 my-6 py-2.5 px-3 sm:px-5 rounded-2xl sm:rounded-full bg-[#0d061e]/95 border border-purple-400/30 text-xs font-bold text-white shadow-[0_12px_32px_rgba(0,0,0,0.5)] backdrop-blur-md" aria-label="${escapeHtml(ariaLabel)}">
-        <button type="button" class="vault-pg-prev px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center gap-1" ${cur <= 1 ? 'disabled' : ''} aria-label="Página anterior">
-          &larr; <span class="hidden sm:inline">Anterior</span>
-        </button>
-        <div class="flex items-center gap-1 flex-wrap justify-center">
-          ${pageButtonsHtml}
-        </div>
-        <button type="button" class="vault-pg-next px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center gap-1" ${cur >= totalPages ? 'disabled' : ''} aria-label="Página siguiente">
-          <span class="hidden sm:inline">Siguiente</span> &rarr;
-        </button>
-        <span class="text-[11px] text-purple-300/80 font-mono pl-1 sm:pl-2">
-          Pág ${cur}/${totalPages} &middot; ${totalItems} (${pageSize}/pág.)
-        </span>
-      </nav>
+      <div class="w-full flex justify-center">
+        <nav class="w-full sm:w-auto max-w-full flex flex-col sm:flex-row sm:flex-wrap items-center justify-center gap-2 my-4 py-3 px-3 sm:px-5 rounded-2xl sm:rounded-full bg-[#0d061e]/95 border border-purple-400/30 text-xs font-bold text-white shadow-[0_12px_32px_rgba(0,0,0,0.5)] backdrop-blur-md" aria-label="${escapeHtml(ariaLabel)}">
+          <div class="flex items-center justify-center gap-1.5 flex-wrap w-full sm:w-auto">
+            <button type="button" class="vault-pg-prev px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center gap-1" ${cur <= 1 ? 'disabled' : ''} aria-label="Página anterior">
+              &larr; <span class="hidden sm:inline">Anterior</span>
+            </button>
+            <div class="flex items-center gap-1 flex-wrap justify-center">
+              ${pageButtonsHtml}
+            </div>
+            <button type="button" class="vault-pg-next px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-pink-500/20 text-white disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center gap-1" ${cur >= totalPages ? 'disabled' : ''} aria-label="Página siguiente">
+              <span class="hidden sm:inline">Siguiente</span> &rarr;
+            </button>
+          </div>
+          <span class="text-[11px] text-purple-300/85 font-mono text-center sm:pl-2">
+            Pág ${cur}/${totalPages} &middot; ${totalItems} (${pageSize}/pág.)
+          </span>
+        </nav>
+      </div>
     `;
     container.classList.remove('hidden');
 
@@ -455,6 +459,9 @@
       }
 
       let favs = favState.items || [];
+      if (favs.length === 0 && storeFavs.length > 0 && !favState.isLoading) {
+        favs = storeFavs;
+      }
 
       // Filtro local adicional de búsqueda si el usuario escribe
       if (favSearchQuery) {
@@ -508,8 +515,9 @@
       let pageFavs;
 
       if (!isClientFavSlice) {
-        favTotalItems = Math.max(favState.total || 0, favs.length);
-        favTotalPages = Math.max(1, favState.totalPages || Math.ceil(favTotalItems / pageSize));
+        const knownStoreTotal = (favFilterType === 'all' && Array.isArray(storeFavs)) ? storeFavs.length : 0;
+        favTotalItems = Math.max(favState.total || 0, favs.length, knownStoreTotal);
+        favTotalPages = Math.max(1, Math.max(favState.totalPages || 0, Math.ceil(favTotalItems / pageSize)));
         favCurrentPage = Math.min(Math.max(1, favState.page || favPage || 1), favTotalPages);
         favPage = favCurrentPage;
         pageFavs = favs.slice(0, pageSize);
@@ -768,7 +776,7 @@
       if (!histPaginationContainer && container.parentNode) {
         histPaginationContainer = document.createElement('div');
         histPaginationContainer.id = 'vault-history-pagination-root';
-        histPaginationContainer.className = 'w-full flex justify-center py-4';
+        histPaginationContainer.className = 'w-full py-4';
         container.parentNode.appendChild(histPaginationContainer);
       }
 
