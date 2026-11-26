@@ -440,8 +440,8 @@
       incoming.forEach((it) => {
         if (it.id != null) state.seenIds.push(String(it.id));
       });
-      if (state.seenIds.length > 600) {
-        state.seenIds = state.seenIds.slice(-400);
+      if (state.seenIds.length > 900) {
+        state.seenIds = state.seenIds.slice(-600);
       }
 
       appendSlideElements(incoming, startIdx);

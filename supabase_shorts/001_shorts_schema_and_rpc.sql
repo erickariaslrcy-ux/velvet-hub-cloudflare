@@ -58,6 +58,10 @@ CREATE INDEX IF NOT EXISTS idx_shorts_active_id
   ON public.shorts (id)
   WHERE is_active = true;
 
+CREATE INDEX IF NOT EXISTS idx_shorts_active_rand
+  ON public.shorts (rand_key)
+  WHERE is_active = true;
+
 CREATE OR REPLACE FUNCTION public.get_random_shorts(
   p_limit integer DEFAULT 12,
   p_q text DEFAULT '',
@@ -83,27 +87,74 @@ DECLARE
   v_limit integer := least(greatest(coalesce(p_limit, 12), 1), 30);
   v_q text := btrim(coalesce(p_q, ''));
   v_excl bigint[] := coalesce(p_exclude, '{}'::bigint[]);
-  v_min_id bigint;
-  v_max_id bigint;
+  v_slice integer := greatest(4, ceil(v_limit / 3.0)::integer + 3);
+  v_r1 double precision := random();
+  v_r2 double precision := random();
+  v_r3 double precision := random();
+  v_r4 double precision := random();
+  v_r5 double precision := random();
+  v_r6 double precision := random();
 BEGIN
   IF v_q = '' THEN
-    SELECT min(s.id), max(s.id) INTO v_min_id, v_max_id
-    FROM public.shorts s
-    WHERE s.is_active = true;
-    IF v_min_id IS NULL THEN
-      RETURN;
-    END IF;
-
     RETURN QUERY
-    WITH probes AS (
-      SELECT DISTINCT (v_min_id + floor(random() * (v_max_id - v_min_id + 1))::bigint) AS gid
-      FROM generate_series(1, v_limit * 6)
+    WITH pool AS (
+      (SELECT sh.id, sh.title, sh.cover_url, sh.video_url, sh.tags, sh.artists, sh.duration, sh.likes, sh.direct_play
+       FROM public.shorts sh
+       WHERE sh.is_active = true AND sh.rand_key >= v_r1
+         AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
+       ORDER BY sh.rand_key ASC
+       LIMIT v_slice)
+      UNION ALL
+      (SELECT sh.id, sh.title, sh.cover_url, sh.video_url, sh.tags, sh.artists, sh.duration, sh.likes, sh.direct_play
+       FROM public.shorts sh
+       WHERE sh.is_active = true AND sh.rand_key >= v_r2
+         AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
+       ORDER BY sh.rand_key ASC
+       LIMIT v_slice)
+      UNION ALL
+      (SELECT sh.id, sh.title, sh.cover_url, sh.video_url, sh.tags, sh.artists, sh.duration, sh.likes, sh.direct_play
+       FROM public.shorts sh
+       WHERE sh.is_active = true AND sh.rand_key >= v_r3
+         AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
+       ORDER BY sh.rand_key ASC
+       LIMIT v_slice)
+      UNION ALL
+      (SELECT sh.id, sh.title, sh.cover_url, sh.video_url, sh.tags, sh.artists, sh.duration, sh.likes, sh.direct_play
+       FROM public.shorts sh
+       WHERE sh.is_active = true AND sh.rand_key >= v_r4
+         AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
+       ORDER BY sh.rand_key ASC
+       LIMIT v_slice)
+      UNION ALL
+      (SELECT sh.id, sh.title, sh.cover_url, sh.video_url, sh.tags, sh.artists, sh.duration, sh.likes, sh.direct_play
+       FROM public.shorts sh
+       WHERE sh.is_active = true AND sh.rand_key >= v_r5
+         AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
+       ORDER BY sh.rand_key ASC
+       LIMIT v_slice)
+      UNION ALL
+      (SELECT sh.id, sh.title, sh.cover_url, sh.video_url, sh.tags, sh.artists, sh.duration, sh.likes, sh.direct_play
+       FROM public.shorts sh
+       WHERE sh.is_active = true AND sh.rand_key >= v_r6
+         AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
+       ORDER BY sh.rand_key ASC
+       LIMIT v_slice)
+      UNION ALL
+      (SELECT sh.id, sh.title, sh.cover_url, sh.video_url, sh.tags, sh.artists, sh.duration, sh.likes, sh.direct_play
+       FROM public.shorts sh
+       WHERE sh.is_active = true AND sh.rand_key >= 0.0
+         AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
+       ORDER BY sh.rand_key ASC
+       LIMIT v_limit)
+    ),
+    dedup AS (
+      SELECT DISTINCT ON (p.id)
+        p.id, p.title, p.cover_url, p.video_url, p.tags, p.artists, p.duration, p.likes, p.direct_play
+      FROM pool p
     )
-    SELECT s.id, s.title, s.cover_url, s.video_url, s.tags, s.artists, s.duration, s.likes, s.direct_play
-    FROM probes p
-    JOIN public.shorts s ON s.id = p.gid
-    WHERE s.is_active = true
-      AND (cardinality(v_excl) = 0 OR NOT (s.id = ANY(v_excl)))
+    SELECT d.id, d.title, d.cover_url, d.video_url, d.tags, d.artists, d.duration, d.likes, d.direct_play
+    FROM dedup d
+    ORDER BY random()
     LIMIT v_limit;
     RETURN;
   END IF;
@@ -116,7 +167,7 @@ BEGIN
     WHERE sh.is_active = true
       AND (sh.tags @> ARRAY[lower(v_q)]::text[] OR sh.search_text ILIKE ('%' || v_q || '%'))
       AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
-    LIMIT 600
+    LIMIT 1500
   ) s
   ORDER BY random()
   LIMIT v_limit;

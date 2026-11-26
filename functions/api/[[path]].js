@@ -2859,22 +2859,34 @@ async function fetchShortRowById(sid, sbUrl, sbKey, ctx) {
   }
 }
 
+function shuffleShortsInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
 async function refillShortsPool(sbUrl, sbKey, excludeIds = []) {
   if (SHORTS_POOL_CACHE.inflight) return SHORTS_POOL_CACHE.inflight;
   SHORTS_POOL_CACHE.inflight = (async () => {
     try {
-      const rpcRes = await fetch(`${sbUrl}/rest/v1/rpc/get_random_shorts`, {
+      const exclSlice = excludeIds.slice(-300);
+      const fetchOne = () => fetch(`${sbUrl}/rest/v1/rpc/get_random_shorts`, {
         method: "POST",
         headers: {
           "apikey": sbKey,
           "Authorization": `Bearer ${sbKey}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ p_limit: 36, p_q: "", p_exclude: excludeIds.slice(-300) })
-      });
-      if (!rpcRes.ok) return [];
-      const rows = await rpcRes.json().catch(() => []);
-      const valid = Array.isArray(rows) ? rows.filter(r => r && r.id && r.video_url && !/nekyda\.com|\.m3u8(?:$|\?)/i.test(r.video_url)) : [];
+        body: JSON.stringify({ p_limit: 30, p_q: "", p_exclude: exclSlice })
+      }).then(r => r.ok ? r.json().catch(() => []) : []).catch(() => []);
+
+      const [rowsA, rowsB] = await Promise.all([fetchOne(), fetchOne()]);
+      const combined = [...(Array.isArray(rowsA) ? rowsA : []), ...(Array.isArray(rowsB) ? rowsB : [])];
+      const valid = combined.filter(r => r && r.id && r.video_url && !/nekyda\.com|\.m3u8(?:$|\?)/i.test(r.video_url));
       const seen = new Set(SHORTS_POOL_CACHE.items.map(x => Number(x.id)));
       for (const r of valid) {
         const rid = Number(r.id);
@@ -2884,8 +2896,9 @@ async function refillShortsPool(sbUrl, sbKey, excludeIds = []) {
           SHORTS_POOL_CACHE.items.push(r);
         }
       }
-      if (SHORTS_POOL_CACHE.items.length > 108) {
-        SHORTS_POOL_CACHE.items = SHORTS_POOL_CACHE.items.slice(-108);
+      shuffleShortsInPlace(SHORTS_POOL_CACHE.items);
+      if (SHORTS_POOL_CACHE.items.length > 180) {
+        SHORTS_POOL_CACHE.items = SHORTS_POOL_CACHE.items.slice(0, 180);
       }
       SHORTS_POOL_CACHE.lastRefillMs = Date.now();
       return valid;
@@ -3057,11 +3070,12 @@ export async function onRequest(context) {
 
       const needed = Math.max(0, pLimit - chosenRows.length);
       if (needed > 0 && !pQ) {
-        const poolAgeOk = (Date.now() - SHORTS_POOL_CACHE.lastRefillMs) < 180000;
+        const poolAgeOk = (Date.now() - SHORTS_POOL_CACHE.lastRefillMs) < 60000;
         if (!poolAgeOk) {
           SHORTS_POOL_CACHE.items = [];
         }
         const popFromPool = () => {
+          shuffleShortsInPlace(SHORTS_POOL_CACHE.items);
           const remaining = [];
           for (const candidate of SHORTS_POOL_CACHE.items) {
             const cid = Number(candidate && candidate.id);
@@ -3081,8 +3095,8 @@ export async function onRequest(context) {
           popFromPool();
         }
         if (
-          SHORTS_POOL_CACHE.items.length < 24 &&
-          (Date.now() - SHORTS_POOL_CACHE.lastRefillMs) > 4000 &&
+          SHORTS_POOL_CACHE.items.length < 48 &&
+          (Date.now() - SHORTS_POOL_CACHE.lastRefillMs) > 3000 &&
           typeof context.waitUntil === "function"
         ) {
           context.waitUntil(refillShortsPool(SUPABASE_URL_SHORTS, SUPABASE_KEY_SHORTS, Array.from(excludeSet)));

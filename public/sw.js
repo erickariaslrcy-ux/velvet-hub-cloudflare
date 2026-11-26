@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages - Fast Cache & Worker Budget)
-const CACHE_VERSION = 'v44-tiktok-vip-favs';
+const CACHE_VERSION = 'v45-tiktok-mega-random';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const COVER_CACHE = `velvet-covers-${CACHE_VERSION}`;
