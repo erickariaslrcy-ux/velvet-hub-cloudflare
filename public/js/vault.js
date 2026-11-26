@@ -546,19 +546,34 @@
       // ESTADO 5: Con Resultados (Renderizado de tarjetas, máx 18 PC / 12 Android)
 
       pageFavs.forEach((it) => {
-        const itemUrl = window.VelvetRouter?.getItemUrl(it) || '#';
-        const coverSrc = it.cover_url
-          ? (window.getStealthImageUrl ? window.getStealthImageUrl(it.cover_url, it.url, 380) : it.cover_url)
-          : '/velvet_logo.png';
-        const isVid = it.media_type === 'video' || (it.video_sources && it.video_sources.length > 0 && it.media_type !== 'game');
+        const isShort = it.media_type === 'short' || it.source === 'short';
+        const shortSid = isShort ? String(it.source_id || it.id || '').replace(/^short:/i, '') : '';
+        const itemUrl = isShort
+          ? (it.share_id ? `/?c=${encodeURIComponent(it.share_id)}` : '/')
+          : (window.VelvetRouter?.getItemUrl(it) || '#');
+        const coverSrc = isShort
+          ? (it.cover_url || '/velvet_logo.png')
+          : (it.cover_url
+            ? (window.getStealthImageUrl ? window.getStealthImageUrl(it.cover_url, it.url, 380) : it.cover_url)
+            : '/velvet_logo.png');
+        const isVid = !isShort && (it.media_type === 'video' || (it.video_sources && it.video_sources.length > 0 && it.media_type !== 'game'));
         const isGame = it.media_type === 'game';
-        const badgeText = isGame ? 'Juego VIP' : (isVid ? 'Video XXX' : (it.media_type === 'gallery' ? 'Galería' : 'Cómic'));
-        const actionLabel = isGame ? 'Jugar' : (isVid ? 'Reproducir' : (it.media_type === 'gallery' ? 'Ver galería' : 'Leer'));
+        const badgeText = isShort ? 'Short +18' : (isGame ? 'Juego VIP' : (isVid ? 'Video XXX' : (it.media_type === 'gallery' ? 'Galería' : 'Cómic')));
+        const actionLabel = isShort ? 'Ver Short' : (isGame ? 'Jugar' : (isVid ? 'Reproducir' : (it.media_type === 'gallery' ? 'Ver galería' : 'Leer')));
         const itemId = String(it.id || `${it.source}_${it.source_id}`);
 
         const openFavItem = (e) => {
           if (e.target.closest('button') || e.target.closest('input')) return;
           e.preventDefault();
+          if (isShort) {
+            if (window.VelvetRouter && typeof window.VelvetRouter.navigate === 'function') {
+              window.VelvetRouter.navigate('/');
+            }
+            setTimeout(() => {
+              window.VelvetTikTokFeed?.playSavedShortId?.(shortSid);
+            }, 60);
+            return;
+          }
           if (isGame && typeof window.openGameModal === 'function') {
             window.openGameModal(it);
           } else if (isVid && typeof window.openVideoPlayer === 'function') {
@@ -1272,6 +1287,12 @@
     setFavFilter(type) {
       favFilterType = type;
       favPage = 1;
+      document.querySelectorAll('#vault-fav-type-chips [data-vault-filter]').forEach((btn) => {
+        const active = btn.dataset.vaultFilter === type;
+        btn.className = active
+          ? 'px-3 py-1.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/40 text-xs font-bold cursor-pointer whitespace-nowrap'
+          : 'px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer whitespace-nowrap';
+      });
       if (window.VelvetPersonalData && window.VelvetPersonalData.isAuthenticated()) {
         window.VelvetPersonalData.fetchFavorites(1, { filter: favFilterType, sort: favSortMode, search: favSearchQuery });
       }

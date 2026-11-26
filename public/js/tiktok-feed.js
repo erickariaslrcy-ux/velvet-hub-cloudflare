@@ -1,17 +1,16 @@
 /**
- * MORBO HUB — MOTOR TIKTOK STEALTH + FAVORITOS + PANTALLA LIMPIA (v4.0)
- * - Ajuste automático limpio sin recorte (botón Auto/Llenar eliminado).
- * - Corazón ♥ guarda y gestiona "Mis Shorts Favoritos" persistentes y reproducibles.
- * - Botón especial "Limpiar" (H): oculta barra superior, títulos y botones para cine total.
- * - Arranque turbo con prefetch inline, precarga de 2 slides adelante y buffer atrás.
+ * MORBO HUB — MOTOR TIKTOK STEALTH + FAVORITOS VIP EN CUENTA + PANTALLA LIMPIA (v4.1)
+ * - Ajuste automático limpio sin recorte.
+ * - Corazón ♥ y Favoritos EXCLUSIVOS para usuarios logueados VIP (guardado en nube de su cuenta).
+ * - Si un invitado o cuenta sin acceso intenta guardar/ver Favoritos, abre el login VIP.
+ * - Modo "Limpiar" (Pantalla Limpia) con botón visible y táctil "Mostrar controles" para PC y Android.
  */
 (function (window, document) {
   'use strict';
 
-  const LIKES_KEY = 'velvet_shorts_likes_v1';
-  const FAVS_KEY = 'velvet_shorts_favs_v1';
   const MUTE_KEY = 'velvet_shorts_muted_v1';
   const AUTO_NEXT_KEY = 'velvet_shorts_autonext_v1';
+  const USER_CACHE_PREFIX = 'velvet_shorts_user_favs_v1_';
 
   const state = {
     mounted: false,
@@ -27,30 +26,38 @@
     seenIds: [],
     likes: new Set(),
     favs: [],
+    loadedUid: '',
     consecSkips: 0,
     observer: null,
     nextTimer: 0
   };
 
-  function loadLocalPrefs() {
-    let loadedFavs = [];
-    try {
-      const rawFavs = JSON.parse(localStorage.getItem(FAVS_KEY) || '[]');
-      if (Array.isArray(rawFavs)) {
-        loadedFavs = rawFavs.filter(x => x && x.id != null);
-      }
-    } catch (e) {}
-    state.favs = loadedFavs;
+  function getAuthContext() {
+    const store = window.VelvetStore;
+    const pData = window.VelvetPersonalData;
+    const user =
+      (store && typeof store.getCurrentUser === 'function' ? store.getCurrentUser() : null) ||
+      (pData && typeof pData.getUser === 'function' ? pData.getUser() : null);
+    const hasAuth = pData && typeof pData.isAuthenticated === 'function' ? pData.isAuthenticated() : Boolean(user);
+    const hasAccess = store && typeof store.hasFullAccess === 'function' ? Boolean(store.hasFullAccess()) : Boolean(user);
+    return {
+      user,
+      uid: user && user.id ? String(user.id) : '',
+      authed: Boolean(user && hasAuth),
+      canSave: Boolean(user && hasAuth && hasAccess)
+    };
+  }
 
-    const likeSet = new Set(loadedFavs.map(x => String(x.id)));
-    try {
-      const savedLikes = JSON.parse(localStorage.getItem(LIKES_KEY) || '[]');
-      if (Array.isArray(savedLikes)) {
-        savedLikes.forEach(id => likeSet.add(String(id)));
-      }
-    } catch (e) {}
-    state.likes = likeSet;
+  function promptVipLogin(message) {
+    if (typeof window.showToast === 'function') {
+      window.showToast(message || 'Inicia sesión con tu cuenta VIP para guardar favoritos', 'info');
+    }
+    if (typeof window.openAuthModal === 'function') {
+      window.openAuthModal('login');
+    }
+  }
 
+  function loadLocalPlayerPrefs() {
     try {
       const m = localStorage.getItem(MUTE_KEY);
       state.muted = m === null ? true : m === '1';
@@ -60,20 +67,131 @@
     } catch (e) { state.autoNext = false; }
   }
 
-  function persistFavsAndLikes() {
+  function writeScopedFavCache(uid, list) {
+    if (!uid) return;
     try {
-      localStorage.setItem(FAVS_KEY, JSON.stringify(state.favs.slice(0, 500)));
-      localStorage.setItem(LIKES_KEY, JSON.stringify(Array.from(state.likes).slice(-500)));
+      const slim = (Array.isArray(list) ? list : []).slice(0, 500).map((f) => ({
+        id: f.id,
+        title: f.title || 'Clip',
+        cover_url: f.cover_url || '',
+        share_id: f.share_id || '',
+        tags: Array.isArray(f.tags) ? f.tags.slice(0, 6) : [],
+        artists: Array.isArray(f.artists) ? f.artists.slice(0, 2) : [],
+        duration: f.duration ?? null,
+        likes: Number(f.likes || 0),
+        savedAt: f.savedAt || Date.now()
+      }));
+      localStorage.setItem(`${USER_CACHE_PREFIX}${uid}`, JSON.stringify(slim));
     } catch (e) {}
-    syncFavsBadge();
   }
 
-  function syncFavsBadge() {
-    const count = state.favs.length;
+  function readScopedFavCache(uid) {
+    if (!uid) return [];
+    try {
+      const raw = JSON.parse(localStorage.getItem(`${USER_CACHE_PREFIX}${uid}`) || '[]');
+      return Array.isArray(raw) ? raw.filter(x => x && x.id != null) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function syncFavsUIAll() {
+    const auth = getAuthContext();
+    const count = auth.canSave ? state.favs.length : 0;
     const badge = document.getElementById('tt-favs-count');
-    if (badge) badge.textContent = String(count);
+    if (badge) {
+      badge.textContent = auth.canSave ? String(count) : 'VIP';
+    }
     const modalCount = document.getElementById('tt-favs-modal-count');
     if (modalCount) modalCount.textContent = String(count);
+
+    document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach((s) => {
+      const idx = Number(s.dataset.idx);
+      const sItem = state.slides[idx];
+      if (!sItem) return;
+      const isLiked = auth.canSave && state.likes.has(String(sItem.id));
+      const btn = s.querySelector('[data-tt-action="like"]');
+      if (btn) {
+        btn.classList.toggle('is-liked', isLiked);
+        const cntEl = btn.querySelector('.tt-rail-txt');
+        if (cntEl) cntEl.textContent = String(Number(sItem.likes || 0) + (isLiked ? 1 : 0));
+      }
+    });
+  }
+
+  function normalizeShortFavRecord(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const rawSid = String(raw.source_id || raw.item_id || raw.id || '').replace(/^short:/i, '').trim();
+    if (!/^\d{1,15}$/.test(rawSid)) return null;
+    return {
+      id: Number(rawSid),
+      title: raw.title || 'Clip',
+      cover_url: raw.cover_url || '',
+      share_id: raw.share_id || '',
+      tags: Array.isArray(raw.tags) ? raw.tags : [],
+      artists: Array.isArray(raw.artists) ? raw.artists : [],
+      duration: raw.duration ?? null,
+      likes: Number(raw.likes || 0),
+      savedAt: raw.created_at ? new Date(raw.created_at).getTime() : (raw.savedAt || Date.now())
+    };
+  }
+
+  async function loadAccountFavorites(forceServer = false) {
+    const auth = getAuthContext();
+    if (!auth.canSave || !auth.uid) {
+      state.loadedUid = '';
+      state.favs = [];
+      state.likes = new Set();
+      if (state.feedMode === 'favorites') {
+        state.feedMode = 'random';
+        syncTopModeChips();
+        fetchRandomBatch(true);
+      }
+      closeFavoritesModal();
+      syncFavsUIAll();
+      return [];
+    }
+
+    if (state.loadedUid !== auth.uid) {
+      state.loadedUid = auth.uid;
+      const cached = readScopedFavCache(auth.uid);
+      state.favs = cached;
+      state.likes = new Set(cached.map(x => String(x.id)));
+      syncFavsUIAll();
+    } else if (!forceServer) {
+      syncFavsUIAll();
+    }
+
+    const pData = window.VelvetPersonalData;
+    if (!pData || typeof pData.fetchAuthed !== 'function') return state.favs;
+
+    try {
+      const res = await pData.fetchAuthed('/api/user/favorites?type=short&page=1&pageSize=100');
+      if (!res || !res.ok) return state.favs;
+      const data = await res.json().catch(() => null);
+      if (!data || data.degraded || !Array.isArray(data.items)) return state.favs;
+
+      const latestAuth = getAuthContext();
+      if (!latestAuth.canSave || latestAuth.uid !== auth.uid) return state.favs;
+
+      const serverList = data.items
+        .filter(x => x && (x.media_type === 'short' || String(x.source || '').toLowerCase() === 'short'))
+        .map(normalizeShortFavRecord)
+        .filter(Boolean);
+
+      state.favs = serverList;
+      state.likes = new Set(serverList.map(x => String(x.id)));
+      writeScopedFavCache(auth.uid, serverList);
+      syncFavsUIAll();
+
+      const modal = document.getElementById('tt-favs-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        renderFavsGrid(state.favs);
+      }
+      return state.favs;
+    } catch (e) {
+      return state.favs;
+    }
   }
 
   function esc(str) {
@@ -150,7 +268,7 @@
     if (favModeChip) {
       favModeChip.classList.toggle('hidden', state.feedMode !== 'favorites');
     }
-    syncFavsBadge();
+    syncFavsUIAll();
   }
 
   function syncCleanModeUI() {
@@ -175,57 +293,93 @@
     state.cleanMode = next;
     syncCleanModeUI();
     if (state.cleanMode && typeof window.showToast === 'function') {
-      window.showToast('Pantalla limpia: toca el ojo arriba o pulsa H para volver', 'info');
+      window.showToast('Pantalla limpia · Toca "Mostrar controles" arriba para volver', 'info');
     }
   }
 
-  function toggleHeartItem(item, slideBtn) {
+  async function toggleHeartItem(item) {
+    const auth = getAuthContext();
+    if (!auth.authed) {
+      promptVipLogin('Inicia sesión con tu cuenta VIP para guardar favoritos');
+      return false;
+    }
+    if (!auth.canSave) {
+      promptVipLogin('Solo las cuentas VIP activas pueden guardar favoritos');
+      return false;
+    }
     if (!item || item.id == null) return false;
-    const key = String(item.id);
-    const exists = state.likes.has(key);
+
+    const cleanSid = String(item.source_id || item.id).replace(/^short:/i, '').trim();
+    const exists = state.likes.has(cleanSid);
+    const pData = window.VelvetPersonalData;
+
+    const prevFavs = [...state.favs];
+    const prevLikes = new Set(state.likes);
+
     if (exists) {
-      state.likes.delete(key);
-      state.favs = state.favs.filter(f => String(f.id) !== key);
+      state.likes.delete(cleanSid);
+      state.favs = state.favs.filter(f => String(f.id) !== cleanSid);
       if (typeof window.showToast === 'function') {
-        window.showToast('Quitado de Favoritos', 'info');
+        window.showToast('Quitado de Tus Favoritos', 'info');
       }
     } else {
-      state.likes.add(key);
+      state.likes.add(cleanSid);
       const record = {
-        id: item.id,
+        id: Number(cleanSid) || cleanSid,
         title: item.title || 'Clip',
         cover_url: item.cover_url || '',
+        share_id: item.share_id || '',
         tags: Array.isArray(item.tags) ? item.tags.slice(0, 6) : [],
         artists: Array.isArray(item.artists) ? item.artists.slice(0, 2) : [],
         duration: item.duration ?? null,
         likes: Number(item.likes || 0),
-        share_id: item.share_id || '',
         savedAt: Date.now()
       };
-      state.favs = [record, ...state.favs.filter(f => String(f.id) !== key)].slice(0, 500);
+      state.favs = [record, ...state.favs.filter(f => String(f.id) !== cleanSid)].slice(0, 500);
       if (typeof window.showToast === 'function') {
-        window.showToast('Guardado en Tus Favoritos ♥', 'success');
+        window.showToast('Guardado en los Favoritos de tu cuenta ♥', 'success');
       }
     }
-    persistFavsAndLikes();
 
-    // Sync heart button(s) for this ID in the DOM
-    document.querySelectorAll(`#tiktok-snap-track .tt-slide`).forEach((s) => {
-      const idx = Number(s.dataset.idx);
-      const sItem = state.slides[idx];
-      if (!sItem || String(sItem.id) !== key) return;
-      const btn = s.querySelector('[data-tt-action="like"]');
-      if (btn) {
-        btn.classList.toggle('is-liked', !exists);
-        const cntEl = btn.querySelector('.tt-rail-txt');
-        if (cntEl) cntEl.textContent = String(Number(sItem.likes || 0) + (!exists ? 1 : 0));
-      }
-    });
-    if (slideBtn) slideBtn.classList.toggle('is-liked', !exists);
-
+    writeScopedFavCache(auth.uid, state.favs);
+    syncFavsUIAll();
     const modal = document.getElementById('tt-favs-modal');
     if (modal && !modal.classList.contains('hidden')) {
       renderFavsGrid(state.favs);
+    }
+
+    if (pData) {
+      try {
+        let ok = false;
+        if (exists && typeof pData.removeFavorite === 'function') {
+          const rm = await pData.removeFavorite({ id: `short:${cleanSid}`, item_id: cleanSid, source: 'short', source_id: cleanSid });
+          ok = Boolean(rm);
+        } else if (!exists && typeof pData.addFavorite === 'function') {
+          ok = await pData.addFavorite({
+            id: `short:${cleanSid}`,
+            item_id: cleanSid,
+            source: 'short',
+            source_id: cleanSid,
+            media_type: 'short',
+            title: item.title || 'Short guardado',
+            cover_url: item.cover_url || '',
+            url: ''
+          });
+        }
+        if (!ok) {
+          throw new Error('sync_failed');
+        }
+      } catch (err) {
+        state.favs = prevFavs;
+        state.likes = prevLikes;
+        writeScopedFavCache(auth.uid, prevFavs);
+        syncFavsUIAll();
+        if (modal && !modal.classList.contains('hidden')) renderFavsGrid(state.favs);
+        if (typeof window.showToast === 'function') {
+          window.showToast('No se pudo guardar en tu cuenta, intenta de nuevo', 'error');
+        }
+        return false;
+      }
     }
     return !exists;
   }
@@ -311,7 +465,8 @@
     slide.className = 'tt-slide';
     slide.dataset.idx = String(idx);
 
-    const isLiked = state.likes.has(String(item.id));
+    const auth = getAuthContext();
+    const isLiked = auth.canSave && state.likes.has(String(item.id));
     const tagsHtml = (item.tags || []).slice(0, 5).map((t) =>
       `<button type="button" data-tt-tag="${esc(t)}" class="tt-tag-chip">#${esc(t)}</button>`
     ).join('');
@@ -333,7 +488,7 @@
         </div>
 
         <div class="tt-rail">
-          <button type="button" class="tt-rail-btn ${isLiked ? 'is-liked' : ''}" data-tt-action="like" title="Guardar en Mis Shorts Favoritos">
+          <button type="button" class="tt-rail-btn ${isLiked ? 'is-liked' : ''}" data-tt-action="like" title="Guardar en Favoritos de tu cuenta VIP">
             <span class="tt-rail-ico"><i class="fa-solid fa-heart"></i></span>
             <span class="tt-rail-txt">${Number(item.likes || 0) + (isLiked ? 1 : 0)}</span>
           </button>
@@ -345,7 +500,7 @@
             <span class="tt-rail-ico"><i class="fa-solid fa-forward-step"></i></span>
             <span class="tt-rail-txt">Auto</span>
           </button>
-          <button type="button" class="tt-rail-btn ${state.cleanMode ? 'is-on' : ''}" data-tt-action="clean" title="Limpiar pantalla: oculta barra, títulos y botones (H)">
+          <button type="button" class="tt-rail-btn ${state.cleanMode ? 'is-on' : ''}" data-tt-action="clean" title="Limpiar pantalla: oculta barra, títulos y botones">
             <span class="tt-rail-ico"><i class="fa-solid fa-eye-slash"></i></span>
             <span class="tt-rail-txt">${state.cleanMode ? 'Ver UI' : 'Limpiar'}</span>
           </button>
@@ -562,7 +717,6 @@
         attachVideoSource(slide, item, 'metadata');
         const vid = slide.querySelector('.tt-video');
         if (vid) vid.pause();
-        // Tras 250ms empezar a pre-cargar en segundo plano el siguiente video para cambio instantáneo
         state.nextTimer = setTimeout(() => {
           if (state.mounted && state.activeIndex === activeIdx && vid && vid.dataset.loadedSrc) {
             vid.preload = 'auto';
@@ -633,7 +787,7 @@
     if (!grid) return;
 
     const list = Array.isArray(itemsList) ? itemsList : [];
-    syncFavsBadge();
+    syncFavsUIAll();
     if (playAllBtn) playAllBtn.classList.toggle('hidden', list.length === 0);
     if (list.length === 0) {
       grid.innerHTML = '';
@@ -657,9 +811,20 @@
   }
 
   async function openFavoritesModal() {
+    const auth = getAuthContext();
+    if (!auth.authed) {
+      promptVipLogin('Inicia sesión con tu cuenta VIP para ver tus favoritos');
+      return;
+    }
+    if (!auth.canSave) {
+      promptVipLogin('Activa tu cuenta VIP para acceder a tus shorts favoritos');
+      return;
+    }
+
     const modal = document.getElementById('tt-favs-modal');
     if (!modal) return;
     modal.classList.remove('hidden');
+    await loadAccountFavorites(true);
     renderFavsGrid(state.favs);
 
     const ids = state.favs.map(x => Number(x.id)).filter(n => Number.isFinite(n) && n > 0).slice(0, 60);
@@ -676,7 +841,7 @@
         const f = freshById.get(String(old.id));
         return f ? { ...old, ...f, savedAt: old.savedAt || Date.now() } : old;
       });
-      persistFavsAndLikes();
+      writeScopedFavCache(auth.uid, state.favs);
       if (!modal.classList.contains('hidden')) {
         renderFavsGrid(state.favs);
       }
@@ -689,9 +854,21 @@
   }
 
   async function launchFavoritesFeed(startId = null) {
+    const auth = getAuthContext();
+    if (!auth.canSave) {
+      promptVipLogin('Solo cuentas VIP activas pueden reproducir su lista de favoritos');
+      return;
+    }
+    if (state.favs.length === 0) {
+      await loadAccountFavorites(true);
+    }
     const ids = state.favs.map(x => Number(x.id)).filter(n => Number.isFinite(n) && n > 0).slice(0, 60);
+    if (startId && !ids.includes(Number(startId))) {
+      const numStart = Number(startId);
+      if (Number.isFinite(numStart) && numStart > 0) ids.unshift(numStart);
+    }
     if (ids.length === 0) {
-      if (typeof window.showToast === 'function') window.showToast('Aún no tienes shorts favoritos', 'info');
+      if (typeof window.showToast === 'function') window.showToast('Aún no tienes shorts guardados en tu cuenta', 'info');
       return;
     }
 
@@ -795,6 +972,24 @@
       });
     }, { passive: true });
 
+    window.addEventListener('velvet:auth-changed', () => {
+      loadAccountFavorites(true);
+    });
+
+    window.addEventListener('velvet:favorites-updated', () => {
+      const auth = getAuthContext();
+      if (!auth.canSave) {
+        syncFavsUIAll();
+        return;
+      }
+      const pData = window.VelvetPersonalData;
+      if (!pData || typeof pData.getFavorites !== 'function') return;
+      const list = pData.getFavorites() || [];
+      if (Array.isArray(list) && list.some(x => x && (x.media_type === 'short' || x.source === 'short'))) {
+        loadAccountFavorites(true);
+      }
+    });
+
     const trackEl = document.getElementById('tiktok-snap-track');
     if (trackEl) {
       trackEl.addEventListener('scroll', () => {
@@ -811,7 +1006,7 @@
       if (delBtn) {
         e.stopPropagation();
         const delId = delBtn.dataset.ttFavDel;
-        toggleHeartItem({ id: delId }, null);
+        toggleHeartItem({ id: delId });
         return;
       }
 
@@ -839,8 +1034,8 @@
         if (now - lastTapAt < 260) {
           clearTimeout(tapTimer);
           lastTapAt = 0;
-          if (item && !state.likes.has(String(item.id))) {
-            toggleHeartItem(item, slide.querySelector('[data-tt-action="like"]'));
+          if (item && (!getAuthContext().canSave || !state.likes.has(String(item.id)))) {
+            toggleHeartItem(item);
           }
           return;
         }
@@ -858,7 +1053,7 @@
           }
         }, 230);
       } else if (action === 'like' && item) {
-        toggleHeartItem(item, actEl);
+        toggleHeartItem(item);
       } else if (action === 'mute') {
         state.muted = !state.muted;
         syncMuteIcons();
@@ -900,13 +1095,14 @@
 
   window.VelvetTikTokFeed = {
     mount() {
-      loadLocalPrefs();
+      loadLocalPlayerPrefs();
       state.mounted = true;
       document.body.classList.add('tiktok-home-active');
       setupObserver();
       bindEvents();
       syncTopModeChips();
       syncCleanModeUI();
+      loadAccountFavorites(false);
       if (state.slides.length === 0) {
         fetchRandomBatch(true);
       } else {
@@ -929,6 +1125,9 @@
     },
     openFavorites() {
       openFavoritesModal();
+    },
+    playSavedShortId(shortId) {
+      launchFavoritesFeed(shortId);
     },
     toggleCleanMode(force) {
       toggleCleanMode(force);

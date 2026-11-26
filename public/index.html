@@ -44,7 +44,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css';">
 
   <!-- High-Performance Static Design System (Compiled Tailwind CSS) -->
-  <link rel="stylesheet" href="/css/tailwind.css?v=3.19.0">
+  <link rel="stylesheet" href="/css/tailwind.css?v=3.20.0">
   <link rel="stylesheet" href="/css/pagination.css?v=3.10.0">
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination (sin bloqueo externo) -->
@@ -54,7 +54,7 @@
   <script defer src="/js/vault.js?v=3.10.0"></script>
   <script defer src="/js/pagination.js?v=3.10.0"></script>
   <script defer src="/js/image-loader.js?v=3.10.0"></script>
-  <script defer src="/js/tiktok-feed.js?v=3.19.0"></script>
+  <script defer src="/js/tiktok-feed.js?v=3.20.0"></script>
 
   <!-- Tailwind CSS Engine asíncrono para utilidades dinámicas sin frenar el arranque -->
   <script async src="https://cdn.tailwindcss.com"></script>
@@ -1254,22 +1254,25 @@
     }
     #tt-clean-exit-btn {
       position: fixed;
-      top: 14px;
+      top: max(14px, env(safe-area-inset-top, 14px));
       right: 14px;
-      z-index: 60;
+      z-index: 95;
       display: none;
       align-items: center;
-      gap: 6px;
-      padding: 7px 12px;
+      gap: 7px;
+      min-height: 42px;
+      padding: 9px 15px;
       border-radius: 999px;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 800;
       color: #fff;
-      background: rgba(10, 5, 22, 0.78);
-      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(18, 8, 36, 0.9);
+      border: 1.5px solid rgba(255, 45, 149, 0.85);
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.8), 0 0 18px rgba(255, 45, 149, 0.3);
+      backdrop-filter: blur(10px);
       cursor: pointer;
-      opacity: 0.4;
-      transition: opacity 0.2s ease, transform 0.15s ease, border-color 0.15s ease;
+      opacity: 0.92;
+      transition: opacity 0.18s ease, transform 0.15s ease, border-color 0.15s ease;
     }
     #tt-clean-exit-btn:hover, #tt-clean-exit-btn:active {
       opacity: 1;
@@ -1979,9 +1982,9 @@
       </button>
     </div>
 
-    <button type="button" id="tt-clean-exit-btn" data-tt-action="clean" title="Mostrar controles y barra (H)">
-      <i class="fa-solid fa-eye text-pink-400"></i>
-      <span>Mostrar UI</span>
+    <button type="button" id="tt-clean-exit-btn" data-tt-action="clean" title="Salir del modo pantalla limpia y mostrar botones">
+      <i class="fa-solid fa-eye text-pink-400 text-sm"></i>
+      <span>Mostrar controles</span>
     </button>
 
     <div id="tiktok-snap-track"></div>
@@ -2386,11 +2389,12 @@
           <!-- Barra de Filtros, Orden y Buscador -->
           <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-[#0e071c] border border-purple-500/20">
             <!-- Chips por tipo -->
-            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              <button onclick="window.VelvetVault?.setFavFilter('all')" class="px-3 py-1.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/40 text-xs font-bold cursor-pointer">Todo</button>
-              <button onclick="window.VelvetVault?.setFavFilter('comic')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Cómics</button>
-              <button onclick="window.VelvetVault?.setFavFilter('video')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Videos</button>
-              <button onclick="window.VelvetVault?.setFavFilter('gallery')" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Galerías</button>
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar" id="vault-fav-type-chips">
+              <button onclick="window.VelvetVault?.setFavFilter('all')" data-vault-filter="all" class="px-3 py-1.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/40 text-xs font-bold cursor-pointer">Todo</button>
+              <button onclick="window.VelvetVault?.setFavFilter('short')" data-vault-filter="short" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer whitespace-nowrap">Shorts +18</button>
+              <button onclick="window.VelvetVault?.setFavFilter('comic')" data-vault-filter="comic" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Cómics</button>
+              <button onclick="window.VelvetVault?.setFavFilter('video')" data-vault-filter="video" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Videos</button>
+              <button onclick="window.VelvetVault?.setFavFilter('gallery')" data-vault-filter="gallery" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Galerías</button>
             </div>
 
             <!-- Buscador y Vista Grilla/Lista -->

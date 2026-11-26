@@ -6647,9 +6647,11 @@ export async function onRequest(context) {
 
   const inferPersonalMediaType = (item) => {
     const raw = String(item?.media_type || "").trim().toLowerCase();
+    if (raw === "short" || raw === "shorts") return "short";
     if (raw === "comic" || raw === "video" || raw === "game") return raw;
     if (raw === "gallery" || raw === "cosplay") return "gallery";
     const src = String(item?.source || "").trim().toLowerCase();
+    if (src === "short" || src === "shorts") return "short";
     if (["pmvhaven", "pornone", "redporn", "anyporn", "alotporn", "damplips", "pornhd", "spankbang", "xvideos", "eporner"].includes(src)) return "video";
     if (["buondua", "4khd", "xasiat", "leakgallery", "mitaku"].includes(src)) return "gallery";
     if (["gamcore", "games", "flash", "ruffle", "renpy"].includes(src) || item?.game_type) return "game";
@@ -6675,7 +6677,9 @@ export async function onRequest(context) {
   };
 
   const resolveSqlItemId = async (candidate, tokenVal, userId) => {
-    if (inferPersonalMediaType(candidate) === "game" || String(candidate?.source || "").toLowerCase() === "gamcore") {
+    const pType = inferPersonalMediaType(candidate);
+    const pSrc = String(candidate?.source || "").toLowerCase();
+    if (pType === "game" || pSrc === "gamcore" || pType === "short" || pSrc === "short") {
       return null;
     }
     const rawNum = parseStrictPositiveInt(candidate?.id || candidate?.item_id);
@@ -6715,6 +6719,27 @@ export async function onRequest(context) {
     let effectiveTitle = cleanPublicTitle(it.title || entry.title || meta.title) || fallbackTitle;
     let effectiveSource = it.source || entry.source || meta.source || "";
     let effectiveSourceId = it.source_id || entry.source_id || meta.source_id || "";
+    if (String(effectiveSource).toLowerCase() === "short" || String(entry.media_type || "").toLowerCase() === "short") {
+      const cleanSid = parseStrictPositiveInt(String(effectiveSourceId || entry.item_id || entry.id || "").replace(/^short:/i, ""));
+      let finalCover = "/velvet_logo.png";
+      let shareId = "";
+      if (cleanSid && MEDIA_SECRET) {
+        const [tCov, tShare] = await Promise.all([
+          encodeShortToken(cleanSid, "c", MEDIA_SECRET, 604800),
+          encodeShortToken(cleanSid, "s", MEDIA_SECRET, 7776000)
+        ]);
+        if (tCov) finalCover = `/api/shorts/img?t=${tCov}`;
+        shareId = tShare || "";
+      }
+      return {
+        effectiveTitle,
+        effectiveSource: "short",
+        effectiveSourceId: String(cleanSid || effectiveSourceId || ""),
+        effectiveUrl: "",
+        finalCover,
+        shareId
+      };
+    }
     const effectiveReferer = it.url || entry.url || meta.url || "";
     const rawCover = it.cover_url || entry.cover_url || meta.cover_url || "";
     const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
@@ -6748,6 +6773,24 @@ export async function onRequest(context) {
   };
 
   const buildCustomFavRow = (userId, item) => {
+    const isShort = inferPersonalMediaType(item) === "short" || String(item?.source || "").toLowerCase() === "short";
+    if (isShort) {
+      const cleanSid = String(item.source_id || item.item_id || item.id || "").replace(/^short:/i, "").trim();
+      const numSid = parseStrictPositiveInt(cleanSid);
+      if (!numSid) return null;
+      return {
+        user_id: userId,
+        item_key: `short:${numSid}`,
+        item_id: String(numSid),
+        source: "short",
+        source_id: String(numSid),
+        media_type: "short",
+        title: String(cleanPublicTitle(item.title) || "Short guardado").slice(0, 300),
+        cover_url: "",
+        url: "",
+        created_at: new Date().toISOString()
+      };
+    }
     const itemKey = buildCustomItemKey(item);
     if (!itemKey) return null;
     return {
@@ -6897,24 +6940,40 @@ export async function onRequest(context) {
           }
           const src = String(cf.source || "external").slice(0, 40);
           const srcId = String(cf.source_id || cf.item_id || cf.id || "").slice(0, 120);
+          const pType = inferPersonalMediaType(cf);
           const refKey = (src && srcId) ? `${src.toLowerCase()}:${srcId}` : String(cf.item_key || cf.id || srcId);
           if (!refKey || seenRefs.has(refKey)) return;
           seenRefs.add(refKey);
-          const rawCover = String(cf.cover_url || "");
-          const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
-          let finalCover = rawCover.startsWith("/api/media?t=") ? rawCover : "/velvet_logo.png";
-          if (upstreamCover) {
-            const freshTok = await encodeToken(upstreamCover, "");
-            if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+          let finalCover = "/velvet_logo.png";
+          let shareId = "";
+          if (pType === "short" || src.toLowerCase() === "short") {
+            const cleanSid = parseStrictPositiveInt(String(srcId || cf.id || "").replace(/^short:/i, ""));
+            if (cleanSid && MEDIA_SECRET) {
+              const [tCov, tShare] = await Promise.all([
+                encodeShortToken(cleanSid, "c", MEDIA_SECRET, 604800),
+                encodeShortToken(cleanSid, "s", MEDIA_SECRET, 7776000)
+              ]);
+              if (tCov) finalCover = `/api/shorts/img?t=${tCov}`;
+              shareId = tShare || "";
+            }
+          } else {
+            const rawCover = String(cf.cover_url || "");
+            const upstreamCover = extractRawMediaUrl(rawCover) || (rawCover && /^https?:\/\//i.test(rawCover) ? rawCover : "");
+            finalCover = rawCover.startsWith("/api/media?t=") ? rawCover : "/velvet_logo.png";
+            if (upstreamCover) {
+              const freshTok = await encodeToken(upstreamCover, "");
+              if (freshTok) finalCover = `/api/media?t=${freshTok}`;
+            }
           }
           refs.push({
             id: n || cf.id || cf.item_id || srcId || null,
             item_key: cf.item_key || refKey,
             source: src,
             source_id: srcId,
-            media_type: inferPersonalMediaType(cf),
+            media_type: pType,
             title: String(cleanPublicTitle(cf.title) || "Contenido guardado").slice(0, 120),
             cover_url: finalCover,
+            share_id: shareId,
             url: ""
           });
         };
@@ -6961,7 +7020,7 @@ export async function onRequest(context) {
       const offset = (page - 1) * pageSize;
       const to = offset + pageSize - 1;
       const typeFilter = url.searchParams.get("type") || url.searchParams.get("media_type");
-      const hasTypeFilter = Boolean(typeFilter && ["comic", "video", "gallery", "game"].includes(typeFilter));
+      const hasTypeFilter = Boolean(typeFilter && ["comic", "video", "gallery", "game", "short"].includes(typeFilter));
       const getVideoCatalog = createVideoCatalogLoader();
 
       try {
@@ -7123,7 +7182,7 @@ export async function onRequest(context) {
 
         const formattedCustom = await Promise.all(
           [...customRows, ...legacyMetaFavs].map(async (cf) => {
-            const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover } =
+            const { effectiveTitle, effectiveSource, effectiveSourceId, finalCover, shareId } =
               await formatPersonalMediaEntry(cf, getVideoCatalog, "Contenido guardado");
             const numId = parseStrictPositiveInt(cf.item_id || cf.id);
             const resolvedId = numId || (cf.id || cf.item_id || cf.source_id || cf.item_key);
@@ -7133,6 +7192,7 @@ export async function onRequest(context) {
               item_key: cf.item_key || buildCustomItemKey(cf),
               title: effectiveTitle,
               cover_url: finalCover,
+              share_id: shareId || "",
               media_type: inferPersonalMediaType(cf),
               source: effectiveSource || "external",
               source_id: effectiveSourceId || String(resolvedId || ""),
@@ -7200,8 +7260,10 @@ export async function onRequest(context) {
           const customCandidates = [];
           for (const it of body.items.slice(0, 200)) {
             const num = parseStrictPositiveInt(it?.id || it?.item_id);
-            const isGame = inferPersonalMediaType(it) === "game" || String(it?.source || "").toLowerCase() === "gamcore";
-            if (num && !isGame) {
+            const pType = inferPersonalMediaType(it);
+            const pSrc = String(it?.source || "").toLowerCase();
+            const isCustomOnly = pType === "game" || pSrc === "gamcore" || pType === "short" || pSrc === "short";
+            if (num && !isCustomOnly) {
               numericCandidates.push({ num, item: it });
             } else if (it && (it.id || it.item_id || (it.source && it.source_id))) {
               customCandidates.push(it);
