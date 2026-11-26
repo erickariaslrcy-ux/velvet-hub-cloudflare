@@ -44,7 +44,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css';">
 
   <!-- High-Performance Static Design System (Compiled Tailwind CSS) -->
-  <link rel="stylesheet" href="/css/tailwind.css?v=3.10.0">
+  <link rel="stylesheet" href="/css/tailwind.css?v=3.17.0">
   <link rel="stylesheet" href="/css/pagination.css?v=3.10.0">
 
   <!-- Tailwind CSS Engine for Dynamic JavaScript Components (Ruffle se carga bajo demanda en Flash) -->
@@ -57,6 +57,7 @@
   <script defer src="/js/vault.js?v=3.10.0"></script>
   <script defer src="/js/pagination.js?v=3.10.0"></script>
   <script defer src="/js/image-loader.js?v=3.10.0"></script>
+  <script defer src="/js/tiktok-feed.js?v=3.17.0"></script>
 
   <style>
     /* =======================================================================
@@ -1143,6 +1144,335 @@
       animation: spinPulse 0.75s linear infinite;
     }
 
+    /* =======================================================================
+       TIKTOK VERTICAL +18 FEED (LIGHTWEIGHT VIRTUALIZED PLAYER)
+       ======================================================================= */
+    body.tiktok-home-active {
+      overflow: hidden !important;
+      height: 100dvh !important;
+    }
+    body.tiktok-home-active #filter-bar,
+    body.tiktok-home-active #site-footer,
+    body.tiktok-home-active #random-btn {
+      display: none !important;
+    }
+    #tiktok-feed-view {
+      position: relative;
+      width: 100%;
+      height: calc(100dvh - 4rem);
+      overflow: hidden;
+      background: #04010c;
+    }
+    @media (max-width: 1023px) {
+      #tiktok-feed-view {
+        height: calc(100dvh - 4rem - 4rem);
+      }
+    }
+    .tt-ambient-wrap {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      contain: layout style paint;
+    }
+    .tt-ambient-img {
+      position: absolute;
+      left: 38%;
+      top: 38%;
+      width: 24%;
+      height: 24%;
+      object-fit: cover;
+      filter: blur(18px) saturate(1.85) brightness(0.46);
+      transform: scale(4.8);
+      transform-origin: center center;
+      will-change: opacity;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+    .tt-ambient-img.is-ready {
+      opacity: 0.9;
+    }
+    .tt-ambient-orbs {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(48% 60% at 18% 28%, rgba(255, 45, 149, 0.2), transparent 70%),
+        radial-gradient(46% 62% at 84% 72%, rgba(139, 61, 255, 0.24), transparent 72%),
+        radial-gradient(38% 58% at 50% 50%, rgba(217, 70, 239, 0.14), transparent 72%);
+    }
+    .tt-ambient-grid {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(236, 72, 153, 0.15) 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.3;
+    }
+    .tt-ambient-vignette {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 36%, rgba(2, 0, 8, 0.85) 100%);
+    }
+    @media (max-width: 1023px) {
+      .tt-ambient-wrap { display: none; }
+    }
+    #tt-search-chip {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      z-index: 26;
+    }
+    #tiktok-snap-track {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      overflow-y: scroll;
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+    }
+    #tiktok-snap-track::-webkit-scrollbar { display: none; }
+    .tt-slide {
+      width: 100%;
+      height: 100%;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 16px;
+      contain: layout style paint;
+    }
+    @media (max-width: 1023px) {
+      .tt-slide { padding: 0; }
+    }
+    .tt-stage {
+      position: relative;
+      width: clamp(380px, 46vw, 780px);
+      height: 100%;
+      border-radius: 20px;
+      overflow: hidden;
+      background: #000;
+      border: 1px solid rgba(236, 72, 153, 0.38);
+      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.95), 0 0 65px rgba(255, 45, 149, 0.2), 0 0 120px rgba(139, 61, 255, 0.16);
+      transition: width 0.22s ease;
+    }
+    .tt-stage.is-fill {
+      width: clamp(540px, 56vw, 880px);
+    }
+    .tt-stage.is-fill.is-wide {
+      width: min(88vw, 1260px);
+    }
+    @media (max-width: 1023px) {
+      .tt-stage, .tt-stage.is-fill, .tt-stage.is-fill.is-wide {
+        width: 100% !important;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+      }
+    }
+    #tiktok-feed-view, .tt-stage, .tt-poster, .tt-video {
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+    }
+    .tt-poster, .tt-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center center;
+      background: #000;
+      pointer-events: none;
+    }
+    .tt-stage.is-fill .tt-video,
+    .tt-stage.is-fill .tt-poster {
+      object-fit: cover;
+      object-position: center 22%;
+    }
+    .tt-stage.is-fill.is-wide .tt-video,
+    .tt-stage.is-fill.is-wide .tt-poster {
+      object-position: center center;
+    }
+    .tt-poster {
+      z-index: 1;
+      transition: opacity 0.2s ease;
+    }
+    .tt-poster.is-hidden { opacity: 0; pointer-events: none; }
+    .tt-video { z-index: 2; }
+    .tt-tap-layer { position: absolute; inset: 0; z-index: 5; cursor: pointer; }
+    .tt-center-icon, .tt-spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 8;
+      pointer-events: none;
+    }
+    .tt-center-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.58);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tt-gradient-bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 36%;
+      background: linear-gradient(0deg, rgba(3, 0, 8, 0.9) 0%, rgba(3, 0, 8, 0.4) 55%, transparent 100%);
+      pointer-events: none;
+      z-index: 6;
+    }
+    .tt-info {
+      position: absolute;
+      left: 16px;
+      right: 76px;
+      bottom: 26px;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: auto;
+    }
+    .tt-meta-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tt-artist { font-size: 12px; font-weight: 700; color: #f9a8d4; text-shadow: 0 1px 4px #000; }
+    .tt-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.3;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .tt-tags-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
+    .tt-tag-chip {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: #f3e8ff;
+      background: rgba(24, 10, 44, 0.78);
+      border: 1px solid rgba(168, 85, 247, 0.42);
+      cursor: pointer;
+    }
+    .tt-tag-chip:hover { background: rgba(255, 45, 149, 0.45); color: #fff; }
+    .tt-rail {
+      position: absolute;
+      right: 12px;
+      bottom: 30px;
+      z-index: 12;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    .tt-rail-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      color: #fff;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+    }
+    .tt-rail-ico {
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      background: rgba(10, 6, 18, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .tt-rail-btn:hover .tt-rail-ico { transform: scale(1.08); border-color: #ff2d95; }
+    .tt-rail-btn.is-liked .tt-rail-ico { color: #ff2d95; border-color: #ff2d95; background: rgba(255, 45, 149, 0.24); }
+    .tt-rail-btn.is-on .tt-rail-ico { color: #34d399; border-color: #34d399; background: rgba(16, 185, 129, 0.22); }
+    .tt-rail-txt { font-size: 10px; font-weight: 700; color: rgba(255, 255, 255, 0.92); text-shadow: 0 1px 4px #000; }
+    .tt-progress-wrap {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 6px;
+      z-index: 15;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .tt-progress-bg {
+      flex: 1;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.24);
+      overflow: hidden;
+    }
+    .tt-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff2d95, #8b3dff);
+      transition: width 0.1s linear;
+    }
+    .tt-time-badge {
+      font-size: 10px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.85);
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 1px 4px #000;
+    }
+    .tt-side-nav {
+      display: none;
+    }
+    @media (min-width: 1024px) {
+      .tt-side-nav {
+        position: absolute;
+        right: 22px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 26;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .tt-side-arrow {
+        width: 48px;
+        height: 48px;
+        border-radius: 999px;
+        background: rgba(18, 8, 36, 0.82);
+        border: 1px solid rgba(168, 85, 247, 0.35);
+        color: #fff;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.65);
+        transition: all 0.15s ease;
+      }
+      .tt-side-arrow:hover {
+        border-color: #ff2d95;
+        background: linear-gradient(135deg, rgba(255, 45, 149, 0.35), rgba(139, 61, 255, 0.35));
+        transform: scale(1.06);
+      }
+    }
+
   </style>
 
 </head>
@@ -1200,9 +1530,18 @@
       <div id="desktop-mode-nav" class="hidden lg:flex items-center p-1 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-inner shrink-0">
 
         <a
+          id="mode-btn-shorts"
+          href="/"
+          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer"
+        >
+          <i class="fa-solid fa-fire text-xs"></i>
+          <span>Para Ti</span>
+        </a>
+
+        <a
           id="mode-btn-comics"
           href="/comics"
-          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-md cursor-pointer"
+          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer"
         >
           <i class="fa-solid fa-book-open text-xs"></i>
           <span>Cómics</span>
@@ -1469,6 +1808,65 @@
   </div>
 
   <!-- ===================================================================== -->
+  <!-- FEED PRINCIPAL TIKTOK +18 VERTICAL (PÁGINA DE INICIO)                  -->
+  <!-- ===================================================================== -->
+  <section id="tiktok-feed-view" class="hidden" aria-label="Videos Verticales Aleatorios" oncontextmenu="return false;">
+    <script>
+      (function () {
+        try {
+          var p = (window.location.pathname || '/').toLowerCase();
+          if (p === '/' || p === '/index.html' || p === '/shorts' || p === '/parati') {
+            var sp = new URLSearchParams(window.location.search || '');
+            var c = sp.get('c') || '';
+            var q = sp.get('q') || '';
+            if (!q) {
+              var u = '/api/shorts/random?limit=12&category=all' + (c ? '&clip=' + encodeURIComponent(c) : '') + '&_=' + Date.now();
+              window.__ttInitialBatchPromise = fetch(u, { cache: 'no-store' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .catch(function () { return null; });
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <div class="tt-ambient-wrap" aria-hidden="true">
+      <img id="tt-ambient-img" class="tt-ambient-img" alt="" decoding="async" referrerpolicy="no-referrer" />
+      <div class="tt-ambient-orbs"></div>
+      <div class="tt-ambient-grid"></div>
+      <div class="tt-ambient-vignette"></div>
+    </div>
+
+    <button type="button" id="tt-search-chip" data-tt-action="clear-search" class="hidden px-3 py-1.5 rounded-full bg-pink-500/25 border border-pink-500/60 text-[11px] font-bold text-white flex items-center gap-1.5 cursor-pointer shadow-lg">
+      <i class="fa-solid fa-magnifying-glass text-[10px] text-pink-300"></i>
+      <span id="tt-search-chip-label"></span>
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+
+    <div id="tiktok-snap-track"></div>
+
+    <div class="tt-side-nav">
+      <button type="button" data-tt-action="prev" class="tt-side-arrow" title="Anterior (↑)">
+        <i class="fa-solid fa-chevron-up"></i>
+      </button>
+      <button type="button" data-tt-action="next" class="tt-side-arrow" title="Siguiente aleatorio (↓)">
+        <i class="fa-solid fa-chevron-down"></i>
+      </button>
+    </div>
+
+    <div id="tiktok-feed-loader" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 pointer-events-none">
+      <div class="video-buffering-ring w-12 h-12 mb-3"></div>
+      <p class="text-xs font-bold text-pink-300 tracking-wide">Cargando videos...</p>
+    </div>
+
+    <div id="tiktok-empty-state" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center bg-black/85">
+      <i class="fa-solid fa-fire-flame-curved text-3xl text-pink-500 mb-3"></i>
+      <h3 class="text-base font-black text-white">Sin videos para ese filtro</h3>
+      <p class="text-xs text-lav/70 mt-1 mb-4">Prueba otro término o explora todas las categorías.</p>
+      <button type="button" onclick="window.VelvetTikTokFeed?.setFilter({ q: '', category: 'all' })" class="px-5 py-2.5 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-black cursor-pointer">Ver Todo</button>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
 
   <!-- CONTENIDO PRINCIPAL -->
 
@@ -1599,6 +1997,16 @@
         (function initReservedGridShell() {
           try {
             var p = (window.location && window.location.pathname) || '/';
+            if (p === '/' || p === '/index.html' || p.startsWith('/shorts') || p.startsWith('/parati')) {
+              if (document.body) document.body.classList.add('tiktok-home-active');
+              var fb = document.getElementById('filter-bar');
+              var hv = document.getElementById('home-view');
+              var tv = document.getElementById('tiktok-feed-view');
+              if (fb) fb.classList.add('hidden');
+              if (hv) hv.classList.add('hidden');
+              if (tv) tv.classList.remove('hidden');
+              return;
+            }
             var isSearch = !!(new URLSearchParams(window.location.search || '').get('q'));
             var mode = p.startsWith('/videos') ? 'videos'
               : (p.startsWith('/cosplay') || p.startsWith('/galerias')) ? 'galleries'
@@ -2274,6 +2682,10 @@
       </div>
       <div class="drawer-scroll">
         <p class="drawer-kicker">Contenido</p>
+        <a href="/" class="drawer-link" data-drawer-nav="shorts">
+          <span class="drawer-link-icon text-pink-400"><i class="fa-solid fa-fire"></i></span>
+          <span class="min-w-0"><span class="block text-sm font-black leading-tight">Para Ti (TikTok)</span><span class="block text-[11px] text-white/50 leading-tight mt-0.5">Feed vertical aleatorio +18</span></span>
+        </a>
         <a href="/comics" class="drawer-link" data-drawer-nav="comics">
           <span class="drawer-link-icon text-pink-300"><i class="fa-solid fa-book-open"></i></span>
           <span class="min-w-0"><span class="block text-sm font-black leading-tight">Cómics</span><span class="block text-[11px] text-white/50 leading-tight mt-0.5">Manhwas, manga y doujin</span></span>
@@ -2309,7 +2721,12 @@
 
   <nav id="mobile-navbar" aria-label="Navegación Móvil" class="fixed inset-x-0 bottom-0 z-40 bg-[#0a0610]/95 border-t border-purple-500/20 shadow-thumb lg:hidden w-full max-w-full" style="padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);">
 
-    <div class="mob-tab-row grid grid-cols-5 h-16 w-full max-w-lg mx-auto px-0.5">
+    <div class="mob-tab-row grid grid-cols-6 h-16 w-full max-w-lg mx-auto px-0.5">
+
+      <a href="/" id="tab-btn-shorts" data-nav="shorts" class="mob-tab flex flex-col items-center justify-center text-lav/70" style="min-height:44px">
+        <span class="mob-tab-icon"><i class="fa-solid fa-fire"></i></span>
+        <span class="mob-tab-label">Para Ti</span>
+      </a>
 
       <a href="/comics" id="tab-btn-comics" data-nav="comics" class="mob-tab flex flex-col items-center justify-center text-lav/70" style="min-height:44px">
         <span class="mob-tab-icon"><i class="fa-solid fa-book-open"></i></span>
@@ -4188,6 +4605,7 @@
       const idle = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all text-white/70 hover:text-white cursor-pointer';
       const gamesActive = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black transition-all bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25 cursor-pointer';
       [
+        ['mode-btn-shorts', mode === 'shorts'],
         ['mode-btn-comics', mode === 'comics'],
         ['mode-btn-videos', mode === 'videos'],
         ['mode-btn-galleries', mode === 'galleries'],
@@ -4218,6 +4636,7 @@
       }
 
       const tabByMode = {
+        shorts: 'tab-btn-shorts',
         comics: 'tab-btn-comics',
         videos: 'tab-btn-videos',
         galleries: 'tab-btn-galleries',
@@ -4225,7 +4644,7 @@
         vault: 'tab-btn-vault'
       };
       const activeTab = tabByMode[mode] || '';
-      ['tab-btn-comics', 'tab-btn-videos', 'tab-btn-galleries', 'tab-btn-games', 'tab-btn-vault'].forEach((id) => {
+      ['tab-btn-shorts', 'tab-btn-comics', 'tab-btn-videos', 'tab-btn-galleries', 'tab-btn-games', 'tab-btn-vault'].forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
         const on = id === activeTab;
@@ -4250,7 +4669,8 @@
       if (!route) return null;
       if (route.name === 'vault') return route.tab === 'account' ? 'account' : 'vault';
       if (route.name === 'auth') return 'account';
-      if (route.name === 'home' || route.name === 'catalog') return route.mode || 'comics';
+      if (route.name === 'home') return route.mode || 'shorts';
+      if (route.name === 'catalog') return route.mode || 'comics';
       if (route.name === 'video') return 'videos';
       if (route.name === 'comic' || route.name === 'reader') return 'comics';
       if (route.name === 'gallery') return 'galleries';
@@ -4448,10 +4868,10 @@
       }
     }
 
-    const sectionMemory = { comics: null, videos: null, galleries: null, games: null };
+    const sectionMemory = { shorts: null, comics: null, videos: null, galleries: null, games: null };
 
     function sectionKey(mode) {
-      if (mode === 'videos' || mode === 'galleries' || mode === 'games') return mode;
+      if (mode === 'shorts' || mode === 'videos' || mode === 'galleries' || mode === 'games') return mode;
       return 'comics';
     }
 
@@ -4520,6 +4940,24 @@
       }
 
       state.mode = mode;
+      if (mode === 'shorts') {
+        const tiktokView = document.getElementById('tiktok-feed-view');
+        const mainContent = document.getElementById('home-view');
+        const filterBar = document.getElementById('filter-bar');
+        if (mainContent) mainContent.classList.add('hidden');
+        if (filterBar) filterBar.classList.add('hidden');
+        if (tiktokView) tiktokView.classList.remove('hidden');
+        updateModeButtonsUI('shorts');
+        const sIn = document.getElementById('search-input');
+        if (sIn) sIn.placeholder = 'Buscar shorts +18, tags, categorías...';
+        window.VelvetTikTokFeed?.mount();
+        hidePortalTransition();
+        return;
+      } else {
+        window.VelvetTikTokFeed?.unmount();
+        const tiktokView = document.getElementById('tiktok-feed-view');
+        if (tiktokView) tiktokView.classList.add('hidden');
+      }
       if (mode === 'comics') {
         state.category = 'all';
       }
@@ -5269,7 +5707,7 @@
       } else if (tabParam === 'videos' || tabParam === 'comics' || tabParam === 'galleries' || tabParam === 'games' || tabParam === 'juegos') {
         state.mode = (tabParam === 'games' || tabParam === 'juegos') ? 'games' : tabParam;
       } else {
-        state.mode = 'comics';
+        state.mode = 'shorts';
       }
 
       // Comprobar si se abrió una URL directa de Video, Cómic o Galería VIP
@@ -5663,6 +6101,7 @@
         window.VelvetStore?.setAgeVerified(true);
         const gate = document.getElementById('velvet-age-gate');
         if (gate) gate.classList.add('hidden');
+        window.VelvetTikTokFeed?.onAgeConfirmed?.();
       }
     };
 
@@ -5733,6 +6172,7 @@
       if (section) updateModeButtonsUI(section);
 
       const mainContent = document.getElementById('home-view') || document.getElementById('main-content');
+      const tiktokView = document.getElementById('tiktok-feed-view');
       const videoView = document.getElementById('video-view');
       const readerModal = document.getElementById('reader-modal');
       const gameModal = document.getElementById('game-modal');
@@ -5750,6 +6190,8 @@
 
       // 1. Ruta Bóveda, Historial o Cuenta
       if (route.name === 'vault') {
+        window.VelvetTikTokFeed?.unmount?.();
+        if (tiktokView) tiktokView.classList.add('hidden');
         unlockScrollAndOverlays();
         if (mainContent) mainContent.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
@@ -5767,18 +6209,33 @@
         return;
       }
 
-      // 2. Ruta Inicio o Catálogos (/videos, /comics, /cosplay, /juegos)
+      // 2. Ruta Inicio o Catálogos (/, /videos, /comics, /cosplay, /juegos)
       if (route.name === 'home' || route.name === 'catalog') {
         unlockScrollAndOverlays();
         if (vaultView) vaultView.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
         if (readerModal) readerModal.classList.add('hidden');
-        if (mainContent) mainContent.classList.remove('hidden');
-        if (filterBar) filterBar.classList.remove('hidden');
         if (gHeader) gHeader.classList.remove('hidden');
         if (mobNav) mobNav.classList.remove('hidden');
 
-        const targetMode = route.mode || 'comics';
+        const targetMode = route.mode || (route.name === 'home' ? 'shorts' : 'comics');
+        if (targetMode === 'shorts') {
+          if (mainContent) mainContent.classList.add('hidden');
+          if (filterBar) filterBar.classList.add('hidden');
+          if (tiktokView) tiktokView.classList.remove('hidden');
+          state.mode = 'shorts';
+          state._initialModePending = false;
+          updateModeButtonsUI('shorts');
+          const sIn = document.getElementById('search-input');
+          if (sIn) sIn.placeholder = 'Buscar shorts +18, tags, categorías...';
+          window.VelvetTikTokFeed?.mount();
+          return;
+        }
+
+        window.VelvetTikTokFeed?.unmount?.();
+        if (tiktokView) tiktokView.classList.add('hidden');
+        if (mainContent) mainContent.classList.remove('hidden');
+        if (filterBar) filterBar.classList.remove('hidden');
         const targetPage = route.page || 1;
         const targetCat = route.category !== undefined ? route.category : 'all';
         const targetQuery = route.query !== undefined ? route.query : '';
@@ -5826,6 +6283,8 @@
 
       // 2b. Ruta Acceso VIP (/acceso)
       if (route.name === 'auth') {
+        window.VelvetTikTokFeed?.unmount?.();
+        if (tiktokView) tiktokView.classList.add('hidden');
         if (vaultView) vaultView.classList.add('hidden');
         if (mainContent) mainContent.classList.remove('hidden');
         if (gHeader) gHeader.classList.remove('hidden');
@@ -5836,6 +6295,8 @@
 
       // 2c. Ruta Juego (/j/:slug)
       if (route.name === 'game') {
+        window.VelvetTikTokFeed?.unmount?.();
+        if (tiktokView) tiktokView.classList.add('hidden');
         if (vaultView) vaultView.classList.add('hidden');
         let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
         if (route.rawToken) {
@@ -5865,6 +6326,8 @@
 
       // 3. Ruta de Video (/v/:slug)
       if (route.name === 'video') {
+        window.VelvetTikTokFeed?.unmount?.();
+        if (tiktokView) tiktokView.classList.add('hidden');
         if (vaultView) vaultView.classList.add('hidden');
         if (readerModal) readerModal.classList.add('hidden');
         let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
@@ -5891,6 +6354,8 @@
 
       // 4. Ruta de Cómic o Galería (/c/:slug, /g/:slug, /c/:slug/leer)
       if (route.name === 'comic' || route.name === 'gallery' || route.name === 'reader') {
+        window.VelvetTikTokFeed?.unmount?.();
+        if (tiktokView) tiktokView.classList.add('hidden');
         if (vaultView) vaultView.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
         let source = route.source || '', id = route.sourceId || '', itemId = route.id || null;
@@ -5913,6 +6378,8 @@
 
       // 5. Ruta 404 Desconocida
       if (route.name === '404') {
+        window.VelvetTikTokFeed?.unmount?.();
+        if (tiktokView) tiktokView.classList.add('hidden');
         if (vaultView) vaultView.classList.add('hidden');
         if (videoView) videoView.classList.add('hidden');
         if (readerModal) readerModal.classList.add('hidden');
@@ -10746,8 +11213,15 @@
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+      const tiktokView = document.getElementById('tiktok-feed-view');
       const videoView = document.getElementById('video-view');
       const readerModal = document.getElementById('reader-modal');
+
+      if (tiktokView && !tiktokView.classList.contains('hidden') && (!videoView || videoView.classList.contains('hidden')) && (!readerModal || readerModal.classList.contains('hidden'))) {
+        if (window.VelvetTikTokFeed && window.VelvetTikTokFeed.handleKeydown(e)) {
+          return;
+        }
+      }
 
       // Si el reproductor de video está visible
       if (videoView && !videoView.classList.contains('hidden')) {
@@ -15932,6 +16406,12 @@
 
       const val = document.getElementById('search-input').value.trim();
 
+      if (state.mode === 'shorts' && window.VelvetTikTokFeed) {
+        document.getElementById('clear-search-btn')?.classList.toggle('hidden', !val);
+        window.VelvetTikTokFeed.setFilter({ q: val, category: 'all' });
+        return;
+      }
+
       const videoView = document.getElementById('video-view');
 
       if (videoView && !videoView.classList.contains('hidden')) {
@@ -15990,6 +16470,11 @@
       state.query = '';
       state.tag = '';
       state.page = 1;
+
+      if (state.mode === 'shorts' && window.VelvetTikTokFeed) {
+        window.VelvetTikTokFeed.setFilter({ q: '', category: 'all' });
+        return;
+      }
 
       try {
         const curUrl = new URL(window.location.href);
@@ -16191,6 +16676,13 @@
     }
 
     function resetHome() {
+      if (state.mode === 'shorts' && window.VelvetTikTokFeed) {
+        const sIn = document.getElementById('search-input');
+        if (sIn) sIn.value = '';
+        document.getElementById('clear-search-btn')?.classList.add('hidden');
+        window.VelvetTikTokFeed.setFilter({ q: '', category: 'all', source: 'all' });
+        return;
+      }
       endManualShuffle();
 
       state.query = '';
@@ -16213,6 +16705,10 @@
     }
 
     function shuffleCurrentFeed() {
+      if (state.mode === 'shorts' && window.VelvetTikTokFeed) {
+        window.VelvetTikTokFeed.reshuffle();
+        return;
+      }
       setShuffleSpin(true);
       state.catalogMode = 'dynamic';
       try { localStorage.setItem('velvet_catalog_mode', 'dynamic'); } catch(e) {}

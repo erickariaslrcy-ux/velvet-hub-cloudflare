@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages - Fast Cache & Worker Budget)
-const CACHE_VERSION = 'v33-fast-budget';
+const CACHE_VERSION = 'v41-tiktok-stealth';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const COVER_CACHE = `velvet-covers-${CACHE_VERSION}`;
@@ -19,7 +19,7 @@ const STATIC_ASSETS = [
   '/icon-192.png',
   '/icon-512.png',
   '/velvet_logo.png',
-  '/css/tailwind.css?v=3.10.0',
+  '/css/tailwind.css?v=3.17.0',
   '/css/pagination.css?v=3.10.0',
   '/js/video-session.js?v=3.10.0',
   '/js/personal-data.js?v=3.10.0',
@@ -27,7 +27,8 @@ const STATIC_ASSETS = [
   '/js/router.js?v=3.10.0',
   '/js/vault.js?v=3.10.0',
   '/js/pagination.js?v=3.10.0',
-  '/js/image-loader.js?v=3.10.0'
+  '/js/image-loader.js?v=3.10.0',
+  '/js/tiktok-feed.js?v=3.17.0'
 ];
 
 const BRAND_FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" width="100%" height="100%"><rect width="100%" height="100%" fill="#0f071e"/><radialGradient id="g" cx="50%" cy="45%" r="60%"><stop offset="0%" stop-color="#2a0d3f"/><stop offset="100%" stop-color="#0a0414"/></radialGradient><rect width="100%" height="100%" fill="url(#g)"/><circle cx="150" cy="168" r="28" fill="none" stroke="#ff2d95" stroke-width="2"/><text x="150" y="176" text-anchor="middle" fill="#ff2d95" font-family="Georgia,serif" font-size="22" font-weight="700">M</text><text x="150" y="230" text-anchor="middle" fill="#c4b5fd" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="11" font-weight="700" letter-spacing="2">MORBO HUB</text></svg>`;
@@ -110,6 +111,8 @@ self.addEventListener('fetch', (event) => {
   // 1. Exclusiones críticas: streaming de video, range requests, auth, admin, APIs privadas y catálogo paginado
   if (
     url.pathname.startsWith('/api/items') ||
+    url.pathname.startsWith('/api/shorts') ||
+    url.pathname.startsWith('/api/media') ||
     url.pathname.startsWith('/api/video/stream') ||
     url.pathname.startsWith('/api/auth') ||
     url.pathname.startsWith('/api/admin') ||

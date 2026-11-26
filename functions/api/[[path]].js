@@ -272,7 +272,17 @@ function isSafeUpstreamUrl(urlStr) {
       "supabase.co",
       "supabase.in",
       "morbohub.pages.dev",
-      "cloudflare.com"
+      "cloudflare.com",
+      "reddit.tube",
+      "reddvideo.tube",
+      "redd.it",
+      "kiwi99.space",
+      "xxxfollow.com",
+      "xfollow.com",
+      "nekyda.com",
+      "nsfwswipe.com",
+      "waptap.com",
+      "onlytik.com"
     ];
 
     // Validación estricta por límite de punto: host idéntico o subdominio legítimo con punto separador
@@ -2668,6 +2678,246 @@ async function patchAuthUserLightMeta(sbUrl, adminKey, userId, existingMeta, pat
   return await updateSupabaseUserMetadata(userId, merged, sbUrl, adminKey);
 }
 
+// ============================================================================
+// BLINDAJE STEALTH & VELOCIDAD SHORTS (TOKENS OPACOS POR ID + CACHE PoP)
+// ============================================================================
+const ISOLATE_SHORTS_MEDIA = new Map();
+const SHORTS_POOL_CACHE = { items: [], lastRefillMs: 0, inflight: null };
+const SHORTS_META_CACHE_PREFIX = "https://shorts-meta.internal/v1/";
+const SHORTS_COVER_CACHE_PREFIX = "https://shorts-cover.internal/v1/";
+
+function shortsQuantizedExp(ttlSeconds) {
+  const now = Math.floor(Date.now() / 1000);
+  const ttl = Math.max(3600, Number(ttlSeconds) || 43200);
+  const bucket = Math.min(86400, Math.max(3600, Math.floor(ttl / 4)));
+  return (Math.floor(now / bucket) * bucket) + ttl;
+}
+
+async function encodeShortToken(id, kind, secret, ttlSeconds = 43200) {
+  const sid = parseInt(id, 10);
+  if (!Number.isFinite(sid) || sid <= 0 || !secret || !kind) return "";
+  try {
+    const exp = shortsQuantizedExp(ttlSeconds);
+    const dataB64 = toBase64Url(JSON.stringify({ i: sid, k: kind, e: exp }));
+    const key = await getHmacKey(secret);
+    if (!key) return "";
+    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(dataB64));
+    const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    return `${dataB64}.${sigHex}`;
+  } catch (e) {
+    return "";
+  }
+}
+
+async function decodeShortToken(token, secret, expectedKind = "") {
+  if (!token || !secret || typeof token !== "string") return null;
+  const dotIdx = token.indexOf(".");
+  if (dotIdx === -1) return null;
+  const dataB64 = token.substring(0, dotIdx);
+  const sigHex = token.substring(dotIdx + 1);
+  if (!/^[0-9a-f]{64}$/i.test(sigHex)) return null;
+  try {
+    const key = await getHmacKey(secret);
+    if (!key) return null;
+    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(dataB64));
+    const expectedHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    if (!timingSafeEqualHex(expectedHex.toLowerCase(), sigHex.toLowerCase())) return null;
+    const payload = JSON.parse(fromBase64Url(dataB64));
+    const sid = parseInt(payload && payload.i, 10);
+    if (!payload || !Number.isFinite(sid) || sid <= 0) return null;
+    if (expectedKind && payload.k !== expectedKind) return null;
+    if (payload.e && Math.floor(Date.now() / 1000) > Number(payload.e)) return null;
+    return { i: sid, k: String(payload.k || ""), e: Number(payload.e || 0) };
+  } catch (e) {
+    return null;
+  }
+}
+
+function isSameSiteHostname(a, b) {
+  const h1 = String(a || "").toLowerCase().replace(/^www\./, "");
+  const h2 = String(b || "").toLowerCase().replace(/^www\./, "");
+  if (!h1 || !h2) return false;
+  if (h1 === h2) return true;
+  if ((h1 === "localhost" || h1 === "127.0.0.1") && (h2 === "localhost" || h2 === "127.0.0.1")) return true;
+  return h1.endsWith(`.${h2}`) || h2.endsWith(`.${h1}`);
+}
+
+function checkSameSiteStreamRequest(request, reqUrl) {
+  const dest = (request.headers.get("sec-fetch-dest") || "").toLowerCase();
+  if (dest === "document" || dest === "iframe" || dest === "frame" || dest === "object" || dest === "embed") {
+    return false;
+  }
+  const secSite = (request.headers.get("sec-fetch-site") || "").toLowerCase();
+  if (secSite === "cross-site") return false;
+  const hdrRef = request.headers.get("origin") || request.headers.get("referer") || "";
+  if (hdrRef && hdrRef !== "null") {
+    try {
+      const refHost = new URL(hdrRef).hostname;
+      if (!isSameSiteHostname(refHost, reqUrl.hostname)) return false;
+    } catch (e) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function cacheShortMediaInMemory(sid, meta) {
+  if (!sid || !meta || (!meta.v && !meta.c)) return;
+  if (ISOLATE_SHORTS_MEDIA.has(sid)) ISOLATE_SHORTS_MEDIA.delete(sid);
+  while (ISOLATE_SHORTS_MEDIA.size >= 4000) {
+    const firstKey = ISOLATE_SHORTS_MEDIA.keys().next().value;
+    ISOLATE_SHORTS_MEDIA.delete(firstKey);
+  }
+  ISOLATE_SHORTS_MEDIA.set(sid, {
+    v: String(meta.v || ""),
+    c: String(meta.c || ""),
+    r: String(meta.r || "")
+  });
+}
+
+function persistShortsMetaEdge(rows, ctx) {
+  if (typeof caches === "undefined" || !caches || !caches.default || !Array.isArray(rows) || rows.length === 0) return;
+  const task = Promise.all(rows.map(async (row) => {
+    const sid = parseInt(row && row.id, 10);
+    if (!Number.isFinite(sid) || sid <= 0) return;
+    const meta = {
+      v: String(row.video_url || ""),
+      c: String(row.cover_url || ""),
+      r: String(row.referer || "")
+    };
+    cacheShortMediaInMemory(sid, meta);
+    try {
+      await caches.default.put(
+        new Request(`${SHORTS_META_CACHE_PREFIX}${sid}`),
+        new Response(JSON.stringify(meta), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=604800"
+          }
+        })
+      );
+    } catch (e) {}
+  })).catch(() => {});
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(task);
+}
+
+async function resolveShortMediaMeta(sid, sbUrl, sbKey, ctx) {
+  const idNum = parseInt(sid, 10);
+  if (!Number.isFinite(idNum) || idNum <= 0) return null;
+  const mem = ISOLATE_SHORTS_MEDIA.get(idNum);
+  if (mem && (mem.v || mem.c)) return mem;
+
+  if (typeof caches !== "undefined" && caches && caches.default) {
+    try {
+      const edgeHit = await caches.default.match(new Request(`${SHORTS_META_CACHE_PREFIX}${idNum}`));
+      if (edgeHit && edgeHit.ok) {
+        const parsed = await edgeHit.json().catch(() => null);
+        if (parsed && (parsed.v || parsed.c)) {
+          cacheShortMediaInMemory(idNum, parsed);
+          return parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  try {
+    const lookupRes = await fetch(
+      `${sbUrl}/rest/v1/shorts?select=id,video_url,cover_url,referer&id=eq.${idNum}&limit=1`,
+      { headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` } }
+    );
+    if (!lookupRes.ok) return null;
+    const rows = await lookupRes.json().catch(() => []);
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row) return null;
+    const meta = {
+      v: String(row.video_url || ""),
+      c: String(row.cover_url || ""),
+      r: String(row.referer || "")
+    };
+    persistShortsMetaEdge([{ id: idNum, video_url: meta.v, cover_url: meta.c, referer: meta.r }], ctx);
+    return meta;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchShortRowById(sid, sbUrl, sbKey, ctx) {
+  const idNum = parseInt(sid, 10);
+  if (!Number.isFinite(idNum) || idNum <= 0) return null;
+  try {
+    const res = await fetch(
+      `${sbUrl}/rest/v1/shorts?select=id,title,cover_url,video_url,referer,tags,artists,duration,likes&id=eq.${idNum}&limit=1`,
+      { headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` } }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json().catch(() => []);
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (row) persistShortsMetaEdge([row], ctx);
+    return row || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function refillShortsPool(sbUrl, sbKey, excludeIds = []) {
+  if (SHORTS_POOL_CACHE.inflight) return SHORTS_POOL_CACHE.inflight;
+  SHORTS_POOL_CACHE.inflight = (async () => {
+    try {
+      const rpcRes = await fetch(`${sbUrl}/rest/v1/rpc/get_random_shorts`, {
+        method: "POST",
+        headers: {
+          "apikey": sbKey,
+          "Authorization": `Bearer ${sbKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ p_limit: 36, p_q: "", p_exclude: excludeIds.slice(-300) })
+      });
+      if (!rpcRes.ok) return [];
+      const rows = await rpcRes.json().catch(() => []);
+      const valid = Array.isArray(rows) ? rows.filter(r => r && r.id && r.video_url) : [];
+      const seen = new Set(SHORTS_POOL_CACHE.items.map(x => Number(x.id)));
+      for (const r of valid) {
+        const rid = Number(r.id);
+        cacheShortMediaInMemory(rid, { v: r.video_url, c: r.cover_url, r: r.referer });
+        if (!seen.has(rid)) {
+          seen.add(rid);
+          SHORTS_POOL_CACHE.items.push(r);
+        }
+      }
+      if (SHORTS_POOL_CACHE.items.length > 108) {
+        SHORTS_POOL_CACHE.items = SHORTS_POOL_CACHE.items.slice(-108);
+      }
+      SHORTS_POOL_CACHE.lastRefillMs = Date.now();
+      return valid;
+    } catch (e) {
+      return [];
+    } finally {
+      SHORTS_POOL_CACHE.inflight = null;
+    }
+  })();
+  return SHORTS_POOL_CACHE.inflight;
+}
+
+async function formatShortPublicItem(row, secret) {
+  const sid = Number(row.id);
+  const [tVideo, tCover, tShare] = await Promise.all([
+    encodeShortToken(sid, "v", secret, 43200),
+    row.cover_url ? encodeShortToken(sid, "c", secret, 604800) : Promise.resolve(""),
+    encodeShortToken(sid, "s", secret, 7776000)
+  ]);
+  return {
+    id: sid,
+    title: row.title || "Clip",
+    cover_url: tCover ? `/api/shorts/img?t=${tCover}` : "",
+    stream_url: `/api/shorts/v?t=${tVideo}`,
+    share_id: tShare,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    artists: Array.isArray(row.artists) ? row.artists : [],
+    duration: row.duration ?? null,
+    likes: Number(row.likes || 0)
+  };
+}
+
 export async function onRequest(context) {
   const env = context.env || {};
   const SUPABASE_URL = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || "https://qnmcejlxoufheisgkuyo.supabase.co";
@@ -2676,6 +2926,10 @@ export async function onRequest(context) {
   const SUPABASE_URL_DB2 = env.SUPABASE_URL_DB2 || env.NEXT_PUBLIC_SUPABASE_URL_DB2 || "https://vtyleivfovkolpxjjkjs.supabase.co";
   const SUPABASE_ANON_KEY_DB2 = env.SUPABASE_ANON_KEY_DB2 || env.NEXT_PUBLIC_SUPABASE_ANON_KEY_DB2 || "";
   const SUPABASE_SERVICE_ROLE_KEY_DB2 = env.SUPABASE_SERVICE_ROLE_KEY_DB2 || "";
+  const SUPABASE_URL_SHORTS = env.SUPABASE_URL_SHORTS || env.NEXT_PUBLIC_SUPABASE_URL_SHORTS || "https://gfzmxupwzbsdmjjiagnl.supabase.co";
+  const SUPABASE_ANON_KEY_SHORTS = env.SUPABASE_ANON_KEY_SHORTS || env.NEXT_PUBLIC_SUPABASE_ANON_KEY_SHORTS || "";
+  const SUPABASE_SERVICE_ROLE_KEY_SHORTS = env.SUPABASE_SERVICE_ROLE_KEY_SHORTS || "";
+  const SUPABASE_KEY_SHORTS = SUPABASE_ANON_KEY_SHORTS || SUPABASE_SERVICE_ROLE_KEY_SHORTS;
   const MEDIA_SECRET = env.MEDIA_SECRET || "";
   _activeMediaSecret = MEDIA_SECRET;
 
@@ -2752,6 +3006,284 @@ export async function onRequest(context) {
         "Cache-Control": "public, max-age=60, s-maxage=300",
         ...getCorsHeaders(origin)
       }
+    });
+  }
+
+  // =========================================================================
+  // 0b. FEED VERTICAL TIKTOK +18 (/api/shorts/* -> BASE DEDICADA STEALTH)
+  // =========================================================================
+  if (url.pathname === "/api/shorts/categories" && method === "GET") {
+    return new Response(JSON.stringify({ categories: [{ id: "all", label: "Para Ti" }] }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        ...getCorsHeaders(origin)
+      }
+    });
+  }
+
+  if (url.pathname === "/api/shorts/random" && method === "GET") {
+    if (!SUPABASE_URL_SHORTS || !SUPABASE_KEY_SHORTS || !MEDIA_SECRET) {
+      return new Response(JSON.stringify({ items: [], has_more: false, detail: "Shorts stealth no configurado" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+    const rawLim = parseInt(url.searchParams.get("limit") || "12", 10);
+    const pLimit = Number.isFinite(rawLim) ? Math.min(30, Math.max(1, rawLim)) : 12;
+    const rawQ = sanitizeSearchQuery(url.searchParams.get("q"));
+    const rawCat = sanitizeSlug(url.searchParams.get("category"));
+    const pQ = rawQ || (rawCat && rawCat !== "all" ? rawCat : "");
+    const rawClipParam = url.searchParams.get("clip") || "";
+    const rawExcl = (url.searchParams.get("exclude") || "").split(",")
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => Number.isFinite(n) && n > 0)
+      .slice(-360);
+    const excludeSet = new Set(rawExcl);
+
+    try {
+      const chosenRows = [];
+      if (rawClipParam && !pQ) {
+        const clipDecoded = await decodeShortToken(rawClipParam, MEDIA_SECRET, "s");
+        if (clipDecoded && clipDecoded.i) {
+          const clipRow = await fetchShortRowById(clipDecoded.i, SUPABASE_URL_SHORTS, SUPABASE_KEY_SHORTS, context);
+          if (clipRow && clipRow.video_url) {
+            chosenRows.push(clipRow);
+            excludeSet.add(Number(clipRow.id));
+          }
+        }
+      }
+
+      const needed = Math.max(0, pLimit - chosenRows.length);
+      if (needed > 0 && !pQ) {
+        const poolAgeOk = (Date.now() - SHORTS_POOL_CACHE.lastRefillMs) < 180000;
+        if (!poolAgeOk) {
+          SHORTS_POOL_CACHE.items = [];
+        }
+        const popFromPool = () => {
+          const remaining = [];
+          for (const candidate of SHORTS_POOL_CACHE.items) {
+            const cid = Number(candidate && candidate.id);
+            if (chosenRows.length < pLimit && cid > 0 && !excludeSet.has(cid)) {
+              excludeSet.add(cid);
+              chosenRows.push(candidate);
+            } else {
+              remaining.push(candidate);
+            }
+          }
+          SHORTS_POOL_CACHE.items = remaining;
+        };
+
+        popFromPool();
+        if (chosenRows.length < pLimit) {
+          await refillShortsPool(SUPABASE_URL_SHORTS, SUPABASE_KEY_SHORTS, Array.from(excludeSet));
+          popFromPool();
+        }
+        if (
+          SHORTS_POOL_CACHE.items.length < 24 &&
+          (Date.now() - SHORTS_POOL_CACHE.lastRefillMs) > 4000 &&
+          typeof context.waitUntil === "function"
+        ) {
+          context.waitUntil(refillShortsPool(SUPABASE_URL_SHORTS, SUPABASE_KEY_SHORTS, Array.from(excludeSet)));
+        }
+      } else if (needed > 0) {
+        const rpcRes = await fetch(`${SUPABASE_URL_SHORTS}/rest/v1/rpc/get_random_shorts`, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_KEY_SHORTS,
+            "Authorization": `Bearer ${SUPABASE_KEY_SHORTS}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ p_limit: needed, p_q: pQ, p_exclude: Array.from(excludeSet).slice(-360) })
+        });
+        if (!rpcRes.ok) {
+          return new Response(JSON.stringify({ items: [], has_more: false }), {
+            status: rpcRes.status,
+            headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+          });
+        }
+        const rows = await rpcRes.json().catch(() => []);
+        if (Array.isArray(rows)) {
+          for (const r of rows) {
+            if (r && r.id && !excludeSet.has(Number(r.id))) {
+              excludeSet.add(Number(r.id));
+              chosenRows.push(r);
+            }
+          }
+        }
+      }
+
+      persistShortsMetaEdge(chosenRows, context);
+      const items = await Promise.all(chosenRows.map((row) => formatShortPublicItem(row, MEDIA_SECRET)));
+
+      return new Response(JSON.stringify({ items, has_more: items.length > 0 }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          ...getCorsHeaders(origin)
+        }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ items: [], has_more: false }), {
+        status: 500,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  if ((url.pathname === "/api/shorts/v" || url.pathname === "/api/shorts/img") && (method === "GET" || method === "HEAD")) {
+    if (!SUPABASE_URL_SHORTS || !SUPABASE_KEY_SHORTS || !MEDIA_SECRET) {
+      return new Response("Servicio no configurado", { status: 503 });
+    }
+    if (!checkSameSiteStreamRequest(context.request, url)) {
+      return new Response("Descarga directa o enlace externo bloqueado", {
+        status: 403,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" }
+      });
+    }
+    const isImg = url.pathname === "/api/shorts/img";
+    const tok = url.searchParams.get("t") || "";
+    const decoded = await decodeShortToken(tok, MEDIA_SECRET, isImg ? "c" : "v");
+    if (!decoded) {
+      return new Response("Enlace expirado o inválido", {
+        status: 403,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" }
+      });
+    }
+
+    try {
+      const edgeCache = (typeof caches !== "undefined" && caches && caches.default) ? caches.default : null;
+      const edgeCoverReq = isImg ? new Request(`${SHORTS_COVER_CACHE_PREFIX}${decoded.i}`) : null;
+      if (isImg && method === "GET" && edgeCache && edgeCoverReq) {
+        const hit = await edgeCache.match(edgeCoverReq).catch(() => null);
+        if (hit && hit.ok) {
+          const hitH = new Headers(hit.headers);
+          hitH.set("X-Velvet-Cover", "HIT-EDGE");
+          hitH.set("Cross-Origin-Resource-Policy", "same-origin");
+          hitH.set("Vary", "Origin");
+          return new Response(hit.body, { status: 200, headers: hitH });
+        }
+      }
+
+      const meta = await resolveShortMediaMeta(decoded.i, SUPABASE_URL_SHORTS, SUPABASE_KEY_SHORTS, context);
+      if (!meta) {
+        return new Response("No encontrado", { status: 404 });
+      }
+      const initialUrl = isImg ? String(meta.c || "") : String(meta.v || "");
+      let currentUrl = initialUrl;
+      const refUrl = String(meta.r || "");
+      if (!currentUrl || !isSafeUpstreamUrl(currentUrl)) {
+        return new Response("Recurso bloqueado o no disponible", { status: 403 });
+      }
+
+      const baseHeaders = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+        "Accept": "*/*"
+      };
+      const rangeHdr = !isImg ? context.request.headers.get("range") : null;
+      if (rangeHdr) baseHeaders["Range"] = rangeHdr;
+
+      const fetchWithHops = async (sendReferer) => {
+        let hopUrl = currentUrl;
+        let res = null;
+        for (let hop = 0; hop < 4; hop++) {
+          const hdrs = { ...baseHeaders };
+          if (sendReferer && refUrl && isSafeUpstreamUrl(refUrl)) hdrs["Referer"] = refUrl;
+          res = await fetch(hopUrl, { method, headers: hdrs, redirect: "manual" });
+          if (res.status >= 300 && res.status < 400) {
+            const loc = res.headers.get("location");
+            if (!loc) break;
+            let nextAbs = "";
+            try { nextAbs = new URL(loc, hopUrl).href; } catch (e) { break; }
+            if (!isSafeUpstreamUrl(nextAbs)) {
+              return { blocked: true, url: hopUrl, res: null };
+            }
+            hopUrl = nextAbs;
+            continue;
+          }
+          break;
+        }
+        return { blocked: false, url: hopUrl, res };
+      };
+
+      let outcome = await fetchWithHops(true);
+      if (!outcome.blocked && outcome.res && outcome.res.status === 403 && refUrl) {
+        outcome = await fetchWithHops(false);
+      }
+      if (outcome.blocked) {
+        return new Response("Redirect upstream no permitido", { status: 502 });
+      }
+      const upstream = outcome.res;
+      if (!upstream || upstream.status >= 400) {
+        return new Response("Recurso temporalmente no disponible", { status: (upstream && upstream.status) || 502 });
+      }
+
+      if (!isImg && outcome.url && outcome.url !== initialUrl && isSafeUpstreamUrl(outcome.url)) {
+        const updated = { v: outcome.url, c: meta.c, r: meta.r };
+        persistShortsMetaEdge([{ id: decoded.i, video_url: updated.v, cover_url: updated.c, referer: updated.r }], context);
+      }
+
+      let ctype = upstream.headers.get("content-type") || (isImg ? "image/jpeg" : "video/mp4");
+      if (!isImg && (ctype.includes("octet-stream") || !ctype.startsWith("video/"))) {
+        ctype = "video/mp4";
+      }
+
+      if (isImg) {
+        const imgH = new Headers({
+          "Content-Type": ctype,
+          "Content-Disposition": "inline",
+          "X-Content-Type-Options": "nosniff",
+          "Cross-Origin-Resource-Policy": "same-origin",
+          "Cache-Control": "public, max-age=604800, s-maxage=604800",
+          "X-Velvet-Cover": "MISS-EDGE",
+          "Vary": "Origin"
+        });
+        if (method === "GET" && upstream.status === 200 && ctype.startsWith("image/") && edgeCache && edgeCoverReq && upstream.body) {
+          const [outStream, cacheStream] = upstream.body.tee();
+          if (typeof context.waitUntil === "function") {
+            context.waitUntil(
+              edgeCache.put(edgeCoverReq, new Response(cacheStream, {
+                status: 200,
+                headers: {
+                  "Content-Type": ctype,
+                  "Content-Disposition": "inline",
+                  "X-Content-Type-Options": "nosniff",
+                  "Cache-Control": "public, max-age=604800"
+                }
+              })).catch(() => {})
+            );
+          }
+          return new Response(outStream, { status: 200, headers: imgH });
+        }
+        return new Response(method === "HEAD" ? null : upstream.body, { status: upstream.status, headers: imgH });
+      }
+
+      const vidH = new Headers({
+        "Content-Type": ctype,
+        "Content-Disposition": "inline",
+        "Accept-Ranges": upstream.headers.get("accept-ranges") || "bytes",
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store, no-transform",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, noarchive, nosnippet",
+        "Vary": "Origin"
+      });
+      if (upstream.headers.has("content-length")) vidH.set("Content-Length", upstream.headers.get("content-length"));
+      if (upstream.headers.has("content-range")) vidH.set("Content-Range", upstream.headers.get("content-range"));
+      return new Response(method === "HEAD" ? null : upstream.body, { status: upstream.status, headers: vidH });
+    } catch (e) {
+      return new Response("Error proxy shorts", { status: 502 });
+    }
+  }
+
+  const legacyShortsMatch = url.pathname.match(/^\/api\/shorts\/(stream|cover)\/(\d+)$/);
+  if (legacyShortsMatch) {
+    return new Response("Enlace protegido", {
+      status: 403,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" }
     });
   }
 

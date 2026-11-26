@@ -185,8 +185,8 @@
       if (tabParam === 'juegos' || tabParam === 'games') return makeCatalogRoute('games', '/juegos');
 
       // 3. Rutas canónicas del nuevo sistema
-      if (path === '/' || path === '/index.html') {
-        return makeCatalogRoute('comics', '/', true);
+      if (path === '/' || path === '/index.html' || path === '/shorts' || path === '/parati') {
+        return makeCatalogRoute('shorts', '/', true);
       }
       if (path === '/videos') {
         return makeCatalogRoute('videos', '/videos');
@@ -365,7 +365,8 @@
 
     updateDocumentMeta(route) {
       const titles = {
-        home: 'Morbo Hub — Cómics +18, Videos & Modelos VIP Sin Censura',
+        home: 'Morbo Hub — TikTok +18 Vertical Aleatorio',
+        shorts: 'Morbo Hub — TikTok +18 Vertical Aleatorio',
         videos: 'Videos +18 Sin Censura — Morbo Hub',
         comics: 'Cómics +18 & Hentai VIP — Morbo Hub',
         galleries: 'Galerías Cosplay & Modelos VIP — Morbo Hub',
@@ -378,7 +379,9 @@
       };
 
       let title = titles.home;
-      if (route.name === 'catalog') {
+      if (route.name === 'home') {
+        title = titles[route.mode] || titles.shorts;
+      } else if (route.name === 'catalog') {
         title = titles[route.mode] || titles.home;
       } else if (route.name === 'vault') {
         if (route.tab === 'history') title = titles.vault_history;
@@ -397,13 +400,14 @@
       const path = currentPath || '/';
       const isAccount = path === '/cuenta' || path.startsWith('/cuenta/') || path === '/acceso' || path.startsWith('/perfil') || path === '/boveda/cuenta' || path === '/boveda/perfil';
       const isVault = !isAccount && (path === '/boveda' || path.startsWith('/boveda/'));
+      const isShorts = !isAccount && !isVault && (path === '/' || path === '/index.html' || path === '/shorts' || path === '/parati');
       const isVideos = !isAccount && (path === '/videos' || path.startsWith('/v/') || path.startsWith('/video/'));
       const isGalleries = !isAccount && (path === '/cosplay' || path.startsWith('/g/') || path.startsWith('/gallery') || path.startsWith('/galeria'));
       const isGames = !isAccount && (path === '/juegos' || path === '/games' || path.startsWith('/j/') || path.startsWith('/juego/') || path.startsWith('/game/'));
-      const isComics = !isAccount && !isVault && !isVideos && !isGalleries && !isGames && (
-        path === '/' || path === '/index.html' || path === '/comics' || path.startsWith('/c/') || path.startsWith('/comic/')
+      const isComics = !isAccount && !isVault && !isShorts && !isVideos && !isGalleries && !isGames && (
+        path === '/comics' || path.startsWith('/c/') || path.startsWith('/comic/')
       );
-      const sectionHref = isAccount ? '/cuenta' : isVault ? '/boveda/favoritos' : isVideos ? '/videos' : isGalleries ? '/cosplay' : isGames ? '/juegos' : isComics ? '/comics' : '';
+      const sectionHref = isAccount ? '/cuenta' : isVault ? '/boveda/favoritos' : isShorts ? '/' : isVideos ? '/videos' : isGalleries ? '/cosplay' : isGames ? '/juegos' : isComics ? '/comics' : '';
       document.querySelectorAll('#desktop-mode-nav a[href], #mobile-drawer a[href]').forEach((link) => {
         const href = link.getAttribute('href');
         const on = !!sectionHref && href === sectionHref;
@@ -418,16 +422,18 @@
       const clean = path || '/';
       const isAccount = clean === '/cuenta' || clean.startsWith('/cuenta/') || clean === '/acceso' || clean.startsWith('/perfil') || clean === '/boveda/cuenta' || clean === '/boveda/perfil';
       const isVault = !isAccount && (clean === '/boveda' || clean.startsWith('/boveda/'));
+      const isShorts = !isAccount && !isVault && (clean === '/' || clean === '/index.html' || clean === '/shorts' || clean === '/parati');
       const isVideos = !isAccount && (clean === '/videos' || clean.startsWith('/v/') || clean.startsWith('/video/'));
       const isGalleries = !isAccount && (clean === '/cosplay' || clean.startsWith('/g/') || clean.startsWith('/gallery') || clean.startsWith('/galeria'));
-      const isGames = !isAccount && (clean === '/juegos' || clean === '/games' || clean.startsWith('/j/') || clean.startsWith('/juego/') || clean.startsWith('/game/'));
-      const isComics = !isAccount && !isVault && !isVideos && !isGalleries && !isGames && (
-        clean === '/' || clean === '/index.html' || clean === '/comics' || clean.startsWith('/c/') || clean.startsWith('/comic/')
+      const isGames = !isAccount && (clean === '/juegos' || clean.startsWith('/j/') || clean.startsWith('/juego/') || clean.startsWith('/game/'));
+      const isComics = !isAccount && !isVault && !isShorts && !isVideos && !isGalleries && !isGames && (
+        clean === '/comics' || clean.startsWith('/c/') || clean.startsWith('/comic/')
       );
-      const section = isAccount ? 'account' : isVault ? 'vault' : isVideos ? 'videos' : isGalleries ? 'galleries' : isGames ? 'games' : isComics ? 'comics' : '';
+      const section = isAccount ? 'account' : isVault ? 'vault' : isShorts ? 'shorts' : isVideos ? 'videos' : isGalleries ? 'galleries' : isGames ? 'games' : isComics ? 'comics' : '';
 
       // Un solo tab de la barra. Cuenta vive en el avatar (tab-btn-account no está en la barra).
       const tabs = [
+        { id: 'tab-btn-shorts', on: isShorts },
         { id: 'tab-btn-comics', on: isComics },
         { id: 'tab-btn-videos', on: isVideos },
         { id: 'tab-btn-galleries', on: isGalleries },
