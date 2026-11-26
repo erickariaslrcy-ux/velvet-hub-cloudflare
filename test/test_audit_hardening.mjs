@@ -530,8 +530,10 @@ try {
   assert.equal(allowedEdgeRes.status, 200, "Navegador legítimo de morbohub.com con mh_gate debe funcionar 200");
 
   const headersFile = fs.readFileSync(path.join("public", "_headers"), "utf8");
-  assert.ok(!headersFile.includes("pmvhaven"), "_headers CSP no debe exponer dominios de fuentes");
+  assert.ok(!/pmvhaven|gamcore|serverable/i.test(headersFile), "_headers CSP no debe exponer dominios de fuentes");
   assert.ok(headersFile.includes("Referrer-Policy: same-origin"), "_headers debe permitir Referer mismo sitio sin filtrar a terceros");
+  const updatedRoutes = JSON.parse(fs.readFileSync(path.join("public", "_routes.json"), "utf8"));
+  assert.ok(updatedRoutes.include.includes("/") && updatedRoutes.include.includes("/shorts"), "_routes.json debe incluir / y /shorts para emitir mh_gate");
 
   console.log("✓ Cifrado AES-GCM, cookie Edge mh_gate, CORS estricto y cero fugas verificados.");
   console.log("\n====================================================");

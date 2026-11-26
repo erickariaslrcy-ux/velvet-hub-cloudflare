@@ -15,6 +15,7 @@ function isSpaNavigation(pathname) {
   if (/\.[a-zA-Z0-9]+$/.test(p)) return false;
   return (
     p === "/shorts" ||
+    p.startsWith("/shorts/") ||
     p === "/parati" ||
     p === "/videos" ||
     p === "/comics" ||
@@ -153,11 +154,42 @@ export async function onRequest(context) {
     });
   }
 
-  // Fast-path para rutas SPA de la aplicación (shorts, cómics, videos, galerías, juegos, bóveda)
-  if (isSpaNavigation(current.pathname) && context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === "function") {
-    const indexReq = new Request(new URL("/", context.request.url), context.request);
+  const hasFreshGate = await hasFreshValidGateCookie(context.request, gateSecret);
+  const fetchFreshIndexShell = async () => {
+    const fwdHeaders = new Headers();
+    const accept = context.request.headers.get("accept");
+    if (accept) fwdHeaders.set("accept", accept);
+    const ua = context.request.headers.get("user-agent");
+    if (ua) fwdHeaders.set("user-agent", ua);
+    const indexReq = new Request(new URL("/", context.request.url), {
+      method: context.request.method === "HEAD" ? "HEAD" : "GET",
+      headers: fwdHeaders
+    });
     const res = await context.env.ASSETS.fetch(indexReq);
     return await attachGateCookieIfNeeded(context.request, res, gateSecret);
+  };
+
+  if ((current.pathname === "/" || current.pathname === "/index.html") && !hasFreshGate) {
+    const cleanHeaders = new Headers(context.request.headers);
+    cleanHeaders.delete("if-none-match");
+    cleanHeaders.delete("if-modified-since");
+    const cleanReq = new Request(context.request.url, {
+      method: context.request.method === "HEAD" ? "HEAD" : "GET",
+      headers: cleanHeaders
+    });
+    const nextRes = await context.next(cleanReq);
+    if (nextRes && nextRes.status === 200) {
+      return await attachGateCookieIfNeeded(context.request, nextRes, gateSecret);
+    }
+    if (context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === "function") {
+      return await fetchFreshIndexShell();
+    }
+    return nextRes;
+  }
+
+  // Fast-path para rutas SPA de la aplicación (shorts, cómics, videos, galerías, juegos, bóveda)
+  if (isSpaNavigation(current.pathname) && context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === "function") {
+    return await fetchFreshIndexShell();
   }
 
   const response = await context.next();
@@ -166,9 +198,7 @@ export async function onRequest(context) {
   if (response.status === 404 && !current.pathname.startsWith("/api/")) {
     const hasExt = /\.[a-zA-Z0-9]+$/.test(current.pathname);
     if (!hasExt && context.env && context.env.ASSETS && typeof context.env.ASSETS.fetch === "function") {
-      const indexReq = new Request(new URL("/", context.request.url), context.request);
-      const fallbackRes = await context.env.ASSETS.fetch(indexReq);
-      return await attachGateCookieIfNeeded(context.request, fallbackRes, gateSecret);
+      return await fetchFreshIndexShell();
     }
   }
 
