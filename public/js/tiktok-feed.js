@@ -1,36 +1,73 @@
 /**
- * MORBO HUB — MOTOR TIKTOK STEALTH + FAVORITOS VIP EN CUENTA + PANTALLA LIMPIA (v4.1)
- * - Ajuste automático limpio sin recorte.
- * - Corazón ♥ y Favoritos EXCLUSIVOS para usuarios logueados VIP (guardado en nube de su cuenta).
- * - Si un invitado o cuenta sin acceso intenta guardar/ver Favoritos, abre el login VIP.
- * - Modo "Limpiar" (Pantalla Limpia) con botón visible y táctil "Mostrar controles" para PC y Android.
+ * MORBO HUB — MOTOR TIKTOK MULTIPANTALLA PRO (1-3 PANTALLAS) + FAVORITOS EXCLUSIVOS SHORTS (v5.0)
+ * - 1, 2 o 3 pantallas simultáneas en escritorio/tablet sin duplicar clips entre pantallas.
+ * - Comportamiento inteligente configurable:
+ *   * Nav: 'focused' (solo pantalla enfocada) o 'sync' (todas las no fijadas juntas).
+ *   * Audio: 'solo' (una sola a la vez), 'follow' (sigue al foco) o 'free' (cada pantalla libre).
+ *   * Auto: 'lane' (cada pantalla independiente), 'sync' (espera a que todas acaben y cambia juntas) o 'off'.
+ *   * Lock/Fijar (📌) independiente por pantalla + origen por pantalla (Para Ti / Favoritos / #tag).
+ * - Corazón ♥ y Favoritos EXCLUSIVOS para VIP dentro de Shorts (sin mezclar con Mi Bóveda).
+ * - Pantalla Limpia (Limpiar / H / Esc) aplicable a 1, 2 o 3 pantallas simultáneas.
  */
 (function (window, document) {
   'use strict';
 
   const MUTE_KEY = 'velvet_shorts_muted_v1';
   const AUTO_NEXT_KEY = 'velvet_shorts_autonext_v1';
+  const PRO_PREFS_KEY = 'velvet_shorts_pro_v1';
   const USER_CACHE_PREFIX = 'velvet_shorts_user_favs_v1_';
+  const MAX_LANES = 3;
+
+  function createLaneState(index) {
+    return {
+      index,
+      el: null,
+      trackEl: null,
+      slides: [],
+      activeIndex: 0,
+      loading: false,
+      locked: false,
+      userPaused: false,
+      muted: true,
+      autoNext: false,
+      cycleDone: false,
+      feedMode: 'random', // 'random' | 'favorites'
+      q: '', // override local opcional; vacío = usa state.q global
+      consecSkips: 0,
+      observer: null,
+      nextTimer: 0
+    };
+  }
 
   const state = {
     mounted: false,
-    slides: [],
-    activeIndex: 0,
-    loading: false,
+    focusedLane: 0,
+    effectiveLanes: 1,
+    proPrefs: {
+      requestedLanes: 1,
+      navMode: 'focused', // 'focused' | 'sync'
+      audioMode: 'solo', // 'solo' | 'follow' | 'free'
+      autoMode: 'lane' // 'lane' | 'sync' | 'off'
+    },
+    globalWantAudio: false,
+    proMenuOpen: false,
     category: 'all',
     q: '',
-    feedMode: 'random', // 'random' | 'favorites'
     cleanMode: false,
-    muted: true,
-    autoNext: false,
     seenIds: [],
     likes: new Set(),
     favs: [],
     loadedUid: '',
-    consecSkips: 0,
-    observer: null,
-    nextTimer: 0
+    lastSyncWheelAt: 0,
+    lanes: [createLaneState(0), createLaneState(1), createLaneState(2)]
   };
+
+  function getMaxAllowedLanes() {
+    const w = window.innerWidth || 1280;
+    if (w < 768) return 1;
+    if (w < 1100) return 2;
+    return MAX_LANES;
+  }
 
   function getAuthContext() {
     const store = window.VelvetStore;
@@ -57,14 +94,61 @@
     }
   }
 
-  function loadLocalPlayerPrefs() {
+  function loadProPrefs() {
     try {
       const m = localStorage.getItem(MUTE_KEY);
-      state.muted = m === null ? true : m === '1';
-    } catch (e) { state.muted = true; }
+      const lane0Muted = m === null ? true : m === '1';
+      state.lanes[0].muted = lane0Muted;
+      state.globalWantAudio = !lane0Muted;
+    } catch (e) {}
     try {
-      state.autoNext = localStorage.getItem(AUTO_NEXT_KEY) === '1';
-    } catch (e) { state.autoNext = false; }
+      const a = localStorage.getItem(AUTO_NEXT_KEY) === '1';
+      state.lanes[0].autoNext = a;
+    } catch (e) {}
+    try {
+      const raw = JSON.parse(localStorage.getItem(PRO_PREFS_KEY) || 'null');
+      if (raw && typeof raw === 'object') {
+        const req = Number(raw.requestedLanes);
+        state.proPrefs.requestedLanes = (req === 2 || req === 3) ? req : 1;
+        state.proPrefs.navMode = raw.navMode === 'sync' ? 'sync' : 'focused';
+        state.proPrefs.audioMode = ['solo', 'follow', 'free'].includes(raw.audioMode) ? raw.audioMode : 'solo';
+        state.proPrefs.autoMode = ['lane', 'sync', 'off'].includes(raw.autoMode) ? raw.autoMode : 'lane';
+      }
+    } catch (e) {}
+  }
+
+  function saveProPrefs() {
+    try {
+      localStorage.setItem(PRO_PREFS_KEY, JSON.stringify(state.proPrefs));
+    } catch (e) {}
+  }
+
+  function bindLaneDomRefs() {
+    for (let k = 0; k < MAX_LANES; k++) {
+      const lane = state.lanes[k];
+      lane.el = document.getElementById(`tt-lane-${k}`);
+      lane.trackEl = document.getElementById(k === 0 ? 'tiktok-snap-track' : `tiktok-snap-track-${k}`);
+    }
+  }
+
+  function getActiveLane() {
+    return state.lanes[state.focusedLane] || state.lanes[0];
+  }
+
+  function esc(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function fmtTime(sec) {
+    const s = Math.max(0, Math.floor(sec || 0));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${r < 10 ? '0' : ''}${r}`;
   }
 
   function writeScopedFavCache(uid, list) {
@@ -89,34 +173,10 @@
     if (!uid) return [];
     try {
       const raw = JSON.parse(localStorage.getItem(`${USER_CACHE_PREFIX}${uid}`) || '[]');
-      return Array.isArray(raw) ? raw.filter(x => x && x.id != null) : [];
+      return Array.isArray(raw) ? raw.filter((x) => x && x.id != null) : [];
     } catch (e) {
       return [];
     }
-  }
-
-  function syncFavsUIAll() {
-    const auth = getAuthContext();
-    const count = auth.canSave ? state.favs.length : 0;
-    const badge = document.getElementById('tt-favs-count');
-    if (badge) {
-      badge.textContent = auth.canSave ? String(count) : 'VIP';
-    }
-    const modalCount = document.getElementById('tt-favs-modal-count');
-    if (modalCount) modalCount.textContent = String(count);
-
-    document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach((s) => {
-      const idx = Number(s.dataset.idx);
-      const sItem = state.slides[idx];
-      if (!sItem) return;
-      const isLiked = auth.canSave && state.likes.has(String(sItem.id));
-      const btn = s.querySelector('[data-tt-action="like"]');
-      if (btn) {
-        btn.classList.toggle('is-liked', isLiked);
-        const cntEl = btn.querySelector('.tt-rail-txt');
-        if (cntEl) cntEl.textContent = String(Number(sItem.likes || 0) + (isLiked ? 1 : 0));
-      }
-    });
   }
 
   function normalizeShortFavRecord(raw) {
@@ -136,17 +196,56 @@
     };
   }
 
+  function syncFavsUIAll() {
+    const auth = getAuthContext();
+    const count = auth.canSave ? state.favs.length : 0;
+    const badge = document.getElementById('tt-favs-count');
+    if (badge) {
+      badge.textContent = auth.canSave ? String(count) : 'VIP';
+    }
+    const modalCount = document.getElementById('tt-favs-modal-count');
+    if (modalCount) modalCount.textContent = String(count);
+
+    const spreadBtn = document.getElementById('tt-favs-spread-all');
+    if (spreadBtn) {
+      const showSpread = state.effectiveLanes >= 2 && count >= 2;
+      spreadBtn.classList.toggle('hidden', !showSpread);
+      spreadBtn.classList.toggle('flex', showSpread);
+    }
+
+    for (let k = 0; k < MAX_LANES; k++) {
+      const lane = state.lanes[k];
+      if (!lane.trackEl) continue;
+      lane.trackEl.querySelectorAll('.tt-slide').forEach((s) => {
+        const idx = Number(s.dataset.idx);
+        const sItem = lane.slides[idx];
+        if (!sItem) return;
+        const isLiked = auth.canSave && state.likes.has(String(sItem.id));
+        const btn = s.querySelector('[data-tt-action="like"]');
+        if (btn) {
+          btn.classList.toggle('is-liked', isLiked);
+          const cntEl = btn.querySelector('.tt-rail-txt');
+          if (cntEl) cntEl.textContent = String(Number(sItem.likes || 0) + (isLiked ? 1 : 0));
+        }
+      });
+    }
+  }
+
   async function loadAccountFavorites(forceServer = false) {
     const auth = getAuthContext();
     if (!auth.canSave || !auth.uid) {
       state.loadedUid = '';
       state.favs = [];
       state.likes = new Set();
-      if (state.feedMode === 'favorites') {
-        state.feedMode = 'random';
-        syncTopModeChips();
-        fetchRandomBatch(true);
-      }
+      let exitedAny = false;
+      state.lanes.forEach((lane) => {
+        if (lane.feedMode === 'favorites') {
+          lane.feedMode = 'random';
+          exitedAny = true;
+          if (state.mounted && lane.index < state.effectiveLanes) fetchLaneBatch(lane, true);
+        }
+      });
+      if (exitedAny) syncTopModeChips();
       closeFavoritesModal();
       syncFavsUIAll();
       return [];
@@ -156,7 +255,7 @@
       state.loadedUid = auth.uid;
       const cached = readScopedFavCache(auth.uid);
       state.favs = cached;
-      state.likes = new Set(cached.map(x => String(x.id)));
+      state.likes = new Set(cached.map((x) => String(x.id)));
       syncFavsUIAll();
     } else if (!forceServer) {
       syncFavsUIAll();
@@ -166,7 +265,7 @@
     if (!pData || typeof pData.fetchAuthed !== 'function') return state.favs;
 
     try {
-      const res = await pData.fetchAuthed('/api/user/favorites?type=short&page=1&pageSize=100');
+      const res = await pData.fetchAuthed('/api/user/favorites?type=short&page=1&pageSize=120');
       if (!res || !res.ok) return state.favs;
       const data = await res.json().catch(() => null);
       if (!data || data.degraded || !Array.isArray(data.items)) return state.favs;
@@ -175,12 +274,12 @@
       if (!latestAuth.canSave || latestAuth.uid !== auth.uid) return state.favs;
 
       const serverList = data.items
-        .filter(x => x && (x.media_type === 'short' || String(x.source || '').toLowerCase() === 'short'))
+        .filter((x) => x && (x.media_type === 'short' || String(x.source || '').toLowerCase() === 'short'))
         .map(normalizeShortFavRecord)
         .filter(Boolean);
 
       state.favs = serverList;
-      state.likes = new Set(serverList.map(x => String(x.id)));
+      state.likes = new Set(serverList.map((x) => String(x.id)));
       writeScopedFavCache(auth.uid, serverList);
       syncFavsUIAll();
 
@@ -191,109 +290,6 @@
       return state.favs;
     } catch (e) {
       return state.favs;
-    }
-  }
-
-  function esc(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function fmtTime(sec) {
-    const s = Math.max(0, Math.floor(sec || 0));
-    const m = Math.floor(s / 60);
-    const r = s % 60;
-    return `${m}:${r < 10 ? '0' : ''}${r}`;
-  }
-
-  function updateAmbientBackdrop(item) {
-    if (window.innerWidth < 1024) return;
-    const ambImg = document.getElementById('tt-ambient-img');
-    if (!ambImg) return;
-    if (!item || !item.cover_url) {
-      ambImg.classList.remove('is-ready');
-      return;
-    }
-    const targetSrc = item.cover_url;
-    if (ambImg.dataset.src === targetSrc) return;
-    ambImg.dataset.src = targetSrc;
-    ambImg.classList.remove('is-ready');
-    ambImg.onerror = () => ambImg.classList.remove('is-ready');
-    ambImg.onload = () => ambImg.classList.add('is-ready');
-    ambImg.src = targetSrc;
-  }
-
-  function applyStageGeometry(slide) {
-    if (!slide) return;
-    const stage = slide.querySelector('.tt-stage');
-    const vid = slide.querySelector('.tt-video');
-    if (!stage || !vid) return;
-
-    const vw = vid.videoWidth || 0;
-    const vh = vid.videoHeight || 0;
-    if (!vw || !vh) {
-      stage.style.width = '';
-      return;
-    }
-
-    if (window.innerWidth >= 1024) {
-      const viewEl = document.getElementById('tiktok-feed-view');
-      const vPad = state.cleanMode ? 8 : 16;
-      const availH = Math.max(360, ((viewEl && viewEl.clientHeight) || (window.innerHeight - (state.cleanMode ? 0 : 64))) - vPad);
-      const maxW = Math.min(window.innerWidth * (state.cleanMode ? 0.94 : 0.88), 1280);
-      const idealW = Math.round(availH * (vw / vh));
-      const finalW = Math.max(360, Math.min(maxW, idealW));
-      stage.style.width = `${finalW}px`;
-    } else {
-      stage.style.width = '';
-    }
-  }
-
-  function syncTopModeChips() {
-    const statusChip = document.getElementById('tt-search-chip');
-    const statusTxt = document.getElementById('tt-search-chip-label');
-    if (statusChip && statusTxt) {
-      if (state.q && state.feedMode !== 'favorites') {
-        statusTxt.textContent = state.q;
-        statusChip.classList.remove('hidden');
-      } else {
-        statusChip.classList.add('hidden');
-      }
-    }
-    const favModeChip = document.getElementById('tt-favs-mode-chip');
-    if (favModeChip) {
-      favModeChip.classList.toggle('hidden', state.feedMode !== 'favorites');
-    }
-    syncFavsUIAll();
-  }
-
-  function syncCleanModeUI() {
-    document.body.classList.toggle('tt-clean-mode', state.cleanMode);
-    document.querySelectorAll('#tiktok-snap-track [data-tt-action="clean"]').forEach((btn) => {
-      btn.classList.toggle('is-on', state.cleanMode);
-      const txt = btn.querySelector('.tt-rail-txt');
-      if (txt) txt.textContent = state.cleanMode ? 'Ver UI' : 'Limpiar';
-    });
-    const refreshGeo = () => {
-      document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach(applyStageGeometry);
-    };
-    requestAnimationFrame(() => {
-      refreshGeo();
-      setTimeout(refreshGeo, 80);
-    });
-  }
-
-  function toggleCleanMode(force) {
-    const next = typeof force === 'boolean' ? force : !state.cleanMode;
-    if (next === state.cleanMode) return;
-    state.cleanMode = next;
-    syncCleanModeUI();
-    if (state.cleanMode && typeof window.showToast === 'function') {
-      window.showToast('Pantalla limpia · Toca "Mostrar controles" arriba para volver', 'info');
     }
   }
 
@@ -318,9 +314,9 @@
 
     if (exists) {
       state.likes.delete(cleanSid);
-      state.favs = state.favs.filter(f => String(f.id) !== cleanSid);
+      state.favs = state.favs.filter((f) => String(f.id) !== cleanSid);
       if (typeof window.showToast === 'function') {
-        window.showToast('Quitado de Tus Favoritos', 'info');
+        window.showToast('Quitado de Tus Shorts Favoritos', 'info');
       }
     } else {
       state.likes.add(cleanSid);
@@ -335,9 +331,9 @@
         likes: Number(item.likes || 0),
         savedAt: Date.now()
       };
-      state.favs = [record, ...state.favs.filter(f => String(f.id) !== cleanSid)].slice(0, 500);
+      state.favs = [record, ...state.favs.filter((f) => String(f.id) !== cleanSid)].slice(0, 500);
       if (typeof window.showToast === 'function') {
-        window.showToast('Guardado en los Favoritos de tu cuenta ♥', 'success');
+        window.showToast('Guardado en Tus Shorts Favoritos ♥', 'success');
       }
     }
 
@@ -348,27 +344,34 @@
       renderFavsGrid(state.favs);
     }
 
-    if (pData) {
+    if (pData && typeof pData.fetchAuthed === 'function') {
       try {
         let ok = false;
-        if (exists && typeof pData.removeFavorite === 'function') {
-          const rm = await pData.removeFavorite({ id: `short:${cleanSid}`, item_id: cleanSid, source: 'short', source_id: cleanSid });
-          ok = Boolean(rm);
-        } else if (!exists && typeof pData.addFavorite === 'function') {
-          ok = await pData.addFavorite({
-            id: `short:${cleanSid}`,
-            item_id: cleanSid,
+        if (exists) {
+          const qp = new URLSearchParams({
+            id: cleanSid,
             source: 'short',
-            source_id: cleanSid,
-            media_type: 'short',
-            title: item.title || 'Short guardado',
-            cover_url: item.cover_url || '',
-            url: ''
+            source_id: cleanSid
           });
+          const res = await pData.fetchAuthed(`/api/user/favorites?${qp.toString()}`, { method: 'DELETE' });
+          ok = Boolean(res && res.ok);
+        } else {
+          const res = await pData.fetchAuthed('/api/user/favorites', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: cleanSid,
+              item_id: cleanSid,
+              source: 'short',
+              source_id: cleanSid,
+              media_type: 'short',
+              title: item.title || 'Short guardado',
+              cover_url: '',
+              url: ''
+            })
+          });
+          ok = Boolean(res && res.ok);
         }
-        if (!ok) {
-          throw new Error('sync_failed');
-        }
+        if (!ok) throw new Error('sync_failed');
       } catch (err) {
         state.favs = prevFavs;
         state.likes = prevLikes;
@@ -384,17 +387,256 @@
     return !exists;
   }
 
-  async function fetchRandomBatch(reset = false) {
-    if (state.feedMode === 'favorites') return;
-    if (state.loading) return;
-    state.loading = true;
+  function updateAmbientBackdrop(item) {
+    if (window.innerWidth < 1024) return;
+    const ambImg = document.getElementById('tt-ambient-img');
+    if (!ambImg) return;
+    if (!item || !item.cover_url) {
+      ambImg.classList.remove('is-ready');
+      return;
+    }
+    const targetSrc = item.cover_url;
+    if (ambImg.dataset.src === targetSrc) return;
+    ambImg.dataset.src = targetSrc;
+    ambImg.classList.remove('is-ready');
+    ambImg.onerror = () => ambImg.classList.remove('is-ready');
+    ambImg.onload = () => ambImg.classList.add('is-ready');
+    ambImg.src = targetSrc;
+  }
+
+  function applyStageGeometry(slide, lane = null) {
+    if (!slide) return;
+    const stage = slide.querySelector('.tt-stage');
+    const vid = slide.querySelector('.tt-video');
+    if (!stage || !vid) return;
+
+    const eff = state.effectiveLanes;
+    if (window.innerWidth < 768) {
+      stage.style.width = '';
+      return;
+    }
+
+    const vw = vid.videoWidth || 0;
+    const vh = vid.videoHeight || 0;
+    if (!vw || !vh) {
+      stage.style.width = '';
+      return;
+    }
+
+    const viewEl = document.getElementById('tiktok-feed-view');
+    const trackH = lane && lane.trackEl ? lane.trackEl.clientHeight : 0;
+    const fallbackH = ((viewEl && viewEl.clientHeight) || (window.innerHeight - (state.cleanMode ? 0 : 64))) - (state.cleanMode ? 8 : (eff >= 2 ? 72 : 16));
+    const availH = Math.max(300, trackH > 200 ? trackH - (state.cleanMode ? 6 : 8) : fallbackH);
+    const idealW = Math.round(availH * (vw / vh));
+
+    if (eff === 1) {
+      const maxW = Math.min(window.innerWidth * (state.cleanMode ? 0.94 : 0.88), 1280);
+      const finalW = Math.max(340, Math.min(maxW, idealW));
+      stage.style.width = `${finalW}px`;
+    } else {
+      const maxLaneW = lane && lane.trackEl && lane.trackEl.clientWidth > 120
+        ? Math.max(220, lane.trackEl.clientWidth - 8)
+        : Math.floor((window.innerWidth - 96) / eff);
+      const finalW = Math.max(220, Math.min(maxLaneW, idealW));
+      stage.style.width = `${finalW}px`;
+    }
+  }
+
+  function syncTopModeChips() {
+    const activeLane = getActiveLane();
+    const statusChip = document.getElementById('tt-search-chip');
+    const statusTxt = document.getElementById('tt-search-chip-label');
+    if (statusChip && statusTxt) {
+      if (state.q && activeLane.feedMode !== 'favorites') {
+        statusTxt.textContent = state.q;
+        statusChip.classList.remove('hidden');
+      } else {
+        statusChip.classList.add('hidden');
+      }
+    }
+    const favModeChip = document.getElementById('tt-favs-mode-chip');
+    if (favModeChip) {
+      const anyFav = state.lanes.slice(0, state.effectiveLanes).some((l) => l.feedMode === 'favorites');
+      favModeChip.classList.toggle('hidden', !anyFav);
+    }
+    syncProControlsUI();
+    syncAllLaneHeaders();
+    syncFavsUIAll();
+  }
+
+  function syncProControlsUI() {
+    const eff = state.effectiveLanes;
+    const { requestedLanes, navMode, audioMode, autoMode } = state.proPrefs;
+
+    document.querySelectorAll('#tt-lanes-switcher [data-tt-lanes]').forEach((btn) => {
+      const n = Number(btn.dataset.ttLanes);
+      btn.classList.toggle('is-selected', n === requestedLanes || (n === eff && requestedLanes > getMaxAllowedLanes()));
+    });
+
+    const dock = document.getElementById('tt-pro-dock');
+    if (dock) {
+      dock.classList.toggle('is-open', eff >= 2);
+    }
+
+    const navBtn = document.getElementById('tt-nav-mode-btn');
+    const navLbl = document.getElementById('tt-nav-mode-label');
+    if (navBtn && navLbl) {
+      navLbl.textContent = navMode === 'sync' ? 'Nav: Juntas' : 'Nav: Individual';
+      navBtn.classList.toggle('is-sync', navMode === 'sync');
+    }
+
+    const audioBtn = document.getElementById('tt-audio-mode-btn');
+    const audioLbl = document.getElementById('tt-audio-mode-label');
+    if (audioBtn && audioLbl) {
+      const map = { solo: 'Audio: Solo una', follow: 'Audio: Foco', free: 'Audio: Libre' };
+      audioLbl.textContent = map[audioMode] || 'Audio: Solo una';
+      audioBtn.classList.toggle('is-sync', audioMode !== 'free');
+    }
+
+    const autoBtn = document.getElementById('tt-auto-mode-btn');
+    const autoLbl = document.getElementById('tt-auto-mode-label');
+    if (autoBtn && autoLbl) {
+      const map = { lane: 'Auto: Libre', sync: 'Auto: Juntas', off: 'Auto: Off' };
+      autoLbl.textContent = map[autoMode] || 'Auto: Libre';
+      autoBtn.classList.toggle('is-sync', autoMode === 'sync');
+      autoBtn.classList.toggle('is-green', autoMode === 'lane');
+    }
+
+    document.querySelectorAll('#tt-pro-popover [data-tt-set-nav]').forEach((b) => {
+      b.classList.toggle('is-selected', b.dataset.ttSetNav === navMode);
+    });
+    document.querySelectorAll('#tt-pro-popover [data-tt-set-audio]').forEach((b) => {
+      b.classList.toggle('is-selected', b.dataset.ttSetAudio === audioMode);
+    });
+    document.querySelectorAll('#tt-pro-popover [data-tt-set-auto]').forEach((b) => {
+      b.classList.toggle('is-selected', b.dataset.ttSetAuto === autoMode);
+    });
+
+    const isSmart = navMode === 'focused' && audioMode === 'solo' && autoMode === 'lane';
+    const isSync = navMode === 'sync' && audioMode === 'follow' && autoMode === 'sync';
+    const isFree = navMode === 'focused' && audioMode === 'free' && autoMode === 'lane';
+    document.querySelectorAll('#tt-pro-popover [data-tt-preset]').forEach((b) => {
+      const p = b.dataset.ttPreset;
+      b.classList.toggle('is-active', (p === 'smart' && isSmart) || (p === 'sync' && isSync) || (p === 'free' && isFree));
+    });
+  }
+
+  function syncLaneHeader(lane) {
+    if (!lane || !lane.el) return;
+    const focused = lane.index === state.focusedLane;
+    lane.el.classList.toggle('is-focused', focused);
+    lane.el.classList.toggle('is-locked', lane.locked);
+
+    const head = lane.el.querySelector('.tt-lane-head');
+    if (!head) return;
+    const badge = head.querySelector('.tt-lane-badge');
+    if (badge) {
+      if (state.proPrefs.autoMode === 'sync' && lane.cycleDone && !lane.locked) {
+        badge.textContent = `#${lane.index + 1} · ✓ Listo`;
+      } else if (focused) {
+        badge.textContent = `#${lane.index + 1} · Activa`;
+      } else {
+        badge.textContent = `#${lane.index + 1}`;
+      }
+    }
+
+    const srcBtn = head.querySelector('[data-tt-lane-source-btn]');
+    if (srcBtn) {
+      srcBtn.classList.toggle('is-fav', lane.feedMode === 'favorites');
+      srcBtn.classList.toggle('is-wait', Boolean(lane.q));
+      if (lane.feedMode === 'favorites') {
+        srcBtn.textContent = '❤️ Favs';
+      } else if (lane.q) {
+        srcBtn.textContent = `#${lane.q.slice(0, 12)} ✕`;
+      } else {
+        srcBtn.textContent = '🎲 Para Ti';
+      }
+    }
+
+    const lockBtn = head.querySelector('[data-tt-lane-lock-btn]');
+    if (lockBtn) {
+      lockBtn.classList.toggle('is-locked', lane.locked);
+      lockBtn.title = lane.locked ? 'Soltar pantalla fijada (L)' : 'Fijar pantalla (L)';
+    }
+  }
+
+  function syncAllLaneHeaders() {
+    for (let k = 0; k < MAX_LANES; k++) {
+      syncLaneHeader(state.lanes[k]);
+    }
+  }
+
+  function syncCleanModeUI() {
+    document.body.classList.toggle('tt-clean-mode', state.cleanMode);
+    if (state.cleanMode) closeProPopover();
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const lane = state.lanes[k];
+      if (!lane.trackEl) continue;
+      lane.trackEl.querySelectorAll('[data-tt-action="clean"]').forEach((btn) => {
+        btn.classList.toggle('is-on', state.cleanMode);
+        const txt = btn.querySelector('.tt-rail-txt');
+        if (txt) txt.textContent = state.cleanMode ? 'Ver UI' : 'Limpiar';
+      });
+    }
+    const refreshGeo = () => {
+      for (let k = 0; k < state.effectiveLanes; k++) {
+        const lane = state.lanes[k];
+        if (!lane.trackEl) continue;
+        lane.trackEl.querySelectorAll('.tt-slide').forEach((s) => applyStageGeometry(s, lane));
+      }
+    };
+    requestAnimationFrame(() => {
+      refreshGeo();
+      setTimeout(refreshGeo, 80);
+    });
+  }
+
+  function toggleCleanMode(force) {
+    const next = typeof force === 'boolean' ? force : !state.cleanMode;
+    if (next === state.cleanMode) return;
+    state.cleanMode = next;
+    syncCleanModeUI();
+    if (state.cleanMode && typeof window.showToast === 'function') {
+      window.showToast('Pantalla limpia · Toca "Mostrar controles" arriba para volver', 'info');
+    }
+  }
+
+  function getCurrentlyLoadedIds() {
+    const out = new Set();
+    for (let k = 0; k < MAX_LANES; k++) {
+      state.lanes[k].slides.forEach((it) => {
+        if (it && it.id != null) out.add(String(it.id));
+      });
+    }
+    return out;
+  }
+
+  function buildExcludeParam(reset) {
+    const loaded = getCurrentlyLoadedIds();
+    const historySlice = reset ? [] : state.seenIds.slice(-300);
+    const merged = Array.from(new Set([...historySlice, ...loaded])).slice(-380);
+    return merged.join(',');
+  }
+
+  async function fetchLaneBatch(lane, reset = false) {
+    if (!lane || lane.feedMode === 'favorites') return;
+    if (lane.loading) return;
+    lane.loading = true;
 
     const loaderEl = document.getElementById('tiktok-feed-loader');
-    if (reset && loaderEl) loaderEl.classList.remove('hidden');
+    const isInitialZero = reset && lane.index === 0 && lane.slides.length === 0;
+    if (isInitialZero && loaderEl) loaderEl.classList.remove('hidden');
 
     try {
+      const effectiveQ = lane.q || state.q || '';
       let data = null;
-      const canUsePrefetch = reset && !state.q && (!state.category || state.category === 'all') && window.__ttInitialBatchPromise;
+      const canUsePrefetch =
+        reset &&
+        lane.index === 0 &&
+        !effectiveQ &&
+        (!state.category || state.category === 'all') &&
+        window.__ttInitialBatchPromise;
+
       if (canUsePrefetch) {
         const pre = window.__ttInitialBatchPromise;
         window.__ttInitialBatchPromise = null;
@@ -402,68 +644,84 @@
       }
 
       if (!data) {
-        const excludeSlice = reset ? '' : state.seenIds.slice(-360).join(',');
-        const clipToken = reset ? (new URLSearchParams(window.location.search).get('c') || '') : '';
+        const excludeSlice = buildExcludeParam(reset && lane.index === 0);
+        const clipToken = reset && lane.index === 0 ? (new URLSearchParams(window.location.search).get('c') || '') : '';
         const params = new URLSearchParams({
           limit: '12',
           category: state.category || 'all',
-          q: state.q || '',
+          q: effectiveQ,
           exclude: excludeSlice,
-          _: String(Date.now()) + '_' + Math.random().toString(36).slice(2, 7)
+          _: `${Date.now()}_${lane.index}_${Math.random().toString(36).slice(2, 7)}`
         });
-        if (clipToken && !state.q) params.set('clip', clipToken);
+        if (clipToken && !effectiveQ) params.set('clip', clipToken);
 
         const res = await fetch('/api/shorts/random?' + params.toString(), { cache: 'no-store' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         data = await res.json();
       }
-      const incoming = Array.isArray(data.items) ? data.items : [];
 
+      const rawIncoming = Array.isArray(data.items) ? data.items : [];
       if (reset) {
-        unloadAllVideos();
-        state.slides = [];
-        state.activeIndex = 0;
-        state.consecSkips = 0;
-        const track = document.getElementById('tiktok-snap-track');
-        if (track) track.innerHTML = '';
+        unloadLaneVideos(lane);
+        lane.slides = [];
+        lane.activeIndex = 0;
+        lane.consecSkips = 0;
+        lane.cycleDone = false;
+        if (lane.trackEl) lane.trackEl.innerHTML = '';
       }
 
+      const existingElsewhere = new Set();
+      for (let k = 0; k < MAX_LANES; k++) {
+        state.lanes[k].slides.forEach((s) => {
+          if (s && s.id != null) existingElsewhere.add(String(s.id));
+        });
+      }
+
+      const incoming = rawIncoming.filter((it) => {
+        if (!it || it.id == null) return false;
+        const sid = String(it.id);
+        if (existingElsewhere.has(sid)) return false;
+        existingElsewhere.add(sid);
+        return true;
+      });
+
+      const finalIncoming = incoming.length > 0 ? incoming : rawIncoming;
       const emptyEl = document.getElementById('tiktok-empty-state');
-      if (incoming.length === 0 && state.slides.length === 0) {
+      if (lane.index === 0 && finalIncoming.length === 0 && lane.slides.length === 0) {
         if (emptyEl) emptyEl.classList.remove('hidden');
         return;
       }
-      if (emptyEl) emptyEl.classList.add('hidden');
+      if (emptyEl && finalIncoming.length > 0) emptyEl.classList.add('hidden');
 
-      const startIdx = state.slides.length;
-      state.slides.push(...incoming);
-      incoming.forEach((it) => {
+      const startIdx = lane.slides.length;
+      lane.slides.push(...finalIncoming);
+      finalIncoming.forEach((it) => {
         if (it.id != null) state.seenIds.push(String(it.id));
       });
       if (state.seenIds.length > 900) {
         state.seenIds = state.seenIds.slice(-600);
       }
 
-      appendSlideElements(incoming, startIdx);
+      appendLaneSlideElements(lane, finalIncoming, startIdx);
       if (reset) {
-        const track = document.getElementById('tiktok-snap-track');
-        if (track) track.scrollTop = 0;
-        activateSlide(0);
+        if (lane.trackEl) lane.trackEl.scrollTop = 0;
+        activateLaneSlide(lane, 0);
       } else {
-        syncVideoWindow(state.activeIndex);
+        syncLaneVideoWindow(lane, lane.activeIndex);
       }
     } catch (err) {
-      console.warn('[TikTokFeed] Error cargando aleatorios:', err);
+      console.warn(`[TikTokFeed] Error cargando aleatorios (pantalla ${lane.index + 1}):`, err);
     } finally {
-      state.loading = false;
-      if (loaderEl) loaderEl.classList.add('hidden');
+      lane.loading = false;
+      if (loaderEl && lane.index === 0) loaderEl.classList.add('hidden');
     }
   }
 
-  function createSlideElement(item, idx) {
+  function createSlideElement(lane, item, idx) {
     const slide = document.createElement('article');
     slide.className = 'tt-slide';
     slide.dataset.idx = String(idx);
+    slide.dataset.lane = String(lane.index);
 
     const auth = getAuthContext();
     const isLiked = auth.canSave && state.likes.has(String(item.id));
@@ -471,11 +729,12 @@
       `<button type="button" data-tt-tag="${esc(t)}" class="tt-tag-chip">#${esc(t)}</button>`
     ).join('');
     const artist = (item.artists && item.artists[0]) ? `@${esc(item.artists[0])}` : '';
+    const shouldLoop = state.proPrefs.autoMode === 'off' || (state.proPrefs.autoMode === 'lane' && !lane.autoNext);
 
     slide.innerHTML = `
       <div class="tt-stage">
         ${item.cover_url ? `<img class="tt-poster" src="${esc(item.cover_url)}" alt="" loading="eager" decoding="async" draggable="false" />` : ''}
-        <video class="tt-video" playsinline controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback oncontextmenu="return false;" loop preload="none" ${state.muted ? 'muted' : ''}></video>
+        <video class="tt-video" playsinline controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback oncontextmenu="return false;" ${shouldLoop ? 'loop' : ''} preload="none" ${lane.muted ? 'muted' : ''}></video>
         <div class="tt-tap-layer" data-tt-action="toggle-play"></div>
         <div class="tt-center-icon hidden"><i class="fa-solid fa-play"></i></div>
         <div class="tt-spinner hidden"><div class="video-buffering-ring w-10 h-10"></div></div>
@@ -488,15 +747,15 @@
         </div>
 
         <div class="tt-rail">
-          <button type="button" class="tt-rail-btn ${isLiked ? 'is-liked' : ''}" data-tt-action="like" title="Guardar en Favoritos de tu cuenta VIP">
+          <button type="button" class="tt-rail-btn ${isLiked ? 'is-liked' : ''}" data-tt-action="like" title="Guardar en Tus Shorts Favoritos (VIP)">
             <span class="tt-rail-ico"><i class="fa-solid fa-heart"></i></span>
             <span class="tt-rail-txt">${Number(item.likes || 0) + (isLiked ? 1 : 0)}</span>
           </button>
-          <button type="button" class="tt-rail-btn" data-tt-action="mute" title="Sonido (M)">
-            <span class="tt-rail-ico"><i class="fa-solid ${state.muted ? 'fa-volume-xmark' : 'fa-volume-high'}"></i></span>
-            <span class="tt-rail-txt">${state.muted ? 'Mute' : 'Audio'}</span>
+          <button type="button" class="tt-rail-btn" data-tt-action="mute" title="Sonido en esta pantalla (M)">
+            <span class="tt-rail-ico"><i class="fa-solid ${lane.muted ? 'fa-volume-xmark' : 'fa-volume-high'}"></i></span>
+            <span class="tt-rail-txt">${lane.muted ? 'Mute' : 'Audio'}</span>
           </button>
-          <button type="button" class="tt-rail-btn ${state.autoNext ? 'is-on' : ''}" data-tt-action="autonext" title="Pasar solo al terminar">
+          <button type="button" class="tt-rail-btn ${lane.autoNext ? 'is-on' : ''}" data-tt-action="autonext" title="Pasar solo al terminar">
             <span class="tt-rail-ico"><i class="fa-solid fa-forward-step"></i></span>
             <span class="tt-rail-txt">Auto</span>
           </button>
@@ -533,7 +792,8 @@
     };
 
     const promoteNextSlide = (myIdx) => {
-      const nextSlide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${myIdx + 1}"]`);
+      if (!lane.trackEl) return;
+      const nextSlide = lane.trackEl.querySelector(`.tt-slide[data-idx="${myIdx + 1}"]`);
       const nextVid = nextSlide && nextSlide.querySelector('.tt-video');
       if (nextVid && nextVid.dataset.loadedSrc && nextVid.preload !== 'auto') {
         nextVid.preload = 'auto';
@@ -546,34 +806,34 @@
       if (spinner) spinner.classList.add('hidden');
       if (poster) poster.classList.remove('is-hidden');
       const myIdx = Number(slide.dataset.idx);
-      if (myIdx !== state.activeIndex || !state.mounted) return;
-      state.consecSkips = (state.consecSkips || 0) + 1;
-      if (state.consecSkips <= 3 && myIdx + 1 < state.slides.length) {
+      if (myIdx !== lane.activeIndex || !state.mounted || lane.index >= state.effectiveLanes) return;
+      lane.consecSkips = (lane.consecSkips || 0) + 1;
+      if (lane.consecSkips <= 3 && myIdx + 1 < lane.slides.length) {
         setTimeout(() => {
-          if (state.mounted && state.activeIndex === myIdx) {
-            goToSlide(myIdx + 1);
+          if (state.mounted && lane.activeIndex === myIdx) {
+            goToLaneSlide(lane, myIdx + 1);
           }
         }, 200);
       }
     };
 
-    vid.addEventListener('loadedmetadata', () => applyStageGeometry(slide));
+    vid.addEventListener('loadedmetadata', () => applyStageGeometry(slide, lane));
     vid.addEventListener('loadeddata', () => {
       clearWatchdog();
       const myIdx = Number(slide.dataset.idx);
-      if (myIdx === state.activeIndex) promoteNextSlide(myIdx);
+      if (myIdx === lane.activeIndex) promoteNextSlide(myIdx);
     });
     vid.addEventListener('waiting', () => {
-      if (Number(slide.dataset.idx) === state.activeIndex && spinner) spinner.classList.remove('hidden');
+      if (Number(slide.dataset.idx) === lane.activeIndex && spinner) spinner.classList.remove('hidden');
     });
     vid.addEventListener('playing', () => {
       clearWatchdog();
-      state.consecSkips = 0;
+      lane.consecSkips = 0;
       delete slide.dataset.dead;
       if (spinner) spinner.classList.add('hidden');
       if (poster) poster.classList.add('is-hidden');
       const myIdx = Number(slide.dataset.idx);
-      if (myIdx === state.activeIndex) promoteNextSlide(myIdx);
+      if (myIdx === lane.activeIndex) promoteNextSlide(myIdx);
     });
     vid.addEventListener('canplay', () => {
       clearWatchdog();
@@ -584,38 +844,89 @@
       failAndAdvance();
     });
     vid.addEventListener('timeupdate', () => {
-      if (!vid.duration || Number(slide.dataset.idx) !== state.activeIndex) return;
+      if (!vid.duration || Number(slide.dataset.idx) !== lane.activeIndex) return;
       const pct = Math.min(100, (vid.currentTime / vid.duration) * 100);
       if (fill) fill.style.width = `${pct}%`;
       if (timeBadge) timeBadge.textContent = `${fmtTime(vid.currentTime)} / ${fmtTime(vid.duration)}`;
     });
     vid.addEventListener('ended', () => {
-      if (state.autoNext && Number(slide.dataset.idx) === state.activeIndex) {
-        if (state.activeIndex + 1 < state.slides.length) {
-          goToSlide(state.activeIndex + 1);
-        } else if (state.feedMode === 'favorites' && state.slides.length > 0) {
-          goToSlide(0);
-        }
-      }
+      if (Number(slide.dataset.idx) !== lane.activeIndex || !state.mounted || lane.index >= state.effectiveLanes) return;
+      handleLaneVideoEnded(lane, vid);
     });
 
     return slide;
   }
 
-  function appendSlideElements(items, startIdx) {
-    const track = document.getElementById('tiktok-snap-track');
-    if (!track) return;
+  function handleLaneVideoEnded(lane, vid) {
+    const mode = state.proPrefs.autoMode;
+    if (mode === 'off') {
+      vid.currentTime = 0;
+      vid.play().catch(() => {});
+      return;
+    }
 
-    const frag = document.createDocumentFragment();
-    items.forEach((item, offset) => {
-      const slide = createSlideElement(item, startIdx + offset);
-      frag.appendChild(slide);
-      if (state.observer) state.observer.observe(slide);
-    });
-    track.appendChild(frag);
+    if (mode === 'sync' && state.effectiveLanes >= 2) {
+      if (lane.locked) {
+        vid.currentTime = 0;
+        vid.play().catch(() => {});
+        return;
+      }
+      lane.cycleDone = true;
+      syncLaneHeader(lane);
+
+      const eligible = [];
+      for (let k = 0; k < state.effectiveLanes; k++) {
+        const l = state.lanes[k];
+        if (!l.locked && !l.userPaused && l.slides.length > 0) {
+          eligible.push(l);
+        }
+      }
+      const allDone = eligible.length > 0 && eligible.every((l) => l.cycleDone);
+      if (allDone) {
+        for (let k = 0; k < MAX_LANES; k++) {
+          state.lanes[k].cycleDone = false;
+          syncLaneHeader(state.lanes[k]);
+        }
+        stepAllUnlocked(1);
+      } else {
+        // Bucle suave mientras las demás pantallas terminan su clip
+        vid.currentTime = 0;
+        vid.play().catch(() => {});
+      }
+      return;
+    }
+
+    // Modo 'lane' (cada pantalla independiente según su botón Auto)
+    if (lane.autoNext) {
+      if (lane.activeIndex + 1 < lane.slides.length) {
+        goToLaneSlide(lane, lane.activeIndex + 1);
+      } else if (lane.feedMode === 'favorites' && lane.slides.length > 0) {
+        goToLaneSlide(lane, 0);
+      }
+    } else {
+      vid.currentTime = 0;
+      vid.play().catch(() => {});
+    }
   }
 
-  function attachVideoSource(slide, item, preloadMode) {
+  function appendLaneSlideElements(lane, items, startIdx) {
+    if (!lane.trackEl) return;
+    const frag = document.createDocumentFragment();
+    items.forEach((item, offset) => {
+      const slide = createSlideElement(lane, item, startIdx + offset);
+      frag.appendChild(slide);
+      if (lane.observer) lane.observer.observe(slide);
+    });
+    lane.trackEl.appendChild(frag);
+  }
+
+  function computeShouldLoop(lane) {
+    if (state.proPrefs.autoMode === 'off') return true;
+    if (state.proPrefs.autoMode === 'sync' && state.effectiveLanes >= 2) return false;
+    return !lane.autoNext;
+  }
+
+  function attachVideoSource(lane, slide, item, preloadMode) {
     if (!slide || !item) return;
     const vid = slide.querySelector('.tt-video');
     if (!vid) return;
@@ -626,8 +937,8 @@
       vid.dataset.loadedSrc = targetSrc;
     }
     if (vid.preload !== preloadMode) vid.preload = preloadMode;
-    vid.muted = state.muted;
-    vid.loop = !state.autoNext;
+    vid.muted = lane.muted;
+    vid.loop = computeShouldLoop(lane);
   }
 
   function detachVideoSource(slide) {
@@ -651,80 +962,102 @@
     }
   }
 
-  function unloadAllVideos() {
-    if (state.nextTimer) {
-      clearTimeout(state.nextTimer);
-      state.nextTimer = 0;
+  function unloadLaneVideos(lane) {
+    if (!lane) return;
+    if (lane.nextTimer) {
+      clearTimeout(lane.nextTimer);
+      lane.nextTimer = 0;
     }
-    document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach(detachVideoSource);
+    if (lane.trackEl) {
+      lane.trackEl.querySelectorAll('.tt-slide').forEach(detachVideoSource);
+    }
   }
 
-  function syncVideoWindow(activeIdx) {
-    if (state.nextTimer) {
-      clearTimeout(state.nextTimer);
-      state.nextTimer = 0;
+  function unloadAllVideos() {
+    for (let k = 0; k < MAX_LANES; k++) {
+      unloadLaneVideos(state.lanes[k]);
     }
-    const slides = document.querySelectorAll('#tiktok-snap-track .tt-slide');
+  }
+
+  function syncLaneVideoWindow(lane, activeIdx) {
+    if (!lane || !lane.trackEl) return;
+    if (lane.nextTimer) {
+      clearTimeout(lane.nextTimer);
+      lane.nextTimer = 0;
+    }
+    if (!state.mounted || lane.index >= state.effectiveLanes) {
+      unloadLaneVideos(lane);
+      return;
+    }
+
+    const slides = lane.trackEl.querySelectorAll('.tt-slide');
     slides.forEach((slide) => {
       const idx = Number(slide.dataset.idx);
-      const item = state.slides[idx];
+      const item = lane.slides[idx];
       if (!item) return;
 
       const poster = slide.querySelector('.tt-poster');
-      if (poster && Math.abs(idx - activeIdx) <= 4) {
+      if (poster && Math.abs(idx - activeIdx) <= 3) {
         if (!poster.getAttribute('src') && item.cover_url) {
           poster.setAttribute('src', item.cover_url);
         }
-      } else if (poster && Math.abs(idx - activeIdx) > 5) {
+      } else if (poster && Math.abs(idx - activeIdx) > 4) {
         poster.removeAttribute('src');
       }
 
       if (idx === activeIdx) {
-        if (slide.dataset.dead === '1' && (state.consecSkips || 0) <= 3 && activeIdx + 1 < state.slides.length) {
-          setTimeout(() => { if (state.mounted && state.activeIndex === activeIdx) goToSlide(activeIdx + 1); }, 120);
+        if (slide.dataset.dead === '1' && (lane.consecSkips || 0) <= 3 && activeIdx + 1 < lane.slides.length) {
+          setTimeout(() => { if (state.mounted && lane.activeIndex === activeIdx) goToLaneSlide(lane, activeIdx + 1); }, 120);
           return;
         }
-        attachVideoSource(slide, item, 'auto');
-        applyStageGeometry(slide);
+        attachVideoSource(lane, slide, item, 'auto');
+        applyStageGeometry(slide, lane);
         const vid = slide.querySelector('.tt-video');
+        const centerIco = slide.querySelector('.tt-center-icon');
         if (vid && state.mounted) {
-          vid.muted = state.muted;
-          vid.loop = !state.autoNext;
+          vid.muted = lane.muted;
+          vid.loop = computeShouldLoop(lane);
           if (slide._ttWatchdog) clearTimeout(slide._ttWatchdog);
-          if (vid.readyState < 2) {
+          if (vid.readyState < 2 && !lane.userPaused) {
             slide._ttWatchdog = setTimeout(() => {
               slide._ttWatchdog = 0;
-              if (!state.mounted || state.activeIndex !== activeIdx || vid.readyState >= 2) return;
+              if (!state.mounted || lane.activeIndex !== activeIdx || vid.readyState >= 2 || lane.userPaused) return;
               slide.dataset.dead = '1';
-              state.consecSkips = (state.consecSkips || 0) + 1;
-              if (state.consecSkips <= 3 && activeIdx + 1 < state.slides.length) {
-                goToSlide(activeIdx + 1);
+              lane.consecSkips = (lane.consecSkips || 0) + 1;
+              if (lane.consecSkips <= 3 && activeIdx + 1 < lane.slides.length) {
+                goToLaneSlide(lane, activeIdx + 1);
               }
             }, 6500);
           }
-          const p = vid.play();
-          if (p && typeof p.catch === 'function') {
-            p.catch(() => {
-              vid.muted = true;
-              state.muted = true;
-              syncMuteIcons();
-              vid.play().catch(() => {});
-            });
+          if (lane.userPaused) {
+            vid.pause();
+            if (centerIco) centerIco.classList.remove('hidden');
+          } else {
+            if (centerIco) centerIco.classList.add('hidden');
+            const p = vid.play();
+            if (p && typeof p.catch === 'function') {
+              p.catch(() => {
+                vid.muted = true;
+                lane.muted = true;
+                syncLaneMuteIcons(lane);
+                vid.play().catch(() => {});
+              });
+            }
           }
         }
       } else if (idx === activeIdx + 1) {
         if (slide._ttWatchdog) { clearTimeout(slide._ttWatchdog); slide._ttWatchdog = 0; }
-        attachVideoSource(slide, item, 'metadata');
+        attachVideoSource(lane, slide, item, 'metadata');
         const vid = slide.querySelector('.tt-video');
         if (vid) vid.pause();
-        state.nextTimer = setTimeout(() => {
-          if (state.mounted && state.activeIndex === activeIdx && vid && vid.dataset.loadedSrc) {
+        lane.nextTimer = setTimeout(() => {
+          if (state.mounted && lane.activeIndex === activeIdx && vid && vid.dataset.loadedSrc) {
             vid.preload = 'auto';
           }
         }, 250);
       } else if (idx === activeIdx + 2 || idx === activeIdx - 1) {
         if (slide._ttWatchdog) { clearTimeout(slide._ttWatchdog); slide._ttWatchdog = 0; }
-        attachVideoSource(slide, item, 'metadata');
+        attachVideoSource(lane, slide, item, 'metadata');
         const vid = slide.querySelector('.tt-video');
         if (vid) vid.pause();
       } else {
@@ -733,51 +1066,367 @@
     });
   }
 
-  function activateSlide(idx) {
-    if (idx < 0 || idx >= state.slides.length) return;
-    state.activeIndex = idx;
-    updateAmbientBackdrop(state.slides[idx]);
-    syncVideoWindow(idx);
-    if (state.feedMode !== 'favorites' && idx >= state.slides.length - 6 && !state.loading) {
-      fetchRandomBatch(false);
+  function activateLaneSlide(lane, idx) {
+    if (!lane || idx < 0 || idx >= lane.slides.length) return;
+    lane.activeIndex = idx;
+    lane.cycleDone = false;
+    lane.userPaused = false;
+    syncLaneHeader(lane);
+    if (lane.index === state.focusedLane) {
+      updateAmbientBackdrop(lane.slides[idx]);
+    }
+    syncLaneVideoWindow(lane, idx);
+    if (lane.feedMode !== 'favorites' && idx >= lane.slides.length - 5 && !lane.loading) {
+      fetchLaneBatch(lane, false);
     }
   }
 
-  function goToSlide(idx, instant = false) {
-    let clamped = Math.max(0, Math.min(idx, state.slides.length - 1));
-    while (clamped < state.slides.length - 1) {
-      const cand = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${clamped}"]`);
+  function goToLaneSlide(lane, idx, instant = false) {
+    if (!lane || !lane.trackEl || lane.slides.length === 0) return;
+    let clamped = Math.max(0, Math.min(idx, lane.slides.length - 1));
+    while (clamped < lane.slides.length - 1) {
+      const cand = lane.trackEl.querySelector(`.tt-slide[data-idx="${clamped}"]`);
       if (!cand || cand.dataset.dead !== '1') break;
       clamped++;
     }
-    const slide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${clamped}"]`);
+    const slide = lane.trackEl.querySelector(`.tt-slide[data-idx="${clamped}"]`);
     if (slide) {
       slide.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'start' });
-      if (instant) activateSlide(clamped);
+      if (instant || clamped === lane.activeIndex) activateLaneSlide(lane, clamped);
     }
   }
 
-  function syncMuteIcons() {
-    try { localStorage.setItem(MUTE_KEY, state.muted ? '1' : '0'); } catch (e) {}
-    document.querySelectorAll('#tiktok-snap-track [data-tt-action="mute"]').forEach((btn) => {
-      const ico = btn.querySelector('i');
-      const txt = btn.querySelector('.tt-rail-txt');
-      if (ico) ico.className = `fa-solid ${state.muted ? 'fa-volume-xmark' : 'fa-volume-high'}`;
-      if (txt) txt.textContent = state.muted ? 'Mute' : 'Audio';
-    });
-    const activeSlide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${state.activeIndex}"]`);
-    const vid = activeSlide && activeSlide.querySelector('.tt-video');
-    if (vid) vid.muted = state.muted;
+  function stepAllUnlocked(delta) {
+    let moved = 0;
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const lane = state.lanes[k];
+      if (lane.locked || lane.slides.length === 0) continue;
+      let target = lane.activeIndex + delta;
+      if (lane.feedMode === 'favorites' && lane.slides.length > 0) {
+        target = (target + lane.slides.length) % lane.slides.length;
+      } else {
+        target = Math.max(0, Math.min(target, lane.slides.length - 1));
+      }
+      if (target !== lane.activeIndex || (delta > 0 && lane.activeIndex === lane.slides.length - 1 && lane.feedMode !== 'favorites')) {
+        goToLaneSlide(lane, target);
+        moved++;
+      }
+    }
+    return moved;
   }
 
-  function syncAutoNextIcons() {
-    try { localStorage.setItem(AUTO_NEXT_KEY, state.autoNext ? '1' : '0'); } catch (e) {}
-    document.querySelectorAll('#tiktok-snap-track [data-tt-action="autonext"]').forEach((btn) => {
-      btn.classList.toggle('is-on', state.autoNext);
+  function setFocusedLane(idx) {
+    if (idx < 0 || idx >= state.effectiveLanes) return;
+    const changed = state.focusedLane !== idx;
+    state.focusedLane = idx;
+    syncAllLaneHeaders();
+    const focused = state.lanes[idx];
+    if (focused && focused.slides[focused.activeIndex]) {
+      updateAmbientBackdrop(focused.slides[focused.activeIndex]);
+    }
+    if (changed && state.proPrefs.audioMode === 'follow' && state.globalWantAudio) {
+      setLaneMuted(focused, false, true);
+    }
+  }
+
+  function syncLaneMuteIcons(lane) {
+    if (!lane) return;
+    if (lane.index === 0) {
+      try { localStorage.setItem(MUTE_KEY, lane.muted ? '1' : '0'); } catch (e) {}
+    }
+    if (lane.trackEl) {
+      lane.trackEl.querySelectorAll('[data-tt-action="mute"]').forEach((btn) => {
+        const ico = btn.querySelector('i');
+        const txt = btn.querySelector('.tt-rail-txt');
+        if (ico) ico.className = `fa-solid ${lane.muted ? 'fa-volume-xmark' : 'fa-volume-high'}`;
+        if (txt) txt.textContent = lane.muted ? 'Mute' : 'Audio';
+      });
+      const activeSlide = lane.trackEl.querySelector(`.tt-slide[data-idx="${lane.activeIndex}"]`);
+      const vid = activeSlide && activeSlide.querySelector('.tt-video');
+      if (vid) vid.muted = lane.muted;
+    }
+  }
+
+  function setLaneMuted(lane, nextMuted, quietFollow = false) {
+    if (!lane) return;
+    lane.muted = Boolean(nextMuted);
+    if (!lane.muted) state.globalWantAudio = true;
+    else if (!quietFollow && state.lanes.slice(0, state.effectiveLanes).every((l) => l.muted)) {
+      state.globalWantAudio = false;
+    }
+
+    if (!lane.muted && (state.proPrefs.audioMode === 'solo' || state.proPrefs.audioMode === 'follow')) {
+      for (let k = 0; k < MAX_LANES; k++) {
+        if (k !== lane.index && !state.lanes[k].muted) {
+          state.lanes[k].muted = true;
+          syncLaneMuteIcons(state.lanes[k]);
+        }
+      }
+    }
+    syncLaneMuteIcons(lane);
+  }
+
+  function muteAllLanes() {
+    state.globalWantAudio = false;
+    for (let k = 0; k < MAX_LANES; k++) {
+      state.lanes[k].muted = true;
+      syncLaneMuteIcons(state.lanes[k]);
+    }
+    if (typeof window.showToast === 'function') {
+      window.showToast('Todas las pantallas silenciadas', 'info');
+    }
+  }
+
+  function syncLaneAutoIcons(lane) {
+    if (!lane) return;
+    if (lane.index === 0) {
+      try { localStorage.setItem(AUTO_NEXT_KEY, lane.autoNext ? '1' : '0'); } catch (e) {}
+    }
+    if (lane.trackEl) {
+      lane.trackEl.querySelectorAll('[data-tt-action="autonext"]').forEach((btn) => {
+        btn.classList.toggle('is-on', lane.autoNext);
+      });
+      const activeSlide = lane.trackEl.querySelector(`.tt-slide[data-idx="${lane.activeIndex}"]`);
+      const vid = activeSlide && activeSlide.querySelector('.tt-video');
+      if (vid) vid.loop = computeShouldLoop(lane);
+    }
+  }
+
+  function refreshAllVideoLoops() {
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const lane = state.lanes[k];
+      lane.cycleDone = false;
+      syncLaneHeader(lane);
+      if (!lane.trackEl) continue;
+      const activeSlide = lane.trackEl.querySelector(`.tt-slide[data-idx="${lane.activeIndex}"]`);
+      const vid = activeSlide && activeSlide.querySelector('.tt-video');
+      if (vid) vid.loop = computeShouldLoop(lane);
+    }
+  }
+
+  function setRequestedLanes(count, silent = false) {
+    const req = (count === 2 || count === 3) ? count : 1;
+    state.proPrefs.requestedLanes = req;
+    saveProPrefs();
+    applyViewportLaneLayout();
+    if (!silent && typeof window.showToast === 'function') {
+      if (req > state.effectiveLanes) {
+        window.showToast(`Tu pantalla admite hasta ${state.effectiveLanes} videos simultáneos`, 'info');
+      } else if (state.effectiveLanes >= 2) {
+        window.showToast(`${state.effectiveLanes} pantallas activas · Tocá o pulsá 1-${state.effectiveLanes} para enfocar`, 'success');
+      } else {
+        window.showToast('Vista de 1 pantalla restaurada', 'info');
+      }
+    }
+  }
+
+  function applyViewportLaneLayout() {
+    bindLaneDomRefs();
+    const maxAllowed = getMaxAllowedLanes();
+    const eff = Math.min(state.proPrefs.requestedLanes, maxAllowed);
+    const prevEff = state.effectiveLanes;
+    state.effectiveLanes = eff;
+
+    const stageEl = document.getElementById('tt-lanes-stage');
+    if (stageEl) stageEl.dataset.lanes = String(eff);
+    document.body.classList.toggle('tt-multi-active', eff >= 2);
+
+    if (state.focusedLane >= eff) {
+      state.focusedLane = eff - 1;
+    }
+
+    for (let k = 0; k < MAX_LANES; k++) {
+      const lane = state.lanes[k];
+      if (!lane.el) continue;
+      const visible = k < eff;
+      lane.el.classList.toggle('hidden', !visible);
+      if (!visible) {
+        unloadLaneVideos(lane);
+      } else if (state.mounted) {
+        setupLaneObserver(lane);
+        if (lane.slides.length === 0) {
+          fetchLaneBatch(lane, true);
+        } else if (k >= prevEff || !lane.trackEl?.querySelector('.tt-video[src]')) {
+          syncLaneVideoWindow(lane, lane.activeIndex);
+        }
+      }
+    }
+
+    syncTopModeChips();
+    requestAnimationFrame(() => {
+      for (let k = 0; k < eff; k++) {
+        const lane = state.lanes[k];
+        if (!lane.trackEl) continue;
+        lane.trackEl.querySelectorAll('.tt-slide').forEach((s) => applyStageGeometry(s, lane));
+      }
     });
-    const activeSlide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${state.activeIndex}"]`);
+  }
+
+  function toggleLaneLock(laneIdx, force) {
+    const lane = state.lanes[laneIdx];
+    if (!lane) return;
+    lane.locked = typeof force === 'boolean' ? force : !lane.locked;
+    lane.cycleDone = false;
+    syncLaneHeader(lane);
+    if (typeof window.showToast === 'function') {
+      window.showToast(
+        lane.locked
+          ? `📌 Pantalla #${lane.index + 1} fijada (no cambia al bajar juntas)`
+          : `🔓 Pantalla #${lane.index + 1} desbloqueada`,
+        'info'
+      );
+    }
+  }
+
+  function toggleLanePlayPause(lane, forcePause) {
+    if (!lane || !lane.trackEl) return;
+    const activeSlide = lane.trackEl.querySelector(`.tt-slide[data-idx="${lane.activeIndex}"]`);
     const vid = activeSlide && activeSlide.querySelector('.tt-video');
-    if (vid) vid.loop = !state.autoNext;
+    const icon = activeSlide && activeSlide.querySelector('.tt-center-icon');
+    if (!vid) return;
+    const nextPause = typeof forcePause === 'boolean' ? forcePause : !vid.paused;
+    lane.userPaused = nextPause;
+    if (nextPause) {
+      vid.pause();
+      if (icon) icon.classList.remove('hidden');
+    } else {
+      vid.play().catch(() => {});
+      if (icon) icon.classList.add('hidden');
+    }
+  }
+
+  function togglePauseAllLanes() {
+    let anyPlaying = false;
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const lane = state.lanes[k];
+      const activeSlide = lane.trackEl?.querySelector(`.tt-slide[data-idx="${lane.activeIndex}"]`);
+      const vid = activeSlide?.querySelector('.tt-video');
+      if (vid && !vid.paused) {
+        anyPlaying = true;
+        break;
+      }
+    }
+    const targetPause = anyPlaying;
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      toggleLanePlayPause(state.lanes[k], targetPause);
+    }
+    if (typeof window.showToast === 'function') {
+      window.showToast(targetPause ? '⏸ Todas las pantallas pausadas' : '▶ Todas las pantallas en reproducción', 'info');
+    }
+  }
+
+  function shuffleUnlockedLanes() {
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const lane = state.lanes[k];
+      if (lane.locked) continue;
+      if (lane.feedMode === 'favorites') {
+        launchFavoritesInLane(lane, null, true);
+      } else {
+        fetchLaneBatch(lane, true);
+      }
+    }
+    if (typeof window.showToast === 'function') {
+      window.showToast('🎲 Videos aleatorios renovados en pantallas libres', 'info');
+    }
+  }
+
+  function setNavMode(mode) {
+    state.proPrefs.navMode = mode === 'sync' ? 'sync' : 'focused';
+    saveProPrefs();
+    syncProControlsUI();
+    if (typeof window.showToast === 'function') {
+      window.showToast(
+        state.proPrefs.navMode === 'sync'
+          ? 'Nav Juntas: ↑/↓ y la rueda bajan todas las pantallas libres a la vez'
+          : 'Nav Individual: cada pantalla baja independiente (↑/↓ mueve la enfocada)',
+        'info'
+      );
+    }
+  }
+
+  function setAudioMode(mode) {
+    state.proPrefs.audioMode = ['solo', 'follow', 'free'].includes(mode) ? mode : 'solo';
+    saveProPrefs();
+    if (state.proPrefs.audioMode === 'follow' && state.globalWantAudio) {
+      setLaneMuted(getActiveLane(), false, true);
+    } else if (state.proPrefs.audioMode === 'solo') {
+      let kept = false;
+      for (let k = 0; k < state.effectiveLanes; k++) {
+        const idx = k === 0 ? state.focusedLane : (k === state.focusedLane ? 0 : k);
+        const l = state.lanes[idx];
+        if (!l.muted && !kept) kept = true;
+        else if (!l.muted && kept) {
+          l.muted = true;
+          syncLaneMuteIcons(l);
+        }
+      }
+    }
+    syncProControlsUI();
+    if (typeof window.showToast === 'function') {
+      const msgs = {
+        solo: 'Audio Solo una: al activar sonido en una pantalla se silencian las otras',
+        follow: 'Audio Foco: el audio sigue automáticamente la pantalla que enfoques',
+        free: 'Audio Libre: puedes escuchar varias pantallas al mismo tiempo'
+      };
+      window.showToast(msgs[state.proPrefs.audioMode], 'info');
+    }
+  }
+
+  function setAutoMode(mode) {
+    state.proPrefs.autoMode = ['lane', 'sync', 'off'].includes(mode) ? mode : 'lane';
+    saveProPrefs();
+    refreshAllVideoLoops();
+    syncProControlsUI();
+    if (typeof window.showToast === 'function') {
+      const msgs = {
+        lane: 'Auto Por pantalla: cada video avanza solo si su botón Auto está activo',
+        sync: 'Auto Sincronizado: las pantallas cortas esperan a la más larga y cambian todas juntas',
+        off: 'Auto Off: todos los clips repiten en bucle hasta que cambies manualmente'
+      };
+      window.showToast(msgs[state.proPrefs.autoMode], 'info');
+    }
+  }
+
+  function applyProPreset(preset) {
+    if (preset === 'sync') {
+      state.proPrefs.navMode = 'sync';
+      state.proPrefs.audioMode = 'follow';
+      state.proPrefs.autoMode = 'sync';
+      if (state.globalWantAudio) setLaneMuted(getActiveLane(), false, true);
+    } else if (preset === 'free') {
+      state.proPrefs.navMode = 'focused';
+      state.proPrefs.audioMode = 'free';
+      state.proPrefs.autoMode = 'lane';
+    } else {
+      state.proPrefs.navMode = 'focused';
+      state.proPrefs.audioMode = 'solo';
+      state.proPrefs.autoMode = 'lane';
+    }
+    saveProPrefs();
+    refreshAllVideoLoops();
+    syncProControlsUI();
+    if (typeof window.showToast === 'function') {
+      const labels = {
+        smart: '🧠 Perfil Smart activado (Nav individual · Audio en 1 pantalla)',
+        sync: '🔗 Perfil Sync Total activado (bajan y esperan juntas al acabar)',
+        free: '🎛️ Perfil Todo Libre activado (cada pantalla 100% independiente)'
+      };
+      window.showToast(labels[preset] || 'Perfil aplicado', 'success');
+    }
+  }
+
+  function toggleProPopover(force) {
+    const pop = document.getElementById('tt-pro-popover');
+    if (!pop) return;
+    const next = typeof force === 'boolean' ? force : pop.classList.contains('hidden');
+    state.proMenuOpen = next;
+    pop.classList.toggle('hidden', !next);
+    const btn = document.getElementById('tt-pro-menu-btn');
+    if (btn) btn.classList.toggle('is-sync', next);
+  }
+
+  function closeProPopover() {
+    toggleProPopover(false);
   }
 
   function renderFavsGrid(itemsList) {
@@ -821,13 +1470,14 @@
       return;
     }
 
+    closeProPopover();
     const modal = document.getElementById('tt-favs-modal');
     if (!modal) return;
     modal.classList.remove('hidden');
     await loadAccountFavorites(true);
     renderFavsGrid(state.favs);
 
-    const ids = state.favs.map(x => Number(x.id)).filter(n => Number.isFinite(n) && n > 0).slice(0, 60);
+    const ids = state.favs.map((x) => Number(x.id)).filter((n) => Number.isFinite(n) && n > 0).slice(0, 60);
     if (ids.length === 0) return;
 
     try {
@@ -836,7 +1486,7 @@
       const data = await res.json();
       const fresh = Array.isArray(data.items) ? data.items : [];
       if (fresh.length === 0) return;
-      const freshById = new Map(fresh.map(x => [String(x.id), x]));
+      const freshById = new Map(fresh.map((x) => [String(x.id), x]));
       state.favs = state.favs.map((old) => {
         const f = freshById.get(String(old.id));
         return f ? { ...old, ...f, savedAt: old.savedAt || Date.now() } : old;
@@ -853,77 +1503,136 @@
     if (modal) modal.classList.add('hidden');
   }
 
-  async function launchFavoritesFeed(startId = null) {
+  async function loadResolvedFavItems(startId = null) {
     const auth = getAuthContext();
     if (!auth.canSave) {
       promptVipLogin('Solo cuentas VIP activas pueden reproducir su lista de favoritos');
-      return;
+      return null;
     }
     if (state.favs.length === 0) {
       await loadAccountFavorites(true);
     }
-    const ids = state.favs.map(x => Number(x.id)).filter(n => Number.isFinite(n) && n > 0).slice(0, 60);
+    const ids = state.favs.map((x) => Number(x.id)).filter((n) => Number.isFinite(n) && n > 0).slice(0, 60);
     if (startId && !ids.includes(Number(startId))) {
       const numStart = Number(startId);
       if (Number.isFinite(numStart) && numStart > 0) ids.unshift(numStart);
     }
     if (ids.length === 0) {
       if (typeof window.showToast === 'function') window.showToast('Aún no tienes shorts guardados en tu cuenta', 'info');
-      return;
+      return null;
     }
 
-    closeFavoritesModal();
+    const res = await fetch('/api/shorts/batch?ids=' + ids.join(','), { cache: 'no-store' });
+    const data = res.ok ? await res.json() : { items: [] };
+    const items = Array.isArray(data.items) && data.items.length > 0 ? data.items : [];
+    if (items.length === 0) {
+      if (typeof window.showToast === 'function') window.showToast('No se pudieron cargar tus favoritos ahorita', 'error');
+      return null;
+    }
+    return items;
+  }
+
+  async function launchFavoritesInLane(lane, startId = null, shuffle = false) {
+    const targetLane = lane || getActiveLane();
     const loaderEl = document.getElementById('tiktok-feed-loader');
-    if (loaderEl) loaderEl.classList.remove('hidden');
+    closeFavoritesModal();
+    if (loaderEl && targetLane.index === 0) loaderEl.classList.remove('hidden');
 
     try {
-      const res = await fetch('/api/shorts/batch?ids=' + ids.join(','), { cache: 'no-store' });
-      const data = res.ok ? await res.json() : { items: [] };
-      const items = Array.isArray(data.items) && data.items.length > 0 ? data.items : [];
-      if (items.length === 0) {
-        if (typeof window.showToast === 'function') window.showToast('No se pudieron cargar tus favoritos ahorita', 'error');
-        return;
+      const items = await loadResolvedFavItems(startId);
+      if (!items) return;
+
+      let ordered = items.slice();
+      if (shuffle) {
+        for (let i = ordered.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+        }
       }
 
-      state.feedMode = 'favorites';
+      targetLane.feedMode = 'favorites';
+      targetLane.q = '';
       syncTopModeChips();
-      unloadAllVideos();
-      state.slides = items;
-      state.activeIndex = 0;
-      state.consecSkips = 0;
-      const track = document.getElementById('tiktok-snap-track');
-      if (track) track.innerHTML = '';
+      unloadLaneVideos(targetLane);
+      targetLane.slides = ordered;
+      targetLane.activeIndex = 0;
+      targetLane.consecSkips = 0;
+      targetLane.cycleDone = false;
+      if (targetLane.trackEl) targetLane.trackEl.innerHTML = '';
 
       const emptyEl = document.getElementById('tiktok-empty-state');
       if (emptyEl) emptyEl.classList.add('hidden');
 
-      appendSlideElements(items, 0);
+      appendLaneSlideElements(targetLane, ordered, 0);
       let startIdx = 0;
       if (startId != null) {
-        const found = items.findIndex(x => String(x.id) === String(startId));
+        const found = ordered.findIndex((x) => String(x.id) === String(startId));
         if (found >= 0) startIdx = found;
       }
-      goToSlide(startIdx, true);
+      goToLaneSlide(targetLane, startIdx, true);
     } catch (e) {
       if (typeof window.showToast === 'function') window.showToast('Error cargando Favoritos', 'error');
     } finally {
-      if (loaderEl) loaderEl.classList.add('hidden');
+      if (loaderEl && targetLane.index === 0) loaderEl.classList.add('hidden');
     }
   }
 
-  function exitFavoritesMode() {
-    state.feedMode = 'random';
+  async function spreadFavoritesAcrossLanes() {
+    const items = await loadResolvedFavItems(null);
+    if (!items || items.length === 0) return;
+    closeFavoritesModal();
+
+    const pool = items.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const lane = state.lanes[k];
+      if (lane.locked) continue;
+      // Rotar el orden para que cada pantalla arranque con un favorito distinto
+      const rotated = pool.map((_, idx) => pool[(idx + k) % pool.length]);
+      lane.feedMode = 'favorites';
+      lane.q = '';
+      unloadLaneVideos(lane);
+      lane.slides = rotated;
+      lane.activeIndex = 0;
+      lane.consecSkips = 0;
+      lane.cycleDone = false;
+      if (lane.trackEl) lane.trackEl.innerHTML = '';
+      appendLaneSlideElements(lane, rotated, 0);
+      goToLaneSlide(lane, 0, true);
+    }
     syncTopModeChips();
-    fetchRandomBatch(true);
+    if (typeof window.showToast === 'function') {
+      window.showToast('❤️ Favoritos repartidos en tus pantallas activas', 'success');
+    }
   }
 
-  function setupObserver() {
-    const track = document.getElementById('tiktok-snap-track');
-    if (!track || state.observer) return;
+  function exitFavoritesMode(lane = null) {
+    if (lane) {
+      lane.feedMode = 'random';
+      syncTopModeChips();
+      fetchLaneBatch(lane, true);
+      return;
+    }
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const l = state.lanes[k];
+      if (l.feedMode === 'favorites') {
+        l.feedMode = 'random';
+        fetchLaneBatch(l, true);
+      }
+    }
+    syncTopModeChips();
+  }
 
-    state.observer = new IntersectionObserver(
+  function setupLaneObserver(lane) {
+    if (!lane || !lane.trackEl || lane.observer) return;
+
+    lane.observer = new IntersectionObserver(
       (entries) => {
-        if (!state.mounted) return;
+        if (!state.mounted || lane.index >= state.effectiveLanes) return;
         let best = null;
         for (const entry of entries) {
           if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
@@ -934,25 +1643,31 @@
         }
         if (best) {
           const idx = Number(best.target.dataset.idx);
-          if (!Number.isNaN(idx) && idx !== state.activeIndex) {
-            activateSlide(idx);
+          if (!Number.isNaN(idx) && idx !== lane.activeIndex) {
+            activateLaneSlide(lane, idx);
           }
         }
       },
-      { root: track, threshold: [0.6, 0.85] }
+      { root: lane.trackEl, threshold: [0.6, 0.85] }
     );
   }
 
   function applyFilterAndReload({ category, q }) {
-    state.feedMode = 'random';
     if (category !== undefined) state.category = category || 'all';
     if (q !== undefined) state.q = String(q || '').trim();
     const sIn = document.getElementById('search-input');
     if (sIn) sIn.value = state.q;
     const cBtn = document.getElementById('clear-search-btn');
     if (cBtn) cBtn.classList.toggle('hidden', !state.q);
+
+    for (let k = 0; k < state.effectiveLanes; k++) {
+      const lane = state.lanes[k];
+      if (lane.locked && state.effectiveLanes >= 2) continue;
+      lane.feedMode = 'random';
+      lane.q = '';
+      fetchLaneBatch(lane, true);
+    }
     syncTopModeChips();
-    fetchRandomBatch(true);
   }
 
   function bindEvents() {
@@ -968,7 +1683,7 @@
       if (!state.mounted || resizeRaf) return;
       resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
-        document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach(applyStageGeometry);
+        applyViewportLaneLayout();
       });
     }, { passive: true });
 
@@ -976,58 +1691,191 @@
       loadAccountFavorites(true);
     });
 
-    window.addEventListener('velvet:favorites-updated', () => {
-      const auth = getAuthContext();
-      if (!auth.canSave) {
-        syncFavsUIAll();
-        return;
-      }
-      const pData = window.VelvetPersonalData;
-      if (!pData || typeof pData.getFavorites !== 'function') return;
-      const list = pData.getFavorites() || [];
-      if (Array.isArray(list) && list.some(x => x && (x.media_type === 'short' || x.source === 'short'))) {
-        loadAccountFavorites(true);
-      }
-    });
+    for (let k = 0; k < MAX_LANES; k++) {
+      const lane = state.lanes[k];
+      if (!lane.trackEl) continue;
 
-    const trackEl = document.getElementById('tiktok-snap-track');
-    if (trackEl) {
-      trackEl.addEventListener('scroll', () => {
-        if (!state.mounted || state.loading || state.feedMode === 'favorites' || state.slides.length === 0) return;
-        const remainingPx = trackEl.scrollHeight - (trackEl.scrollTop + trackEl.clientHeight);
-        if (remainingPx < trackEl.clientHeight * 3.5) {
-          fetchRandomBatch(false);
+      lane.trackEl.addEventListener('scroll', () => {
+        if (!state.mounted || lane.loading || lane.feedMode === 'favorites' || lane.slides.length === 0 || lane.index >= state.effectiveLanes) return;
+        const remainingPx = lane.trackEl.scrollHeight - (lane.trackEl.scrollTop + lane.trackEl.clientHeight);
+        if (remainingPx < lane.trackEl.clientHeight * 3.5) {
+          fetchLaneBatch(lane, false);
         }
+      }, { passive: true });
+
+      lane.trackEl.addEventListener('pointerdown', () => {
+        if (state.mounted && lane.index < state.effectiveLanes) setFocusedLane(lane.index);
       }, { passive: true });
     }
 
+    const stageEl = document.getElementById('tt-lanes-stage');
+    if (stageEl) {
+      stageEl.addEventListener('wheel', (e) => {
+        if (!state.mounted || state.effectiveLanes < 2) return;
+        if (state.proPrefs.navMode !== 'sync' && !e.shiftKey) return;
+        if (Math.abs(e.deltaY) < 12) return;
+        e.preventDefault();
+        const now = Date.now();
+        if (now - state.lastSyncWheelAt < 360) return;
+        state.lastSyncWheelAt = now;
+        stepAllUnlocked(e.deltaY > 0 ? 1 : -1);
+      }, { passive: false });
+    }
+
     root.addEventListener('click', (e) => {
+      // Cerrar popover Pro si hace clic fuera
+      const pop = document.getElementById('tt-pro-popover');
+      if (state.proMenuOpen && pop && !e.target.closest('#tt-pro-popover') && !e.target.closest('[data-tt-action="toggle-pro-menu"]')) {
+        closeProPopover();
+      }
+
+      const presetBtn = e.target.closest('[data-tt-preset]');
+      if (presetBtn) {
+        applyProPreset(presetBtn.dataset.ttPreset);
+        return;
+      }
+
+      const navOpt = e.target.closest('[data-tt-set-nav]');
+      if (navOpt) {
+        setNavMode(navOpt.dataset.ttSetNav);
+        return;
+      }
+
+      const audioOpt = e.target.closest('[data-tt-set-audio]');
+      if (audioOpt) {
+        setAudioMode(audioOpt.dataset.ttSetAudio);
+        return;
+      }
+
+      const autoOpt = e.target.closest('[data-tt-set-auto]');
+      if (autoOpt) {
+        setAutoMode(autoOpt.dataset.ttSetAuto);
+        return;
+      }
+
+      const laneAct = e.target.closest('[data-tt-lane-action]');
+      if (laneAct) {
+        const lIdx = Number(laneAct.dataset.lane);
+        const lane = state.lanes[lIdx];
+        const lAct = laneAct.dataset.ttLaneAction;
+        if (!lane) return;
+        setFocusedLane(lIdx);
+        if (lAct === 'focus') {
+          return;
+        } else if (lAct === 'lock') {
+          toggleLaneLock(lIdx);
+          return;
+        } else if (lAct === 'prev') {
+          goToLaneSlide(lane, lane.activeIndex - 1);
+          return;
+        } else if (lAct === 'next') {
+          goToLaneSlide(lane, lane.activeIndex + 1);
+          return;
+        } else if (lAct === 'source') {
+          if (lane.feedMode === 'favorites') {
+            exitFavoritesMode(lane);
+          } else if (lane.q) {
+            lane.q = '';
+            syncTopModeChips();
+            fetchLaneBatch(lane, true);
+          } else {
+            const auth = getAuthContext();
+            if (!auth.canSave) {
+              promptVipLogin('Inicia sesión VIP para reproducir tus Shorts Favoritos');
+              return;
+            }
+            if (state.favs.length === 0) {
+              openFavoritesModal();
+            } else {
+              launchFavoritesInLane(lane, null, true);
+            }
+          }
+          return;
+        }
+      }
+
       const delBtn = e.target.closest('[data-tt-fav-del]');
       if (delBtn) {
         e.stopPropagation();
-        const delId = delBtn.dataset.ttFavDel;
-        toggleHeartItem({ id: delId });
+        toggleHeartItem({ id: delBtn.dataset.ttFavDel });
         return;
       }
 
       const playCard = e.target.closest('[data-tt-fav-play]');
       if (playCard) {
-        launchFavoritesFeed(playCard.dataset.ttFavPlay);
+        launchFavoritesInLane(getActiveLane(), playCard.dataset.ttFavPlay, false);
         return;
       }
 
       const tagBtn = e.target.closest('[data-tt-tag]');
       if (tagBtn) {
-        applyFilterAndReload({ category: 'all', q: tagBtn.dataset.ttTag || '' });
+        const slide = tagBtn.closest('.tt-slide');
+        const laneIdx = slide ? Number(slide.dataset.lane) : state.focusedLane;
+        const lane = state.lanes[laneIdx] || getActiveLane();
+        const tag = tagBtn.dataset.ttTag || '';
+        if (state.effectiveLanes >= 2 && state.proPrefs.navMode !== 'sync') {
+          setFocusedLane(lane.index);
+          lane.feedMode = 'random';
+          lane.q = tag;
+          syncTopModeChips();
+          fetchLaneBatch(lane, true);
+          if (typeof window.showToast === 'function') {
+            window.showToast(`Pantalla #${lane.index + 1} filtrada por #${tag}`, 'info');
+          }
+        } else {
+          applyFilterAndReload({ category: 'all', q: tag });
+        }
         return;
       }
 
       const actEl = e.target.closest('[data-tt-action]');
       if (!actEl) return;
       const action = actEl.dataset.ttAction;
+
+      if (action === 'set-lanes') {
+        setRequestedLanes(Number(actEl.dataset.ttLanes));
+        return;
+      } else if (action === 'cycle-nav') {
+        setNavMode(state.proPrefs.navMode === 'sync' ? 'focused' : 'sync');
+        return;
+      } else if (action === 'cycle-audio') {
+        const order = ['solo', 'follow', 'free'];
+        const next = order[(order.indexOf(state.proPrefs.audioMode) + 1) % order.length];
+        setAudioMode(next);
+        return;
+      } else if (action === 'cycle-auto') {
+        const order = ['lane', 'sync', 'off'];
+        const next = order[(order.indexOf(state.proPrefs.autoMode) + 1) % order.length];
+        setAutoMode(next);
+        return;
+      } else if (action === 'shuffle-all') {
+        shuffleUnlockedLanes();
+        return;
+      } else if (action === 'toggle-pro-menu') {
+        toggleProPopover();
+        return;
+      } else if (action === 'close-pro-menu') {
+        closeProPopover();
+        return;
+      } else if (action === 'toggle-pause-all') {
+        togglePauseAllLanes();
+        return;
+      } else if (action === 'mute-all') {
+        muteAllLanes();
+        return;
+      } else if (action === 'unlock-all') {
+        state.lanes.forEach((l) => { l.locked = false; });
+        syncAllLaneHeaders();
+        if (typeof window.showToast === 'function') window.showToast('🔓 Todas las pantallas desbloqueadas', 'info');
+        return;
+      }
+
       const slide = actEl.closest('.tt-slide');
-      const idx = slide ? Number(slide.dataset.idx) : state.activeIndex;
-      const item = state.slides[idx];
+      const laneIdx = slide ? Number(slide.dataset.lane) : state.focusedLane;
+      const lane = state.lanes[laneIdx] || getActiveLane();
+      if (slide) setFocusedLane(lane.index);
+      const idx = slide ? Number(slide.dataset.idx) : lane.activeIndex;
+      const item = lane.slides[idx];
 
       if (action === 'toggle-play' && slide) {
         const now = Date.now();
@@ -1041,25 +1889,20 @@
         }
         lastTapAt = now;
         tapTimer = setTimeout(() => {
-          const vid = slide.querySelector('.tt-video');
-          const icon = slide.querySelector('.tt-center-icon');
-          if (!vid) return;
-          if (vid.paused) {
-            vid.play().catch(() => {});
-            if (icon) icon.classList.add('hidden');
-          } else {
-            vid.pause();
-            if (icon) icon.classList.remove('hidden');
-          }
+          toggleLanePlayPause(lane);
         }, 230);
       } else if (action === 'like' && item) {
         toggleHeartItem(item);
       } else if (action === 'mute') {
-        state.muted = !state.muted;
-        syncMuteIcons();
+        setLaneMuted(lane, !lane.muted);
       } else if (action === 'autonext') {
-        state.autoNext = !state.autoNext;
-        syncAutoNextIcons();
+        lane.autoNext = !lane.autoNext;
+        if (state.proPrefs.autoMode === 'off') {
+          state.proPrefs.autoMode = 'lane';
+          saveProPrefs();
+          syncProControlsUI();
+        }
+        syncLaneAutoIcons(lane);
       } else if (action === 'clean') {
         toggleCleanMode();
       } else if (action === 'open-favs') {
@@ -1067,9 +1910,11 @@
       } else if (action === 'close-favs') {
         closeFavoritesModal();
       } else if (action === 'play-all-favs') {
-        launchFavoritesFeed(null);
+        launchFavoritesInLane(getActiveLane(), null, false);
+      } else if (action === 'spread-favs') {
+        spreadFavoritesAcrossLanes();
       } else if (action === 'exit-favs-mode') {
-        exitFavoritesMode();
+        exitFavoritesMode(null);
       } else if (action === 'copy' && item) {
         const shareUrl = item.share_id
           ? `${window.location.origin}/?c=${encodeURIComponent(item.share_id)}`
@@ -1078,9 +1923,17 @@
           if (typeof window.showToast === 'function') window.showToast('Enlace de Morbo Hub copiado', 'success');
         }).catch(() => {});
       } else if (action === 'prev') {
-        goToSlide(state.activeIndex - 1);
+        if (state.effectiveLanes >= 2 && state.proPrefs.navMode === 'sync') {
+          stepAllUnlocked(-1);
+        } else {
+          goToLaneSlide(lane, lane.activeIndex - 1);
+        }
       } else if (action === 'next') {
-        goToSlide(state.activeIndex + 1);
+        if (state.effectiveLanes >= 2 && state.proPrefs.navMode === 'sync') {
+          stepAllUnlocked(1);
+        } else {
+          goToLaneSlide(lane, lane.activeIndex + 1);
+        }
       } else if (action === 'seek' && slide) {
         const vid = slide.querySelector('.tt-video');
         if (!vid || !vid.duration) return;
@@ -1095,39 +1948,42 @@
 
   window.VelvetTikTokFeed = {
     mount() {
-      loadLocalPlayerPrefs();
+      loadProPrefs();
+      bindLaneDomRefs();
       state.mounted = true;
       document.body.classList.add('tiktok-home-active');
-      setupObserver();
       bindEvents();
-      syncTopModeChips();
       syncCleanModeUI();
       loadAccountFavorites(false);
-      if (state.slides.length === 0) {
-        fetchRandomBatch(true);
-      } else {
-        updateAmbientBackdrop(state.slides[state.activeIndex]);
-        syncVideoWindow(state.activeIndex);
-      }
+      applyViewportLaneLayout();
     },
     unmount() {
       state.mounted = false;
       state.cleanMode = false;
+      closeProPopover();
       document.body.classList.remove('tiktok-home-active');
       document.body.classList.remove('tt-clean-mode');
+      document.body.classList.remove('tt-multi-active');
       closeFavoritesModal();
       unloadAllVideos();
     },
     reshuffle() {
-      state.feedMode = 'random';
+      for (let k = 0; k < state.effectiveLanes; k++) {
+        const lane = state.lanes[k];
+        if (lane.locked && state.effectiveLanes >= 2) continue;
+        lane.feedMode = 'random';
+        fetchLaneBatch(lane, true);
+      }
       syncTopModeChips();
-      fetchRandomBatch(true);
+    },
+    setLanes(count) {
+      setRequestedLanes(count);
     },
     openFavorites() {
       openFavoritesModal();
     },
     playSavedShortId(shortId) {
-      launchFavoritesFeed(shortId);
+      launchFavoritesInLane(getActiveLane(), shortId, false);
     },
     toggleCleanMode(force) {
       toggleCleanMode(force);
@@ -1142,7 +1998,14 @@
       if (!state.mounted) return false;
       const modal = document.getElementById('tt-favs-modal');
       const modalOpen = modal && !modal.classList.contains('hidden');
+      const kLow = String(e.key || '').toLowerCase();
+
       if (e.key === 'Escape') {
+        if (state.proMenuOpen) {
+          e.preventDefault();
+          closeProPopover();
+          return true;
+        }
         if (modalOpen) {
           e.preventDefault();
           closeFavoritesModal();
@@ -1154,47 +2017,93 @@
           return true;
         }
       }
-      if (e.key.toLowerCase() === 'h' && !modalOpen) {
+
+      if (modalOpen) return false;
+
+      if (kLow === 'h') {
         e.preventDefault();
         toggleCleanMode();
         return true;
       }
-      if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'j') {
+
+      if (state.effectiveLanes >= 2 && (e.key === '1' || e.key === '2' || e.key === '3')) {
+        const target = Number(e.key) - 1;
+        if (target < state.effectiveLanes) {
+          e.preventDefault();
+          setFocusedLane(target);
+          return true;
+        }
+      }
+
+      if (state.effectiveLanes >= 2 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
-        goToSlide(state.activeIndex + 1);
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        setFocusedLane((state.focusedLane + dir + state.effectiveLanes) % state.effectiveLanes);
         return true;
       }
-      if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'k') {
+
+      if (e.key === 'ArrowDown' || kLow === 'j') {
         e.preventDefault();
-        goToSlide(state.activeIndex - 1);
-        return true;
-      }
-      if (e.key === ' ') {
-        e.preventDefault();
-        const activeSlide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${state.activeIndex}"]`);
-        const vid = activeSlide && activeSlide.querySelector('.tt-video');
-        const icon = activeSlide && activeSlide.querySelector('.tt-center-icon');
-        if (vid) {
-          if (vid.paused) {
-            vid.play().catch(() => {});
-            if (icon) icon.classList.add('hidden');
-          } else {
-            vid.pause();
-            if (icon) icon.classList.remove('hidden');
-          }
+        if (state.effectiveLanes >= 2 && (state.proPrefs.navMode === 'sync' || e.shiftKey)) {
+          stepAllUnlocked(1);
+        } else {
+          const lane = getActiveLane();
+          goToLaneSlide(lane, lane.activeIndex + 1);
         }
         return true;
       }
-      if (e.key.toLowerCase() === 'm') {
+
+      if (e.key === 'ArrowUp' || kLow === 'k') {
         e.preventDefault();
-        state.muted = !state.muted;
-        syncMuteIcons();
+        if (state.effectiveLanes >= 2 && (state.proPrefs.navMode === 'sync' || e.shiftKey)) {
+          stepAllUnlocked(-1);
+        } else {
+          const lane = getActiveLane();
+          goToLaneSlide(lane, lane.activeIndex - 1);
+        }
         return true;
       }
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (state.effectiveLanes >= 2 && e.shiftKey) {
+          togglePauseAllLanes();
+        } else {
+          toggleLanePlayPause(getActiveLane());
+        }
+        return true;
+      }
+
+      if (kLow === 'm') {
+        e.preventDefault();
+        if (state.effectiveLanes >= 2 && e.shiftKey) {
+          muteAllLanes();
+        } else {
+          const lane = getActiveLane();
+          setLaneMuted(lane, !lane.muted);
+        }
+        return true;
+      }
+
+      if (kLow === 'l' && state.effectiveLanes >= 2) {
+        e.preventDefault();
+        toggleLaneLock(state.focusedLane);
+        return true;
+      }
+
+      if (kLow === 'r' && state.effectiveLanes >= 2) {
+        e.preventDefault();
+        shuffleUnlockedLanes();
+        return true;
+      }
+
       return false;
     },
     onAgeConfirmed() {
-      if (state.mounted) syncVideoWindow(state.activeIndex);
+      if (!state.mounted) return;
+      for (let k = 0; k < state.effectiveLanes; k++) {
+        syncLaneVideoWindow(state.lanes[k], state.lanes[k].activeIndex);
+      }
     }
   };
 })(window, document);

@@ -158,6 +158,14 @@
       .slice(0, 140);
   }
 
+  function isShortFavEntry(f) {
+    if (!f || typeof f !== 'object') return false;
+    const mt = String(f.media_type || '').toLowerCase();
+    const src = String(f.source || '').toLowerCase();
+    const key = String(f.item_key || f.id || f.item_id || '').toLowerCase();
+    return mt === 'short' || src === 'short' || key.startsWith('short:');
+  }
+
   function compactFavRecord(f) {
     if (!f || typeof f !== 'object') return null;
     const id = parseStrictPositiveInt(f.id || f.item_id);
@@ -681,7 +689,7 @@
       const cachedFavs = readLocalCache('favs', null);
       const favList = (Array.isArray(cachedFavs) && cachedFavs.length ? cachedFavs : this.readLegacyList(favKeys))
         .map(compactFavRecord)
-        .filter(Boolean);
+        .filter((f) => f && !isShortFavEntry(f));
       if (favList.length) {
         _favState.items = favList;
         _favState.ids = favList.map(f => parseStrictPositiveInt(f.id)).filter(n => n !== null);
@@ -755,7 +763,7 @@
         const compactFavs = [];
         const pushCompact = (raw) => {
           const slim = compactFavRecord(raw);
-          if (!slim) return;
+          if (!slim || isShortFavEntry(slim)) return;
           const k = (slim.source && slim.source_id) ? `${slim.source}:${slim.source_id}` : String(slim.id || slim.item_id || '');
           if (!k || seenKeys.has(k)) return;
           seenKeys.add(k);
@@ -887,7 +895,9 @@
       if (!this.isAuthenticated()) {
         // Invitado: leer de caché de invitado con paginación adaptativa (18 PC / 12 Android)
         const guestFavs = readLocalCache('favs', []);
-        const allGuestFavs = (Array.isArray(guestFavs) ? guestFavs : []).map(compactFavRecord).filter(Boolean);
+        const allGuestFavs = (Array.isArray(guestFavs) ? guestFavs : [])
+          .map(compactFavRecord)
+          .filter((f) => f && !isShortFavEntry(f));
         _favState.items = allGuestFavs;
         _favState.total = allGuestFavs.length;
         _favState.totalPages = Math.max(1, Math.ceil(_favState.total / pageSize));
@@ -962,8 +972,12 @@
           return this.getFavoritesState();
         }
 
-        const serverItems = Array.isArray(data.items) ? data.items : [];
-        const serverTotal = typeof data.total === 'number' ? data.total : serverItems.length;
+        const serverItemsRaw = Array.isArray(data.items) ? data.items : [];
+        const serverItems = serverItemsRaw.filter((f) => !isShortFavEntry(f));
+        const strippedShorts = serverItemsRaw.length - serverItems.length;
+        const serverTotal = typeof data.total === 'number'
+          ? Math.max(0, data.total - strippedShorts)
+          : serverItems.length;
 
         _favState.items = serverItems.slice(0, _favState.pageSize);
         _favState.total = serverTotal;
@@ -1011,6 +1025,27 @@
 
     async addFavorite(item) {
       if (!item) return false;
+      if (isShortFavEntry(item)) {
+        if (!this.isAuthenticated()) return false;
+        try {
+          const res = await this.fetchAuthed('/api/user/favorites', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: item.id || item.item_id || null,
+              item_id: item.item_id || item.id || null,
+              source: 'short',
+              source_id: item.source_id || item.id || '',
+              media_type: 'short',
+              title: item.title || '',
+              cover_url: item.cover_url || '',
+              url: ''
+            })
+          });
+          return Boolean(res && res.ok);
+        } catch (err) {
+          return false;
+        }
+      }
       const itemId = item.id || item.item_id || item.source_id || null;
       const hasSourcePair = Boolean(item.source && item.source_id);
       if (!itemId && !hasSourcePair) return false;
@@ -1102,6 +1137,20 @@
       const source = isObj ? (itemOrId.source || '') : (sourceArg || '');
       const sourceId = isObj ? (itemOrId.source_id || '') : (sourceIdArg || '');
       if (!itemId && !(source && sourceId)) return null;
+
+      if ((isObj && isShortFavEntry(itemOrId)) || String(source).toLowerCase() === 'short') {
+        if (!this.isAuthenticated()) return null;
+        try {
+          const qp = new URLSearchParams();
+          if (itemId) qp.set('id', String(itemId));
+          qp.set('source', 'short');
+          if (sourceId) qp.set('source_id', String(sourceId));
+          const res = await this.fetchAuthed(`/api/user/favorites?${qp.toString()}`, { method: 'DELETE' });
+          return (res && res.ok) ? (isObj ? itemOrId : { id: itemId, source: 'short', source_id: sourceId }) : false;
+        } catch (err) {
+          return false;
+        }
+      }
 
       const prevItems = [..._favState.items];
       const prevIds = Array.isArray(_favState.ids) ? [..._favState.ids] : _favState.ids;
@@ -1227,8 +1276,11 @@
         if (!res || !res.ok) return this.getFavoritesState();
         const data = await res.json().catch(() => null);
         if (data && Array.isArray(data.items) && !data.degraded) {
-          _favState.items = data.items;
-          _favState.total = typeof data.total === 'number' ? data.total : data.items.length;
+          const clean = data.items.filter((f) => !isShortFavEntry(f));
+          _favState.items = clean;
+          _favState.total = typeof data.total === 'number'
+            ? Math.max(0, data.total - (data.items.length - clean.length))
+            : clean.length;
           _favState._allLoaded = true;
           this.updateAllCounters();
           window.dispatchEvent(new CustomEvent('velvet:favorites-updated', { detail: this.getFavoritesState() }));

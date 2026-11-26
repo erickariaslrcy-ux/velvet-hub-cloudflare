@@ -547,6 +547,83 @@ try {
   assert.ok(storage[`velvet_usr_${USER_1_ID}_favs`]?.includes(hexVideoId), "Los favoritos se cachean bajo el prefijo aislado de USER_1");
 
   console.log("✓ Motor VelvetPersonalData conserva videos hex, aisla cuentas y protege tarjetas con apóstrofos.");
+
+  // [7] Aislamiento estricto: favoritos de Shorts NO deben salir en Mi Bóveda (solo con type=short)
+  const shortSaveRes = await onRequest({
+    request: new Request("https://www.morbohub.com/api/user/favorites", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${TOKEN_1}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "987654",
+        item_id: "987654",
+        source: "short",
+        source_id: "987654",
+        media_type: "short",
+        title: "Vertical Short Solo Feed",
+        cover_url: "",
+        url: ""
+      })
+    }),
+    env,
+    params: {},
+    waitUntil: () => {}
+  });
+  assert.equal(shortSaveRes.status, 200);
+
+  const vaultListAfterShortRes = await onRequest({
+    request: new Request("https://www.morbohub.com/api/user/favorites?page=1&pageSize=24", {
+      headers: { Authorization: `Bearer ${TOKEN_1}` }
+    }),
+    env,
+    params: {},
+    waitUntil: () => {}
+  });
+  const vaultListAfterShort = await vaultListAfterShortRes.json();
+  assert.equal(
+    vaultListAfterShort.items.some((i) => i.media_type === "short" || i.source === "short"),
+    false,
+    "Mi Bóveda (GET /api/user/favorites) NO debe incluir Shorts guardados"
+  );
+
+  const vaultIdsAfterShortRes = await onRequest({
+    request: new Request("https://www.morbohub.com/api/user/favorites?ids=1", {
+      headers: { Authorization: `Bearer ${TOKEN_1}` }
+    }),
+    env,
+    params: {},
+    waitUntil: () => {}
+  });
+  const vaultIdsAfterShort = await vaultIdsAfterShortRes.json();
+  assert.equal(
+    vaultIdsAfterShort.refs.some((r) => r.media_type === "short" || r.source === "short"),
+    false,
+    "Mi Bóveda (ids=1) NO debe mezclar Shorts en refs ni totales"
+  );
+
+  const syncAfterShortRes = await onRequest({
+    request: new Request("https://www.morbohub.com/api/user/sync-status", {
+      headers: { Authorization: `Bearer ${TOKEN_1}` }
+    }),
+    env,
+    params: {},
+    waitUntil: () => {}
+  });
+  const syncAfterShort = await syncAfterShortRes.json();
+  assert.equal(syncAfterShort.favorites_count, 1, "sync-status solo debe contar favoritos de Bóveda, sin Shorts");
+
+  const shortsOnlyRes = await onRequest({
+    request: new Request("https://www.morbohub.com/api/user/favorites?type=short&page=1&pageSize=50", {
+      headers: { Authorization: `Bearer ${TOKEN_1}` }
+    }),
+    env,
+    params: {},
+    waitUntil: () => {}
+  });
+  const shortsOnly = await shortsOnlyRes.json();
+  assert.equal(shortsOnly.items.length, 1, "type=short debe devolver el Short exclusivamente para la vista de Shorts");
+  assert.equal(String(shortsOnly.items[0].source_id), "987654");
+
+  console.log("✓ Aislamiento Shorts vs Mi Bóveda verificado en backend y frontend.");
   console.log("\n====================================================");
   console.log("✅ TODAS LAS PRUEBAS DE SINCRONIZACIÓN CROSS-BROWSER PASARON");
   console.log("====================================================");

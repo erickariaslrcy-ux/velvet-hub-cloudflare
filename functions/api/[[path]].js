@@ -6786,6 +6786,14 @@ export async function onRequest(context) {
     return { effectiveTitle, effectiveSource, effectiveSourceId, effectiveUrl: "", finalCover };
   };
 
+  const isShortPersonalEntry = (entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    const mt = String(entry.media_type || "").toLowerCase();
+    const src = String(entry.source || "").toLowerCase();
+    const key = String(entry.item_key || entry.id || entry.item_id || "").toLowerCase();
+    return mt === "short" || src === "short" || key.startsWith("short:");
+  };
+
   const buildCustomFavRow = (userId, item) => {
     const isShort = inferPersonalMediaType(item) === "short" || String(item?.source || "").toLowerCase() === "short";
     if (isShort) {
@@ -6996,7 +7004,7 @@ export async function onRequest(context) {
         if (customRes && customRes.ok) {
           const customRows = await customRes.json().catch(() => []);
           for (const cf of (Array.isArray(customRows) ? customRows : [])) {
-            await pushRefEntry(cf);
+            if (!isShortPersonalEntry(cf)) await pushRefEntry(cf);
           }
         }
 
@@ -7005,7 +7013,9 @@ export async function onRequest(context) {
           ...(Array.isArray(user.user_metadata?.favorites) ? user.user_metadata.favorites : []),
           ...(Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [])
         ];
-        for (const mf of legacyMetaFavs) await pushRefEntry(mf);
+        for (const mf of legacyMetaFavs) {
+          if (!isShortPersonalEntry(mf)) await pushRefEntry(mf);
+        }
 
         if (!sqlOk && refs.length === 0) {
           return new Response(JSON.stringify({ ids: [], refs: [], total: 0, degraded: true }), {
@@ -7085,14 +7095,20 @@ export async function onRequest(context) {
           );
         }
 
+        const allowShortsHere = hasTypeFilter && typeFilter === "short";
         const customRowsRaw = customRes && customRes.ok ? await customRes.json().catch(() => []) : [];
-        const customRows = Array.isArray(customRowsRaw) ? customRowsRaw : [];
+        const customRows = (Array.isArray(customRowsRaw) ? customRowsRaw : [])
+          .filter((cf) => allowShortsHere ? isShortPersonalEntry(cf) : !isShortPersonalEntry(cf));
         const customTotal = customRows.length;
 
         const legacyMetaFavs = [
           ...(Array.isArray(user.user_metadata?.favorites) ? user.user_metadata.favorites : []),
           ...(Array.isArray(user.user_metadata?.custom_favorites) ? user.user_metadata.custom_favorites : [])
-        ].filter((mf) => !hasTypeFilter || inferPersonalMediaType(mf) === typeFilter);
+        ].filter((mf) => {
+          if (allowShortsHere) return isShortPersonalEntry(mf);
+          if (isShortPersonalEntry(mf)) return false;
+          return !hasTypeFilter || inferPersonalMediaType(mf) === typeFilter;
+        });
 
         if ((!favRes || !favRes.ok) && customTotal === 0 && legacyMetaFavs.length === 0) {
           return new Response(JSON.stringify({
@@ -8202,12 +8218,9 @@ export async function onRequest(context) {
           verified
         ),
         restFetchWithAdminFallback(
-          `${SUPABASE_URL}/rest/v1/user_custom_favorites?user_id=eq.${user.id}&select=item_key`,
+          `${SUPABASE_URL}/rest/v1/user_custom_favorites?user_id=eq.${user.id}&select=item_key,media_type,source&limit=500`,
           (useAdmin) => ({
-            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({
-              "Prefer": "count=exact",
-              "Range": "0-0"
-            })
+            headers: (useAdmin ? getAdminRestHeaders : (extra) => getUserRestHeaders(token, extra))({})
           }),
           user.id,
           verified
@@ -8239,7 +8252,11 @@ export async function onRequest(context) {
         })
       ]);
 
-      const favCount = parseContentRangeTotal(favRes) + parseContentRangeTotal(customFavRes);
+      const customFavRows = customFavRes && customFavRes.ok ? await customFavRes.json().catch(() => null) : null;
+      const customFavNonShort = Array.isArray(customFavRows)
+        ? customFavRows.filter((r) => !isShortPersonalEntry(r)).length
+        : parseContentRangeTotal(customFavRes);
+      const favCount = parseContentRangeTotal(favRes) + customFavNonShort;
       const histCount = parseContentRangeTotal(histRes) + parseContentRangeTotal(customHistRes);
       const prefData = prefRes.ok ? await prefRes.json().catch(() => []) : [];
       const prefUpdatedAt = prefData && prefData[0] ? prefData[0].updated_at : null;

@@ -269,12 +269,23 @@ assert.ok(
 
 // Service Worker v12
 assert.ok(
-  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign") || swJs.includes("v13-session-persist") || swJs.includes("v14-stable-media") || swJs.includes("v15-mobile-nav") || swJs.includes("v16-stable-covers") || swJs.includes("v17-gallery-mirrors") || swJs.includes("v18-fav-ids") || swJs.includes("v19-section-zoom") || swJs.includes("v20-video-silence") || swJs.includes("v21-gallery-budget") || swJs.includes("v22-video-direct") || swJs.includes("v23-morbo-name") || swJs.includes("v24-subscriptions-fix") || swJs.includes("v25-cloud-favorites") || swJs.includes("v26-security-audit") || swJs.includes("v27-vault-pagination") || swJs.includes("v28-clean-vault-titles") || swJs.includes("v29-random-disjoint-ui") || swJs.includes("v30-pmv-disjoint-final") || swJs.includes("v31-android-pagination-fix") || swJs.includes("v32-launch-hardening") || swJs.includes("v33-fast-budget") || swJs.includes("v34-tiktok-local") || swJs.includes("v35-tiktok-wide") || swJs.includes("v36-tiktok-solo") || swJs.includes("v37-tiktok-fit") || swJs.includes("v38-tiktok-ambient") || swJs.includes("v39-tiktok-turbo") || swJs.includes("v40-tiktok-direct") || swJs.includes("v41-tiktok-stealth") || swJs.includes("v42-tiktok-playable") || swJs.includes("v43-tiktok-zen-favs") || swJs.includes("v44-tiktok-vip-favs") || swJs.includes("v45-tiktok-mega-random"),
+  swJs.includes("v12-velvet-turbo") || swJs.includes("v12-velvet-redesign") || swJs.includes("v13-session-persist") || swJs.includes("v14-stable-media") || swJs.includes("v15-mobile-nav") || swJs.includes("v16-stable-covers") || swJs.includes("v17-gallery-mirrors") || swJs.includes("v18-fav-ids") || swJs.includes("v19-section-zoom") || swJs.includes("v20-video-silence") || swJs.includes("v21-gallery-budget") || swJs.includes("v22-video-direct") || swJs.includes("v23-morbo-name") || swJs.includes("v24-subscriptions-fix") || swJs.includes("v25-cloud-favorites") || swJs.includes("v26-security-audit") || swJs.includes("v27-vault-pagination") || swJs.includes("v28-clean-vault-titles") || swJs.includes("v29-random-disjoint-ui") || swJs.includes("v30-pmv-disjoint-final") || swJs.includes("v31-android-pagination-fix") || swJs.includes("v32-launch-hardening") || swJs.includes("v33-fast-budget") || swJs.includes("v34-tiktok-local") || swJs.includes("v35-tiktok-wide") || swJs.includes("v36-tiktok-solo") || swJs.includes("v37-tiktok-fit") || swJs.includes("v38-tiktok-ambient") || swJs.includes("v39-tiktok-turbo") || swJs.includes("v40-tiktok-direct") || swJs.includes("v41-tiktok-stealth") || swJs.includes("v42-tiktok-playable") || swJs.includes("v43-tiktok-zen-favs") || swJs.includes("v44-tiktok-vip-favs") || swJs.includes("v45-tiktok-mega-random") || swJs.includes("v46-tiktok-multiscreen"),
   "sw.js debe tener la versión de caché actualizada"
 );
 assert.ok(
   swJs.includes("/favicon.ico") && swJs.includes("/icon-192.png"),
   "sw.js debe pre-cachear los nuevos iconos en STATIC_ASSETS"
+);
+assert.ok(
+  !indexHtml.includes('data-vault-filter="short"'),
+  "Mi Bóveda no debe listar Shorts +18 en sus pestañas de favoritos"
+);
+assert.ok(
+  indexHtml.includes('id="tt-lanes-stage"') &&
+    indexHtml.includes('id="tt-lanes-switcher"') &&
+    indexHtml.includes('id="tt-pro-dock"') &&
+    indexHtml.includes('id="tt-pro-popover"'),
+  "La página de Shorts debe incluir el selector Multipantalla (1-3) y el panel Pro"
 );
 
 console.log("✓ Favicons multi-resolución, PWA manifest e invalidación del Service Worker v12 verificados.");

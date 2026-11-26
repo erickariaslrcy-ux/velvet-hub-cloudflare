@@ -48,13 +48,13 @@
   <link rel="stylesheet" href="/css/pagination.css?v=3.10.0">
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination (sin bloqueo externo) -->
-  <script defer src="/js/personal-data.js?v=3.10.0"></script>
+  <script defer src="/js/personal-data.js?v=4.0.0"></script>
   <script defer src="/js/store.js?v=3.10.0"></script>
   <script defer src="/js/router.js?v=3.10.0"></script>
-  <script defer src="/js/vault.js?v=3.10.0"></script>
+  <script defer src="/js/vault.js?v=4.0.0"></script>
   <script defer src="/js/pagination.js?v=3.10.0"></script>
   <script defer src="/js/image-loader.js?v=3.10.0"></script>
-  <script defer src="/js/tiktok-feed.js?v=3.20.0"></script>
+  <script defer src="/js/tiktok-feed.js?v=4.0.0"></script>
 
   <!-- Tailwind CSS Engine asíncrono para utilidades dinámicas sin frenar el arranque -->
   <script async src="https://cdn.tailwindcss.com"></script>
@@ -1218,14 +1218,24 @@
     }
     #tt-top-controls {
       position: absolute;
-      top: 12px;
+      top: 10px;
       left: 14px;
-      z-index: 26;
+      right: 14px;
+      z-index: 32;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .tt-top-group {
       display: flex;
       align-items: center;
       flex-wrap: wrap;
       gap: 8px;
-      transition: opacity 0.2s ease;
+      pointer-events: auto;
     }
     .tt-top-pill {
       display: inline-flex;
@@ -1236,7 +1246,7 @@
       font-size: 11px;
       font-weight: 800;
       color: #fff;
-      background: rgba(14, 7, 28, 0.84);
+      background: rgba(14, 7, 28, 0.86);
       border: 1px solid rgba(255, 45, 149, 0.45);
       backdrop-filter: blur(8px);
       cursor: pointer;
@@ -1244,11 +1254,171 @@
       transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
     }
     .tt-top-pill:hover { transform: scale(1.03); border-color: #ff2d95; background: rgba(34, 12, 58, 0.94); }
+    .tt-top-pill.is-active {
+      background: linear-gradient(135deg, rgba(255, 45, 149, 0.34), rgba(139, 61, 255, 0.36));
+      border-color: #ff2d95;
+    }
     .tt-top-pill-badge {
       padding: 1px 6px;
       border-radius: 999px;
       font-size: 10px;
       font-weight: 900;
+      background: linear-gradient(135deg, #ff2d95, #8b3dff);
+      color: #fff;
+    }
+    #tt-multiscreen-bar {
+      display: none;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      position: relative;
+    }
+    @media (min-width: 768px) {
+      #tt-multiscreen-bar { display: flex; }
+    }
+    .tt-seg-group {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px;
+      border-radius: 999px;
+      background: rgba(12, 6, 24, 0.88);
+      border: 1px solid rgba(168, 85, 247, 0.42);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+      gap: 2px;
+    }
+    .tt-seg-label {
+      font-size: 10px;
+      font-weight: 800;
+      color: rgba(233, 213, 255, 0.72);
+      padding: 0 7px 0 9px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .tt-lane-opt {
+      min-width: 28px;
+      height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.72);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.14s ease;
+    }
+    .tt-lane-opt:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+    .tt-lane-opt.is-selected {
+      color: #fff;
+      background: linear-gradient(135deg, #ff2d95, #8b3dff);
+      box-shadow: 0 0 12px rgba(255, 45, 149, 0.45);
+    }
+    .tt-lane-opt-3 { display: none; }
+    @media (min-width: 1100px) {
+      .tt-lane-opt-3 { display: inline-flex; align-items: center; justify-content: center; }
+    }
+    #tt-pro-dock {
+      display: none;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    #tt-pro-dock.is-open { display: inline-flex; }
+    .tt-pro-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 32px;
+      padding: 0 11px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #f3e8ff;
+      background: rgba(14, 7, 28, 0.88);
+      border: 1px solid rgba(168, 85, 247, 0.42);
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+      transition: all 0.14s ease;
+      white-space: nowrap;
+    }
+    .tt-pro-chip:hover { border-color: #ff2d95; color: #fff; background: rgba(34, 12, 58, 0.94); }
+    .tt-pro-chip.is-sync {
+      border-color: rgba(255, 45, 149, 0.75);
+      background: linear-gradient(135deg, rgba(255, 45, 149, 0.24), rgba(139, 61, 255, 0.28));
+      color: #fff;
+    }
+    .tt-pro-chip.is-green {
+      border-color: rgba(52, 211, 153, 0.72);
+      background: rgba(16, 185, 129, 0.2);
+      color: #a7f3d0;
+    }
+    #tt-pro-popover {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: min(360px, calc(100vw - 28px));
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(11, 5, 24, 0.97);
+      border: 1px solid rgba(255, 45, 149, 0.48);
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.88), 0 0 34px rgba(139, 61, 255, 0.24);
+      backdrop-filter: blur(16px);
+      z-index: 60;
+      color: #fff;
+      font-size: 11px;
+    }
+    #tt-pro-popover.hidden { display: none; }
+    .tt-pro-section-title {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(244, 114, 182, 0.9);
+      margin-bottom: 6px;
+    }
+    .tt-pro-preset-btn {
+      padding: 7px 9px;
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f3e8ff;
+      font-size: 11px;
+      font-weight: 800;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.14s ease;
+    }
+    .tt-pro-preset-btn:hover { border-color: #ff2d95; background: rgba(255, 45, 149, 0.18); color: #fff; }
+    .tt-pro-preset-btn.is-active {
+      border-color: #ff2d95;
+      background: linear-gradient(135deg, rgba(255, 45, 149, 0.25), rgba(139, 61, 255, 0.25));
+      color: #fff;
+    }
+    .tt-pro-mode-row {
+      display: flex;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .tt-pro-mode-opt {
+      flex: 1;
+      padding: 5px 6px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: rgba(233, 213, 255, 0.72);
+      font-size: 10.5px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.14s ease;
+    }
+    .tt-pro-mode-opt:hover { color: #fff; }
+    .tt-pro-mode-opt.is-selected {
       background: linear-gradient(135deg, #ff2d95, #8b3dff);
       color: #fff;
     }
@@ -1289,8 +1459,15 @@
     body.tt-clean-mode #tiktok-feed-view {
       height: 100dvh !important;
     }
+    body.tt-clean-mode .tt-lanes-stage {
+      padding: 4px 10px !important;
+      gap: 8px !important;
+    }
+    body.tt-clean-mode .tt-lane-head {
+      display: none !important;
+    }
     body.tt-clean-mode .tt-slide {
-      padding: 4px 10px;
+      padding: 4px 6px;
     }
     @media (max-width: 1023px) {
       body.tt-clean-mode .tt-slide { padding: 0; }
@@ -1300,7 +1477,8 @@
     body.tt-clean-mode .tt-rail,
     body.tt-clean-mode .tt-progress-wrap,
     body.tt-clean-mode .tt-side-nav,
-    body.tt-clean-mode #tt-top-controls {
+    body.tt-clean-mode #tt-top-controls,
+    body.tt-clean-mode #tt-pro-popover {
       opacity: 0 !important;
       pointer-events: none !important;
     }
@@ -1351,17 +1529,136 @@
       cursor: pointer;
     }
     .tt-fav-del:hover { background: rgba(255, 45, 149, 0.3); color: #fff; }
-    #tiktok-snap-track {
+    .tt-lanes-stage {
       position: relative;
       z-index: 2;
       width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 14px;
+    }
+    .tt-lanes-stage[data-lanes="2"],
+    .tt-lanes-stage[data-lanes="3"] {
+      padding: 54px 72px 10px 18px;
+    }
+    @media (max-width: 1023px) {
+      .tt-lanes-stage[data-lanes="2"],
+      .tt-lanes-stage[data-lanes="3"] {
+        padding: 52px 14px 10px;
+      }
+    }
+    .tt-lane {
+      position: relative;
+      flex: 1 1 0;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .tt-lanes-stage[data-lanes="1"] .tt-lane {
+      max-width: 100%;
+    }
+    .tt-lanes-stage[data-lanes="2"] .tt-lane {
+      max-width: 590px;
+    }
+    .tt-lanes-stage[data-lanes="3"] .tt-lane {
+      max-width: 490px;
+    }
+    .tt-lane.hidden { display: none !important; }
+    .tt-lane-head {
+      display: none;
+      width: 100%;
+      max-width: 460px;
+      height: 30px;
+      margin-bottom: 6px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(12, 6, 26, 0.84);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-shrink: 0;
+      z-index: 15;
+    }
+    .tt-lanes-stage[data-lanes="2"] .tt-lane-head,
+    .tt-lanes-stage[data-lanes="3"] .tt-lane-head {
+      display: flex;
+    }
+    .tt-lane.is-focused .tt-lane-head {
+      border-color: rgba(255, 45, 149, 0.85);
+      box-shadow: 0 0 18px rgba(255, 45, 149, 0.25);
+    }
+    .tt-lane.is-locked .tt-lane-head {
+      border-color: rgba(251, 191, 36, 0.72);
+    }
+    .tt-lane-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10.5px;
+      font-weight: 900;
+      color: rgba(255, 255, 255, 0.82);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+    .tt-lane.is-focused .tt-lane-badge {
+      color: #f9a8d4;
+      background: rgba(255, 45, 149, 0.2);
+    }
+    .tt-lane-mini-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 22px;
+      padding: 0 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 800;
+      color: rgba(233, 213, 255, 0.85);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      cursor: pointer;
+      transition: all 0.14s ease;
+    }
+    .tt-lane-mini-btn:hover { border-color: #ff2d95; color: #fff; background: rgba(255, 45, 149, 0.22); }
+    .tt-lane-mini-btn.is-locked {
+      color: #fde68a;
+      background: rgba(245, 158, 11, 0.24);
+      border-color: rgba(251, 191, 36, 0.65);
+    }
+    .tt-lane-mini-btn.is-fav {
+      color: #fbcfe8;
+      background: rgba(236, 72, 153, 0.25);
+      border-color: rgba(236, 72, 153, 0.65);
+    }
+    .tt-lane-mini-btn.is-wait {
+      color: #a7f3d0;
+      background: rgba(16, 185, 129, 0.22);
+      border-color: rgba(52, 211, 153, 0.65);
+    }
+    #tiktok-snap-track,
+    .tt-snap-track {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
       height: 100%;
       overflow-y: scroll;
       scroll-snap-type: y mandatory;
       scroll-behavior: smooth;
       scrollbar-width: none;
     }
-    #tiktok-snap-track::-webkit-scrollbar { display: none; }
+    #tiktok-snap-track::-webkit-scrollbar,
+    .tt-snap-track::-webkit-scrollbar { display: none; }
     .tt-slide {
       width: 100%;
       height: 100%;
@@ -1373,8 +1670,12 @@
       padding: 8px 16px;
       contain: layout style paint;
     }
+    .tt-lanes-stage[data-lanes="2"] .tt-slide,
+    .tt-lanes-stage[data-lanes="3"] .tt-slide {
+      padding: 2px 4px;
+    }
     @media (max-width: 1023px) {
-      .tt-slide { padding: 0; }
+      .tt-lanes-stage[data-lanes="1"] .tt-slide { padding: 0; }
     }
     .tt-stage {
       position: relative;
@@ -1385,9 +1686,49 @@
       background: #000;
       border: 1px solid rgba(236, 72, 153, 0.38);
       box-shadow: 0 28px 90px rgba(0, 0, 0, 0.95), 0 0 65px rgba(255, 45, 149, 0.2), 0 0 120px rgba(139, 61, 255, 0.16);
-      transition: width 0.22s ease;
+      transition: width 0.22s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    @media (max-width: 1023px) {
+    .tt-lanes-stage[data-lanes="2"] .tt-stage,
+    .tt-lanes-stage[data-lanes="3"] .tt-stage {
+      width: 100%;
+      border-color: rgba(168, 85, 247, 0.28);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.85);
+    }
+    .tt-lanes-stage[data-lanes="2"] .tt-lane.is-focused .tt-stage,
+    .tt-lanes-stage[data-lanes="3"] .tt-lane.is-focused .tt-stage {
+      border-color: rgba(255, 45, 149, 0.78);
+      box-shadow: 0 22px 68px rgba(0, 0, 0, 0.94), 0 0 38px rgba(255, 45, 149, 0.24);
+    }
+    .tt-lanes-stage[data-lanes="2"] .tt-lane.is-locked .tt-stage,
+    .tt-lanes-stage[data-lanes="3"] .tt-lane.is-locked .tt-stage {
+      border-color: rgba(251, 191, 36, 0.62);
+    }
+    body.tt-clean-mode .tt-stage {
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.9) !important;
+    }
+    .tt-lanes-stage[data-lanes="3"] .tt-info {
+      left: 11px;
+      right: 54px;
+      bottom: 24px;
+    }
+    .tt-lanes-stage[data-lanes="3"] .tt-title {
+      font-size: 13px;
+    }
+    .tt-lanes-stage[data-lanes="3"] .tt-rail {
+      right: 8px;
+      bottom: 26px;
+      gap: 7px;
+    }
+    .tt-lanes-stage[data-lanes="3"] .tt-rail-ico {
+      width: 34px;
+      height: 34px;
+      font-size: 13px;
+    }
+    .tt-lanes-stage[data-lanes="3"] .tt-rail-txt {
+      font-size: 9px;
+    }
+    @media (max-width: 767px) {
       .tt-stage {
         width: 100% !important;
         border-radius: 0;
@@ -1963,23 +2304,119 @@
     </div>
 
     <div id="tt-top-controls">
-      <button type="button" id="tt-favs-pill" data-tt-action="open-favs" class="tt-top-pill" title="Ver tus shorts guardados">
-        <i class="fa-solid fa-heart text-pink-400"></i>
-        <span>Favoritos</span>
-        <span id="tt-favs-count" class="tt-top-pill-badge">0</span>
-      </button>
+      <div class="tt-top-group">
+        <button type="button" id="tt-favs-pill" data-tt-action="open-favs" class="tt-top-pill" title="Tus shorts favoritos (exclusivos de esta sección)">
+          <i class="fa-solid fa-heart text-pink-400"></i>
+          <span>Favoritos</span>
+          <span id="tt-favs-count" class="tt-top-pill-badge">0</span>
+        </button>
 
-      <button type="button" id="tt-favs-mode-chip" data-tt-action="exit-favs-mode" class="hidden tt-top-pill bg-pink-600/35 border-pink-400">
-        <i class="fa-solid fa-play text-pink-300 text-[10px]"></i>
-        <span>Modo Favoritos · Volver</span>
-        <i class="fa-solid fa-xmark"></i>
-      </button>
+        <button type="button" id="tt-favs-mode-chip" data-tt-action="exit-favs-mode" class="hidden tt-top-pill bg-pink-600/35 border-pink-400">
+          <i class="fa-solid fa-play text-pink-300 text-[10px]"></i>
+          <span>Modo Favoritos · Volver</span>
+          <i class="fa-solid fa-xmark"></i>
+        </button>
 
-      <button type="button" id="tt-search-chip" data-tt-action="clear-search" class="hidden tt-top-pill bg-pink-500/25 border-pink-500/60">
-        <i class="fa-solid fa-magnifying-glass text-[10px] text-pink-300"></i>
-        <span id="tt-search-chip-label"></span>
-        <i class="fa-solid fa-xmark"></i>
-      </button>
+        <button type="button" id="tt-search-chip" data-tt-action="clear-search" class="hidden tt-top-pill bg-pink-500/25 border-pink-500/60">
+          <i class="fa-solid fa-magnifying-glass text-[10px] text-pink-300"></i>
+          <span id="tt-search-chip-label"></span>
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div id="tt-multiscreen-bar" class="tt-top-group">
+        <div class="tt-seg-group" id="tt-lanes-switcher" role="group" aria-label="Pantallas simultáneas">
+          <span class="tt-seg-label"><i class="fa-solid fa-table-columns text-pink-400"></i><span class="hidden xl:inline">Pantallas</span></span>
+          <button type="button" data-tt-action="set-lanes" data-tt-lanes="1" class="tt-lane-opt is-selected" title="1 video grande">1</button>
+          <button type="button" data-tt-action="set-lanes" data-tt-lanes="2" class="tt-lane-opt" title="2 videos simultáneos">2</button>
+          <button type="button" data-tt-action="set-lanes" data-tt-lanes="3" class="tt-lane-opt tt-lane-opt-3" title="3 videos simultáneos (máximo)">3</button>
+        </div>
+
+        <div id="tt-pro-dock">
+          <button type="button" id="tt-nav-mode-btn" data-tt-action="cycle-nav" class="tt-pro-chip" title="Elegir si ↑/↓ baja solo la pantalla enfocada o todas juntas">
+            <i class="fa-solid fa-arrows-up-down text-pink-400"></i>
+            <span id="tt-nav-mode-label">Nav: Individual</span>
+          </button>
+          <button type="button" id="tt-audio-mode-btn" data-tt-action="cycle-audio" class="tt-pro-chip" title="Elegir audio en una sola pantalla o libre">
+            <i class="fa-solid fa-volume-high text-pink-400"></i>
+            <span id="tt-audio-mode-label">Audio: Solo una</span>
+          </button>
+          <button type="button" id="tt-auto-mode-btn" data-tt-action="cycle-auto" class="tt-pro-chip" title="Cómo avanza Auto al terminar los videos">
+            <i class="fa-solid fa-forward-step text-pink-400"></i>
+            <span id="tt-auto-mode-label">Auto: Libre</span>
+          </button>
+          <button type="button" data-tt-action="shuffle-all" class="tt-pro-chip" title="Cambiar por videos nuevos todas las pantallas no fijadas (tecla R)">
+            <i class="fa-solid fa-shuffle text-pink-400"></i>
+            <span class="hidden xl:inline">Todas</span>
+          </button>
+          <button type="button" id="tt-pro-menu-btn" data-tt-action="toggle-pro-menu" class="tt-pro-chip" title="Configuración inteligente Multipantalla y atajos">
+            <i class="fa-solid fa-sliders text-pink-400"></i>
+            <span>Pro</span>
+          </button>
+        </div>
+
+        <div id="tt-pro-popover" class="hidden" role="dialog" aria-label="Control Pro Multipantalla">
+          <div class="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
+            <span class="font-black text-xs text-white flex items-center gap-1.5">
+              <i class="fa-solid fa-wand-magic-sparkles text-pink-400"></i> Control Pro Multipantalla
+            </span>
+            <button type="button" data-tt-action="close-pro-menu" class="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer text-[11px]">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div class="mb-3">
+            <div class="tt-pro-section-title">Perfiles inteligentes (1 clic)</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button type="button" data-tt-preset="smart" class="tt-pro-preset-btn">🧠 Smart</button>
+              <button type="button" data-tt-preset="sync" class="tt-pro-preset-btn">🔗 Sync Total</button>
+              <button type="button" data-tt-preset="free" class="tt-pro-preset-btn">🎛️ Todo Libre</button>
+            </div>
+          </div>
+
+          <div class="space-y-2.5 mb-3">
+            <div>
+              <div class="tt-pro-section-title">Navegación (teclas ↑ / ↓ y flechas)</div>
+              <div class="tt-pro-mode-row">
+                <button type="button" data-tt-set-nav="focused" class="tt-pro-mode-opt">Solo enfocada</button>
+                <button type="button" data-tt-set-nav="sync" class="tt-pro-mode-opt">Todas juntas (salvo 🔒)</button>
+              </div>
+            </div>
+            <div>
+              <div class="tt-pro-section-title">Audio entre pantallas</div>
+              <div class="tt-pro-mode-row">
+                <button type="button" data-tt-set-audio="solo" class="tt-pro-mode-opt">Solo una</button>
+                <button type="button" data-tt-set-audio="follow" class="tt-pro-mode-opt">Seguir foco</button>
+                <button type="button" data-tt-set-audio="free" class="tt-pro-mode-opt">Libre</button>
+              </div>
+            </div>
+            <div>
+              <div class="tt-pro-section-title">Auto-avance al terminar</div>
+              <div class="tt-pro-mode-row">
+                <button type="button" data-tt-set-auto="lane" class="tt-pro-mode-opt">Cada pantalla</button>
+                <button type="button" data-tt-set-auto="sync" class="tt-pro-mode-opt">Esperar a todas</button>
+                <button type="button" data-tt-set-auto="off" class="tt-pro-mode-opt">Off</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-1.5 mb-3">
+            <button type="button" data-tt-action="toggle-pause-all" class="tt-pro-preset-btn text-center">⏯️ Pausar / Seguir todas</button>
+            <button type="button" data-tt-action="mute-all" class="tt-pro-preset-btn text-center">🔇 Silenciar todas</button>
+            <button type="button" data-tt-action="unlock-all" class="tt-pro-preset-btn text-center">🔓 Soltar fijadas</button>
+            <button type="button" data-tt-action="clean" class="tt-pro-preset-btn text-center">👁️ Pantalla limpia</button>
+          </div>
+
+          <div class="pt-2 border-t border-white/10 text-[10px] text-purple-200/75 grid grid-cols-2 gap-x-2 gap-y-1">
+            <span><b class="text-white">1/2/3</b> o <b class="text-white">←/→</b> Enfocar</span>
+            <span><b class="text-white">↑/↓</b> Bajar / Subir</span>
+            <span><b class="text-white">L</b> Fijar pantalla</span>
+            <span><b class="text-white">R</b> Cambiar todas</span>
+            <span><b class="text-white">Shift+Esp</b> Pausa global</span>
+            <span><b class="text-white">H</b> Pantalla limpia</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <button type="button" id="tt-clean-exit-btn" data-tt-action="clean" title="Salir del modo pantalla limpia y mostrar botones">
@@ -1987,7 +2424,52 @@
       <span>Mostrar controles</span>
     </button>
 
-    <div id="tiktok-snap-track"></div>
+    <div id="tt-lanes-stage" class="tt-lanes-stage" data-lanes="1">
+      <div class="tt-lane is-focused" data-lane="0" id="tt-lane-0">
+        <div class="tt-lane-head" data-lane-head="0">
+          <div class="flex items-center gap-1 min-w-0">
+            <button type="button" class="tt-lane-badge" data-tt-lane-action="focus" data-lane="0" title="Enfocar pantalla 1 (tecla 1)">#1 · Activa</button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="source" data-lane="0" data-tt-lane-source-btn="0" title="Cambiar origen entre Aleatorio y Favoritos">🎲 Para Ti</button>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="lock" data-lane="0" data-tt-lane-lock-btn="0" title="Fijar pantalla 1 para que no cambie con Sync (tecla L)"><i class="fa-solid fa-thumbtack"></i></button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="prev" data-lane="0" title="Anterior en pantalla 1"><i class="fa-solid fa-chevron-up"></i></button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="next" data-lane="0" title="Siguiente en pantalla 1"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+        </div>
+        <div id="tiktok-snap-track" class="tt-snap-track" data-lane-track="0"></div>
+      </div>
+
+      <div class="tt-lane hidden" data-lane="1" id="tt-lane-1">
+        <div class="tt-lane-head" data-lane-head="1">
+          <div class="flex items-center gap-1 min-w-0">
+            <button type="button" class="tt-lane-badge" data-tt-lane-action="focus" data-lane="1" title="Enfocar pantalla 2 (tecla 2)">#2</button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="source" data-lane="1" data-tt-lane-source-btn="1" title="Cambiar origen entre Aleatorio y Favoritos">🎲 Para Ti</button>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="lock" data-lane="1" data-tt-lane-lock-btn="1" title="Fijar pantalla 2 para que no cambie con Sync (tecla L)"><i class="fa-solid fa-thumbtack"></i></button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="prev" data-lane="1" title="Anterior en pantalla 2"><i class="fa-solid fa-chevron-up"></i></button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="next" data-lane="1" title="Siguiente en pantalla 2"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+        </div>
+        <div id="tiktok-snap-track-1" class="tt-snap-track" data-lane-track="1"></div>
+      </div>
+
+      <div class="tt-lane hidden" data-lane="2" id="tt-lane-2">
+        <div class="tt-lane-head" data-lane-head="2">
+          <div class="flex items-center gap-1 min-w-0">
+            <button type="button" class="tt-lane-badge" data-tt-lane-action="focus" data-lane="2" title="Enfocar pantalla 3 (tecla 3)">#3</button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="source" data-lane="2" data-tt-lane-source-btn="2" title="Cambiar origen entre Aleatorio y Favoritos">🎲 Para Ti</button>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="lock" data-lane="2" data-tt-lane-lock-btn="2" title="Fijar pantalla 3 para que no cambie con Sync (tecla L)"><i class="fa-solid fa-thumbtack"></i></button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="prev" data-lane="2" title="Anterior en pantalla 3"><i class="fa-solid fa-chevron-up"></i></button>
+            <button type="button" class="tt-lane-mini-btn" data-tt-lane-action="next" data-lane="2" title="Siguiente en pantalla 3"><i class="fa-solid fa-chevron-down"></i></button>
+          </div>
+        </div>
+        <div id="tiktok-snap-track-2" class="tt-snap-track" data-lane-track="2"></div>
+      </div>
+    </div>
 
     <div id="tt-favs-modal" class="hidden" role="dialog" aria-modal="true" aria-label="Mis Shorts Favoritos">
       <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-purple-500/25 bg-[#0c051a]/90 shrink-0">
@@ -2001,6 +2483,10 @@
           </div>
         </div>
         <div class="flex items-center gap-2">
+          <button type="button" id="tt-favs-spread-all" data-tt-action="spread-favs" class="hidden px-3 py-2 rounded-full bg-white/10 hover:bg-pink-500/25 border border-pink-400/50 text-white text-xs font-black items-center gap-1.5 cursor-pointer" title="Repartir favoritos en todas las pantallas activas">
+            <i class="fa-solid fa-table-columns text-pink-300"></i>
+            <span class="hidden sm:inline">En todas</span>
+          </button>
           <button type="button" id="tt-favs-play-all" data-tt-action="play-all-favs" class="hidden px-3.5 py-2 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg">
             <i class="fa-solid fa-play"></i>
             <span class="hidden sm:inline">Reproducir todos</span>
@@ -2391,7 +2877,6 @@
             <!-- Chips por tipo -->
             <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar" id="vault-fav-type-chips">
               <button onclick="window.VelvetVault?.setFavFilter('all')" data-vault-filter="all" class="px-3 py-1.5 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-500/40 text-xs font-bold cursor-pointer">Todo</button>
-              <button onclick="window.VelvetVault?.setFavFilter('short')" data-vault-filter="short" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer whitespace-nowrap">Shorts +18</button>
               <button onclick="window.VelvetVault?.setFavFilter('comic')" data-vault-filter="comic" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Cómics</button>
               <button onclick="window.VelvetVault?.setFavFilter('video')" data-vault-filter="video" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Videos</button>
               <button onclick="window.VelvetVault?.setFavFilter('gallery')" data-vault-filter="gallery" class="px-3 py-1.5 rounded-xl bg-white/[0.04] text-lav/70 hover:text-white text-xs font-medium cursor-pointer">Galerías</button>
