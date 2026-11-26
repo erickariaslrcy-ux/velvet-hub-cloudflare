@@ -1,9 +1,12 @@
-// Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages v12 - Turbo Dynamic & Profile Resilience)
-const CACHE_VERSION = 'v32-launch-hardening';
+// Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages - Fast Cache & Worker Budget)
+const CACHE_VERSION = 'v33-fast-budget';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
+const COVER_CACHE = `velvet-covers-${CACHE_VERSION}`;
 const IMAGE_CACHE = `velvet-images-${CACHE_VERSION}`;
-const MAX_CACHED_IMAGES = 800;
+const MAX_CACHED_COVERS = 1500;
+const MAX_CACHED_IMAGES = 1500;
+const MEDIA_INFLIGHT = new Map();
 
 const STATIC_ASSETS = [
   '/',
@@ -67,12 +70,14 @@ self.addEventListener('activate', (event) => {
       );
       // Por si una portada fallida (SVG de reserva, 403 o HTML) quedó
       // guardada con el nombre de caché nuevo.
-      const imageCache = await caches.open(IMAGE_CACHE);
-      const imageKeys = await imageCache.keys();
-      await Promise.all(imageKeys.map(async (key) => {
-        const cached = await imageCache.match(key);
-        if (!isUsableCoverResponse(cached)) await imageCache.delete(key);
-      }));
+      for (const cacheName of [COVER_CACHE, IMAGE_CACHE]) {
+        const mediaCache = await caches.open(cacheName);
+        const mediaKeys = await mediaCache.keys();
+        await Promise.all(mediaKeys.map(async (key) => {
+          const cached = await mediaCache.match(key);
+          if (!isUsableCoverResponse(cached)) await mediaCache.delete(key);
+        }));
+      }
     }).then(() => self.clients.claim())
   );
 });
@@ -174,8 +179,13 @@ self.addEventListener('fetch', (event) => {
     url.pathname.startsWith('/api/img');
 
   if (isImageReq) {
+    const isCoverVariant = url.pathname.startsWith('/api/media') && (url.searchParams.has('w') || url.searchParams.get('cov') === '1');
+    const targetCacheName = isCoverVariant ? COVER_CACHE : IMAGE_CACHE;
+    const targetMaxItems = isCoverVariant ? MAX_CACHED_COVERS : MAX_CACHED_IMAGES;
+    const inflightKey = req.url;
+
     event.respondWith(
-      caches.open(IMAGE_CACHE).then(async (cache) => {
+      caches.open(targetCacheName).then(async (cache) => {
         const cached = await cache.match(req);
 
         // Cache-first: una portada ya vista no vuelve a salir a la red.
@@ -184,33 +194,46 @@ self.addEventListener('fetch', (event) => {
           try { await cache.delete(req); } catch (e) {}
         } else if (cached) return cached;
 
-        const fetchPromise = (async () => {
-          // Reintento optimizado antes de rendirse con timeout adaptativo
-          for (let attempt = 0; attempt < 2; attempt++) {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), attempt === 0 ? 10000 : 15000);
-            try {
-              const networkResp = await fetch(req, { signal: controller.signal });
-              clearTimeout(timer);
-              const cType = (networkResp && networkResp.headers.get('content-type') || '').toLowerCase();
-              const isHtml = cType.includes('text/html') || cType.includes('application/json');
-              if (networkResp && networkResp.status === 200 && !isHtml && cType.includes('image') && !cType.includes('video') && !cType.includes('mpegurl')) {
-                cache.put(req, networkResp.clone());
-                trimLruCache(IMAGE_CACHE, MAX_CACHED_IMAGES);
+        let sharedPromise = MEDIA_INFLIGHT.get(inflightKey);
+        if (!sharedPromise) {
+          sharedPromise = (async () => {
+            // Solo reintentar una vez ante caídas de red o 5xx reales; nunca repetir 4xx ni upstream-rejected
+            for (let attempt = 0; attempt < 2; attempt++) {
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), attempt === 0 ? 7500 : 12000);
+              try {
+                const networkResp = await fetch(req, { signal: controller.signal });
+                clearTimeout(timer);
+                const cType = (networkResp && networkResp.headers.get('content-type') || '').toLowerCase();
+                const isHtml = cType.includes('text/html') || cType.includes('application/json');
+                if (networkResp && networkResp.status === 200 && !isHtml && cType.includes('image') && !cType.includes('video') && !cType.includes('mpegurl')) {
+                  cache.put(req, networkResp.clone()).catch(() => {});
+                  trimLruCache(targetCacheName, targetMaxItems);
+                }
+                if (networkResp && !isHtml && (networkResp.status === 200 || networkResp.status === 304 || networkResp.status === 206)) {
+                  return networkResp;
+                }
+                if (networkResp && ((networkResp.status >= 400 && networkResp.status < 500) || networkResp.headers.get('X-Velvet-Media') === 'upstream-rejected')) {
+                  break;
+                }
+              } catch (err) {
+                clearTimeout(timer);
               }
-              if (networkResp && !isHtml && (networkResp.status === 200 || networkResp.status === 304 || networkResp.status === 206)) {
-                return networkResp;
-              }
-            } catch (err) {
-              clearTimeout(timer);
             }
-          }
-          return null;
-        })();
+            return null;
+          })();
+          MEDIA_INFLIGHT.set(inflightKey, sharedPromise);
+        }
 
-        const netRes = await fetchPromise;
-        if (netRes && (netRes.status === 200 || netRes.status === 304 || netRes.status === 206)) {
-          return netRes;
+        try {
+          const netRes = await sharedPromise;
+          if (netRes && (netRes.status === 200 || netRes.status === 304 || netRes.status === 206)) {
+            return netRes.clone();
+          }
+        } finally {
+          if (MEDIA_INFLIGHT.get(inflightKey) === sharedPromise) {
+            MEDIA_INFLIGHT.delete(inflightKey);
+          }
         }
 
         // 502 para que el onerror de la tarjeta elija cámara, libro o play.

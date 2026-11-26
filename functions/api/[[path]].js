@@ -410,13 +410,18 @@ function unwrapBuonduaEmbed(targetUrl) {
 }
 
 // i2.buondua.com y pic.4khd.com bloquean al worker o redirigen fuera de la
-// lista. Photon (i0.wp.com) sí entrega esos archivos.
-function photonCoverUrl(targetUrl) {
+// lista. Photon (i0.wp.com) sí entrega esos archivos y comprime portadas.
+function photonCoverUrl(targetUrl, thumbWidth = 0) {
   let parsed;
   try { parsed = new URL(String(targetUrl || "")); } catch (e) { return ""; }
   const host = parsed.hostname.toLowerCase();
   if (!hostnameEndsWith(host, "buondua.com") && !hostnameEndsWith(host, "4khd.com")) return "";
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+  const wNum = Number(thumbWidth) || 0;
+  if (wNum > 0) {
+    const clampedW = Math.min(720, Math.max(320, Math.round(wNum)));
+    return `https://i0.wp.com/${host}${parsed.pathname}?ssl=1&w=${clampedW}&quality=78`;
+  }
   return `https://i0.wp.com/${host}${parsed.pathname}?ssl=1`;
 }
 
@@ -429,7 +434,9 @@ function galleryFetchPlan(targetUrl, targetWidth) {
     if (!next || ordered.indexOf(next) !== -1) return;
     ordered.push(next);
   };
-  const isThumbnail = targetWidth !== undefined ? Number(targetWidth) > 0 : true;
+  const parsedW = targetWidth !== undefined ? Number(targetWidth) : 420;
+  const isThumbnail = parsedW > 0;
+  const thumbW = isThumbnail ? Math.min(720, Math.max(360, parsedW)) : 0;
 
   if (isThumbnail) {
     add(xasiatAlbumPreview(primary));
@@ -437,13 +444,13 @@ function galleryFetchPlan(targetUrl, targetWidth) {
   add(unwrapBuonduaEmbed(primary));
   let host = "";
   try { host = new URL(primary).hostname.toLowerCase(); } catch (e) { host = ""; }
-  if (hostnameEndsWith(host, "buondua.com")) add(photonCoverUrl(primary));
+  if (hostnameEndsWith(host, "buondua.com")) add(photonCoverUrl(primary, thumbW));
   add(primary);
   if (!isThumbnail) {
     add(xasiatPhotoThumbnail(primary));
     add(xasiatAlbumPreview(primary));
   }
-  if (hostnameEndsWith(host, "4khd.com")) add(photonCoverUrl(primary));
+  if (hostnameEndsWith(host, "4khd.com")) add(photonCoverUrl(primary, thumbW));
   return ordered;
 }
 
@@ -1962,6 +1969,9 @@ function buildSessionCookies(request, accessToken, refreshToken, expiresAtSec) {
   if (refreshToken && refreshToken.length > 10 && refreshToken.length < 3200) {
     cookies.push(sessionCookie("velvet_refresh", refreshToken, 60 * 60 * 24 * 30, secure));
   }
+  if (cookies.length > 0) {
+    cookies.push(publicSessionCookie("velvet_auth_active", "1", 60 * 60 * 24 * 30, secure));
+  }
   return cookies;
 }
 
@@ -1969,8 +1979,20 @@ function clearSessionCookies(request) {
   const secure = requestIsSecure(request);
   return [
     sessionCookie("velvet_access", "", 0, secure),
-    sessionCookie("velvet_refresh", "", 0, secure)
+    sessionCookie("velvet_refresh", "", 0, secure),
+    publicSessionCookie("velvet_auth_active", "", 0, secure)
   ];
+}
+
+function publicSessionCookie(name, value, maxAge, secure) {
+  const parts = [
+    `${name}=${encodeURIComponent(value || "")}`,
+    `Max-Age=${Math.max(0, maxAge | 0)}`,
+    "Path=/",
+    "SameSite=Lax"
+  ];
+  if (secure) parts.push("Secure");
+  return parts.join("; ");
 }
 
 function sessionCookie(name, value, maxAge, secure) {
@@ -2785,6 +2807,7 @@ export async function onRequest(context) {
     }
 
     // Parámetros de variantes y compresión de imagen (Fase B)
+    const isCoverVariant = url.searchParams.get("cov") === "1";
     const rawW = parseInt(url.searchParams.get("w") || "0", 10);
     const ALLOWED_WIDTHS = [120, 240, 360, 480, 720, 1080];
     let targetWidth = 0;
@@ -2793,6 +2816,7 @@ export async function onRequest(context) {
         Math.abs(curr - rawW) < Math.abs(prev - rawW) ? curr : prev
       );
     }
+    const effectiveThumbWidth = targetWidth > 0 ? targetWidth : (isCoverVariant ? 420 : 0);
 
     const rawQ = parseInt(url.searchParams.get("q") || "70", 10);
     const targetQuality = Math.min(90, Math.max(50, rawQ));
@@ -2809,7 +2833,7 @@ export async function onRequest(context) {
     }
 
     // ETag determinista y revalidación 304 instantánea
-    const etagSeed = `${targetMediaUrl}_w${targetWidth}_q${targetQuality}_f${targetFormat}`;
+    const etagSeed = `${targetMediaUrl}_w${targetWidth}_cov${isCoverVariant ? 1 : 0}_q${targetQuality}_f${targetFormat}`;
     let etagHash = 0;
     for (let i = 0; i < etagSeed.length; i++) {
       etagHash = (etagHash << 5) - etagHash + etagSeed.charCodeAt(i);
@@ -2837,6 +2861,7 @@ export async function onRequest(context) {
     normUrl.searchParams.set("mv", "2");
     if (tParam) normUrl.searchParams.set("t", tParam);
     if (targetWidth) normUrl.searchParams.set("w", String(targetWidth));
+    if (isCoverVariant) normUrl.searchParams.set("cov", "1");
     if (targetQuality) normUrl.searchParams.set("q", String(targetQuality));
     normUrl.searchParams.set("fmt", targetFormat);
 
@@ -2901,7 +2926,7 @@ export async function onRequest(context) {
         };
       }
 
-      const fetchCandidate = async (candidateUrl, withResize) => {
+      const fetchCandidate = async (candidateUrl, withResize = false) => {
         if (!isSafeUpstreamUrl(candidateUrl) && !isGalleryFallbackUrl(candidateUrl)) {
           return new Response("blocked", { status: 403, headers: { "content-type": "text/plain" } });
         }
@@ -2912,6 +2937,7 @@ export async function onRequest(context) {
             method: method === "HEAD" ? "HEAD" : "GET",
             headers: buildUpstreamHeaders(spoofedReferer, false, current),
             redirect: "manual",
+            signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined,
             cf: {
               cacheEverything: true,
               cacheTtl: 31536000,
@@ -2971,7 +2997,7 @@ export async function onRequest(context) {
           }
         }
       } else {
-        const plan = galleryFetchPlan(targetMediaUrl, targetWidth);
+        const plan = galleryFetchPlan(targetMediaUrl, effectiveThumbWidth);
         const primaryUrl = normalizeUpstreamUrl(targetMediaUrl);
         upstream = null;
         for (let i = 0; i < plan.length; i++) {

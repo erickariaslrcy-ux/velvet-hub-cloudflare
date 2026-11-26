@@ -263,19 +263,13 @@
 
     /* Film Grain Noise Disabled for 100% Zero-CPU Performance */
 
-    /* Velvet Logo Loader Seductive Breathing Pulse */
+    /* Velvet Logo Loader Subtle Fade (Cero drop-shadow pesado en Android) */
     @keyframes velvetLogoPulse {
-      0%, 100% {
-        transform: scale(1);
-        filter: drop-shadow(0 0 10px rgba(255, 45, 149, 0.55)) drop-shadow(0 0 24px rgba(139, 61, 255, 0.3));
-      }
-      50% {
-        transform: scale(1.04);
-        filter: drop-shadow(0 0 20px rgba(255, 45, 149, 0.85)) drop-shadow(0 0 45px rgba(139, 61, 255, 0.6));
-      }
+      0%, 100% { opacity: 0.78; }
+      50% { opacity: 1; }
     }
     .animate-velvet-breathe {
-      animation: velvetLogoPulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      animation: velvetLogoPulse 2.4s ease-in-out infinite;
     }
 
     /* Velvet Ambilight Glow Soft Transition */
@@ -415,18 +409,15 @@
 
     @keyframes velvetCardFadeUp {
       from {
-        opacity: 0;
-        transform: translateY(14px) scale(0.985);
+        opacity: 0.72;
       }
       to {
         opacity: 1;
-        transform: translateY(0) scale(1);
       }
     }
 
     .velvet-card-enter {
-      animation: velvetCardFadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-      animation-delay: calc(var(--card-i, 0) * 25ms);
+      animation: velvetCardFadeUp 0.14s ease-out both;
     }
 
     .card-cover-img {
@@ -1487,7 +1478,7 @@
 
     <!-- 1. HERO SPOTLIGHT CAROUSEL CINEMATOGRÁFICO (TOP 5 ESTRENOS) -->
 
-    <section id="hero-section" class="hidden relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d061c] shadow-2xl group">
+    <section id="hero-section" class="velvet-hero-skeleton relative rounded-3xl overflow-hidden border border-white/10 bg-[#0d061c] shadow-2xl group min-h-[260px]">
 
       <!-- Fondo Atmosférico con Desenfoque Dinámico -->
 
@@ -1599,11 +1590,51 @@
 
     <!-- 3. GRID PRINCIPAL DE CONTENIDO -->
     <section class="space-y-4">
-      <div id="comics-grid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6">
+      <div id="comics-grid" class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-5">
 
-        <!-- Skeletons por defecto -->
+        <!-- Skeletons reservados inmediatamente -->
 
       </div>
+      <script>
+        (function initReservedGridShell() {
+          try {
+            var p = (window.location && window.location.pathname) || '/';
+            var isSearch = !!(new URLSearchParams(window.location.search || '').get('q'));
+            var mode = p.startsWith('/videos') ? 'videos'
+              : (p.startsWith('/cosplay') || p.startsWith('/galerias')) ? 'galleries'
+              : (p.startsWith('/juegos') || p.startsWith('/games')) ? 'games' : 'comics';
+            var heroSec = document.getElementById('hero-section');
+            var heroCoverBox = document.getElementById('hero-cover-container');
+            if (heroSec && isSearch) {
+              heroSec.classList.add('hidden');
+            } else if (heroCoverBox) {
+              heroCoverBox.className = (mode === 'videos')
+                ? 'w-full max-w-xs sm:max-w-sm md:max-w-md aspect-video rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/15 relative group/cover cursor-pointer hover:border-pink-500/50 transition-all'
+                : 'w-36 sm:w-44 md:w-52 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/15 relative group/cover cursor-pointer hover:border-pink-500/50 transition-all';
+            }
+            var grid = document.getElementById('comics-grid');
+            if (!grid || grid.querySelector('[data-card-id]')) return;
+            var isMob = typeof window !== 'undefined' && window.innerWidth < 768;
+            var count = isMob ? 12 : 24;
+            grid.className = (mode === 'videos')
+              ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5'
+              : (mode === 'games')
+                ? 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 sm:gap-5'
+                : 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-5';
+            var aspect = (mode === 'videos') ? 'aspect-video' : (mode === 'games' ? 'aspect-[16/11]' : 'aspect-[3/4]');
+            var html = '';
+            for (var i = 0; i < count; i++) {
+              html += '<div data-skeleton="1" class="flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden select-none" aria-hidden="true">' +
+                '<div class="relative ' + aspect + ' w-full velvet-logo-ph"><img src="/velvet_logo.png" alt="" class="velvet-logo-ph-mark" width="40" height="40" decoding="async"></div>' +
+                '<div class="p-3 flex-1 flex flex-col justify-between space-y-2">' +
+                  '<div class="space-y-1.5"><div class="h-3.5 w-11/12 rounded bg-white/[0.06]"></div><div class="h-3.5 w-2/3 rounded bg-white/[0.04]"></div></div>' +
+                  '<div class="pt-1.5 border-t border-white/[0.08] flex items-center justify-between"><div class="h-2.5 w-16 rounded bg-white/[0.05]"></div><div class="h-2.5 w-10 rounded bg-white/[0.05]"></div></div>' +
+                '</div></div>';
+            }
+            grid.innerHTML = html;
+          } catch (e) {}
+        })();
+      </script>
 
     </section>
 
@@ -4588,10 +4619,9 @@
         }
       }
 
-      // Actualizar inmediatamente encabezados de seccion para la nueva pestana activa
-      // Ocultar hero hasta que lleguen los slides reales de esta seccion (evita placeholders o contenido obsoleto)
+      // Reservar estructura limpia de Hero para el nuevo modo (solo ocultar si hay búsqueda activa)
+      resetHeroToSkeleton(mode, !!(state.query && state.query.trim()));
       const heroSec = document.getElementById("hero-section");
-      if (heroSec) heroSec.classList.add("hidden");
       const titleSec = document.getElementById("grid-section-title");
       const resCount = document.getElementById("results-count");
       const badgeEl = document.getElementById("grid-status-badge");
@@ -5603,9 +5633,13 @@
     function getStealthImageUrl(url, referer, width = 0, quality = 70) {
       if (!url || typeof url !== 'string') return '';
       if (url.startsWith('data:') || url.startsWith('blob:')) return url;
-      // El original. w/q le pedían a Cloudflare un recorte y varias portadas no llegaban.
+      // Marcar portadas con cov=1 para activar espejos rápidos y Photon sin disparar cf.image (que duplica peticiones en plan gratuito)
+      if (width > 0 && url.startsWith('/api/media') && !/[?&](?:cov|w)=/.test(url)) {
+        return url + (url.includes('?') ? '&' : '?') + 'cov=1';
+      }
       return url;
     }
+    window.getStealthImageUrl = getStealthImageUrl;
 
     function getStealthStreamUrl(streamUrl, referer) {
       if (!streamUrl || typeof streamUrl !== 'string') return '';
@@ -7255,24 +7289,73 @@
       }
     }
 
+    function resetHeroToSkeleton(mode, forceHide = false) {
+      const heroSec = document.getElementById('hero-section');
+      if (!heroSec) return;
+      if (forceHide) {
+        heroSec.classList.add('hidden');
+        heroSec.classList.remove('velvet-hero-skeleton');
+        return;
+      }
+      heroSec.classList.remove('hidden');
+      heroSec.classList.add('velvet-hero-skeleton');
+      const isVid = (mode === 'videos');
+      const coverContainer = document.getElementById('hero-cover-container');
+      if (coverContainer) {
+        coverContainer.className = isVid
+          ? 'w-full max-w-xs sm:max-w-sm md:max-w-md aspect-video rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/15 relative group/cover cursor-pointer hover:border-pink-500/50 transition-all'
+          : 'w-36 sm:w-44 md:w-52 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/15 relative group/cover cursor-pointer hover:border-pink-500/50 transition-all';
+      }
+      const heroCover = document.getElementById('hero-cover');
+      const heroPh = document.getElementById('hero-cover-placeholder');
+      const heroBackdrop = document.getElementById('hero-backdrop');
+      if (heroCover) {
+        heroCover.classList.add('opacity-0');
+        heroCover.classList.remove('opacity-100');
+        heroCover.removeAttribute('src');
+      }
+      if (heroPh) heroPh.classList.remove('is-hidden');
+      if (heroBackdrop) heroBackdrop.style.backgroundImage = 'none';
+      const setEmpty = (id) => { const el = document.getElementById(id); if (el) el.innerHTML = ''; };
+      setEmpty('hero-title');
+      setEmpty('hero-format-badge');
+      setEmpty('hero-views-badge');
+      setEmpty('hero-tags');
+      const syn = document.getElementById('hero-synopsis');
+      if (syn) { syn.textContent = ''; syn.classList.add('hidden'); }
+      const auth = document.getElementById('hero-author-container');
+      if (auth) auth.classList.add('hidden');
+    }
+
     function renderSkeletons() {
       const grid = document.getElementById('comics-grid');
       if (!grid) return;
       const emptyState = document.getElementById('empty-state');
       if (emptyState) emptyState.classList.add('hidden');
-      const hasRenderedCards = grid.querySelector('[data-card-id]');
-      if (hasRenderedCards) {
-        // Si ya hay tarjetas reales visibles, atenuar sutilmente en lugar de reemplazar por cajas vacías
-        grid.classList.add('opacity-45', 'pointer-events-none', 'transition-opacity', 'duration-150');
-        return;
+      grid.classList.remove('opacity-45', 'pointer-events-none');
+
+      const mode = state.mode || 'comics';
+      const count = typeof getAdaptivePageSize === 'function' ? getAdaptivePageSize() : ((window.innerWidth < 768) ? 12 : 24);
+      grid.className = (mode === 'videos')
+        ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5'
+        : (mode === 'games')
+          ? 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 sm:gap-5'
+          : 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-5';
+
+      const aspect = (mode === 'videos') ? 'aspect-video' : (mode === 'games' ? 'aspect-[16/11]' : 'aspect-[3/4]');
+      const cards = [];
+      for (let i = 0; i < count; i++) {
+        cards.push(
+          `<div data-skeleton="1" class="flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden select-none" aria-hidden="true">` +
+            `<div class="relative ${aspect} w-full velvet-logo-ph"><img src="/velvet_logo.png" alt="" class="velvet-logo-ph-mark" width="40" height="40" decoding="async"></div>` +
+            `<div class="p-3 flex-1 flex flex-col justify-between space-y-2">` +
+              `<div class="space-y-1.5"><div class="h-3.5 w-11/12 rounded bg-white/[0.06]"></div><div class="h-3.5 w-2/3 rounded bg-white/[0.04]"></div></div>` +
+              `<div class="pt-1.5 border-t border-white/[0.08] flex items-center justify-between"><div class="h-2.5 w-16 rounded bg-white/[0.05]"></div><div class="h-2.5 w-10 rounded bg-white/[0.05]"></div></div>` +
+            `</div>` +
+          `</div>`
+        );
       }
-      grid.className = 'w-full';
-      grid.innerHTML = `
-        <div id="catalog-inline-loader" class="w-full py-20 flex flex-col items-center justify-center gap-3 text-center select-none" aria-busy="true">
-          <div class="w-9 h-9 rounded-full border-2 border-purple-500/25 border-t-[#ff2d95] animate-spin"></div>
-          <span class="text-xs font-bold tracking-wider uppercase text-lav/65">Cargando contenido...</span>
-        </div>
-      `;
+      grid.innerHTML = cards.join('');
       grid.classList.remove('hidden');
     }
 
@@ -7291,7 +7374,7 @@
       if (!grid) return;
       if (!append) {
         grid.innerHTML = '';
-        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 sm:gap-6';
+        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 sm:gap-5';
       }
 
       const existingCards = new Set(
@@ -7299,6 +7382,7 @@
       );
 
       const frag = document.createDocumentFragment();
+      const eagerLimit = (typeof window !== 'undefined' && window.innerWidth < 768) ? 2 : 4;
 
       items.forEach((it, idx) => {
         const cardId = String(it.id || `${it.source}_${it.source_id}`);
@@ -7310,8 +7394,7 @@
         const card = document.createElement('div');
         card.setAttribute('data-card-id', cardId);
         card.setAttribute('aria-label', safeGameTitle);
-        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
-        card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-emerald-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(16,185,129,0.25)] transition-all duration-300 cursor-pointer relative';
+        card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-emerald-500/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(16,185,129,0.25)] transition-colors duration-200 cursor-pointer relative';
         
         card.onclick = (e) => {
           if (e.target.closest('.card-fav-btn')) return;
@@ -7332,7 +7415,7 @@
         const badge = (it.badges && it.badges.length) ? it.badges[0] : ((vs.badges && vs.badges.length) ? vs.badges[0] : (isFlash ? 'RUFFLE' : 'HTML5'));
         const rawCover = it.cover_url || it.thumbnail || '';
         const coverSrc = rawCover
-          ? (String(rawCover).indexOf('/api/media') === 0 ? getStealthImageUrl(rawCover, '') : rawCover)
+          ? (String(rawCover).indexOf('/api/media') === 0 ? getStealthImageUrl(rawCover, '', 380) : rawCover)
           : COMIC_FALLBACK_SVG;
         const rawPlays = it.plays || vs.plays || 0;
         const plays = rawPlays ? (rawPlays > 1000 ? `${(rawPlays/1000).toFixed(1)}K` : rawPlays) : '9.5K';
@@ -7346,7 +7429,8 @@
               src="${escapeHtml(coverSrc)}"
               alt="${escapeHtml(safeGameTitle)}"
               referrerpolicy="no-referrer"
-              loading="${idx < 6 ? 'eager' : 'lazy'}"
+              loading="${idx < eagerLimit ? 'eager' : 'lazy'}"
+              fetchpriority="${idx < eagerLimit ? 'high' : 'low'}"
               decoding="async"
               data-media-type="game"
               class="card-cover-img w-full h-full object-cover group-hover:scale-105 transition-all duration-500 opacity-0"
@@ -7837,7 +7921,7 @@
       if (!grid) return;
       if (!append) {
         grid.innerHTML = '';
-        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6';
+        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-5';
       }
 
       const existingCards = new Set(
@@ -7845,6 +7929,7 @@
       );
 
       const frag = document.createDocumentFragment();
+      const eagerLimit = (typeof window !== 'undefined' && window.innerWidth < 768) ? 2 : 4;
 
       items.forEach((it, idx) => {
         const cardId = String(it.id || `${it.source}_${it.source_id}`);
@@ -7858,18 +7943,16 @@
         card.href = itemUrl;
         card.setAttribute('data-card-id', cardId);
         card.setAttribute('aria-label', setTitle || 'Galería');
-        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
-        card.classList.add('velvet-card-enter');
         if (isLocked) {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-colors duration-200 cursor-pointer relative';
           card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-colors duration-200 cursor-pointer relative';
         }
 
-        const isAboveFold = (idx < 4);
+        const isAboveFold = (idx < eagerLimit);
         const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
+          ? getStealthImageUrl(it.cover_url, it.url, 380)
           : COMIC_FALLBACK_SVG;
         const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const photoCount = it.page_count || (it.pages ? it.pages.length : null);
@@ -7979,7 +8062,7 @@
       if (!grid) return;
       if (!append) {
         grid.innerHTML = '';
-        grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6';
+        grid.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5';
       }
 
       const existingCards = new Set(
@@ -7987,6 +8070,7 @@
       );
 
       const frag = document.createDocumentFragment();
+      const eagerLimit = (typeof window !== 'undefined' && window.innerWidth < 768) ? 2 : 4;
 
       items.forEach((it, idx) => {
         const cardId = String(it.id || `${it.source}_${it.source_id}`);
@@ -8000,22 +8084,20 @@
         card.href = itemUrl;
         card.setAttribute('data-card-id', cardId);
         card.setAttribute('aria-label', cleanVideoTitle);
-        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
-        card.classList.add('velvet-card-enter');
 
         if (isLocked) {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-colors duration-200 cursor-pointer relative';
           card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-[#ff2d95]/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] hover:bg-[#150a28] border border-white/10 hover:border-[#ff2d95]/60 rounded-2xl overflow-hidden hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-colors duration-200 cursor-pointer relative';
           if (it.id) setCachedItem(String(it.id), it);
           if (it.source && it.source_id) setCachedItem(`${it.source}_${it.source_id}`, it);
         }
 
-        const isAboveFold = (idx < 4);
+        const isAboveFold = (idx < eagerLimit);
         const isFav = isFavorite(it.source, it.source_id, it.id);
         const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
+          ? getStealthImageUrl(it.cover_url, it.url, 380)
           : VIDEO_FALLBACK_SVG;
         const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const duration = (it.extra && it.extra.duration) || 'HD';
@@ -10364,21 +10446,9 @@
     // Prefetch de metadatos en hover (>150ms)
     let prefetchHoverTimer = null;
     function prefetchVideoOnHover(item) {
+      // Desactivado fetch especulativo por hover para cuidar la cuota de Workers (100K/día)
       clearTimeout(prefetchHoverTimer);
-      prefetchHoverTimer = setTimeout(() => {
-        if (!item) return;
-        const vKey = String(item.id || `${item.source}_${item.source_id}`);
-        if (getCachedItem(vKey)) return;
-        const detailUrl = item.id ? `/api/items/id/${item.id}` : `/api/items/${item.source}/${encodeURIComponent(item.source_id)}`;
-        fetch(detailUrl, { credentials: 'omit' })
-          .then(res => res.ok ? res.json() : null)
-          .then(data => {
-            if (data && data.video_sources) {
-              setCachedItem(vKey, data);
-            }
-          })
-          .catch(() => {});
-      }, 450);
+      return;
     }
 
     function cancelVideoPrefetch() {
@@ -10515,7 +10585,9 @@
         recs.slice(0, 12).forEach((r, idx) => {
           const isLocked = isItemLockedForUser(r, idx);
           const duration = (r.extra && r.extra.duration) || 'HD';
-          const coverSrc = r.cover_url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
+          const coverSrc = r.cover_url
+            ? getStealthImageUrl(r.cover_url, r.url, 380)
+            : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" fill="%230a0610"><rect width="100%" height="100%"/></svg>';
 
           const cleanRelTitle = cleanGallerySetTitle(r.title) || 'Video HD';
           const card = document.createElement('a');
@@ -10915,7 +10987,7 @@
       if (!grid) return;
       if (!append) {
         grid.innerHTML = '';
-        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-6';
+        grid.className = 'grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3.5 sm:gap-5';
       }
 
       const existingCards = new Set(
@@ -10923,6 +10995,7 @@
       );
 
       const frag = document.createDocumentFragment();
+      const eagerLimit = (typeof window !== 'undefined' && window.innerWidth < 768) ? 2 : 4;
 
       items.forEach((it, idx) => {
         const cardId = String(it.id || `${it.source}_${it.source_id}`);
@@ -10936,19 +11009,17 @@
         card.href = itemUrl;
         card.setAttribute('data-card-id', cardId);
         card.setAttribute('aria-label', it.title || 'Cómic');
-        card.style.setProperty('--card-i', String(Math.min(idx, 16)));
-        card.classList.add('velvet-card-enter');
 
         if (isLocked) {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#120722]/85 border border-amber-500/40 rounded-2xl overflow-hidden hover:border-amber-400 hover:shadow-[0_0_24px_rgba(245,158,11,0.25)] transition-colors duration-200 cursor-pointer relative';
           card.onclick = (e) => { e.preventDefault(); openProUpgradeModal(it); };
         } else {
-          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-all duration-300 cursor-pointer relative';
+          card.className = 'group velvet-card-enter flex flex-col bg-[#0e071c] border border-white/10 rounded-2xl overflow-hidden hover:border-[#ff2d95]/60 hover:shadow-[0_0_24px_rgba(255,45,149,0.25)] transition-colors duration-200 cursor-pointer relative';
         }
 
-        const isAboveFold = (idx < 4);
+        const isAboveFold = (idx < eagerLimit);
         const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
+          ? getStealthImageUrl(it.cover_url, it.url, 380)
           : COMIC_FALLBACK_SVG;
         const responsiveSrcSet = it.cover_url ? getResponsiveSrcSet(it.cover_url, it.url) : '';
         const isFav = isFavorite(it.source, it.source_id, it.id);
@@ -11086,8 +11157,11 @@
 
     function setupHeroCarousel(items) {
       const heroSec = document.getElementById('hero-section');
-      if (!items || items.length === 0) {
-        if (heroSec) heroSec.classList.add('hidden');
+      if (!items || items.length === 0 || (state.query && state.query.trim())) {
+        if (heroSec) {
+          heroSec.classList.add('hidden');
+          heroSec.classList.remove('velvet-hero-skeleton');
+        }
         return;
       }
 
@@ -11096,7 +11170,7 @@
       state.heroIndex = 0;
 
       renderHeroSlide(0);
-      if (heroSec) heroSec.classList.remove('hidden');
+      if (heroSec) heroSec.classList.remove('hidden', 'velvet-hero-skeleton');
 
       // Pre-cargar solamente el siguiente slide para no saturar la red
       if (items.length > 1 && items[1].cover_url) {
@@ -11126,15 +11200,17 @@
       const isVid = (item.media_type === 'video');
       const isGallery = !isVid && (item.media_type === 'gallery' || item.media_type === 'cosplay' || state.mode === 'galleries');
       const coverSrc = item.cover_url
-        ? getStealthImageUrl(item.cover_url, item.url)
+        ? getStealthImageUrl(item.cover_url, item.url, 380)
         : coverFallbackFor(isVid ? 'video' : (isGallery ? 'gallery' : 'comic'));
 
       const heroCover = document.getElementById('hero-cover');
       const heroPh = document.getElementById('hero-cover-placeholder');
       if (heroCover) {
         const heroType = isVid ? 'video' : (isGallery ? 'gallery' : 'comic');
+        heroCover.setAttribute('fetchpriority', 'high');
+        heroCover.decoding = 'async';
         heroCover.dataset.mediaType = heroType;
-        heroCover.dataset.coverFallback = item.cover_fallback ? getStealthImageUrl(item.cover_fallback, item.url || '', 0, 70) : '';
+        heroCover.dataset.coverFallback = item.cover_fallback ? getStealthImageUrl(item.cover_fallback, item.url || '', 380, 70) : '';
         heroCover.dataset.altTried = '';
         heroCover.dataset.plainTried = '';
         paintFadingCover(heroCover, coverSrc, heroPh, { type: heroType });
@@ -11449,7 +11525,7 @@
 
         const coverType = isVid ? 'video' : (isGal ? 'gallery' : (isGame ? 'game' : 'comic'));
         const coverSrc = h.cover_url
-          ? getStealthImageUrl(h.cover_url, h.url)
+          ? getStealthImageUrl(h.cover_url, h.url, 380)
           : coverFallbackFor(coverType);
 
         const domColor = getCardDominantColor(h.id || (h.source + '_' + h.source_id));
@@ -12040,7 +12116,7 @@
       const imgUrl = getStealthImageUrl(p.image_url, p.referer || refererUrl);
       const wrapper = document.createElement('div');
       wrapper.className = 'w-full flex flex-col items-center relative z-10 reader-page-item';
-      wrapper.style.minHeight = '160px';
+      wrapper.style.minHeight = 'clamp(340px, 56vh, 560px)';
       wrapper.dataset.pageIndex = idx + 1;
 
       const skeleton = document.createElement('div');
@@ -12091,9 +12167,6 @@
           skeleton.style.opacity = '0';
           setTimeout(() => { try { skeleton.remove(); } catch (e) {} }, 180);
         }
-        if (idx + 1 < _readerAllPages.length) {
-          preloadSinglePage(idx + 1);
-        }
       };
 
       img.onload = () => {
@@ -12105,9 +12178,10 @@
         if (!this.dataset.retried) {
           this.dataset.retried = '1';
           const freshUrl = getStealthImageUrl(p.image_url, p.referer || refererUrl);
-          const sep = freshUrl.includes('?') ? '&' : '?';
-          this.src = freshUrl && !freshUrl.startsWith('data:') ? `${freshUrl}${sep}cb=${Date.now()}` : freshUrl;
-          return;
+          if (freshUrl && freshUrl !== this.src) {
+            this.src = freshUrl;
+            return;
+          }
         }
         this.style.display = 'none';
         try { skeleton.remove(); } catch(e){}
@@ -12341,7 +12415,7 @@
           };
         }
         const coverSrc = it.cover_url
-          ? getStealthImageUrl(it.cover_url, it.url)
+          ? getStealthImageUrl(it.cover_url, it.url, 380)
           : coverFallbackFor(recType);
         card.innerHTML = `
           <div class="aspect-[3/4] w-full overflow-hidden bg-pitch relative">
@@ -12452,24 +12526,11 @@
 
       pages.forEach(p => window._readerObserver.observe(p));
 
-      // Observador adaptativo para descarga de imágenes antes de llegar a la vista
+      // Limpiar antiguo observador prefetch redundante (solo _readerObserver precarga +1/+2 páginas)
       if (window._readerPrefetchObserver) {
         window._readerPrefetchObserver.disconnect();
+        window._readerPrefetchObserver = null;
       }
-      const isSlowConn = (typeof navigator !== 'undefined' && navigator.connection &&
-        (navigator.connection.saveData || ['slow-2g', '2g', '3g'].includes(navigator.connection.effectiveType)));
-      const prefetchMargin = isSlowConn ? '240px 0px 240px 0px' : '480px 0px 480px 0px';
-      window._readerPrefetchObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const pIndex = parseInt(entry.target.dataset.pageIndex, 10);
-            if (pIndex && state.currentItem && state.currentItem.pages) {
-              preloadNextImages(state.currentItem.pages, state.currentItem.url, pIndex);
-            }
-          }
-        });
-      }, { rootMargin: prefetchMargin });
-      pages.forEach(p => window._readerPrefetchObserver.observe(p));
     }
 
     let _readerScrollRaf = null;
@@ -13284,6 +13345,18 @@
         window._readerObserver.disconnect();
         window._readerObserver = null;
       }
+      if (window._readerPrefetchObserver) {
+        window._readerPrefetchObserver.disconnect();
+        window._readerPrefetchObserver = null;
+      }
+      if (_readerChunkObserver) {
+        try { _readerChunkObserver.disconnect(); } catch (e) {}
+        _readerChunkObserver = null;
+      }
+      _readerAllPages = [];
+      _preloadedImageUrls.clear();
+      const _vCont = document.getElementById('reader-pages-vertical');
+      if (_vCont) _vCont.innerHTML = '';
       const _rBody = document.getElementById('reader-body');
       if (_rBody) _rBody.scrollLeft = 0;
 
@@ -13642,27 +13715,31 @@
       let refreshStored = null;
       try { refreshStored = localStorage.getItem('velvet_refresh_token'); } catch (e) {}
       const stillAuthed = !!(state.currentUser && state.currentUser.id && (token || refreshStored));
+      const hasServerAuthCookie = (typeof document !== 'undefined' && typeof document.cookie === 'string' && document.cookie.includes('velvet_auth_active=1')) ||
+        (typeof window !== 'undefined' && window.location && window.location.search && window.location.search.includes('patreon'));
 
       if (!token && !stillAuthed) {
-        try {
-          const cookieResp = await fetch('/api/auth/me', { credentials: 'include', headers: { 'Accept': 'application/json' } });
-          if (cookieResp.status === 503) {
-            updateUserUI();
-            if (attempt === 0) consumePatreonQueryBanner();
-            return;
-          }
-          if (cookieResp.ok) {
-            const data = await cookieResp.json();
-            rememberSession(data.user || data, data.token || data.new_token, data.refresh_token || data.new_refresh_token, data.expires_at, data.device_token);
-            loadStorage();
-            updateUserUI();
-            if (attempt === 0) consumePatreonQueryBanner();
-            await Promise.all([loadCloudFavorites(), loadCloudHistory()]);
-            renderContinueShelf();
-            if (window.VelvetVault && typeof window.VelvetVault.render === 'function') window.VelvetVault.render();
-            return;
-          }
-        } catch (e) {}
+        if (hasServerAuthCookie) {
+          try {
+            const cookieResp = await fetch('/api/auth/me', { credentials: 'include', headers: { 'Accept': 'application/json' } });
+            if (cookieResp.status === 503) {
+              updateUserUI();
+              if (attempt === 0) consumePatreonQueryBanner();
+              return;
+            }
+            if (cookieResp.ok) {
+              const data = await cookieResp.json();
+              rememberSession(data.user || data, data.token || data.new_token, data.refresh_token || data.new_refresh_token, data.expires_at, data.device_token);
+              loadStorage();
+              updateUserUI();
+              if (attempt === 0) consumePatreonQueryBanner();
+              await Promise.all([loadCloudFavorites(), loadCloudHistory()]);
+              renderContinueShelf();
+              if (window.VelvetVault && typeof window.VelvetVault.render === 'function') window.VelvetVault.render();
+              return;
+            }
+          } catch (e) {}
+        }
 
         state.currentUser = null;
         loadStorage();

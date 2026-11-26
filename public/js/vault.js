@@ -548,7 +548,7 @@
       pageFavs.forEach((it) => {
         const itemUrl = window.VelvetRouter?.getItemUrl(it) || '#';
         const coverSrc = it.cover_url
-          ? (window.getStealthImageUrl ? window.getStealthImageUrl(it.cover_url, it.url) : it.cover_url)
+          ? (window.getStealthImageUrl ? window.getStealthImageUrl(it.cover_url, it.url, 380) : it.cover_url)
           : '/velvet_logo.png';
         const isVid = it.media_type === 'video' || (it.video_sources && it.video_sources.length > 0 && it.media_type !== 'game');
         const isGame = it.media_type === 'game';
@@ -952,7 +952,7 @@
           }
 
           const coverSrc = h.cover_url
-            ? (window.getStealthImageUrl ? window.getStealthImageUrl(h.cover_url, h.url) : h.cover_url)
+            ? (window.getStealthImageUrl ? window.getStealthImageUrl(h.cover_url, h.url, 380) : h.cover_url)
             : '/velvet_logo.png';
           const itemUrl = window.VelvetRouter?.getItemUrl(h) || '#';
           const cardId = `hist-item-${String(h.id || `${h.source}_${h.source_id}`)}`;

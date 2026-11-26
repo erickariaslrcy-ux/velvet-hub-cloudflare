@@ -498,65 +498,13 @@
     },
 
     // =======================================================================
-    // 5. MOTOR DE PREFETCH INTELIGENTE (Hover >= 150ms / touchstart)
+    // 5. MOTOR DE PREFETCH CONSERVADOR (Cero ráfagas automáticas por hover)
     // =======================================================================
     bindPrefetchEngine() {
-      const isSlowConnection = () => {
-        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-        if (!conn) return false;
-        return conn.saveData === true || conn.effectiveType === '2g' || conn.effectiveType === '3g';
-      };
-
-      const prefetch = (url) => {
-        if (!url || prefetchedUrls.has(url) || prefetchedUrls.size >= 40) return;
-        if (isSlowConnection() || document.documentElement.classList.contains('velvet-data-saver')) return;
-
-        prefetchedUrls.add(url);
-        const parsed = this.parsePath(url);
-
-        // Si es un item (video, cómic o galería), precargar el endpoint de detalle
-        if (parsed.id && (parsed.name === 'video' || parsed.name === 'comic' || parsed.name === 'gallery')) {
-          const fetchUrl = `/api/items/id/${parsed.id}`;
-          if (fetchUrl) {
-            const linkTag = document.createElement('link');
-            linkTag.rel = 'prefetch';
-            linkTag.as = 'fetch';
-            linkTag.href = fetchUrl;
-            linkTag.crossOrigin = 'anonymous';
-            document.head.appendChild(linkTag);
-          }
-        } else if (parsed.source && parsed.sourceId) {
-          const fetchUrl = `/api/items/${parsed.source}/${encodeURIComponent(parsed.sourceId)}`;
-          const linkTag = document.createElement('link');
-          linkTag.rel = 'prefetch';
-          linkTag.as = 'fetch';
-          linkTag.href = fetchUrl;
-          linkTag.crossOrigin = 'anonymous';
-          document.head.appendChild(linkTag);
-        }
-      };
-
-      document.addEventListener('mouseover', (e) => {
-        const link = e.target.closest('a[href]');
-        if (!link) return;
-        const href = link.getAttribute('href');
-        if (!href || href.startsWith('http') || href.startsWith('#')) return;
-
-        clearTimeout(prefetchTimer);
-        prefetchTimer = setTimeout(() => {
-          prefetch(href);
-        }, 400);
-      });
-
-      document.addEventListener('mouseout', (e) => {
-        if (e.target.closest('a[href]')) {
-          clearTimeout(prefetchTimer);
-        }
-      });
-
-      // En el móvil, touchstart se dispara al hacer scroll sobre una tarjeta.
-      // Precargar el detalle ahí multiplicaba /api/items por cada dedo. El hover
-      // de escritorio (más arriba) sigue precargando una sola ficha.
+      // Desactivado prefetch especulativo por mouseover para evitar consumir
+      // decenas de invocaciones /api/items en Cloudflare por barridos del cursor.
+      clearTimeout(prefetchTimer);
+      prefetchedUrls.clear();
     },
 
     // =======================================================================

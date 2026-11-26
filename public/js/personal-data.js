@@ -435,9 +435,10 @@
       if (String(prevId || '') !== String(_currentUser.id || '')) {
         this.handleSessionSwitched();
         this.migrateLocalDataToServer();
-      } else if (!_favState.items.length || !_favState.total) {
-        this.fetchFavorites(_favState.page || 1);
-        this.fetchHistory(_histState.page || 1);
+      } else if ((!_favState.items.length && !_favState.total) && (!this._lastSyncTimestamp || (Date.now() - _lastSyncTimestamp) > 30000)) {
+        // Evitar doble disparo cuando initAuth/loadCloudFavorites ya está sincronizando
+        if (!_favState.isLoading) this.fetchFavorites(_favState.page || 1);
+        if (!_histState.isLoading) this.fetchHistory(_histState.page || 1);
       }
 
       window.dispatchEvent(new CustomEvent('velvet:auth-changed', { detail: { user: _currentUser } }));

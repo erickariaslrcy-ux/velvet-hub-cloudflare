@@ -759,7 +759,10 @@
   // 7. PRECARGA PREDICTIVA (PREFETCH)
   // ==========================================================================
 
+  const AUTO_PREFETCH_NEXT_PAGE = false;
+
   function schedulePrefetchNextPage() {
+    if (!AUTO_PREFETCH_NEXT_PAGE) return;
     if (!shouldPrefetchNextPage()) return;
     if (state.currentPage >= state.totalPages) return;
 
@@ -772,7 +775,6 @@
         // Construir parámetros replicando el estado actual de filtros
         const curState = window.state || {};
         if (curState.mode === 'games') {
-          // El dataset completo de juegos ya reside en la memoria local del cliente (_cachedGamesData)
           return;
         }
 
@@ -797,7 +799,6 @@
 
         const prefetchUrl = `/api/items?${params.toString()}`;
 
-        // Usar fetch prioritariamente o link rel=prefetch
         fetch(prefetchUrl, {
           credentials: 'omit',
           priority: 'low',

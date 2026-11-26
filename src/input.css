@@ -81,10 +81,68 @@ button,
   transform: scale(0.97);
 }
 
-#comics-grid a,
+#comics-grid > a,
+#comics-grid > div,
 #comics-grid article {
   content-visibility: auto;
-  contain-intrinsic-size: 240px 360px;
+  contain-intrinsic-size: 240px 350px;
+}
+
+@media (hover: none) {
+  #comics-grid > a:hover,
+  #comics-grid > div:hover {
+    transform: none !important;
+  }
+}
+
+/* Reserva de espacio estable para Hero Spotlight antes de hidratar datos */
+#hero-section.velvet-hero-skeleton #hero-format-badge:empty,
+#hero-section.velvet-hero-skeleton #hero-views-badge:empty {
+  display: inline-block;
+  width: 6.5rem;
+  height: 1.35rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+#hero-section.velvet-hero-skeleton #hero-title:empty {
+  display: block;
+  width: min(26rem, 85%);
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+#hero-section.velvet-hero-skeleton #hero-tags:empty {
+  display: flex;
+  gap: 0.5rem;
+}
+
+#hero-section.velvet-hero-skeleton #hero-tags:empty::before,
+#hero-section.velvet-hero-skeleton #hero-tags:empty::after {
+  content: '';
+  display: inline-block;
+  width: 4.5rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+#hero-section.velvet-hero-skeleton #hero-read-btn,
+#hero-section.velvet-hero-skeleton #hero-fav-btn {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  #hero-section.velvet-hero-skeleton #hero-title:empty {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  #hero-section.velvet-hero-skeleton #hero-tags:empty {
+    justify-content: center;
+  }
 }
 
 /* Cabecera y catálogo: nada se sale en 360px y no quedan huecos muertos */
@@ -438,17 +496,14 @@ body.drawer-open {
   }
 }
 
-/* Placeholder premium con el logo mientras la imagen descarga */
+/* Placeholder estático liviano con el logo mientras la imagen descarga (0% GPU repaints en Android) */
 .velvet-logo-ph {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  background-color: #090312;
-  background-image: linear-gradient(110deg, rgba(255, 45, 149, 0) 34%, rgba(255, 45, 149, 0.2) 50%, rgba(167, 139, 250, 0.12) 60%, rgba(255, 45, 149, 0) 74%);
-  background-size: 220% 100%;
-  animation: velvetLogoShimmer 1.5s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 45, 149, 0.07) 0%, #0d061c 74%);
   z-index: 1;
   pointer-events: none;
 }
@@ -462,8 +517,7 @@ body.drawer-open {
   object-fit: contain;
   position: relative;
   z-index: 1;
-  animation: velvetLogoPulse 1.7s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(255, 45, 149, 0.5));
+  opacity: 0.36;
   pointer-events: none;
   user-select: none;
 }
@@ -472,6 +526,7 @@ body.drawer-open {
   width: 64px;
   max-width: 64px;
   min-width: 48px;
+  opacity: 0.44;
 }
 
 .velvet-logo-ph-caption {
@@ -482,31 +537,32 @@ body.drawer-open {
   letter-spacing: 0.16em;
   text-transform: uppercase;
   font-weight: 700;
-  color: rgba(251, 207, 232, 0.78);
+  color: rgba(251, 207, 232, 0.72);
 }
 
 .velvet-logo-ph.is-hidden {
   opacity: 0 !important;
   visibility: hidden;
+  transition: opacity 0.14s ease-out;
 }
 
 .card-cover-img,
 #hero-cover {
-  transition: opacity 0.28s ease, transform 0.4s ease;
+  transition: opacity 0.18s ease, transform 0.35s ease;
 }
 #slide-current-img,
 .reader-img {
-  transition: opacity 0.24s ease;
+  transition: opacity 0.18s ease;
 }
 
 @keyframes velvetLogoShimmer {
-  0% { background-position: 140% 0; }
-  100% { background-position: -140% 0; }
+  from { opacity: 1; }
+  to { opacity: 1; }
 }
 
 @keyframes velvetLogoPulse {
-  0%, 100% { transform: scale(0.94); opacity: 0.8; }
-  50% { transform: scale(1); opacity: 1; }
+  from { opacity: 0.36; }
+  to { opacity: 0.36; }
 }
 
 @media (prefers-reduced-motion: reduce) {
