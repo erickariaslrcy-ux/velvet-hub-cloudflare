@@ -6,14 +6,14 @@
 # - script-src 'unsafe-eval': Exclusivamente requerido por Tailwind Play CDN (cdn.tailwindcss.com) para compilar clases JIT en el navegador con Function().
 # - worker-src / child-src 'self' blob:: Requerido por HLS.js para workers demuxer inline creados con URL.createObjectURL(new Blob([...])).
 # - style-src 'unsafe-inline': Requerido para transformaciones GPU dinámicas (translate3d) y estilos inyectados por Tailwind y Lucide.
-# - connect-src 'self' blob: https://*.supabase.co https://pmvhaven.com: API Supabase, streaming HLS y analítica Cloudflare.
+# - connect-src 'self' blob: https://*.supabase.co: API Supabase, streaming HLS bajo morbohub.com y analítica Cloudflare.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
-  Referrer-Policy: no-referrer
+  Referrer-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self' blob: https:; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://unpkg.com https://*.serverable.com; worker-src 'self' blob:; child-src 'self' blob: https://*.serverable.com https://*.gamcore.com; frame-src 'self' blob: https://*.serverable.com https://*.gamcore.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https://*.supabase.co https://pmvhaven.com https://cloudflareinsights.com https://unpkg.com https://*.serverable.com https://*.gamcore.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
+  Content-Security-Policy: default-src 'self' blob: https:; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://unpkg.com https://*.serverable.com; worker-src 'self' blob:; child-src 'self' blob: https://*.serverable.com https://*.gamcore.com; frame-src 'self' blob: https://*.serverable.com https://*.gamcore.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https://*.supabase.co https://cloudflareinsights.com https://unpkg.com https://*.serverable.com https://*.gamcore.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
 
 # Catálogos internos (no accesibles directamente ni indexables)
 /data/*

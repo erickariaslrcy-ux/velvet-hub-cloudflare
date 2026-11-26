@@ -14,6 +14,7 @@
 // =============================================================================
 
 const HMAC_KEY_CACHE = new Map();
+const AES_KEY_CACHE = new Map();
 
 async function getHmacKey(secret) {
   if (!secret) return null;
@@ -33,6 +34,85 @@ async function getHmacKey(secret) {
     HMAC_KEY_CACHE.set(secret, key);
   }
   return key;
+}
+
+async function getAesKey(secret) {
+  if (!secret) return null;
+  let key = AES_KEY_CACHE.get(secret);
+  if (!key) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("aes-gcm|" + secret));
+    key = await crypto.subtle.importKey(
+      "raw",
+      digest,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"]
+    );
+    if (AES_KEY_CACHE.size > 20) {
+      AES_KEY_CACHE.clear();
+    }
+    AES_KEY_CACHE.set(secret, key);
+  }
+  return key;
+}
+
+function bytesToBase64Url(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]);
+  }
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function base64UrlToBytes(str) {
+  let b64 = String(str || "").replace(/-/g, "+").replace(/_/g, "/");
+  while (b64.length % 4) b64 += "=";
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function sealJsonPayload(payloadObj, secret) {
+  const [hmacKey, aesKey] = await Promise.all([getHmacKey(secret), getAesKey(secret)]);
+  if (!hmacKey || !aesKey) return "";
+  const enc = new TextEncoder();
+  const plainStr = JSON.stringify(payloadObj);
+  const ivFull = await crypto.subtle.sign("HMAC", hmacKey, enc.encode("iv|" + plainStr));
+  const iv = new Uint8Array(ivFull, 0, 12);
+  const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, enc.encode(plainStr));
+  const cipherBytes = new Uint8Array(cipherBuf);
+  const packed = new Uint8Array(12 + cipherBytes.length);
+  packed.set(iv, 0);
+  packed.set(cipherBytes, 12);
+  const dataB64 = bytesToBase64Url(packed);
+  const sigBuf = await crypto.subtle.sign("HMAC", hmacKey, enc.encode(dataB64));
+  const sigHex = Array.from(new Uint8Array(sigBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${dataB64}.${sigHex}`;
+}
+
+async function unsealJsonPayload(token, secret) {
+  if (!token || !secret || typeof token !== "string") return null;
+  const dotIdx = token.indexOf(".");
+  if (dotIdx === -1) return null;
+  const dataB64 = token.substring(0, dotIdx);
+  const sigHex = token.substring(dotIdx + 1);
+  if (!/^[0-9a-f]{64}$/i.test(sigHex)) return null;
+  const [hmacKey, aesKey] = await Promise.all([getHmacKey(secret), getAesKey(secret)]);
+  if (!hmacKey || !aesKey) return null;
+  const expectedSigBuf = await crypto.subtle.sign("HMAC", hmacKey, new TextEncoder().encode(dataB64));
+  const expectedSigHex = Array.from(new Uint8Array(expectedSigBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  if (!timingSafeEqualHex(expectedSigHex.toLowerCase(), sigHex.toLowerCase())) {
+    return null;
+  }
+  const packed = base64UrlToBytes(dataB64);
+  if (packed.length < 28) return null;
+  const iv = packed.subarray(0, 12);
+  const cipher = packed.subarray(12);
+  const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, cipher);
+  return JSON.parse(new TextDecoder().decode(plainBuf));
 }
 
 function timingSafeEqualHex(a, b) {
@@ -65,29 +145,10 @@ function fromBase64Url(str) {
   return new TextDecoder().decode(bytes);
 }
 
-// Extracción determinista de URLs upstream raw desde tokens anidados o URLs directas
+// Extracción segura de URLs upstream directas o tokens sellados en runtime (sin leer JSON en claro de terceros)
 function extractRawMediaUrl(urlOrToken) {
   if (!urlOrToken || typeof urlOrToken !== "string") return "";
-  let current = urlOrToken.trim();
-  let depth = 5;
-  while (depth-- > 0) {
-    if (current.includes("?t=") || current.includes("&t=")) {
-      const match = current.match(/[?&]t=([^&]+)/);
-      current = match ? decodeURIComponent(match[1]) : "";
-    }
-    if (current.includes(".")) {
-      const b64 = current.split(".")[0];
-      try {
-        const payloadStr = fromBase64Url(b64);
-        const parsed = JSON.parse(payloadStr);
-        if (parsed && parsed.u) {
-          current = parsed.u;
-          continue;
-        }
-      } catch (e) {}
-    }
-    break;
-  }
+  const current = urlOrToken.trim();
   if (/^https?:\/\//i.test(current)) {
     return current;
   }
@@ -124,55 +185,28 @@ function quantizedMediaExpiry(nowSec) {
   return (bucket + 3) * MEDIA_TOKEN_QUANTUM_SEC - 1;
 }
 
-// Generación de token firmado con Web Crypto HMAC-SHA256 y expiración cuantizada (14–21 días)
+// Generación de token cifrado con AES-256-GCM + firma HMAC-SHA256 y expiración cuantizada (14–21 días)
+// Cero URLs ni orígenes legibles en base64 al inspeccionar ?t=
 async function encodeMediaToken(targetUrl, referer = "", secret = "", nowSec = 0) {
   const s = secret || _activeMediaSecret;
   if (!targetUrl || !s) return "";
   try {
     const now = nowSec > 0 ? nowSec : Math.floor(Date.now() / 1000);
     const exp = quantizedMediaExpiry(now);
-    const payloadStr = JSON.stringify({ u: targetUrl, r: referer || "", exp });
-    const dataB64 = toBase64Url(payloadStr);
-    const key = await getHmacKey(s);
-    if (!key) return "";
-    const enc = new TextEncoder();
-    const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(dataB64));
-    const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-    return `${dataB64}.${sigHex}`;
+    return await sealJsonPayload({ u: targetUrl, r: referer || "", exp }, s);
   } catch (e) {
     return "";
   }
 }
 
-// Verificación estricta de token con Web Crypto HMAC-SHA256, comparación en tiempo constante y expiración
-// Rechaza absolutamente cualquier token alterado, expirado o con rutas legadas XOR.
+// Verificación y descifrado estricto AES-256-GCM + HMAC-SHA256 con expiración
 async function decodeMediaToken(token, secret = "") {
   if (!token || !secret) return null;
-  const dotIdx = token.indexOf(".");
-  if (dotIdx === -1) return null; // Rechazo inmediato sin HMAC (CERO compatibilidad XOR)
-
-  const dataB64 = token.substring(0, dotIdx);
-  const sigHex = token.substring(dotIdx + 1);
-  if (!/^[0-9a-f]{64}$/i.test(sigHex)) return null;
-
   try {
-    const key = await getHmacKey(secret);
-    if (!key) return null;
-    const enc = new TextEncoder();
-    const expectedSigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(dataB64));
-    const expectedSigHex = Array.from(new Uint8Array(expectedSigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-    if (!timingSafeEqualHex(expectedSigHex.toLowerCase(), sigHex.toLowerCase())) {
-      return null; // Firma alterada o clave no coincidente
-    }
-    const payloadStr = fromBase64Url(dataB64);
-    const payload = JSON.parse(payloadStr);
+    const payload = await unsealJsonPayload(token, secret);
     if (payload && payload.u) {
       if (payload.exp && Math.floor(Date.now() / 1000) > payload.exp) {
         return null; // Token expirado
-      }
-      const rawUpstream = extractRawMediaUrl(payload.u);
-      if (rawUpstream) {
-        payload.u = rawUpstream;
       }
       return payload;
     }
@@ -545,8 +579,56 @@ const DETAIL_SOURCE_ALIAS_MAP = {
   mp: "hentaipaw",
   md: "doujins",
   mg: "gamcore",
-  ml: "leakgallery"
+  ml: "leakgallery",
+  m1: "comics18",
+  mm: "melapelacomics",
+  mr: "vercomicsporno",
+  ry: "reycomix",
+  pn: "pornocomic",
+  sk: "sexkomix2",
+  mw: "manhwaweb",
+  lm: "leermanhwas",
+  mh: "velvet"
 };
+
+const SOURCE_TO_PUBLIC_ALIAS = {
+  pmvhaven: "mv",
+  xasiat: "mx",
+  buondua: "mb",
+  "4khd": "m4",
+  "3hentai": "mc",
+  hentaipaw: "mp",
+  doujins: "md",
+  gamcore: "mg",
+  leakgallery: "ml",
+  comics18: "m1",
+  comics18_org: "m1",
+  comics18_net: "m1",
+  melapelacomics: "mm",
+  melapelocondibujos: "mm",
+  vercomicsporno: "mr",
+  vercomicporno: "mr",
+  reycomix: "ry",
+  pornocomic: "pn",
+  sexkomix2: "sk",
+  manhwaweb: "mw",
+  leermanhwas: "lm",
+  mhcomics: "mh"
+};
+
+function maskPublicSource(rawSource) {
+  const low = String(rawSource || "").trim().toLowerCase();
+  if (!low || low === "velvet" || low === "morbo") return "mv";
+  if (SOURCE_TO_PUBLIC_ALIAS[low]) return SOURCE_TO_PUBLIC_ALIAS[low];
+  if (DETAIL_SOURCE_ALIAS_MAP[low]) return low;
+  EXTERNAL_SITE_LEAK_RE.lastIndex = 0;
+  if (EXTERNAL_SITE_LEAK_RE.test(low)) {
+    EXTERNAL_SITE_LEAK_RE.lastIndex = 0;
+    return "mx";
+  }
+  EXTERNAL_SITE_LEAK_RE.lastIndex = 0;
+  return low.replace(/[^a-z0-9_-]/g, "").slice(0, 12) || "mh";
+}
 
 const EXTERNAL_SITE_LEAK_RE = /\b(?:xasiat|xascdn|buondua|misskon|4khd|imagedeliveries|pmvhaven|3hentai|hentaipaw|doujins|comics18(?:_net|_org)?|comicspornoxxx|reycomix|vercomics?porno|cartooncomixhd|pornocomic|sexkomix2?|comicsparaadultos|melapelacomics|melapelocondibujos|mhcomics|leermanhwas|manhwaweb|f95zone|gamcore|leakgallery|pornhd|damplips|pornone|redporn|anyporn|alotporn|nhentai|e-?hentai|exhentai|hitomi|pixibb|cosplaytele|everia|mrcong|pornhub|xvideos|xnxx|xhamster)\b(?:\.[a-z]{2,5})?/gi;
 
@@ -995,7 +1077,7 @@ function orderCatalogForSlot(items, slot, mediaType) {
 
 function catalogEdgeCacheUrl(requestUrl, slot) {
   const u = new URL(requestUrl.toString());
-  u.searchParams.set("cv", "10");
+  u.searchParams.set("cv", "11");
   if (slot !== undefined && slot !== null && slot !== "") {
     u.searchParams.set("rot", String(slot));
   }
@@ -1165,7 +1247,7 @@ async function maskGameItem(it, secret) {
   const gameType = it.game_type || (it.swf_url ? "flash" : "html5");
   return {
     id: it.id,
-    source: it.source || "gamcore",
+    source: maskPublicSource(it.source || "gamcore"),
     source_id: it.source_id ? String(it.source_id) : String(it.id),
     title: cleanPublicTitle(it.title) || "Juego VIP",
     cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
@@ -1352,11 +1434,12 @@ async function maskVideoItem(it, secret) {
   const rawCover = it.cover_url || "";
   const rawVideo = it.video_url || (it.video_sources && it.video_sources[0] && it.video_sources[0].url) || "";
   const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", secret) : "";
-  const vipLocked = isItemVIPGated(it);
+  const pubSource = maskPublicSource(it.source || "pmvhaven");
+  const vipLocked = isItemVIPGated({ ...it, source: pubSource });
   const videoToken = (!vipLocked && rawVideo) ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", secret) : "";
   return {
     id: it.id,
-    source: it.source || "pmvhaven",
+    source: pubSource,
     source_id: it.source_id ? String(it.source_id) : String(it.id),
     title: cleanPublicTitle(it.title) || "Video HD",
     cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
@@ -1782,12 +1865,13 @@ async function fetchPmvShuffleItems({ page, pageSize, seed, category, q, encodeT
   for (const v of picked) {
     const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
     const rawVideo = v.videoUrl || "";
-    const vipLocked = isItemVIPGated({ id: v._id || v.id, source: "pmvhaven", source_id: v._id || v.id, title: v.title });
+    const pubSource = maskPublicSource("pmvhaven");
+    const vipLocked = isItemVIPGated({ id: v._id || v.id, source: pubSource, source_id: v._id || v.id, title: v.title });
     const coverToken = rawCover && encodeToken ? await encodeToken(rawCover, "https://pmvhaven.com/") : "";
     const videoToken = (!vipLocked && rawVideo && encodeToken) ? await encodeToken(rawVideo, "https://pmvhaven.com/") : "";
     items.push({
       id: v._id || v.id,
-      source: "pmvhaven",
+      source: pubSource,
       source_id: v._id || v.id,
       title: cleanPublicTitle(v.title) || "Video HD",
       cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
@@ -1834,7 +1918,7 @@ function isAllowedOrigin(origin) {
 
 function getCorsHeaders(origin = "") {
   const allowed = isAllowedOrigin(origin);
-  const allowOrigin = allowed ? origin : (origin === "*" ? "*" : "https://morbohub.pages.dev");
+  const allowOrigin = allowed ? origin : "https://www.morbohub.com";
   const headers = {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
@@ -2693,17 +2777,12 @@ function shortsQuantizedExp(ttlSeconds) {
   return (Math.floor(now / bucket) * bucket) + ttl;
 }
 
-async function encodeShortToken(id, kind, secret, ttlSeconds = 43200) {
+async function encodeShortToken(id, kind, secret, ttlSeconds = 7200) {
   const sid = parseInt(id, 10);
   if (!Number.isFinite(sid) || sid <= 0 || !secret || !kind) return "";
   try {
     const exp = shortsQuantizedExp(ttlSeconds);
-    const dataB64 = toBase64Url(JSON.stringify({ i: sid, k: kind, e: exp }));
-    const key = await getHmacKey(secret);
-    if (!key) return "";
-    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(dataB64));
-    const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-    return `${dataB64}.${sigHex}`;
+    return await sealJsonPayload({ i: sid, k: kind, e: exp }, secret);
   } catch (e) {
     return "";
   }
@@ -2711,18 +2790,8 @@ async function encodeShortToken(id, kind, secret, ttlSeconds = 43200) {
 
 async function decodeShortToken(token, secret, expectedKind = "") {
   if (!token || !secret || typeof token !== "string") return null;
-  const dotIdx = token.indexOf(".");
-  if (dotIdx === -1) return null;
-  const dataB64 = token.substring(0, dotIdx);
-  const sigHex = token.substring(dotIdx + 1);
-  if (!/^[0-9a-f]{64}$/i.test(sigHex)) return null;
   try {
-    const key = await getHmacKey(secret);
-    if (!key) return null;
-    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(dataB64));
-    const expectedHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
-    if (!timingSafeEqualHex(expectedHex.toLowerCase(), sigHex.toLowerCase())) return null;
-    const payload = JSON.parse(fromBase64Url(dataB64));
+    const payload = await unsealJsonPayload(token, secret);
     const sid = parseInt(payload && payload.i, 10);
     if (!payload || !Number.isFinite(sid) || sid <= 0) return null;
     if (expectedKind && payload.k !== expectedKind) return null;
@@ -2759,6 +2828,171 @@ function checkSameSiteStreamRequest(request, reqUrl) {
     }
   }
   return true;
+}
+
+const _GATE_KEY_MAP = new Map();
+function gateUaDigest8(request) {
+  const ua = String(request.headers.get("user-agent") || "ua").slice(0, 240);
+  let h1 = 0x811c9dc5;
+  for (let i = 0; i < ua.length; i++) {
+    h1 ^= ua.charCodeAt(i);
+    h1 = Math.imul(h1, 0x01000193) >>> 0;
+  }
+  return h1.toString(16).padStart(8, "0");
+}
+
+async function verifyGateCookie(request, secret) {
+  const raw = readRequestCookie(request, "mh_gate");
+  if (!raw || !secret) return false;
+  const parts = String(raw).split(".");
+  if (parts.length !== 3) return false;
+  const expSec = parseInt(parts[0], 10);
+  const ua8 = parts[1];
+  const sig = parts[2];
+  if (!Number.isFinite(expSec) || expSec <= Math.floor(Date.now() / 1000)) return false;
+  if (ua8 !== gateUaDigest8(request) || !/^[0-9a-f]{32}$/.test(sig)) return false;
+  let k = _GATE_KEY_MAP.get(secret);
+  if (!k) {
+    k = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode("mh-gate|" + secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    if (_GATE_KEY_MAP.size > 8) _GATE_KEY_MAP.clear();
+    _GATE_KEY_MAP.set(secret, k);
+  }
+  const sigBuf = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(`${expSec}.${ua8}`));
+  const expected = Array.from(new Uint8Array(sigBuf)).slice(0, 16).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return timingSafeEqualHex(expected, sig);
+}
+
+const PUBLIC_API_RATE_MAP = new Map();
+function checkPublicApiRateLimit(request, bucket, maxPerMin = 90) {
+  const ip = getClientIp(request);
+  const key = `${bucket}:${ip}`;
+  const now = Date.now();
+  let entry = PUBLIC_API_RATE_MAP.get(key);
+  if (!entry || now - entry.windowStart > 60000) {
+    entry = { windowStart: now, count: 1 };
+    PUBLIC_API_RATE_MAP.set(key, entry);
+    if (PUBLIC_API_RATE_MAP.size > 5000) {
+      const oldest = PUBLIC_API_RATE_MAP.keys().next().value;
+      PUBLIC_API_RATE_MAP.delete(oldest);
+    }
+    return true;
+  }
+  entry.count++;
+  return entry.count <= maxPerMin;
+}
+
+function isProductionEdgeRequest(request) {
+  try {
+    return Boolean(request.headers.get("cf-ray") || (request.cf && request.cf.colo));
+  } catch (e) {
+    return false;
+  }
+}
+
+async function enforcePublicApiShield(request, url, origin, mediaSecret) {
+  const p = url.pathname || "";
+  if (p === "/api/auth/patreon/login" || p === "/api/auth/patreon/callback") return null;
+
+  const secSite = (request.headers.get("sec-fetch-site") || "").toLowerCase();
+  const secDest = (request.headers.get("sec-fetch-dest") || "").toLowerCase();
+  const hdrOrigin = request.headers.get("origin");
+  const hdrRef = request.headers.get("referer");
+
+  // 1. Bloquear peticiones cross-site o desde dominios externos
+  if (secSite === "cross-site") {
+    return new Response(JSON.stringify({ error: "Acceso cross-site bloqueado" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+    });
+  }
+  if (hdrOrigin && !isAllowedOrigin(hdrOrigin)) {
+    return new Response(JSON.stringify({ error: "Origen no autorizado" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+    });
+  }
+  if (hdrRef && hdrRef !== "null") {
+    try {
+      const rHost = new URL(hdrRef).hostname;
+      if (!isSameSiteHostname(rHost, url.hostname)) {
+        return new Response(JSON.stringify({ error: "Referencia externa bloqueada" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      }
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Referencia inválida" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  // 2. Nunca permitir abrir endpoints JSON o streams directamente en pestaña/iframe
+  if (secDest === "document" || secDest === "iframe" || secDest === "frame" || secDest === "object" || secDest === "embed") {
+    return new Response(JSON.stringify({ error: "Acceso directo bloqueado" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store", ...getCorsHeaders(origin) }
+    });
+  }
+
+  const isEdge = isProductionEdgeRequest(request);
+  if (isEdge && mediaSecret) {
+    const validGate = await verifyGateCookie(request, mediaSecret);
+    if (!validGate) {
+      const hdrs = {
+        "Content-Type": "application/json",
+        "Cache-Control": "private, no-store",
+        ...getCorsHeaders(origin)
+      };
+      if (secSite === "same-origin") {
+        hdrs["X-MH-Gate"] = "refresh";
+      }
+      return new Response(JSON.stringify({ error: "Sesión de sitio requerida (morbohub.com)" }), {
+        status: 403,
+        headers: hdrs
+      });
+    }
+
+    const isMediaStream =
+      p === "/api/shorts/v" ||
+      p === "/api/shorts/img" ||
+      p.startsWith("/api/media") ||
+      p.startsWith("/api/image") ||
+      p.startsWith("/api/img") ||
+      p.startsWith("/api/video/stream");
+    const isCatalog =
+      p.startsWith("/api/items") ||
+      p === "/api/random" ||
+      p === "/api/shorts/random" ||
+      p === "/api/shorts/batch";
+
+    if (isMediaStream && !checkPublicApiRateLimit(request, "edge-media", 300)) {
+      return new Response("Demasiadas peticiones de medios", {
+        status: 429,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "60", "Cache-Control": "no-store" }
+      });
+    }
+    if (isCatalog && !checkPublicApiRateLimit(request, "edge-cat", 100)) {
+      return new Response(JSON.stringify({ error: "Límite de consultas excedido" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "60", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+    if ((p === "/api/tags" || p === "/api/version") && !checkPublicApiRateLimit(request, "edge-meta", 45)) {
+      return new Response(JSON.stringify({ error: "Límite excedido" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", "Retry-After": "60", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+  return null;
 }
 
 function cacheShortMediaInMemory(sid, meta) {
@@ -2914,7 +3148,7 @@ async function refillShortsPool(sbUrl, sbKey, excludeIds = []) {
 async function formatShortPublicItem(row, secret) {
   const sid = Number(row.id);
   const [tVideo, tCover, tShare] = await Promise.all([
-    encodeShortToken(sid, "v", secret, 43200),
+    encodeShortToken(sid, "v", secret, 7200),
     row.cover_url ? encodeShortToken(sid, "c", secret, 604800) : Promise.resolve(""),
     encodeShortToken(sid, "s", secret, 7776000)
   ]);
@@ -2998,6 +3232,9 @@ export async function onRequest(context) {
 
   const csrfBlock = enforceCookieMutationOrigin(context.request, origin);
   if (csrfBlock) return csrfBlock;
+
+  const apiShieldBlock = await enforcePublicApiShield(context.request, url, origin, MEDIA_SECRET);
+  if (apiShieldBlock) return apiShieldBlock;
 
   // =========================================================================
   // 0. VERSIÓN Y OBSERVABILIDAD DEL SISTEMA (/api/version)
@@ -3420,14 +3657,11 @@ export async function onRequest(context) {
       /\.(?:mp4|m3u8|webm|m4v|ts)(?:$|[?#])/i.test(targetMediaUrl) ||
       url.pathname.includes("/video/");
 
-    const directVideo = directVideoRedirectUrl(targetMediaUrl);
-    if (directVideo && (method === "GET" || method === "HEAD")) {
-      const directHeaders = new Headers();
-      directHeaders.set("Location", directVideo);
-      directHeaders.set("Cache-Control", "public, max-age=86400");
-      directHeaders.set("Access-Control-Allow-Origin", "*");
-      directHeaders.set("X-Velvet-Media", "direct");
-      return new Response(null, { status: 302, headers: directHeaders });
+    if (!checkSameSiteStreamRequest(context.request, url)) {
+      return new Response("Descarga directa o enlace externo bloqueado", {
+        status: 403,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" }
+      });
     }
 
     // Parámetros de variantes y compresión de imagen (Fase B)
@@ -3473,7 +3707,7 @@ export async function onRequest(context) {
           "ETag": etag,
           "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
           "Vary": "Accept",
-          "Access-Control-Allow-Origin": "*",
+          "Cross-Origin-Resource-Policy": "same-origin",
           "Server": "Velvet-Cloud",
           "X-Media-Cache": "HIT-REVALIDATED"
         }
@@ -3482,7 +3716,7 @@ export async function onRequest(context) {
 
     // Cache Key normalizado en Cloudflare Edge para evitar fragmentación
     const normUrl = new URL(url.origin + url.pathname);
-    normUrl.searchParams.set("mv", "2");
+    normUrl.searchParams.set("mv", "3");
     if (tParam) normUrl.searchParams.set("t", tParam);
     if (targetWidth) normUrl.searchParams.set("w", String(targetWidth));
     if (isCoverVariant) normUrl.searchParams.set("cov", "1");
@@ -3501,7 +3735,12 @@ export async function onRequest(context) {
           const ch = new Headers(cached.headers);
           ch.set("X-Media-Cache", "HIT-CLOUDFLARE");
           ch.delete("X-Powered-By");
-          ch.set("Access-Control-Allow-Origin", "*");
+          ch.set("Cross-Origin-Resource-Policy", "same-origin");
+          if (isAllowedOrigin(origin)) {
+            ch.set("Access-Control-Allow-Origin", origin);
+          } else {
+            ch.delete("Access-Control-Allow-Origin");
+          }
           ch.set("ETag", etag);
           ch.set("Vary", "Accept");
           return new Response(cached.body, { status: cached.status, headers: ch });
@@ -3655,14 +3894,21 @@ export async function onRequest(context) {
 
       const respHeaders = new Headers();
       respHeaders.set("Content-Type", upstream.headers.get("content-type") || (isVideo ? "video/mp4" : "image/jpeg"));
-      respHeaders.set("Access-Control-Allow-Origin", "*");
+      respHeaders.set("Cross-Origin-Resource-Policy", "same-origin");
+      respHeaders.set("Referrer-Policy", "no-referrer");
+      respHeaders.set("X-Content-Type-Options", "nosniff");
+      if (isAllowedOrigin(origin)) {
+        respHeaders.set("Access-Control-Allow-Origin", origin);
+      }
       if (!isVideo && servedFrom && servedFrom !== normalizeUpstreamUrl(targetMediaUrl)) {
         respHeaders.set("X-Velvet-Media", "mirror");
       }
 
       if (isVideo) {
-        respHeaders.set("Accept-Ranges", "bytes");
-        respHeaders.set("Cache-Control", (upstream && upstream.ok) ? "public, max-age=7200" : "no-store");
+        respHeaders.set("Accept-Ranges", upstream.headers.get("accept-ranges") || "bytes");
+        respHeaders.set("Content-Disposition", "inline");
+        respHeaders.set("X-Robots-Tag", "noindex, noarchive, nosnippet");
+        respHeaders.set("Cache-Control", "private, no-store, no-transform");
       } else {
         respHeaders.set("Cache-Control", "public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=604800, immutable");
         respHeaders.set("ETag", etag);
@@ -3709,8 +3955,8 @@ export async function onRequest(context) {
           const m3u8Headers = new Headers(respHeaders);
           m3u8Headers.delete("Content-Length");
           m3u8Headers.set("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-          m3u8Headers.set("Access-Control-Allow-Origin", "*");
-          m3u8Headers.set("Cache-Control", "public, max-age=3600");
+          m3u8Headers.set("Cross-Origin-Resource-Policy", "same-origin");
+          m3u8Headers.set("Cache-Control", "private, no-store, no-transform");
           return new Response(rewrittenBody, { status: 200, headers: m3u8Headers });
         } catch (mErr) {
           return new Response("Error procesando lista HLS", { status: 502, headers: { "Cache-Control": "no-store", ...getCorsHeaders(origin) } });
@@ -3755,7 +4001,7 @@ export async function onRequest(context) {
     }
 
     // Cache L1 de Memoria RAM Isolate (0ms)
-    const detailCacheKey = `v2:${url.pathname}`;
+    const detailCacheKey = `v3:${url.pathname}`;
     const l1Detail = getIsolateCache(ISOLATE_DETAIL_CACHE, detailCacheKey, 86400000);
     if (l1Detail && (!l1Detail.includes('"pages":[]') || l1Detail.includes('"chapters":['))) {
       let parsedL1 = null;
@@ -3776,7 +4022,7 @@ export async function onRequest(context) {
 
     // Cache L2 de Borde Cloudflare para detalle de cómics y videos (aceleración instantánea en móvil)
     const cache = typeof caches !== "undefined" ? caches.default : null;
-    const cacheKey = new Request(`${url.origin}${url.pathname}?dcv=2`, { method: "GET" });
+    const cacheKey = new Request(`${url.origin}${url.pathname}?dcv=3`, { method: "GET" });
     if (cache) {
       try {
         const cached = await cache.match(cacheKey);
@@ -3837,7 +4083,7 @@ export async function onRequest(context) {
             }
             const detailPayload = {
               id: v._id,
-              source: "pmvhaven",
+              source: maskPublicSource("pmvhaven"),
               source_id: v._id,
               title: cleanPublicTitle(v.title) || "Video HD",
               cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
@@ -4318,7 +4564,7 @@ export async function onRequest(context) {
 
       const masked = {
         id: it.id,
-        source: it.source || "",
+        source: maskPublicSource(it.source || ""),
         source_id: it.source_id != null ? String(it.source_id) : "",
         title: cleanPublicTitle(it.title) || it.title || "Contenido VIP",
         media_type: it.media_type || (isComic ? "comic" : "video"),
@@ -4530,12 +4776,13 @@ export async function onRequest(context) {
             const items = await Promise.all(vList.map(async v => {
               const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
               const rawVideo = v.videoUrl || v.hlsMasterPlaylistUrl || "";
-              const vipLocked = isItemVIPGated({ id: v._id, source: "pmvhaven", source_id: v._id, title: v.title });
+              const pubSource = maskPublicSource("pmvhaven");
+              const vipLocked = isItemVIPGated({ id: v._id, source: pubSource, source_id: v._id, title: v.title });
               const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
               const videoToken = (!vipLocked && rawVideo) ? await encodeMediaToken(rawVideo, "https://pmvhaven.com/", MEDIA_SECRET) : "";
               return {
                 id: v._id,
-                source: "pmvhaven",
+                source: pubSource,
                 source_id: v._id,
                 title: cleanPublicTitle(v.title) || "Video HD",
                 cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
@@ -4953,7 +5200,8 @@ export async function onRequest(context) {
       }
       const items = await Promise.all((rawItems || []).map(async it => {
         const isGame = it.media_type === "game";
-        const vipLocked = isItemVIPGated(it);
+        const pubSource = maskPublicSource(it.source || "velvet");
+        const vipLocked = isItemVIPGated({ ...it, source: pubSource });
         const maskedCover = isGame
           ? { cover_url: it.cover_url || "", cover_fallback: "" }
           : await maskCoverFields(it.cover_url, MEDIA_SECRET);
@@ -4966,7 +5214,7 @@ export async function onRequest(context) {
         const firstVs = (it.video_sources && it.video_sources[0]) || {};
         return {
           id: it.id,
-          source: it.source || "velvet",
+          source: pubSource,
           source_id: it.source_id ? String(it.source_id) : String(it.id),
           title: cleanPublicTitle(it.title) || it.title,
           cover_url: maskedCover.cover_url,
@@ -5073,12 +5321,13 @@ export async function onRequest(context) {
               const items = await Promise.all(vList.map(async v => {
                 const rawCover = v.thumbnailUrl || (v.thumbnailSizes && v.thumbnailSizes.lg && v.thumbnailSizes.lg.url) || "";
                 const rawVidUrl = v.videoUrl || v.hlsMasterPlaylistUrl || "";
-                const vipLocked = isItemVIPGated({ id: v._id, source: "pmvhaven", source_id: v._id, title: v.title });
+                const pubSource = maskPublicSource("pmvhaven");
+                const vipLocked = isItemVIPGated({ id: v._id, source: pubSource, source_id: v._id, title: v.title });
                 const coverToken = rawCover ? await encodeMediaToken(rawCover, "https://pmvhaven.com/", MEDIA_SECRET) : "";
                 const videoToken = (!vipLocked && rawVidUrl) ? await encodeMediaToken(rawVidUrl, "https://pmvhaven.com/", MEDIA_SECRET) : "";
                 return {
                   id: v._id,
-                  source: "pmvhaven",
+                  source: pubSource,
                   source_id: v._id,
                   title: cleanPublicTitle(v.title) || "Video HD",
                   cover_url: coverToken ? `/api/media?t=${coverToken}` : "",
@@ -5152,7 +5401,8 @@ export async function onRequest(context) {
 
       const items = await Promise.all((rawItems || []).map(async it => {
         const coverToken = it.cover_url ? await encodeMediaToken(it.cover_url, "", MEDIA_SECRET) : "";
-        const vipLocked = isItemVIPGated(it);
+        const pubSource = maskPublicSource(it.source || "");
+        const vipLocked = isItemVIPGated({ ...it, source: pubSource });
         const videoSources = vipLocked
           ? []
           : await Promise.all((it.video_sources || []).map(async vs => ({
@@ -5162,7 +5412,7 @@ export async function onRequest(context) {
             })));
         return {
           id: it.id,
-          source: it.source || "",
+          source: pubSource,
           source_id: it.source_id != null ? String(it.source_id) : "",
           title: cleanPublicTitle(it.title) || it.title,
           media_type: it.media_type || (mediaType === "gallery" || mediaType === "cosplay" ? "gallery" : "comic"),

@@ -27,7 +27,20 @@
     hentaipaw: 'mp',
     doujins: 'md',
     gamcore: 'mg',
-    leakgallery: 'ml'
+    leakgallery: 'ml',
+    comics18: 'm1',
+    comics18_org: 'm1',
+    comics18_net: 'm1',
+    melapelacomics: 'mm',
+    melapelocondibujos: 'mm',
+    vercomicsporno: 'mr',
+    vercomicporno: 'mr',
+    reycomix: 'ry',
+    pornocomic: 'pn',
+    sexkomix2: 'sk',
+    manhwaweb: 'mw',
+    leermanhwas: 'lm',
+    mhcomics: 'mh'
   };
   const ALIAS_TO_SOURCE = Object.fromEntries(
     Object.entries(SOURCE_TO_ALIAS).map(([k, v]) => [v, k])
@@ -186,7 +199,9 @@
 
       // 3. Rutas canónicas del nuevo sistema
       if (path === '/' || path === '/index.html' || path === '/shorts' || path === '/parati') {
-        return makeCatalogRoute('shorts', '/', true);
+        const homeRoute = makeCatalogRoute('shorts', '/', true);
+        if (q.get('c')) homeRoute.clip = q.get('c');
+        return homeRoute;
       }
       if (path === '/videos') {
         return makeCatalogRoute('videos', '/videos');
@@ -215,10 +230,23 @@
         return { name: 'auth', next: q.get('next') || '/', canonical: '/acceso' };
       }
 
-      // 5. Video: /v/:slug o legada /video/:id
+      // 5. Video: /v/:slug o /v/ms--<token>--<slug> (Shorts nativo) o legada /video/:id
       const vMatch = path.match(/^\/v\/([^\/]+)$/) || path.match(/^\/video\/([^\/]+)(?:\/(.+))?$/);
       if (vMatch) {
         const rawToken = vMatch[1];
+        if (rawToken.startsWith('ms--')) {
+          const shareToken = decodeURIComponent(rawToken.slice(4).split('--')[0] || '');
+          return {
+            name: 'home',
+            mode: 'shorts',
+            category: 'all',
+            tag: '',
+            page: 1,
+            query: '',
+            clip: shareToken,
+            canonical: path
+          };
+        }
         const parsed = this.parseItemToken(rawToken);
         return {
           name: 'video',
@@ -398,10 +426,11 @@
 
     updateActiveNavLinks(currentPath) {
       const path = currentPath || '/';
-      const isAccount = path === '/cuenta' || path.startsWith('/cuenta/') || path === '/acceso' || path.startsWith('/perfil') || path === '/boveda/cuenta' || path === '/boveda/perfil';
+      const isAccount = path === '/cuenta' || path.startsWith('/cuenta/') || path === '/acceso' || path.startsWith('/perfil') || path.startsWith('/boveda/cuenta') || path.startsWith('/boveda/perfil');
       const isVault = !isAccount && (path === '/boveda' || path.startsWith('/boveda/'));
-      const isShorts = !isAccount && !isVault && (path === '/' || path === '/index.html' || path === '/shorts' || path === '/parati');
-      const isVideos = !isAccount && (path === '/videos' || path.startsWith('/v/') || path.startsWith('/video/'));
+      const isShortClipPath = path.startsWith('/v/ms--');
+      const isShorts = !isAccount && !isVault && (path === '/' || path === '/index.html' || path === '/shorts' || path === '/parati' || isShortClipPath);
+      const isVideos = !isAccount && !isShortClipPath && (path === '/videos' || path.startsWith('/v/') || path.startsWith('/video/'));
       const isGalleries = !isAccount && (path === '/cosplay' || path.startsWith('/g/') || path.startsWith('/gallery') || path.startsWith('/galeria'));
       const isGames = !isAccount && (path === '/juegos' || path === '/games' || path.startsWith('/j/') || path.startsWith('/juego/') || path.startsWith('/game/'));
       const isComics = !isAccount && !isVault && !isShorts && !isVideos && !isGalleries && !isGames && (
@@ -422,8 +451,9 @@
       const clean = path || '/';
       const isAccount = clean === '/cuenta' || clean.startsWith('/cuenta/') || clean === '/acceso' || clean.startsWith('/perfil') || clean === '/boveda/cuenta' || clean === '/boveda/perfil';
       const isVault = !isAccount && (clean === '/boveda' || clean.startsWith('/boveda/'));
-      const isShorts = !isAccount && !isVault && (clean === '/' || clean === '/index.html' || clean === '/shorts' || clean === '/parati');
-      const isVideos = !isAccount && (clean === '/videos' || clean.startsWith('/v/') || clean.startsWith('/video/'));
+      const isShortClipPath = clean.startsWith('/v/ms--');
+      const isShorts = !isAccount && !isVault && (clean === '/' || clean === '/index.html' || clean === '/shorts' || clean === '/parati' || isShortClipPath);
+      const isVideos = !isAccount && !isShortClipPath && (clean === '/videos' || clean.startsWith('/v/') || clean.startsWith('/video/'));
       const isGalleries = !isAccount && (clean === '/cosplay' || clean.startsWith('/g/') || clean.startsWith('/gallery') || clean.startsWith('/galeria'));
       const isGames = !isAccount && (clean === '/juegos' || clean.startsWith('/j/') || clean.startsWith('/juego/') || clean.startsWith('/game/'));
       const isComics = !isAccount && !isVault && !isShorts && !isVideos && !isGalleries && !isGames && (

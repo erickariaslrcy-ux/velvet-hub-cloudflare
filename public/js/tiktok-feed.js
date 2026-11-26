@@ -135,6 +135,31 @@
     return state.lanes[state.focusedLane] || state.lanes[0];
   }
 
+  function slugifyShortTitle(text) {
+    return String(text || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '')
+      .slice(0, 48) || 'video';
+  }
+
+  function getInitialClipToken() {
+    if (state.initialClipToken) {
+      const tok = state.initialClipToken;
+      state.initialClipToken = '';
+      return tok;
+    }
+    try {
+      const m = (window.location.pathname || '').match(/^\/v\/ms--([^/]+)/i);
+      if (m && m[1]) return decodeURIComponent(m[1].split('--')[0] || '');
+      return new URLSearchParams(window.location.search || '').get('c') || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function esc(str) {
     return String(str || '')
       .replace(/&/g, '&amp;')
@@ -645,7 +670,7 @@
 
       if (!data) {
         const excludeSlice = buildExcludeParam(reset && lane.index === 0);
-        const clipToken = reset && lane.index === 0 ? (new URLSearchParams(window.location.search).get('c') || '') : '';
+        const clipToken = reset && lane.index === 0 ? getInitialClipToken() : '';
         const params = new URLSearchParams({
           limit: '12',
           category: state.category || 'all',
@@ -655,7 +680,16 @@
         });
         if (clipToken && !effectiveQ) params.set('clip', clipToken);
 
-        const res = await fetch('/api/shorts/random?' + params.toString(), { cache: 'no-store' });
+        const res = await fetch('/api/shorts/random?' + params.toString(), { cache: 'no-store', credentials: 'same-origin' });
+        if (res.status === 403 && res.headers?.get('X-MH-Gate') === 'refresh') {
+          try {
+            if (!sessionStorage.getItem('mh_gate_refreshed')) {
+              sessionStorage.setItem('mh_gate_refreshed', '1');
+              window.location.reload();
+              return;
+            }
+          } catch (e) {}
+        }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         data = await res.json();
       }
@@ -1916,8 +1950,9 @@
       } else if (action === 'exit-favs-mode') {
         exitFavoritesMode(null);
       } else if (action === 'copy' && item) {
+        const cleanSlug = slugifyShortTitle(item.title);
         const shareUrl = item.share_id
-          ? `${window.location.origin}/?c=${encodeURIComponent(item.share_id)}`
+          ? `${window.location.origin}/v/ms--${encodeURIComponent(item.share_id)}--${cleanSlug}`
           : window.location.origin;
         navigator.clipboard?.writeText(shareUrl).then(() => {
           if (typeof window.showToast === 'function') window.showToast('Enlace de Morbo Hub copiado', 'success');
@@ -1947,14 +1982,19 @@
   }
 
   window.VelvetTikTokFeed = {
-    mount() {
+    mount(clipToken = '') {
       loadProPrefs();
       bindLaneDomRefs();
+      state.initialClipToken = String(clipToken || '').trim();
       state.mounted = true;
       document.body.classList.add('tiktok-home-active');
       bindEvents();
       syncCleanModeUI();
       loadAccountFavorites(false);
+      if (state.initialClipToken && state.lanes[0].slides.length > 0) {
+        state.lanes[0].feedMode = 'random';
+        fetchLaneBatch(state.lanes[0], true);
+      }
       applyViewportLaneLayout();
     },
     unmount() {

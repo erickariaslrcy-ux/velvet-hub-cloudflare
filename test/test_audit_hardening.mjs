@@ -287,7 +287,7 @@ try {
     params: {},
     waitUntil: () => {}
   });
-  assert.equal(evilOriginRes.headers.get("access-control-allow-origin"), "https://morbohub.pages.dev", "No debe reflejar orígenes no autorizados");
+  assert.equal(evilOriginRes.headers.get("access-control-allow-origin"), "https://www.morbohub.com", "No debe reflejar orígenes no autorizados");
   assert.equal(evilOriginRes.headers.get("access-control-allow-credentials"), null);
   assert.equal(evilOriginRes.headers.get("x-powered-by"), null, "No debe exponer cabecera X-Powered-By");
 
@@ -451,6 +451,89 @@ try {
   assert.equal(got429, true, "Debe aplicar límite 429 ante fuerza bruta de login");
   console.log("✓ Rate limit anti-fuerza bruta activo.");
 
+  // -------------------------------------------------------------------------
+  // 6. CIFRADO AES-GCM OPACO, ESCUDO EDGE API Y ENMASCARAMIENTO TOTAL DE FUENTES
+  // -------------------------------------------------------------------------
+  console.log("\n[6] Verificando cifrado AES-GCM, bloqueo de APIs externas y cero fugas...");
+  const freeVideo = catBody.items.find((it) => it.video_sources && it.video_sources.length > 0);
+  if (freeVideo) {
+    assert.ok(!/pmvhaven|3hentai|comics18|ovh\.net/i.test(JSON.stringify(freeVideo)), "Catálogo público jamás debe revelar origen");
+    const mediaTok = freeVideo.video_sources[0].url.split("t=")[1].split(".")[0];
+    const rawDecoded = Buffer.from(mediaTok, "base64url").toString("utf8");
+    assert.ok(!rawDecoded.includes("http") && !rawDecoded.includes("pmvhaven"), "Token de media debe venir cifrado (no base64 legible)");
+  }
+
+  // Simular HTML shell visit via middleware con MEDIA_SECRET para emitir cookie mh_gate
+  const shellRes = await onMiddlewareRequest({
+    request: new Request("https://www.morbohub.com/", {
+      headers: { "User-Agent": "Mozilla/5.0 Chrome/134.0.0.0" }
+    }),
+    env: {
+      MEDIA_SECRET,
+      ASSETS: { fetch: async () => new Response("<html>ok</html>", { status: 200, headers: { "content-type": "text/html" } }) }
+    },
+    next: async () => new Response("<html>ok</html>", { status: 200, headers: { "content-type": "text/html" } })
+  });
+  const setCookie = shellRes.headers.get("set-cookie") || "";
+  assert.ok(setCookie.includes("mh_gate=") && setCookie.includes("HttpOnly"), "Middleware debe emitir cookie firmada mh_gate");
+  const gatePair = setCookie.split(";")[0];
+
+  // Sin cookie mh_gate en Edge (cf-ray), curl/scripts externos deben recibir 403 incluso falseando Referer
+  for (const apiPath of ["/api/items?media_type=video", "/api/random?media_type=comic", "/api/shorts/random", "/api/tags"]) {
+    const blockedRes = await onRequest({
+      request: new Request(`https://www.morbohub.com${apiPath}`, {
+        headers: {
+          "cf-ray": "abc123-MIA",
+          "User-Agent": "Mozilla/5.0 Chrome/134.0.0.0",
+          "Referer": "https://www.morbohub.com/",
+          "Sec-Fetch-Site": "same-origin"
+        }
+      }),
+      env: baseEnv,
+      params: {},
+      waitUntil: () => {}
+    });
+    assert.equal(blockedRes.status, 403, `Edge API sin cookie mh_gate debe bloquear ${apiPath} con 403`);
+  }
+
+  // Navegación directa Sec-Fetch-Dest: document debe bloquearse con 403
+  const docNavRes = await onRequest({
+    request: new Request("https://www.morbohub.com/api/items?media_type=video", {
+      headers: {
+        "cf-ray": "abc123-MIA",
+        "User-Agent": "Mozilla/5.0 Chrome/134.0.0.0",
+        "Sec-Fetch-Dest": "document",
+        "Cookie": gatePair
+      }
+    }),
+    env: baseEnv,
+    params: {},
+    waitUntil: () => {}
+  });
+  assert.equal(docNavRes.status, 403, "Abrir endpoint JSON directamente en barra de navegador debe devolver 403");
+
+  // Con cookie mh_gate válida + navegación misma web pasa 200
+  const allowedEdgeRes = await onRequest({
+    request: new Request("https://www.morbohub.com/api/items?media_type=video", {
+      headers: {
+        "cf-ray": "abc123-MIA",
+        "User-Agent": "Mozilla/5.0 Chrome/134.0.0.0",
+        "Sec-Fetch-Site": "same-origin",
+        "Referer": "https://www.morbohub.com/videos",
+        "Cookie": gatePair
+      }
+    }),
+    env: baseEnv,
+    params: {},
+    waitUntil: () => {}
+  });
+  assert.equal(allowedEdgeRes.status, 200, "Navegador legítimo de morbohub.com con mh_gate debe funcionar 200");
+
+  const headersFile = fs.readFileSync(path.join("public", "_headers"), "utf8");
+  assert.ok(!headersFile.includes("pmvhaven"), "_headers CSP no debe exponer dominios de fuentes");
+  assert.ok(headersFile.includes("Referrer-Policy: same-origin"), "_headers debe permitir Referer mismo sitio sin filtrar a terceros");
+
+  console.log("✓ Cifrado AES-GCM, cookie Edge mh_gate, CORS estricto y cero fugas verificados.");
   console.log("\n====================================================");
   console.log("✅ SUITE AUDIT & HARDENING SUPERADA (100%)");
   console.log("====================================================");

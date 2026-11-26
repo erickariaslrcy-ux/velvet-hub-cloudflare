@@ -928,7 +928,7 @@
         groupList.className = 'space-y-2 py-2';
 
         group.items.forEach((h) => {
-          const isGame = h.media_type === 'game' || h.source === 'gamcore';
+          const isGame = h.media_type === 'game' || h.source === 'gamcore' || h.source === 'mg';
           const isVid = !isGame && (h.media_type === 'video' || !!h.duration);
           const key = h.id ? String(h.id) : `${h.source}:${h.source_id}`;
           const p = progMap[key] || progMap[`${h.source}:${h.source_id}`];

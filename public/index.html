@@ -48,13 +48,13 @@
   <link rel="stylesheet" href="/css/pagination.css?v=3.10.0">
 
   <!-- Modular Architecture: Store, Router, Vault & Pagination (sin bloqueo externo) -->
-  <script defer src="/js/personal-data.js?v=4.0.0"></script>
+  <script defer src="/js/personal-data.js?v=4.1.0"></script>
   <script defer src="/js/store.js?v=3.10.0"></script>
-  <script defer src="/js/router.js?v=3.10.0"></script>
-  <script defer src="/js/vault.js?v=4.0.0"></script>
+  <script defer src="/js/router.js?v=4.1.0"></script>
+  <script defer src="/js/vault.js?v=4.1.0"></script>
   <script defer src="/js/pagination.js?v=3.10.0"></script>
   <script defer src="/js/image-loader.js?v=3.10.0"></script>
-  <script defer src="/js/tiktok-feed.js?v=4.0.0"></script>
+  <script defer src="/js/tiktok-feed.js?v=4.1.0"></script>
 
   <!-- Tailwind CSS Engine asíncrono para utilidades dinámicas sin frenar el arranque -->
   <script async src="https://cdn.tailwindcss.com"></script>
@@ -2274,10 +2274,12 @@
     <script>
       (function () {
         try {
-          var p = (window.location.pathname || '/').toLowerCase();
-          if (p === '/' || p === '/index.html' || p === '/shorts' || p === '/parati') {
+          var rawP = window.location.pathname || '/';
+          var p = rawP.toLowerCase();
+          var shortClipMatch = rawP.match(/^\/v\/ms--([^/]+)/i);
+          if (p === '/' || p === '/index.html' || p === '/shorts' || p === '/parati' || shortClipMatch) {
             var sp = new URLSearchParams(window.location.search || '');
-            var c = sp.get('c') || '';
+            var c = shortClipMatch ? decodeURIComponent(shortClipMatch[1].split('--')[0] || '') : (sp.get('c') || '');
             var q = sp.get('q') || '';
             if (!q) {
               var u = '/api/shorts/random?limit=12&category=all' + (c ? '&clip=' + encodeURIComponent(c) : '') + '&_=' + Date.now();
@@ -6211,7 +6213,7 @@
           return art.toUpperCase();
         }
       }
-      if (item.source === 'pmvhaven' || tLower.includes('pmv')) return 'PMV EDIT';
+      if (item.source === 'pmvhaven' || item.source === 'mv' || tLower.includes('pmv')) return 'PMV EDIT';
       if (tLower.includes('milf') || tLower.includes('madura')) return 'MILF';
       if (tLower.includes('anal')) return 'ANAL';
       if (tLower.includes('amateur') || tLower.includes('casero')) return 'AMATEUR';
@@ -6891,7 +6893,7 @@
           updateModeButtonsUI('shorts');
           const sIn = document.getElementById('search-input');
           if (sIn) sIn.placeholder = 'Buscar shorts +18, tags, categorías...';
-          window.VelvetTikTokFeed?.mount();
+          window.VelvetTikTokFeed?.mount(route.clip || '');
           return;
         }
 
@@ -7000,7 +7002,7 @@
           else if (dec && dec.source && dec.sourceId) { source = dec.source; id = dec.sourceId; }
         }
         if (itemId && /^[a-f0-9]{24}$/i.test(itemId) && !source) {
-          source = 'pmvhaven';
+          source = 'mv';
           id = itemId;
         }
         const cacheMatch = (itemId ? getCachedItem(String(itemId)) : null) ||
@@ -7128,9 +7130,9 @@
       if (raw === 'video' || raw === 'game') return raw;
       if (raw === 'gallery' || raw === 'cosplay') return 'gallery';
       const src = String(h.source || '').trim().toLowerCase();
-      if (['pmvhaven', 'pornone', 'redporn', 'anyporn', 'alotporn', 'damplips', 'pornhd', 'spankbang', 'xvideos', 'eporner'].includes(src)) return 'video';
-      if (['buondua', '4khd', 'xasiat', 'leakgallery', 'mitaku'].includes(src)) return 'gallery';
-      if (['gamcore', 'games', 'flash', 'ruffle', 'renpy'].includes(src) || h.game_type) return 'game';
+      if (['mv', 'pmvhaven', 'pornone', 'redporn', 'anyporn', 'alotporn', 'damplips', 'pornhd', 'spankbang', 'xvideos', 'eporner'].includes(src)) return 'video';
+      if (['mb', 'mx', 'm4', 'ml', 'buondua', '4khd', 'xasiat', 'leakgallery', 'mitaku'].includes(src)) return 'gallery';
+      if (['mg', 'gamcore', 'games', 'flash', 'ruffle', 'renpy'].includes(src) || h.game_type) return 'game';
       return 'comic';
     }
 
@@ -8765,7 +8767,7 @@
     function recordGamePlayHistory(game) {
       if (!game) return;
       const itemId = game.id || null;
-      const source = game.source || 'gamcore';
+      const source = game.source || 'mg';
       const sourceId = String(game.source_id || game.id || '');
       const key = `${source}:${sourceId}`;
 
@@ -10987,7 +10989,7 @@
         }
         if (!videoGuard.matches(ticket.token)) return;
         if (resp.status !== 403 && !resp.ok && itemId && /^[a-f0-9]{24}$/i.test(itemId)) {
-          resp = await fetch(`/api/items/pmvhaven/${encodeURIComponent(itemId)}`, detailOpts);
+          resp = await fetch(`/api/items/mv/${encodeURIComponent(itemId)}`, detailOpts);
         }
         if (!videoGuard.matches(ticket.token)) return;
         if (resp.status === 403) {
@@ -11139,17 +11141,7 @@
         hlsInstance = null;
       }
 
-      const isDirectClient = vs.url.includes('anyporn.com') ||
-        vs.url.includes('v-acctoken') ||
-        vs.url.includes('alotporn.com') ||
-        vs.url.includes('redporn.porn') ||
-        vs.url.includes('vcdn02.redporn.porn') ||
-        vs.url.includes('damplips.com') ||
-        vs.url.includes('pmvhavencloud') ||
-        vs.url.includes('cloud.ovh.net') ||
-        vs.url.includes('s3.eu-west-par.io.cloud.ovh.net') ||
-        vs.url.includes('pornone.com') ||
-        vs.url.includes('.mp4');
+      const isDirectClient = vs.url.includes('.mp4');
 
       const streamUrl = getStealthStreamUrl(vs.url, refUrl);
 
@@ -12841,7 +12833,7 @@
       const it = item || state.currentItem || {};
       const type = String(it.media_type || '').toLowerCase();
       const sourceName = String(it.source || '').toLowerCase();
-      return type === 'gallery' || type === 'cosplay' || state.mode === 'galleries' || ['buondua', '4khd', 'xasiat'].includes(sourceName);
+      return type === 'gallery' || type === 'cosplay' || state.mode === 'galleries' || ['mb', 'mx', 'm4', 'ml', 'buondua', '4khd', 'xasiat'].includes(sourceName);
     }
 
     function setReaderHeading(text) {
@@ -12994,7 +12986,7 @@
             const effId = cachedItem.id || itemId;
             const isGallery = (state.mode === 'galleries') ||
               (cachedItem.media_type === 'gallery' || cachedItem.media_type === 'cosplay') ||
-              ['buondua', '4khd', 'xasiat'].includes(cachedItem.source || source);
+              ['mb', 'mx', 'm4', 'ml', 'buondua', '4khd', 'xasiat'].includes(cachedItem.source || source);
             if (isGallery) state.mode = 'galleries';
             const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(cachedItem) : `/${isGallery ? 'g' : 'c'}/${effId}`;
             const homeWasOpen = homeView && !homeView.classList.contains('hidden');
@@ -13098,7 +13090,7 @@
           const effId = item.id || itemId;
           const isGallery = (state.mode === 'galleries') ||
             (item.media_type === 'gallery' || item.media_type === 'cosplay') ||
-            ['buondua', '4khd', 'xasiat'].includes(item.source || source);
+            ['mb', 'mx', 'm4', 'ml', 'buondua', '4khd', 'xasiat'].includes(item.source || source);
           if (isGallery) state.mode = 'galleries';
           const canonicalUrl = window.VelvetRouter ? window.VelvetRouter.getItemUrl(item) : `/${isGallery ? 'g' : 'c'}/${effId}`;
           const homeWasOpen = homeView && !homeView.classList.contains('hidden');

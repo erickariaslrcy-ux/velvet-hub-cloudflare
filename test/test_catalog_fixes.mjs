@@ -303,15 +303,17 @@ assert.notEqual(deadRes.status, 307);
 
 const ovhUrl = "https://pmvhavencloud.s3.eu-west-par.io.cloud.ovh.net/video.mp4";
 const ovhToken = await encodeMediaToken(ovhUrl, "https://pmvhaven.com/", mediaSecret, bucketStart + 22);
-let ovhFetched = false;
-const ovhRes = await callMedia(ovhToken, "", async () => {
-  ovhFetched = true;
-  return new Response("no-stream", { status: 200, headers: { "content-type": "video/mp4" } });
+const ovhCalls = [];
+const ovhRes = await callMedia(ovhToken, "", async (input, init) => {
+  ovhCalls.push(init && init.cf && init.cf.cacheTtl);
+  return new Response("ovh-bytes", {
+    status: 206,
+    headers: { "content-type": "video/mp4", "content-range": "bytes 0-8/100", "content-length": "9" }
+  });
 });
-assert.equal(ovhFetched, false, "Un mp4 de OVH no se descarga por el Worker");
-assert.equal(ovhRes.status, 302);
-assert.equal(ovhRes.headers.get("location"), ovhUrl);
-assert.equal(ovhRes.headers.get("x-velvet-media"), "direct");
+assert.equal(ovhRes.status, 206, "OVH mp4 debe transmitirse vía proxy sin filtrar redirect 302 externo");
+assert.equal(ovhRes.headers.get("location"), null);
+assert.equal(ovhCalls[0], 0);
 
 const ovhPlaylist = "https://pmvhavencloud.s3.eu-west-par.io.cloud.ovh.net/master.m3u8";
 const ovhPlaylistToken = await encodeMediaToken(ovhPlaylist, "https://pmvhaven.com/", mediaSecret, bucketStart + 22);
@@ -499,7 +501,7 @@ const embedRes = await callMedia(embedToken, "", async (input) => {
 assert.equal(embedRes.status, 200, "cdn.buondua.com se abre en pok.misskon.com");
 assert.equal(embedCalls[0], "https://pok.misskon.com/images/2025/12/30/cover.webp");
 
-assert.ok(sw.includes("v23-morbo-name") || sw.includes("v24-subscriptions-fix") || sw.includes("v25-cloud-favorites") || sw.includes("v26-security-audit") || sw.includes("v27-vault-pagination") || sw.includes("v28-clean-vault-titles") || sw.includes("v29-random-disjoint-ui") || sw.includes("v30-pmv-disjoint-final") || sw.includes("v31-android-pagination-fix") || sw.includes("v32-launch-hardening") || sw.includes("v33-fast-budget") || sw.includes("v34-tiktok-local") || sw.includes("v35-tiktok-wide") || sw.includes("v36-tiktok-solo") || sw.includes("v37-tiktok-fit") || sw.includes("v38-tiktok-ambient") || sw.includes("v39-tiktok-turbo") || sw.includes("v40-tiktok-direct") || sw.includes("v41-tiktok-stealth") || sw.includes("v42-tiktok-playable") || sw.includes("v43-tiktok-zen-favs") || sw.includes("v44-tiktok-vip-favs") || sw.includes("v45-tiktok-mega-random") || sw.includes("v46-tiktok-multiscreen"), "El service worker purga la caché vieja de portadas");
+assert.ok(sw.includes("v23-morbo-name") || sw.includes("v24-subscriptions-fix") || sw.includes("v25-cloud-favorites") || sw.includes("v26-security-audit") || sw.includes("v27-vault-pagination") || sw.includes("v28-clean-vault-titles") || sw.includes("v29-random-disjoint-ui") || sw.includes("v30-pmv-disjoint-final") || sw.includes("v31-android-pagination-fix") || sw.includes("v32-launch-hardening") || sw.includes("v33-fast-budget") || sw.includes("v34-tiktok-local") || sw.includes("v35-tiktok-wide") || sw.includes("v36-tiktok-solo") || sw.includes("v37-tiktok-fit") || sw.includes("v38-tiktok-ambient") || sw.includes("v39-tiktok-turbo") || sw.includes("v40-tiktok-direct") || sw.includes("v41-tiktok-stealth") || sw.includes("v42-tiktok-playable") || sw.includes("v43-tiktok-zen-favs") || sw.includes("v44-tiktok-vip-favs") || sw.includes("v45-tiktok-mega-random") || sw.includes("v46-tiktok-multiscreen") || sw.includes("v47-stealth-shield"), "El service worker purga la caché vieja de portadas");
 assert.ok(sw.includes("req.destination === 'video'"), "El service worker no intercepta la reproducción");
 assert.ok(sw.includes("function isUsableCoverResponse"), "El service worker descarta SVG y 403 cacheados");
 
