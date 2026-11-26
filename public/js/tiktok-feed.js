@@ -1,18 +1,17 @@
 /**
- * MORBO HUB — MOTOR TIKTOK TURBO DIRECT-CDN + ULTRA-LIGERO (v3.4)
- * - Ajuste automático ("Auto", 0% recorte) + opción persistente "Llenar".
- * - Streaming directo CDN (86% del catálogo) en Chrome C++ nativo sin saltos de
- *   proxy + fallback automático a /api/shorts/stream/{id} cuando se requiera.
- * - Ventana estricta: solo el video activo descarga (`preload="auto"`) para no
- *   competir ancho de banda; el siguiente solo lee encabezado (`preload="metadata"`).
+ * MORBO HUB — MOTOR TIKTOK STEALTH + FAVORITOS + PANTALLA LIMPIA (v4.0)
+ * - Ajuste automático limpio sin recorte (botón Auto/Llenar eliminado).
+ * - Corazón ♥ guarda y gestiona "Mis Shorts Favoritos" persistentes y reproducibles.
+ * - Botón especial "Limpiar" (H): oculta barra superior, títulos y botones para cine total.
+ * - Arranque turbo con prefetch inline, precarga de 2 slides adelante y buffer atrás.
  */
 (function (window, document) {
   'use strict';
 
   const LIKES_KEY = 'velvet_shorts_likes_v1';
+  const FAVS_KEY = 'velvet_shorts_favs_v1';
   const MUTE_KEY = 'velvet_shorts_muted_v1';
   const AUTO_NEXT_KEY = 'velvet_shorts_autonext_v1';
-  const FIT_KEY = 'velvet_shorts_fit_v1';
 
   const state = {
     mounted: false,
@@ -21,19 +20,37 @@
     loading: false,
     category: 'all',
     q: '',
+    feedMode: 'random', // 'random' | 'favorites'
+    cleanMode: false,
     muted: true,
     autoNext: false,
-    fitMode: 'auto',
     seenIds: [],
     likes: new Set(),
-    observer: null
+    favs: [],
+    consecSkips: 0,
+    observer: null,
+    nextTimer: 0
   };
 
   function loadLocalPrefs() {
+    let loadedFavs = [];
+    try {
+      const rawFavs = JSON.parse(localStorage.getItem(FAVS_KEY) || '[]');
+      if (Array.isArray(rawFavs)) {
+        loadedFavs = rawFavs.filter(x => x && x.id != null);
+      }
+    } catch (e) {}
+    state.favs = loadedFavs;
+
+    const likeSet = new Set(loadedFavs.map(x => String(x.id)));
     try {
       const savedLikes = JSON.parse(localStorage.getItem(LIKES_KEY) || '[]');
-      if (Array.isArray(savedLikes)) state.likes = new Set(savedLikes.map(String));
+      if (Array.isArray(savedLikes)) {
+        savedLikes.forEach(id => likeSet.add(String(id)));
+      }
     } catch (e) {}
+    state.likes = likeSet;
+
     try {
       const m = localStorage.getItem(MUTE_KEY);
       state.muted = m === null ? true : m === '1';
@@ -41,16 +58,22 @@
     try {
       state.autoNext = localStorage.getItem(AUTO_NEXT_KEY) === '1';
     } catch (e) { state.autoNext = false; }
-    try {
-      const f = localStorage.getItem(FIT_KEY);
-      state.fitMode = f === 'fill' ? 'fill' : 'auto';
-    } catch (e) { state.fitMode = 'auto'; }
   }
 
-  function saveLikes() {
+  function persistFavsAndLikes() {
     try {
+      localStorage.setItem(FAVS_KEY, JSON.stringify(state.favs.slice(0, 500)));
       localStorage.setItem(LIKES_KEY, JSON.stringify(Array.from(state.likes).slice(-500)));
     } catch (e) {}
+    syncFavsBadge();
+  }
+
+  function syncFavsBadge() {
+    const count = state.favs.length;
+    const badge = document.getElementById('tt-favs-count');
+    if (badge) badge.textContent = String(count);
+    const modalCount = document.getElementById('tt-favs-modal-count');
+    if (modalCount) modalCount.textContent = String(count);
   }
 
   function esc(str) {
@@ -80,19 +103,9 @@
     const targetSrc = item.cover_url;
     if (ambImg.dataset.src === targetSrc) return;
     ambImg.dataset.src = targetSrc;
-    ambImg.dataset.fb = '';
     ambImg.classList.remove('is-ready');
-    ambImg.onerror = () => {
-      if (!ambImg.dataset.fb && item.cover_fallback && item.cover_fallback !== targetSrc) {
-        ambImg.dataset.fb = '1';
-        ambImg.src = item.cover_fallback;
-      } else {
-        ambImg.classList.remove('is-ready');
-      }
-    };
-    ambImg.onload = () => {
-      ambImg.classList.add('is-ready');
-    };
+    ambImg.onerror = () => ambImg.classList.remove('is-ready');
+    ambImg.onload = () => ambImg.classList.add('is-ready');
     ambImg.src = targetSrc;
   }
 
@@ -100,28 +113,20 @@
     if (!slide) return;
     const stage = slide.querySelector('.tt-stage');
     const vid = slide.querySelector('.tt-video');
-    if (!stage) return;
+    if (!stage || !vid) return;
 
-    const isFill = state.fitMode === 'fill';
-    stage.classList.toggle('is-fill', isFill);
-
-    const vw = (vid && vid.videoWidth) || Number(stage.dataset.vw || 0);
-    const vh = (vid && vid.videoHeight) || Number(stage.dataset.vh || 0);
-    if (vw > 0 && vh > 0) {
-      stage.dataset.vw = String(vw);
-      stage.dataset.vh = String(vh);
-      stage.classList.toggle('is-wide', vw > vh * 1.06);
-    }
-
-    if (window.innerWidth < 1024 || isFill) {
+    const vw = vid.videoWidth || 0;
+    const vh = vid.videoHeight || 0;
+    if (!vw || !vh) {
       stage.style.width = '';
       return;
     }
 
-    if (vw > 0 && vh > 0) {
-      const track = document.getElementById('tiktok-snap-track');
-      const availH = Math.max(360, (track ? track.clientHeight : window.innerHeight - 64) - 16);
-      const maxW = Math.min(Math.floor(window.innerWidth * 0.88), 1300);
+    if (window.innerWidth >= 1024) {
+      const viewEl = document.getElementById('tiktok-feed-view');
+      const vPad = state.cleanMode ? 8 : 16;
+      const availH = Math.max(360, ((viewEl && viewEl.clientHeight) || (window.innerHeight - (state.cleanMode ? 0 : 64))) - vPad);
+      const maxW = Math.min(window.innerWidth * (state.cleanMode ? 0.94 : 0.88), 1280);
       const idealW = Math.round(availH * (vw / vh));
       const finalW = Math.max(360, Math.min(maxW, idealW));
       stage.style.width = `${finalW}px`;
@@ -130,31 +135,103 @@
     }
   }
 
-  function syncFitModeAll() {
-    try { localStorage.setItem(FIT_KEY, state.fitMode); } catch (e) {}
-    const isFill = state.fitMode === 'fill';
-    document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach(applyStageGeometry);
-    document.querySelectorAll('#tiktok-snap-track [data-tt-action="fit"]').forEach((btn) => {
-      btn.classList.toggle('is-on', isFill);
-      const txt = btn.querySelector('.tt-rail-txt');
-      if (txt) txt.textContent = isFill ? 'Llenar' : 'Auto';
-    });
-  }
-
-  function syncSearchChipUI() {
+  function syncTopModeChips() {
     const statusChip = document.getElementById('tt-search-chip');
     const statusTxt = document.getElementById('tt-search-chip-label');
     if (statusChip && statusTxt) {
-      if (state.q) {
+      if (state.q && state.feedMode !== 'favorites') {
         statusTxt.textContent = state.q;
         statusChip.classList.remove('hidden');
       } else {
         statusChip.classList.add('hidden');
       }
     }
+    const favModeChip = document.getElementById('tt-favs-mode-chip');
+    if (favModeChip) {
+      favModeChip.classList.toggle('hidden', state.feedMode !== 'favorites');
+    }
+    syncFavsBadge();
+  }
+
+  function syncCleanModeUI() {
+    document.body.classList.toggle('tt-clean-mode', state.cleanMode);
+    document.querySelectorAll('#tiktok-snap-track [data-tt-action="clean"]').forEach((btn) => {
+      btn.classList.toggle('is-on', state.cleanMode);
+      const txt = btn.querySelector('.tt-rail-txt');
+      if (txt) txt.textContent = state.cleanMode ? 'Ver UI' : 'Limpiar';
+    });
+    const refreshGeo = () => {
+      document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach(applyStageGeometry);
+    };
+    requestAnimationFrame(() => {
+      refreshGeo();
+      setTimeout(refreshGeo, 80);
+    });
+  }
+
+  function toggleCleanMode(force) {
+    const next = typeof force === 'boolean' ? force : !state.cleanMode;
+    if (next === state.cleanMode) return;
+    state.cleanMode = next;
+    syncCleanModeUI();
+    if (state.cleanMode && typeof window.showToast === 'function') {
+      window.showToast('Pantalla limpia: toca el ojo arriba o pulsa H para volver', 'info');
+    }
+  }
+
+  function toggleHeartItem(item, slideBtn) {
+    if (!item || item.id == null) return false;
+    const key = String(item.id);
+    const exists = state.likes.has(key);
+    if (exists) {
+      state.likes.delete(key);
+      state.favs = state.favs.filter(f => String(f.id) !== key);
+      if (typeof window.showToast === 'function') {
+        window.showToast('Quitado de Favoritos', 'info');
+      }
+    } else {
+      state.likes.add(key);
+      const record = {
+        id: item.id,
+        title: item.title || 'Clip',
+        cover_url: item.cover_url || '',
+        tags: Array.isArray(item.tags) ? item.tags.slice(0, 6) : [],
+        artists: Array.isArray(item.artists) ? item.artists.slice(0, 2) : [],
+        duration: item.duration ?? null,
+        likes: Number(item.likes || 0),
+        share_id: item.share_id || '',
+        savedAt: Date.now()
+      };
+      state.favs = [record, ...state.favs.filter(f => String(f.id) !== key)].slice(0, 500);
+      if (typeof window.showToast === 'function') {
+        window.showToast('Guardado en Tus Favoritos ♥', 'success');
+      }
+    }
+    persistFavsAndLikes();
+
+    // Sync heart button(s) for this ID in the DOM
+    document.querySelectorAll(`#tiktok-snap-track .tt-slide`).forEach((s) => {
+      const idx = Number(s.dataset.idx);
+      const sItem = state.slides[idx];
+      if (!sItem || String(sItem.id) !== key) return;
+      const btn = s.querySelector('[data-tt-action="like"]');
+      if (btn) {
+        btn.classList.toggle('is-liked', !exists);
+        const cntEl = btn.querySelector('.tt-rail-txt');
+        if (cntEl) cntEl.textContent = String(Number(sItem.likes || 0) + (!exists ? 1 : 0));
+      }
+    });
+    if (slideBtn) slideBtn.classList.toggle('is-liked', !exists);
+
+    const modal = document.getElementById('tt-favs-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+      renderFavsGrid(state.favs);
+    }
+    return !exists;
   }
 
   async function fetchRandomBatch(reset = false) {
+    if (state.feedMode === 'favorites') return;
     if (state.loading) return;
     state.loading = true;
 
@@ -192,6 +269,7 @@
         unloadAllVideos();
         state.slides = [];
         state.activeIndex = 0;
+        state.consecSkips = 0;
         const track = document.getElementById('tiktok-snap-track');
         if (track) track.innerHTML = '';
       }
@@ -234,14 +312,13 @@
     slide.dataset.idx = String(idx);
 
     const isLiked = state.likes.has(String(item.id));
-    const isFill = state.fitMode === 'fill';
     const tagsHtml = (item.tags || []).slice(0, 5).map((t) =>
       `<button type="button" data-tt-tag="${esc(t)}" class="tt-tag-chip">#${esc(t)}</button>`
     ).join('');
     const artist = (item.artists && item.artists[0]) ? `@${esc(item.artists[0])}` : '';
 
     slide.innerHTML = `
-      <div class="tt-stage ${isFill ? 'is-fill' : ''}">
+      <div class="tt-stage">
         ${item.cover_url ? `<img class="tt-poster" src="${esc(item.cover_url)}" alt="" loading="eager" decoding="async" draggable="false" />` : ''}
         <video class="tt-video" playsinline controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback oncontextmenu="return false;" loop preload="none" ${state.muted ? 'muted' : ''}></video>
         <div class="tt-tap-layer" data-tt-action="toggle-play"></div>
@@ -256,7 +333,7 @@
         </div>
 
         <div class="tt-rail">
-          <button type="button" class="tt-rail-btn ${isLiked ? 'is-liked' : ''}" data-tt-action="like" title="Me gusta">
+          <button type="button" class="tt-rail-btn ${isLiked ? 'is-liked' : ''}" data-tt-action="like" title="Guardar en Mis Shorts Favoritos">
             <span class="tt-rail-ico"><i class="fa-solid fa-heart"></i></span>
             <span class="tt-rail-txt">${Number(item.likes || 0) + (isLiked ? 1 : 0)}</span>
           </button>
@@ -268,9 +345,9 @@
             <span class="tt-rail-ico"><i class="fa-solid fa-forward-step"></i></span>
             <span class="tt-rail-txt">Auto</span>
           </button>
-          <button type="button" class="tt-rail-btn ${isFill ? 'is-on' : ''}" data-tt-action="fit" title="Cambiar entre ajuste automático sin recorte o pantalla llena">
-            <span class="tt-rail-ico"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></span>
-            <span class="tt-rail-txt">${isFill ? 'Llenar' : 'Auto'}</span>
+          <button type="button" class="tt-rail-btn ${state.cleanMode ? 'is-on' : ''}" data-tt-action="clean" title="Limpiar pantalla: oculta barra, títulos y botones (H)">
+            <span class="tt-rail-ico"><i class="fa-solid fa-eye-slash"></i></span>
+            <span class="tt-rail-txt">${state.cleanMode ? 'Ver UI' : 'Limpiar'}</span>
           </button>
           <button type="button" class="tt-rail-btn" data-tt-action="copy" title="Compartir enlace de Morbo Hub">
             <span class="tt-rail-ico"><i class="fa-solid fa-share-nodes"></i></span>
@@ -300,6 +377,14 @@
       }
     };
 
+    const promoteNextSlide = (myIdx) => {
+      const nextSlide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${myIdx + 1}"]`);
+      const nextVid = nextSlide && nextSlide.querySelector('.tt-video');
+      if (nextVid && nextVid.dataset.loadedSrc && nextVid.preload !== 'auto') {
+        nextVid.preload = 'auto';
+      }
+    };
+
     const failAndAdvance = () => {
       clearWatchdog();
       slide.dataset.dead = '1';
@@ -318,7 +403,11 @@
     };
 
     vid.addEventListener('loadedmetadata', () => applyStageGeometry(slide));
-    vid.addEventListener('loadeddata', () => clearWatchdog());
+    vid.addEventListener('loadeddata', () => {
+      clearWatchdog();
+      const myIdx = Number(slide.dataset.idx);
+      if (myIdx === state.activeIndex) promoteNextSlide(myIdx);
+    });
     vid.addEventListener('waiting', () => {
       if (Number(slide.dataset.idx) === state.activeIndex && spinner) spinner.classList.remove('hidden');
     });
@@ -329,13 +418,7 @@
       if (spinner) spinner.classList.add('hidden');
       if (poster) poster.classList.add('is-hidden');
       const myIdx = Number(slide.dataset.idx);
-      if (myIdx === state.activeIndex) {
-        const nextSlide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${myIdx + 1}"]`);
-        const nextVid = nextSlide && nextSlide.querySelector('.tt-video');
-        if (nextVid && nextVid.dataset.loadedSrc && nextVid.preload === 'metadata') {
-          nextVid.preload = 'auto';
-        }
-      }
+      if (myIdx === state.activeIndex) promoteNextSlide(myIdx);
     });
     vid.addEventListener('canplay', () => {
       clearWatchdog();
@@ -353,7 +436,11 @@
     });
     vid.addEventListener('ended', () => {
       if (state.autoNext && Number(slide.dataset.idx) === state.activeIndex) {
-        goToSlide(state.activeIndex + 1);
+        if (state.activeIndex + 1 < state.slides.length) {
+          goToSlide(state.activeIndex + 1);
+        } else if (state.feedMode === 'favorites' && state.slides.length > 0) {
+          goToSlide(0);
+        }
       }
     });
 
@@ -410,10 +497,18 @@
   }
 
   function unloadAllVideos() {
+    if (state.nextTimer) {
+      clearTimeout(state.nextTimer);
+      state.nextTimer = 0;
+    }
     document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach(detachVideoSource);
   }
 
   function syncVideoWindow(activeIdx) {
+    if (state.nextTimer) {
+      clearTimeout(state.nextTimer);
+      state.nextTimer = 0;
+    }
     const slides = document.querySelectorAll('#tiktok-snap-track .tt-slide');
     slides.forEach((slide) => {
       const idx = Number(slide.dataset.idx);
@@ -421,11 +516,11 @@
       if (!item) return;
 
       const poster = slide.querySelector('.tt-poster');
-      if (poster && Math.abs(idx - activeIdx) <= 3) {
+      if (poster && Math.abs(idx - activeIdx) <= 4) {
         if (!poster.getAttribute('src') && item.cover_url) {
           poster.setAttribute('src', item.cover_url);
         }
-      } else if (poster && Math.abs(idx - activeIdx) > 4) {
+      } else if (poster && Math.abs(idx - activeIdx) > 5) {
         poster.removeAttribute('src');
       }
 
@@ -467,6 +562,17 @@
         attachVideoSource(slide, item, 'metadata');
         const vid = slide.querySelector('.tt-video');
         if (vid) vid.pause();
+        // Tras 250ms empezar a pre-cargar en segundo plano el siguiente video para cambio instantáneo
+        state.nextTimer = setTimeout(() => {
+          if (state.mounted && state.activeIndex === activeIdx && vid && vid.dataset.loadedSrc) {
+            vid.preload = 'auto';
+          }
+        }, 250);
+      } else if (idx === activeIdx + 2 || idx === activeIdx - 1) {
+        if (slide._ttWatchdog) { clearTimeout(slide._ttWatchdog); slide._ttWatchdog = 0; }
+        attachVideoSource(slide, item, 'metadata');
+        const vid = slide.querySelector('.tt-video');
+        if (vid) vid.pause();
       } else {
         detachVideoSource(slide);
       }
@@ -478,12 +584,12 @@
     state.activeIndex = idx;
     updateAmbientBackdrop(state.slides[idx]);
     syncVideoWindow(idx);
-    if (idx >= state.slides.length - 6 && !state.loading) {
+    if (state.feedMode !== 'favorites' && idx >= state.slides.length - 6 && !state.loading) {
       fetchRandomBatch(false);
     }
   }
 
-  function goToSlide(idx) {
+  function goToSlide(idx, instant = false) {
     let clamped = Math.max(0, Math.min(idx, state.slides.length - 1));
     while (clamped < state.slides.length - 1) {
       const cand = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${clamped}"]`);
@@ -492,7 +598,8 @@
     }
     const slide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${clamped}"]`);
     if (slide) {
-      slide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      slide.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'start' });
+      if (instant) activateSlide(clamped);
     }
   }
 
@@ -517,6 +624,120 @@
     const activeSlide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${state.activeIndex}"]`);
     const vid = activeSlide && activeSlide.querySelector('.tt-video');
     if (vid) vid.loop = !state.autoNext;
+  }
+
+  function renderFavsGrid(itemsList) {
+    const grid = document.getElementById('tt-favs-grid');
+    const emptyEl = document.getElementById('tt-favs-empty');
+    const playAllBtn = document.getElementById('tt-favs-play-all');
+    if (!grid) return;
+
+    const list = Array.isArray(itemsList) ? itemsList : [];
+    syncFavsBadge();
+    if (playAllBtn) playAllBtn.classList.toggle('hidden', list.length === 0);
+    if (list.length === 0) {
+      grid.innerHTML = '';
+      if (emptyEl) emptyEl.classList.remove('hidden');
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    grid.innerHTML = list.map((it) => `
+      <div class="tt-fav-card group" data-tt-fav-play="${esc(it.id)}">
+        ${it.cover_url ? `<img src="${esc(it.cover_url)}" alt="" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" loading="eager" draggable="false" />` : '<div class="w-full h-full bg-gradient-to-br from-pink-950/60 to-purple-950/70"></div>'}
+        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none"></div>
+        <button type="button" class="tt-fav-del" data-tt-fav-del="${esc(it.id)}" title="Quitar de Favoritos">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+        <div class="absolute inset-x-0 bottom-0 p-2.5 pointer-events-none">
+          <p class="text-[11px] font-bold text-white line-clamp-2 leading-snug drop-shadow">${esc(it.title || 'Clip')}</p>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function openFavoritesModal() {
+    const modal = document.getElementById('tt-favs-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    renderFavsGrid(state.favs);
+
+    const ids = state.favs.map(x => Number(x.id)).filter(n => Number.isFinite(n) && n > 0).slice(0, 60);
+    if (ids.length === 0) return;
+
+    try {
+      const res = await fetch('/api/shorts/batch?ids=' + ids.join(','), { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const fresh = Array.isArray(data.items) ? data.items : [];
+      if (fresh.length === 0) return;
+      const freshById = new Map(fresh.map(x => [String(x.id), x]));
+      state.favs = state.favs.map((old) => {
+        const f = freshById.get(String(old.id));
+        return f ? { ...old, ...f, savedAt: old.savedAt || Date.now() } : old;
+      });
+      persistFavsAndLikes();
+      if (!modal.classList.contains('hidden')) {
+        renderFavsGrid(state.favs);
+      }
+    } catch (e) {}
+  }
+
+  function closeFavoritesModal() {
+    const modal = document.getElementById('tt-favs-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  async function launchFavoritesFeed(startId = null) {
+    const ids = state.favs.map(x => Number(x.id)).filter(n => Number.isFinite(n) && n > 0).slice(0, 60);
+    if (ids.length === 0) {
+      if (typeof window.showToast === 'function') window.showToast('Aún no tienes shorts favoritos', 'info');
+      return;
+    }
+
+    closeFavoritesModal();
+    const loaderEl = document.getElementById('tiktok-feed-loader');
+    if (loaderEl) loaderEl.classList.remove('hidden');
+
+    try {
+      const res = await fetch('/api/shorts/batch?ids=' + ids.join(','), { cache: 'no-store' });
+      const data = res.ok ? await res.json() : { items: [] };
+      const items = Array.isArray(data.items) && data.items.length > 0 ? data.items : [];
+      if (items.length === 0) {
+        if (typeof window.showToast === 'function') window.showToast('No se pudieron cargar tus favoritos ahorita', 'error');
+        return;
+      }
+
+      state.feedMode = 'favorites';
+      syncTopModeChips();
+      unloadAllVideos();
+      state.slides = items;
+      state.activeIndex = 0;
+      state.consecSkips = 0;
+      const track = document.getElementById('tiktok-snap-track');
+      if (track) track.innerHTML = '';
+
+      const emptyEl = document.getElementById('tiktok-empty-state');
+      if (emptyEl) emptyEl.classList.add('hidden');
+
+      appendSlideElements(items, 0);
+      let startIdx = 0;
+      if (startId != null) {
+        const found = items.findIndex(x => String(x.id) === String(startId));
+        if (found >= 0) startIdx = found;
+      }
+      goToSlide(startIdx, true);
+    } catch (e) {
+      if (typeof window.showToast === 'function') window.showToast('Error cargando Favoritos', 'error');
+    } finally {
+      if (loaderEl) loaderEl.classList.add('hidden');
+    }
+  }
+
+  function exitFavoritesMode() {
+    state.feedMode = 'random';
+    syncTopModeChips();
+    fetchRandomBatch(true);
   }
 
   function setupObserver() {
@@ -546,13 +767,14 @@
   }
 
   function applyFilterAndReload({ category, q }) {
+    state.feedMode = 'random';
     if (category !== undefined) state.category = category || 'all';
     if (q !== undefined) state.q = String(q || '').trim();
     const sIn = document.getElementById('search-input');
     if (sIn) sIn.value = state.q;
     const cBtn = document.getElementById('clear-search-btn');
     if (cBtn) cBtn.classList.toggle('hidden', !state.q);
-    syncSearchChipUI();
+    syncTopModeChips();
     fetchRandomBatch(true);
   }
 
@@ -569,14 +791,14 @@
       if (!state.mounted || resizeRaf) return;
       resizeRaf = requestAnimationFrame(() => {
         resizeRaf = 0;
-        syncFitModeAll();
+        document.querySelectorAll('#tiktok-snap-track .tt-slide').forEach(applyStageGeometry);
       });
     }, { passive: true });
 
     const trackEl = document.getElementById('tiktok-snap-track');
     if (trackEl) {
       trackEl.addEventListener('scroll', () => {
-        if (!state.mounted || state.loading || state.slides.length === 0) return;
+        if (!state.mounted || state.loading || state.feedMode === 'favorites' || state.slides.length === 0) return;
         const remainingPx = trackEl.scrollHeight - (trackEl.scrollTop + trackEl.clientHeight);
         if (remainingPx < trackEl.clientHeight * 3.5) {
           fetchRandomBatch(false);
@@ -585,6 +807,20 @@
     }
 
     root.addEventListener('click', (e) => {
+      const delBtn = e.target.closest('[data-tt-fav-del]');
+      if (delBtn) {
+        e.stopPropagation();
+        const delId = delBtn.dataset.ttFavDel;
+        toggleHeartItem({ id: delId }, null);
+        return;
+      }
+
+      const playCard = e.target.closest('[data-tt-fav-play]');
+      if (playCard) {
+        launchFavoritesFeed(playCard.dataset.ttFavPlay);
+        return;
+      }
+
       const tagBtn = e.target.closest('[data-tt-tag]');
       if (tagBtn) {
         applyFilterAndReload({ category: 'all', q: tagBtn.dataset.ttTag || '' });
@@ -603,8 +839,9 @@
         if (now - lastTapAt < 260) {
           clearTimeout(tapTimer);
           lastTapAt = 0;
-          const likeBtn = slide.querySelector('[data-tt-action="like"]');
-          if (likeBtn && item && !state.likes.has(String(item.id))) likeBtn.click();
+          if (item && !state.likes.has(String(item.id))) {
+            toggleHeartItem(item, slide.querySelector('[data-tt-action="like"]'));
+          }
           return;
         }
         lastTapAt = now;
@@ -621,31 +858,23 @@
           }
         }, 230);
       } else if (action === 'like' && item) {
-        const key = String(item.id);
-        const liked = state.likes.has(key);
-        if (liked) state.likes.delete(key);
-        else state.likes.add(key);
-        saveLikes();
-        actEl.classList.toggle('is-liked', !liked);
-        const cntEl = actEl.querySelector('.tt-rail-txt');
-        if (cntEl) cntEl.textContent = String(Number(item.likes || 0) + (!liked ? 1 : 0));
+        toggleHeartItem(item, actEl);
       } else if (action === 'mute') {
         state.muted = !state.muted;
         syncMuteIcons();
       } else if (action === 'autonext') {
         state.autoNext = !state.autoNext;
         syncAutoNextIcons();
-      } else if (action === 'fit') {
-        state.fitMode = state.fitMode === 'fill' ? 'auto' : 'fill';
-        syncFitModeAll();
-        if (typeof window.showToast === 'function') {
-          window.showToast(
-            state.fitMode === 'fill'
-              ? 'Modo Llenar: cubre todo el cuadro'
-              : 'Ajuste Automático: video completo sin recortes',
-            'info'
-          );
-        }
+      } else if (action === 'clean') {
+        toggleCleanMode();
+      } else if (action === 'open-favs') {
+        openFavoritesModal();
+      } else if (action === 'close-favs') {
+        closeFavoritesModal();
+      } else if (action === 'play-all-favs') {
+        launchFavoritesFeed(null);
+      } else if (action === 'exit-favs-mode') {
+        exitFavoritesMode();
       } else if (action === 'copy' && item) {
         const shareUrl = item.share_id
           ? `${window.location.origin}/?c=${encodeURIComponent(item.share_id)}`
@@ -676,7 +905,8 @@
       document.body.classList.add('tiktok-home-active');
       setupObserver();
       bindEvents();
-      syncSearchChipUI();
+      syncTopModeChips();
+      syncCleanModeUI();
       if (state.slides.length === 0) {
         fetchRandomBatch(true);
       } else {
@@ -686,11 +916,22 @@
     },
     unmount() {
       state.mounted = false;
+      state.cleanMode = false;
       document.body.classList.remove('tiktok-home-active');
+      document.body.classList.remove('tt-clean-mode');
+      closeFavoritesModal();
       unloadAllVideos();
     },
     reshuffle() {
+      state.feedMode = 'random';
+      syncTopModeChips();
       fetchRandomBatch(true);
+    },
+    openFavorites() {
+      openFavoritesModal();
+    },
+    toggleCleanMode(force) {
+      toggleCleanMode(force);
     },
     setFilter(opts = {}) {
       applyFilterAndReload({
@@ -700,6 +941,25 @@
     },
     handleKeydown(e) {
       if (!state.mounted) return false;
+      const modal = document.getElementById('tt-favs-modal');
+      const modalOpen = modal && !modal.classList.contains('hidden');
+      if (e.key === 'Escape') {
+        if (modalOpen) {
+          e.preventDefault();
+          closeFavoritesModal();
+          return true;
+        }
+        if (state.cleanMode) {
+          e.preventDefault();
+          toggleCleanMode(false);
+          return true;
+        }
+      }
+      if (e.key.toLowerCase() === 'h' && !modalOpen) {
+        e.preventDefault();
+        toggleCleanMode();
+        return true;
+      }
       if (e.key === 'ArrowDown' || e.key.toLowerCase() === 'j') {
         e.preventDefault();
         goToSlide(state.activeIndex + 1);

@@ -44,20 +44,20 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css';">
 
   <!-- High-Performance Static Design System (Compiled Tailwind CSS) -->
-  <link rel="stylesheet" href="/css/tailwind.css?v=3.18.0">
+  <link rel="stylesheet" href="/css/tailwind.css?v=3.19.0">
   <link rel="stylesheet" href="/css/pagination.css?v=3.10.0">
 
-  <!-- Tailwind CSS Engine for Dynamic JavaScript Components (Ruffle se carga bajo demanda en Flash) -->
-  <script defer src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Modular Architecture: Store, Router, Vault & Pagination -->
+  <!-- Modular Architecture: Store, Router, Vault & Pagination (sin bloqueo externo) -->
   <script defer src="/js/personal-data.js?v=3.10.0"></script>
   <script defer src="/js/store.js?v=3.10.0"></script>
   <script defer src="/js/router.js?v=3.10.0"></script>
   <script defer src="/js/vault.js?v=3.10.0"></script>
   <script defer src="/js/pagination.js?v=3.10.0"></script>
   <script defer src="/js/image-loader.js?v=3.10.0"></script>
-  <script defer src="/js/tiktok-feed.js?v=3.18.0"></script>
+  <script defer src="/js/tiktok-feed.js?v=3.19.0"></script>
+
+  <!-- Tailwind CSS Engine asíncrono para utilidades dinámicas sin frenar el arranque -->
+  <script async src="https://cdn.tailwindcss.com"></script>
 
   <style>
     /* =======================================================================
@@ -1216,12 +1216,138 @@
     @media (max-width: 1023px) {
       .tt-ambient-wrap { display: none; }
     }
-    #tt-search-chip {
+    #tt-top-controls {
       position: absolute;
-      top: 14px;
-      left: 16px;
+      top: 12px;
+      left: 14px;
       z-index: 26;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      transition: opacity 0.2s ease;
     }
+    .tt-top-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      background: rgba(14, 7, 28, 0.84);
+      border: 1px solid rgba(255, 45, 149, 0.45);
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .tt-top-pill:hover { transform: scale(1.03); border-color: #ff2d95; background: rgba(34, 12, 58, 0.94); }
+    .tt-top-pill-badge {
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #ff2d95, #8b3dff);
+      color: #fff;
+    }
+    #tt-clean-exit-btn {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 60;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      background: rgba(10, 5, 22, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      cursor: pointer;
+      opacity: 0.4;
+      transition: opacity 0.2s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    #tt-clean-exit-btn:hover, #tt-clean-exit-btn:active {
+      opacity: 1;
+      border-color: #ff2d95;
+      transform: scale(1.04);
+    }
+    body.tt-clean-mode #tt-clean-exit-btn { display: inline-flex; }
+    body.tt-clean-mode #global-header,
+    body.tt-clean-mode #mobile-navbar,
+    body.tt-clean-mode #filter-bar,
+    body.tt-clean-mode #site-footer {
+      display: none !important;
+    }
+    body.tt-clean-mode #tiktok-feed-view {
+      height: 100dvh !important;
+    }
+    body.tt-clean-mode .tt-slide {
+      padding: 4px 10px;
+    }
+    @media (max-width: 1023px) {
+      body.tt-clean-mode .tt-slide { padding: 0; }
+    }
+    body.tt-clean-mode .tt-info,
+    body.tt-clean-mode .tt-gradient-bottom,
+    body.tt-clean-mode .tt-rail,
+    body.tt-clean-mode .tt-progress-wrap,
+    body.tt-clean-mode .tt-side-nav,
+    body.tt-clean-mode #tt-top-controls {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    #tt-favs-modal {
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+      background: rgba(6, 2, 16, 0.94);
+      backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+    }
+    #tt-favs-modal.hidden { display: none; }
+    .tt-favs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+    }
+    @media (min-width: 640px) {
+      .tt-favs-grid { grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 16px; }
+    }
+    .tt-fav-card {
+      position: relative;
+      aspect-ratio: 9 / 14;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #0d061c;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      cursor: pointer;
+      transition: transform 0.16s ease, border-color 0.16s ease;
+    }
+    .tt-fav-card:hover { transform: translateY(-2px); border-color: #ff2d95; }
+    .tt-fav-del {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 4;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #ff2d95;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .tt-fav-del:hover { background: rgba(255, 45, 149, 0.3); color: #fff; }
     #tiktok-snap-track {
       position: relative;
       z-index: 2;
@@ -1258,14 +1384,8 @@
       box-shadow: 0 28px 90px rgba(0, 0, 0, 0.95), 0 0 65px rgba(255, 45, 149, 0.2), 0 0 120px rgba(139, 61, 255, 0.16);
       transition: width 0.22s ease;
     }
-    .tt-stage.is-fill {
-      width: clamp(540px, 56vw, 880px);
-    }
-    .tt-stage.is-fill.is-wide {
-      width: min(88vw, 1260px);
-    }
     @media (max-width: 1023px) {
-      .tt-stage, .tt-stage.is-fill, .tt-stage.is-fill.is-wide {
+      .tt-stage {
         width: 100% !important;
         border-radius: 0;
         border: none;
@@ -1292,15 +1412,6 @@
     }
     .tt-video {
       background: transparent;
-    }
-    .tt-stage.is-fill .tt-video,
-    .tt-stage.is-fill .tt-poster {
-      object-fit: cover;
-      object-position: center 22%;
-    }
-    .tt-stage.is-fill.is-wide .tt-video,
-    .tt-stage.is-fill.is-wide .tt-poster {
-      object-position: center center;
     }
     .tt-poster {
       z-index: 1;
@@ -1828,6 +1939,13 @@
               var u = '/api/shorts/random?limit=12&category=all' + (c ? '&clip=' + encodeURIComponent(c) : '') + '&_=' + Date.now();
               window.__ttInitialBatchPromise = fetch(u, { cache: 'no-store' })
                 .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                  if (d && d.items && d.items.length) {
+                    if (d.items[0].cover_url) { var i0 = new Image(); i0.src = d.items[0].cover_url; }
+                    if (d.items[1] && d.items[1].cover_url) { var i1 = new Image(); i1.src = d.items[1].cover_url; }
+                  }
+                  return d;
+                })
                 .catch(function () { return null; });
             }
           }
@@ -1841,13 +1959,64 @@
       <div class="tt-ambient-vignette"></div>
     </div>
 
-    <button type="button" id="tt-search-chip" data-tt-action="clear-search" class="hidden px-3 py-1.5 rounded-full bg-pink-500/25 border border-pink-500/60 text-[11px] font-bold text-white flex items-center gap-1.5 cursor-pointer shadow-lg">
-      <i class="fa-solid fa-magnifying-glass text-[10px] text-pink-300"></i>
-      <span id="tt-search-chip-label"></span>
-      <i class="fa-solid fa-xmark"></i>
+    <div id="tt-top-controls">
+      <button type="button" id="tt-favs-pill" data-tt-action="open-favs" class="tt-top-pill" title="Ver tus shorts guardados">
+        <i class="fa-solid fa-heart text-pink-400"></i>
+        <span>Favoritos</span>
+        <span id="tt-favs-count" class="tt-top-pill-badge">0</span>
+      </button>
+
+      <button type="button" id="tt-favs-mode-chip" data-tt-action="exit-favs-mode" class="hidden tt-top-pill bg-pink-600/35 border-pink-400">
+        <i class="fa-solid fa-play text-pink-300 text-[10px]"></i>
+        <span>Modo Favoritos · Volver</span>
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <button type="button" id="tt-search-chip" data-tt-action="clear-search" class="hidden tt-top-pill bg-pink-500/25 border-pink-500/60">
+        <i class="fa-solid fa-magnifying-glass text-[10px] text-pink-300"></i>
+        <span id="tt-search-chip-label"></span>
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <button type="button" id="tt-clean-exit-btn" data-tt-action="clean" title="Mostrar controles y barra (H)">
+      <i class="fa-solid fa-eye text-pink-400"></i>
+      <span>Mostrar UI</span>
     </button>
 
     <div id="tiktok-snap-track"></div>
+
+    <div id="tt-favs-modal" class="hidden" role="dialog" aria-modal="true" aria-label="Mis Shorts Favoritos">
+      <div class="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-purple-500/25 bg-[#0c051a]/90 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white text-sm shadow">
+            <i class="fa-solid fa-heart"></i>
+          </span>
+          <div>
+            <h2 class="text-sm sm:text-base font-black text-white leading-tight">Mis Shorts Favoritos (<span id="tt-favs-modal-count">0</span>)</h2>
+            <p class="text-[11px] text-purple-200/65">Tus clips guardados con corazón para ver cuando quieras</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="tt-favs-play-all" data-tt-action="play-all-favs" class="hidden px-3.5 py-2 rounded-full bg-gradient-to-r from-[#ff2d95] to-[#8b3dff] text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg">
+            <i class="fa-solid fa-play"></i>
+            <span class="hidden sm:inline">Reproducir todos</span>
+            <span class="sm:hidden">Ver todos</span>
+          </button>
+          <button type="button" data-tt-action="close-favs" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer" title="Cerrar">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div id="tt-favs-empty" class="hidden h-full min-h-[260px] flex flex-col items-center justify-center text-center p-6">
+          <i class="fa-regular fa-heart text-4xl text-pink-500/70 mb-3"></i>
+          <h3 class="text-base font-black text-white">Aún no tienes shorts guardados</h3>
+          <p class="text-xs text-lav/70 mt-1 max-w-xs">Toca el corazón o da doble toque en cualquier video para guardarlo aquí y verlo después.</p>
+        </div>
+        <div id="tt-favs-grid" class="tt-favs-grid"></div>
+      </div>
+    </div>
 
     <div class="tt-side-nav">
       <button type="button" data-tt-action="prev" class="tt-side-arrow" title="Anterior (↑)">

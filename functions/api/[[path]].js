@@ -3115,6 +3115,38 @@ export async function onRequest(context) {
       }
 
       persistShortsMetaEdge(chosenRows, context);
+      if (typeof caches !== "undefined" && caches && caches.default && typeof context.waitUntil === "function") {
+        const prewarmTask = Promise.all(chosenRows.slice(0, 2).map(async (row) => {
+          const sid = parseInt(row && row.id, 10);
+          const cov = String((row && row.cover_url) || "");
+          if (!Number.isFinite(sid) || sid <= 0 || !cov || !isSafeUpstreamUrl(cov)) return;
+          const cReq = new Request(`${SHORTS_COVER_CACHE_PREFIX}${sid}`);
+          try {
+            const existing = await caches.default.match(cReq);
+            if (existing && existing.ok) return;
+            const res = await fetch(cov, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+                ...(row.referer && isSafeUpstreamUrl(row.referer) ? { "Referer": row.referer } : {})
+              }
+            });
+            const ctype = res.headers.get("content-type") || "";
+            if (res.ok && ctype.startsWith("image/") && res.body) {
+              await caches.default.put(cReq, new Response(res.body, {
+                status: 200,
+                headers: {
+                  "Content-Type": ctype,
+                  "Content-Disposition": "inline",
+                  "X-Content-Type-Options": "nosniff",
+                  "Cache-Control": "public, max-age=604800"
+                }
+              }));
+            }
+          } catch (e) {}
+        })).catch(() => {});
+        context.waitUntil(prewarmTask);
+      }
+
       const items = await Promise.all(chosenRows.map((row) => formatShortPublicItem(row, MEDIA_SECRET)));
 
       return new Response(JSON.stringify({ items, has_more: items.length > 0 }), {
@@ -3127,6 +3159,52 @@ export async function onRequest(context) {
       });
     } catch (e) {
       return new Response(JSON.stringify({ items: [], has_more: false }), {
+        status: 500,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+  }
+
+  if (url.pathname === "/api/shorts/batch" && method === "GET") {
+    if (!SUPABASE_URL_SHORTS || !SUPABASE_KEY_SHORTS || !MEDIA_SECRET) {
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 503,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+    const rawIds = (url.searchParams.get("ids") || "").split(",")
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => Number.isFinite(n) && n > 0);
+    const uniqueIds = Array.from(new Set(rawIds)).slice(0, 60);
+    if (uniqueIds.length === 0) {
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    }
+    try {
+      const batchRes = await fetch(
+        `${SUPABASE_URL_SHORTS}/rest/v1/shorts?select=id,title,cover_url,video_url,referer,tags,artists,duration,likes&is_active=eq.true&id=in.(${uniqueIds.join(",")})&limit=60`,
+        { headers: { "apikey": SUPABASE_KEY_SHORTS, "Authorization": `Bearer ${SUPABASE_KEY_SHORTS}` } }
+      );
+      if (!batchRes.ok) {
+        return new Response(JSON.stringify({ items: [] }), {
+          status: batchRes.status,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+        });
+      }
+      const rows = await batchRes.json().catch(() => []);
+      const validRows = (Array.isArray(rows) ? rows : []).filter(r => r && r.id && r.video_url && !/nekyda\.com|\.m3u8(?:$|\?)/i.test(r.video_url));
+      const byId = new Map(validRows.map(r => [Number(r.id), r]));
+      const orderedRows = uniqueIds.map(id => byId.get(id)).filter(Boolean);
+      persistShortsMetaEdge(orderedRows, context);
+      const items = await Promise.all(orderedRows.map(r => formatShortPublicItem(r, MEDIA_SECRET)));
+      return new Response(JSON.stringify({ items }), {
+        status: 200,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ items: [] }), {
         status: 500,
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...getCorsHeaders(origin) }
       });
