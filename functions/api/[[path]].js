@@ -2874,7 +2874,7 @@ async function refillShortsPool(sbUrl, sbKey, excludeIds = []) {
       });
       if (!rpcRes.ok) return [];
       const rows = await rpcRes.json().catch(() => []);
-      const valid = Array.isArray(rows) ? rows.filter(r => r && r.id && r.video_url) : [];
+      const valid = Array.isArray(rows) ? rows.filter(r => r && r.id && r.video_url && !/nekyda\.com|\.m3u8(?:$|\?)/i.test(r.video_url)) : [];
       const seen = new Set(SHORTS_POOL_CACHE.items.map(x => Number(x.id)));
       for (const r of valid) {
         const rid = Number(r.id);
@@ -3106,7 +3106,7 @@ export async function onRequest(context) {
         const rows = await rpcRes.json().catch(() => []);
         if (Array.isArray(rows)) {
           for (const r of rows) {
-            if (r && r.id && !excludeSet.has(Number(r.id))) {
+            if (r && r.id && r.video_url && !/nekyda\.com|\.m3u8(?:$|\?)/i.test(r.video_url) && !excludeSet.has(Number(r.id))) {
               excludeSet.add(Number(r.id));
               chosenRows.push(r);
             }

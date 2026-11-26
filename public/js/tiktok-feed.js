@@ -242,7 +242,7 @@
 
     slide.innerHTML = `
       <div class="tt-stage ${isFill ? 'is-fill' : ''}">
-        ${item.cover_url ? `<img class="tt-poster" src="${esc(item.cover_url)}" alt="" loading="lazy" decoding="async" draggable="false" />` : ''}
+        ${item.cover_url ? `<img class="tt-poster" src="${esc(item.cover_url)}" alt="" loading="eager" decoding="async" draggable="false" />` : ''}
         <video class="tt-video" playsinline controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback oncontextmenu="return false;" loop preload="none" ${state.muted ? 'muted' : ''}></video>
         <div class="tt-tap-layer" data-tt-action="toggle-play"></div>
         <div class="tt-center-icon hidden"><i class="fa-solid fa-play"></i></div>
@@ -293,11 +293,39 @@
     const timeBadge = slide.querySelector('.tt-time-badge');
     const poster = slide.querySelector('.tt-poster');
 
+    const clearWatchdog = () => {
+      if (slide._ttWatchdog) {
+        clearTimeout(slide._ttWatchdog);
+        slide._ttWatchdog = 0;
+      }
+    };
+
+    const failAndAdvance = () => {
+      clearWatchdog();
+      slide.dataset.dead = '1';
+      if (spinner) spinner.classList.add('hidden');
+      if (poster) poster.classList.remove('is-hidden');
+      const myIdx = Number(slide.dataset.idx);
+      if (myIdx !== state.activeIndex || !state.mounted) return;
+      state.consecSkips = (state.consecSkips || 0) + 1;
+      if (state.consecSkips <= 3 && myIdx + 1 < state.slides.length) {
+        setTimeout(() => {
+          if (state.mounted && state.activeIndex === myIdx) {
+            goToSlide(myIdx + 1);
+          }
+        }, 200);
+      }
+    };
+
     vid.addEventListener('loadedmetadata', () => applyStageGeometry(slide));
+    vid.addEventListener('loadeddata', () => clearWatchdog());
     vid.addEventListener('waiting', () => {
       if (Number(slide.dataset.idx) === state.activeIndex && spinner) spinner.classList.remove('hidden');
     });
     vid.addEventListener('playing', () => {
+      clearWatchdog();
+      state.consecSkips = 0;
+      delete slide.dataset.dead;
       if (spinner) spinner.classList.add('hidden');
       if (poster) poster.classList.add('is-hidden');
       const myIdx = Number(slide.dataset.idx);
@@ -310,14 +338,12 @@
       }
     });
     vid.addEventListener('canplay', () => {
+      clearWatchdog();
       if (spinner) spinner.classList.add('hidden');
     });
     vid.addEventListener('error', () => {
-      const myIdx = Number(slide.dataset.idx);
-      if (myIdx !== state.activeIndex || !state.mounted || !vid.dataset.loadedSrc) return;
-      if (myIdx + 1 < state.slides.length) {
-        goToSlide(myIdx + 1);
-      }
+      if (!vid.dataset.loadedSrc) return;
+      failAndAdvance();
     });
     vid.addEventListener('timeupdate', () => {
       if (!vid.duration || Number(slide.dataset.idx) !== state.activeIndex) return;
@@ -364,6 +390,10 @@
 
   function detachVideoSource(slide) {
     if (!slide) return;
+    if (slide._ttWatchdog) {
+      clearTimeout(slide._ttWatchdog);
+      slide._ttWatchdog = 0;
+    }
     const vid = slide.querySelector('.tt-video');
     const poster = slide.querySelector('.tt-poster');
     const spinner = slide.querySelector('.tt-spinner');
@@ -400,12 +430,28 @@
       }
 
       if (idx === activeIdx) {
+        if (slide.dataset.dead === '1' && (state.consecSkips || 0) <= 3 && activeIdx + 1 < state.slides.length) {
+          setTimeout(() => { if (state.mounted && state.activeIndex === activeIdx) goToSlide(activeIdx + 1); }, 120);
+          return;
+        }
         attachVideoSource(slide, item, 'auto');
         applyStageGeometry(slide);
         const vid = slide.querySelector('.tt-video');
         if (vid && state.mounted) {
           vid.muted = state.muted;
           vid.loop = !state.autoNext;
+          if (slide._ttWatchdog) clearTimeout(slide._ttWatchdog);
+          if (vid.readyState < 2) {
+            slide._ttWatchdog = setTimeout(() => {
+              slide._ttWatchdog = 0;
+              if (!state.mounted || state.activeIndex !== activeIdx || vid.readyState >= 2) return;
+              slide.dataset.dead = '1';
+              state.consecSkips = (state.consecSkips || 0) + 1;
+              if (state.consecSkips <= 3 && activeIdx + 1 < state.slides.length) {
+                goToSlide(activeIdx + 1);
+              }
+            }, 6500);
+          }
           const p = vid.play();
           if (p && typeof p.catch === 'function') {
             p.catch(() => {
@@ -417,6 +463,7 @@
           }
         }
       } else if (idx === activeIdx + 1) {
+        if (slide._ttWatchdog) { clearTimeout(slide._ttWatchdog); slide._ttWatchdog = 0; }
         attachVideoSource(slide, item, 'metadata');
         const vid = slide.querySelector('.tt-video');
         if (vid) vid.pause();
@@ -437,7 +484,12 @@
   }
 
   function goToSlide(idx) {
-    const clamped = Math.max(0, Math.min(idx, state.slides.length - 1));
+    let clamped = Math.max(0, Math.min(idx, state.slides.length - 1));
+    while (clamped < state.slides.length - 1) {
+      const cand = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${clamped}"]`);
+      if (!cand || cand.dataset.dead !== '1') break;
+      clamped++;
+    }
     const slide = document.querySelector(`#tiktok-snap-track .tt-slide[data-idx="${clamped}"]`);
     if (slide) {
       slide.scrollIntoView({ behavior: 'smooth', block: 'start' });

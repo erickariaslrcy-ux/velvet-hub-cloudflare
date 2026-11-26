@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.shorts (
   duration integer,
   likes integer NOT NULL DEFAULT 0,
   direct_play boolean NOT NULL DEFAULT true,
+  is_active boolean NOT NULL DEFAULT true,
   rand_key double precision NOT NULL DEFAULT random(),
   search_text text NOT NULL DEFAULT '',
   CONSTRAINT shorts_source_unique UNIQUE (source_code, source_id)
@@ -53,6 +54,10 @@ CREATE INDEX IF NOT EXISTS idx_shorts_tags_gin
 CREATE INDEX IF NOT EXISTS idx_shorts_search_trgm
   ON public.shorts USING GIN (search_text extensions.gin_trgm_ops);
 
+CREATE INDEX IF NOT EXISTS idx_shorts_active_id
+  ON public.shorts (id)
+  WHERE is_active = true;
+
 CREATE OR REPLACE FUNCTION public.get_random_shorts(
   p_limit integer DEFAULT 12,
   p_q text DEFAULT '',
@@ -82,7 +87,9 @@ DECLARE
   v_max_id bigint;
 BEGIN
   IF v_q = '' THEN
-    SELECT min(s.id), max(s.id) INTO v_min_id, v_max_id FROM public.shorts s;
+    SELECT min(s.id), max(s.id) INTO v_min_id, v_max_id
+    FROM public.shorts s
+    WHERE s.is_active = true;
     IF v_min_id IS NULL THEN
       RETURN;
     END IF;
@@ -90,12 +97,13 @@ BEGIN
     RETURN QUERY
     WITH probes AS (
       SELECT DISTINCT (v_min_id + floor(random() * (v_max_id - v_min_id + 1))::bigint) AS gid
-      FROM generate_series(1, v_limit * 5)
+      FROM generate_series(1, v_limit * 6)
     )
     SELECT s.id, s.title, s.cover_url, s.video_url, s.tags, s.artists, s.duration, s.likes, s.direct_play
     FROM probes p
     JOIN public.shorts s ON s.id = p.gid
-    WHERE cardinality(v_excl) = 0 OR NOT (s.id = ANY(v_excl))
+    WHERE s.is_active = true
+      AND (cardinality(v_excl) = 0 OR NOT (s.id = ANY(v_excl)))
     LIMIT v_limit;
     RETURN;
   END IF;
@@ -105,7 +113,8 @@ BEGIN
   FROM (
     SELECT sh.*
     FROM public.shorts sh
-    WHERE (sh.tags @> ARRAY[lower(v_q)]::text[] OR sh.search_text ILIKE ('%' || v_q || '%'))
+    WHERE sh.is_active = true
+      AND (sh.tags @> ARRAY[lower(v_q)]::text[] OR sh.search_text ILIKE ('%' || v_q || '%'))
       AND (cardinality(v_excl) = 0 OR NOT (sh.id = ANY(v_excl)))
     LIMIT 600
   ) s
