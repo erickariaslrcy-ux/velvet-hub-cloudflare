@@ -52,7 +52,7 @@
   <script defer src="/js/store.js?v=3.10.0"></script>
   <script defer src="/js/router.js?v=4.1.0"></script>
   <script defer src="/js/vault.js?v=4.1.0"></script>
-  <script defer src="/js/pagination.js?v=3.10.0"></script>
+  <script defer src="/js/pagination.js?v=3.11.0"></script>
   <script defer src="/js/image-loader.js?v=3.10.0"></script>
   <script defer src="/js/tiktok-feed.js?v=4.1.0"></script>
 
@@ -2674,7 +2674,7 @@
             }
             var isSearch = !!(new URLSearchParams(window.location.search || '').get('q'));
             var mode = p.startsWith('/videos') ? 'videos'
-              : (p.startsWith('/cosplay') || p.startsWith('/galerias')) ? 'galleries'
+              : (p.startsWith('/cosplay') || p.startsWith('/modelos') || p.startsWith('/galerias')) ? 'galleries'
               : (p.startsWith('/juegos') || p.startsWith('/games')) ? 'games' : 'comics';
             var heroSec = document.getElementById('hero-section');
             var heroCoverBox = document.getElementById('hero-cover-container');
@@ -6980,7 +6980,7 @@
             ? `/api/items/id/${itemId}`
             : (source && id ? `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(id)}` : '');
           if (lookupPath) {
-            fetch(lookupPath).then(r => r.ok ? r.json() : null).then(d => {
+            fetchSiteApi(lookupPath, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null).then(d => {
               const g = d && (d.item || d);
               if (g && (g.embed_url || g.swf_url || g.media_type === 'game')) openGameModal(g);
             }).catch(() => {});
@@ -7650,6 +7650,29 @@
       }
     }
 
+    let _mhGateRefreshPromise = null;
+    async function refreshSiteGateCookie() {
+      if (_mhGateRefreshPromise) return _mhGateRefreshPromise;
+      _mhGateRefreshPromise = fetch('/?_mh_gate=' + Date.now(), {
+        method: 'HEAD',
+        cache: 'no-store',
+        credentials: 'same-origin'
+      }).catch(() => null).finally(() => {
+        _mhGateRefreshPromise = null;
+      });
+      return _mhGateRefreshPromise;
+    }
+
+    async function fetchSiteApi(url, options = {}) {
+      const opts = { credentials: 'same-origin', ...options };
+      let resp = await fetch(url, opts);
+      if (resp.status === 403 && resp.headers?.get('X-MH-Gate') === 'refresh') {
+        await refreshSiteGateCookie();
+        resp = await fetch(url, opts);
+      }
+      return resp;
+    }
+
     async function transitionToNextPage(targetPage = null) {
       if (_isLoadingMore) return;
       const nextPage = targetPage || ((state.page || 1) + 1);
@@ -7689,9 +7712,9 @@
           const manualShuffle = !!(state.freshShuffle && state.feedSeed);
           const params = buildCatalogParams(nextPage);
 
-          const resp = await fetch(`/api/items?${params.toString()}`, {
+          const resp = await fetchSiteApi(`/api/items?${params.toString()}`, {
             signal,
-            credentials: 'omit',
+            credentials: 'same-origin',
             cache: manualShuffle ? 'no-store' : 'default'
           });
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -8329,9 +8352,9 @@
         const manualShuffle = !!(state.freshShuffle && state.feedSeed);
         const params = buildCatalogParams(state.page);
 
-        const resp = await fetch(`/api/items?${params.toString()}`, {
+        const resp = await fetchSiteApi(`/api/items?${params.toString()}`, {
           signal,
-          credentials: 'omit',
+          credentials: 'same-origin',
           cache: manualShuffle ? 'no-store' : 'default'
         });
 
@@ -10982,14 +11005,14 @@
       try {
         const detailOpts = { signal: ticket.signal, headers: authHeaders(), credentials: 'include' };
         let detailUrl = (itemId || (source === 'id' && sourceId)) ? `/api/items/id/${itemId || sourceId}` : `/api/items/${source}/${encodeURIComponent(sourceId)}`;
-        let resp = await fetch(detailUrl, detailOpts);
+        let resp = await fetchSiteApi(detailUrl, detailOpts);
         if (!videoGuard.matches(ticket.token)) return;
         if (resp.status !== 403 && !resp.ok && source && sourceId && source !== 'id') {
-          resp = await fetch(`/api/items/${source}/${encodeURIComponent(sourceId)}`, detailOpts);
+          resp = await fetchSiteApi(`/api/items/${source}/${encodeURIComponent(sourceId)}`, detailOpts);
         }
         if (!videoGuard.matches(ticket.token)) return;
         if (resp.status !== 403 && !resp.ok && itemId && /^[a-f0-9]{24}$/i.test(itemId)) {
-          resp = await fetch(`/api/items/mv/${encodeURIComponent(itemId)}`, detailOpts);
+          resp = await fetchSiteApi(`/api/items/mv/${encodeURIComponent(itemId)}`, detailOpts);
         }
         if (!videoGuard.matches(ticket.token)) return;
         if (resp.status === 403) {
@@ -11684,7 +11707,7 @@
       if (recs.length === 0) {
         try {
           const recSeed = (parseInt(String(currentId).replace(/\D/g, ''), 10) % 8) + 1 || 1;
-          const resp = await fetch('/api/items?media_type=video&page=1&page_size=12&sort=recent', { credentials: 'omit' });
+          const resp = await fetchSiteApi('/api/items?media_type=video&page=1&page_size=12&sort=recent', { credentials: 'same-origin' });
           if (resp.ok) {
             const data = await resp.json();
             if (data && data.items && data.items.length > 0) {
@@ -13002,14 +13025,14 @@
         const detailUrl = (itemId || (source === 'id' && sourceId) || (/^\d+$/.test(sourceId) && !source))
           ? `/api/items/id/${itemId || sourceId}`
           : (source && sourceId ? `/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}` : `/api/items/id/${itemId || sourceId}`);
-        let resp = await fetch(detailUrl, detailOpts);
+        let resp = await fetchSiteApi(detailUrl, detailOpts);
         if (mySeq !== _readerOpenSeq) return;
         if (resp.status !== 403 && !resp.ok && source && sourceId && source !== 'id') {
-          resp = await fetch(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`, detailOpts);
+          resp = await fetchSiteApi(`/api/items/${encodeURIComponent(source)}/${encodeURIComponent(sourceId)}`, detailOpts);
           if (mySeq !== _readerOpenSeq) return;
         }
         if (resp.status !== 403 && !resp.ok && (itemId || sourceId)) {
-          resp = await fetch(`/api/items/id/${itemId || sourceId}`, detailOpts);
+          resp = await fetchSiteApi(`/api/items/id/${itemId || sourceId}`, detailOpts);
           if (mySeq !== _readerOpenSeq) return;
         }
 

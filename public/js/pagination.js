@@ -800,7 +800,7 @@
         const prefetchUrl = `/api/items?${params.toString()}`;
 
         fetch(prefetchUrl, {
-          credentials: 'omit',
+          credentials: 'same-origin',
           priority: 'low',
           cache: curState.freshShuffle ? 'no-store' : 'default'
         })

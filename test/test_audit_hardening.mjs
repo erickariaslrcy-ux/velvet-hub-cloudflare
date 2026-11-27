@@ -512,22 +512,47 @@ try {
   });
   assert.equal(docNavRes.status, 403, "Abrir endpoint JSON directamente en barra de navegador debe devolver 403");
 
-  // Con cookie mh_gate válida + navegación misma web pasa 200
-  const allowedEdgeRes = await onRequest({
-    request: new Request("https://www.morbohub.com/api/items?media_type=video", {
-      headers: {
-        "cf-ray": "abc123-MIA",
-        "User-Agent": "Mozilla/5.0 Chrome/134.0.0.0",
-        "Sec-Fetch-Site": "same-origin",
-        "Referer": "https://www.morbohub.com/videos",
-        "Cookie": gatePair
-      }
-    }),
-    env: baseEnv,
-    params: {},
-    waitUntil: () => {}
-  });
-  assert.equal(allowedEdgeRes.status, 200, "Navegador legítimo de morbohub.com con mh_gate debe funcionar 200");
+  // Con cookie mh_gate válida + navegación misma web pasa 200 en cómics, modelos (gallery) y videos
+  for (const mt of ["comic", "gallery", "video"]) {
+    const allowedEdgeRes = await onRequest({
+      request: new Request(`https://www.morbohub.com/api/items?media_type=${mt}`, {
+        headers: {
+          "cf-ray": "abc123-MIA",
+          "User-Agent": "Mozilla/5.0 Chrome/134.0.0.0",
+          "Sec-Fetch-Site": "same-origin",
+          "Referer": "https://www.morbohub.com/comics",
+          "Cookie": gatePair
+        }
+      }),
+      env: baseEnv,
+      params: {},
+      waitUntil: () => {}
+    });
+    assert.equal(allowedEdgeRes.status, 200, `Navegador legítimo de morbohub.com con mh_gate debe funcionar 200 para ${mt}`);
+  }
+
+  // Middleware también debe emitir mh_gate en HEAD /?_mh_gate=... y rutas SPA (/comics, /cosplay, /modelos, /videos)
+  for (const [mthd, spaPath] of [["HEAD", "/?_mh_gate=123"], ["GET", "/comics"], ["GET", "/cosplay"], ["GET", "/modelos"], ["GET", "/videos"]]) {
+    const spaGateRes = await onMiddlewareRequest({
+      request: new Request(`https://www.morbohub.com${spaPath}`, {
+        method: mthd,
+        headers: { "User-Agent": "Mozilla/5.0 Chrome/134.0.0.0" }
+      }),
+      env: {
+        MEDIA_SECRET,
+        ASSETS: { fetch: async () => new Response(mthd === "HEAD" ? null : "<html>ok</html>", { status: 200, headers: { "content-type": "text/html" } }) }
+      },
+      next: async () => new Response(mthd === "HEAD" ? null : "<html>ok</html>", { status: 200, headers: { "content-type": "text/html" } })
+    });
+    assert.equal(spaGateRes.status, 200);
+    assert.ok((spaGateRes.headers.get("set-cookie") || "").includes("mh_gate="), `${mthd} ${spaPath} debe emitir cookie mh_gate`);
+  }
+
+  // Regresión crítica: el frontend jamás debe usar credentials: 'omit' al llamar al API protegido por mh_gate
+  const paginationJs = fs.readFileSync(path.join("public", "js", "pagination.js"), "utf8");
+  assert.ok(!/credentials\s*:\s*['"]omit['"]/.test(indexHtml), "index.html no debe usar credentials: 'omit' (rompe cookie mh_gate en cómics, modelos y videos)");
+  assert.ok(!/credentials\s*:\s*['"]omit['"]/.test(paginationJs), "pagination.js no debe usar credentials: 'omit'");
+  assert.ok(indexHtml.includes("async function fetchSiteApi(") && indexHtml.includes("X-MH-Gate"), "index.html debe refrescar cookie mh_gate si expira");
 
   const headersFile = fs.readFileSync(path.join("public", "_headers"), "utf8");
   assert.ok(!/pmvhaven|gamcore|serverable/i.test(headersFile), "_headers CSP no debe exponer dominios de fuentes");

@@ -1,5 +1,5 @@
 // Velvet Hub Ultra-Fast Service Worker (Cloudflare Pages - Fast Cache & Worker Budget)
-const CACHE_VERSION = 'v47-stealth-shield';
+const CACHE_VERSION = 'v48-catalog-gate-fix';
 const STATIC_CACHE = `velvet-static-${CACHE_VERSION}`;
 const API_CACHE = `velvet-api-${CACHE_VERSION}`;
 const COVER_CACHE = `velvet-covers-${CACHE_VERSION}`;
@@ -26,7 +26,7 @@ const STATIC_ASSETS = [
   '/js/store.js?v=3.10.0',
   '/js/router.js?v=4.1.0',
   '/js/vault.js?v=4.1.0',
-  '/js/pagination.js?v=3.10.0',
+  '/js/pagination.js?v=3.11.0',
   '/js/image-loader.js?v=3.10.0',
   '/js/tiktok-feed.js?v=4.1.0'
 ];
@@ -136,7 +136,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((networkResp) => {
-          if (networkResp && networkResp.status === 200) {
+          if (networkResp && networkResp.status === 200 && !url.searchParams.has('_mh_gate')) {
             const clone = networkResp.clone();
             const isShell = url.pathname === '/' || url.pathname === '/index.html';
             caches.open(STATIC_CACHE).then((cache) => {
